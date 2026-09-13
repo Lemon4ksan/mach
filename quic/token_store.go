@@ -67,7 +67,7 @@ var _ TokenStore = &lruTokenStore{}
 func NewLRUTokenStore(maxOrigins, tokensPerOrigin int) TokenStore {
 	return &lruTokenStore{
 		m:                make(map[string]*list.Element[*lruTokenStoreEntry]),
-		q:                list.New[*lruTokenStoreEntry](),
+		q:                list.NewCapacity[*lruTokenStoreEntry](maxOrigins),
 		capacity:         maxOrigins,
 		singleOriginSize: tokensPerOrigin,
 	}

@@ -7,7 +7,6 @@ package quic
 
 import (
 	"errors"
-	"sync"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	list "github.com/lemon4ksan/mach/quic/internal/utils/linkedlist"
@@ -19,11 +18,7 @@ type byteInterval struct {
 	End   protocol.ByteCount
 }
 
-var byteIntervalElementPool sync.Pool
 
-func init() {
-	byteIntervalElementPool = *list.NewPool[byteInterval]()
-}
 
 type frameSorterEntry struct {
 	Data   []byte
@@ -48,7 +43,7 @@ var errDuplicateStreamData = errors.New("duplicate stream data")
 
 func newFrameSorter() *frameSorter {
 	s := frameSorter{
-		gaps: list.NewWithPool[byteInterval](&byteIntervalElementPool),
+		gaps: list.NewCapacity[byteInterval](protocol.MaxStreamFrameSorterGaps + 1),
 	}
 	s.gaps.PushFront(byteInterval{Start: 0, End: protocol.MaxByteCount})
 
