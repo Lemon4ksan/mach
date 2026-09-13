@@ -181,8 +181,7 @@ type Conn struct {
 	oneRTTStream        *cryptoStream // only set for the server
 	cryptoStreamHandler cryptoStreamHandler
 
-
-	closeErr  atomic.Pointer[closeError]
+	closeErr atomic.Pointer[closeError]
 
 	ctx                   context.Context
 	ctxCancel             context.CancelCauseFunc
@@ -240,7 +239,6 @@ type connTestHooks struct {
 	destroy                 func(error)
 	handlePacket            func(receivedPacket)
 }
-
 
 func (c *wrappedConn) run() error {
 	if c.testHooks != nil {
@@ -563,7 +561,7 @@ func (c *Conn) preSetup() {
 		c.perspective,
 	)
 	c.framer = newFramer(c.connFlowController)
-	
+
 	c.handshakeCompleteChan = make(chan struct{})
 
 	now := monotime.Now()
@@ -599,7 +597,7 @@ func (c *Conn) Start() error {
 func (c *Conn) Tick(now time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	mt := monotime.Now() // we use true monotonic time instead of converted time
 
 	if err := c.closeErr.Load(); err != nil {
@@ -665,7 +663,7 @@ func (c *Conn) Tick(now time.Time) error {
 		c.setCloseError(&closeError{err: err})
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -2221,7 +2219,6 @@ func (c *Conn) sendPacketsWithoutGSO(now monotime.Time) error {
 			return nil
 		}
 
-
 	}
 }
 
@@ -2279,8 +2276,6 @@ func (c *Conn) sendPacketsWithGSO(now monotime.Time) error {
 		if c.sendQueue.WouldBlock() {
 			return nil
 		}
-
-
 
 		ecn = nextECN
 		buf = getLargePacketBuffer()

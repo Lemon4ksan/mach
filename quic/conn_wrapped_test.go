@@ -9,7 +9,6 @@ import "time"
 
 import "context"
 
-
 func (c *wrappedConn) earlyConnReady() <-chan struct{} {
 	if c.testHooks == nil {
 		return c.Conn.earlyConnReady()
@@ -85,7 +84,6 @@ func (c *wrappedConn) Start() error {
 	}
 	return c.Conn.Start()
 }
-
 
 func (c *wrappedConn) Tick(now time.Time) error {
 	if c.testHooks != nil {

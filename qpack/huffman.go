@@ -33,5 +33,3 @@ func decodeHuffman(src []byte) (string, error) {
 
 	return string(dst), nil
 }
-
-

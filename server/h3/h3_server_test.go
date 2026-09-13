@@ -7,7 +7,6 @@ package h3_test
 import (
 	h3 "github.com/lemon4ksan/mach/server/h3"
 
-
 	coreh3 "github.com/lemon4ksan/mach/core/h3"
 
 	"bytes"
@@ -31,7 +30,6 @@ import (
 	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/mach/quic"
 	"github.com/lemon4ksan/mach/quic/quicvarint"
-	
 )
 
 func generateTestTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {

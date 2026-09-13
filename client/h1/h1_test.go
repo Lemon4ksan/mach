@@ -79,8 +79,6 @@ func TestH1Engine_URIAndArgs(t *testing.T) {
 	}
 }
 
-
-
 var legacySyncPool = sync.Pool{
 	New: func() any {
 		return &Request{}

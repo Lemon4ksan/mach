@@ -6,10 +6,10 @@
 package h2
 
 import (
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"container/list"
 	"context"
 	"errors"
+	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -336,5 +336,3 @@ func (cl *Client) dialOrWaitLateBindingLocked(ctx context.Context) (*Conn, error
 
 	return c, nil
 }
-
-

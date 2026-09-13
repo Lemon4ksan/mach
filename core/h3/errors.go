@@ -108,5 +108,5 @@ var (
 
 var (
 	ErrMissingMethodOrPath = errors.New("h3: missing :method or :path pseudo-header (RFC 9114 Sec 4.1.2)")
-	ErrMalformedHeader = errors.New("h3: malformed header field (RFC 9114 Sec 4.1.2)")
+	ErrMalformedHeader     = errors.New("h3: malformed header field (RFC 9114 Sec 4.1.2)")
 )

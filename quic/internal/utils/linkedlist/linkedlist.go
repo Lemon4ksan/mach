@@ -193,7 +193,7 @@ func (l *List[T]) move(e *Element[T], at int) {
 
 	atElem.next = idx
 	l.elements[atNextIdx].prev = idx
-	
+
 	e.prev = at
 	e.next = atNextIdx
 }

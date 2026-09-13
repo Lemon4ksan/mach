@@ -6,10 +6,10 @@
 package h3
 
 import (
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
 	"context"
 	"crypto/tls"
 	"errors"
+	coreh3 "github.com/lemon4ksan/mach/core/h3"
 	"net"
 	"sync"
 
@@ -25,9 +25,9 @@ type Client struct {
 	mutex sync.Mutex
 	conns map[string]*ClientConn
 
-	TLSConfig  *tls.Config
+	TLSConfig   *tls.Config
 	QUICOptions []quic.Option
-	Settings   *coreh3.Settings
+	Settings    *coreh3.Settings
 }
 
 // NewClient initializes a new HTTP/3 Client instance (RFC 9114 §3.1 & §3.2).
@@ -43,8 +43,8 @@ func NewClient(tlsCfg *tls.Config, quicOpts ...quic.Option) *Client {
 	quicOpts = append(quicOpts, quic.WithDatagrams(true))
 
 	return &Client{
-		conns:      make(map[string]*ClientConn),
-		TLSConfig:  tlsConf,
+		conns:       make(map[string]*ClientConn),
+		TLSConfig:   tlsConf,
 		QUICOptions: quicOpts,
 	}
 }
@@ -250,5 +250,3 @@ func (c *Client) Close() error {
 
 	return nil
 }
-
-

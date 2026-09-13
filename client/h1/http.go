@@ -53,7 +53,7 @@ type Request struct {
 	multipartForm         *multipart.Form
 	multipartFormBoundary string
 
-	postArgs   Args
+	postArgs Args
 
 	bodyRaw []byte
 

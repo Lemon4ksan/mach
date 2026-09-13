@@ -399,4 +399,3 @@ func BenchmarkQPACKDecodeResponseHeaders(b *testing.B) {
 		_, _ = codec.DecodeResponseHeaders(encoded, &respHeader)
 	}
 }
-

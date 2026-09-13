@@ -71,15 +71,15 @@ func connectionOptRTT(rtt time.Duration) testConnectionOpt {
 }
 
 type testConnection struct {
-	runWrapper func() error
-	conn       *Conn
+	runWrapper  func() error
+	conn        *Conn
 	wrappedConn *wrappedConn
-	connRunner *MockConnRunner
-	sendConn   *MockSendConn
-	packer     *MockPacker
-	destConnID protocol.ConnectionID
-	srcConnID  protocol.ConnectionID
-	remoteAddr *net.UDPAddr
+	connRunner  *MockConnRunner
+	sendConn    *MockSendConn
+	packer      *MockPacker
+	destConnID  protocol.ConnectionID
+	srcConnID   protocol.ConnectionID
+	remoteAddr  *net.UDPAddr
 }
 
 func (tc *testConnection) receivedPacketHandler() *ackhandler.ReceivedPacketHandler {
@@ -146,14 +146,14 @@ func newTestConnectionWithGSO(
 	}
 
 	return &testConnection{
-		conn:       conn,
+		conn:        conn,
 		wrappedConn: wc,
-		connRunner: connRunner,
-		sendConn:   sendConn,
-		packer:     packer,
-		destConnID: origDestConnID,
-		srcConnID:  srcConnID,
-		remoteAddr: remoteAddr,
+		connRunner:  connRunner,
+		sendConn:    sendConn,
+		packer:      packer,
+		destConnID:  origDestConnID,
+		srcConnID:   srcConnID,
+		remoteAddr:  remoteAddr,
 	}
 }
 
@@ -219,13 +219,13 @@ func newClientTestConnection(
 	}
 
 	return &testConnection{
-		conn:       conn.Conn,
+		conn:        conn.Conn,
 		wrappedConn: conn,
-		connRunner: connRunner,
-		sendConn:   sendConn,
-		packer:     packer,
-		destConnID: destConnID,
-		srcConnID:  srcConnID,
+		connRunner:  connRunner,
+		sendConn:    sendConn,
+		packer:      packer,
+		destConnID:  destConnID,
+		srcConnID:   srcConnID,
 	}
 }
 
@@ -692,8 +692,6 @@ func testConnectionUnpackFailureDropped(t *testing.T, unpackErr error) {
 	})
 }
 
-
-
 func TestConnectionRemoteClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
@@ -905,7 +903,6 @@ func TestConnectionHandleMaxStreamsFrame(t *testing.T) {
 		}
 	})
 }
-
 
 func testConnectionHandshakeClient(t *testing.T, usePreferredAddress bool) {
 	mockCtrl := gomock.NewController(t)
@@ -1272,9 +1269,6 @@ func testConnectionReceivePrioritization(t *testing.T, handshakeComplete bool, n
 	return events
 }
 
-
-
-
 func TestConnectionIdleTimeout(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
@@ -1334,9 +1328,6 @@ func TestConnectionIdleTimeout(t *testing.T) {
 		}
 	})
 }
-
-
-
 
 func TestConnectionGSOBatch(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -1711,8 +1702,6 @@ func testConnectionPTOProbePackets(t *testing.T, encLevel protocol.EncryptionLev
 	})
 }
 
-
-
 func testConnectionSendQueue(t *testing.T, enableGSO bool) {
 	synctest.Test(t, func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
@@ -1814,8 +1803,6 @@ func getVersionNegotiationPacket(src, dest protocol.ConnectionID, versions []pro
 		buffer:  getPacketBuffer(),
 	}
 }
-
-
 
 func TestConnectionVersionNegotiationInvalidPackets(t *testing.T) {
 	mockCtrl := gomock.NewController(t)

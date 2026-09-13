@@ -18,8 +18,6 @@ type byteInterval struct {
 	End   protocol.ByteCount
 }
 
-
-
 type frameSorterEntry struct {
 	Data   []byte
 	DoneCb func()

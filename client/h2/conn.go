@@ -5,13 +5,13 @@
 package h2
 
 import (
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"io"
 	"net"
 	"net/http"
@@ -1638,5 +1638,3 @@ func (d *Dialer) tryDial(ctx context.Context) (net.Conn, error) {
 
 	return tlsConn, nil
 }
-
-

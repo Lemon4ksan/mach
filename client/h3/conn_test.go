@@ -496,4 +496,3 @@ func TestDoScoped_Execution(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode())
 	assert.Equal(t, "scoped body content", string(resp.Body()))
 }
-

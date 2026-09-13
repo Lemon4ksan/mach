@@ -106,7 +106,6 @@ func TestTransportPacketHandling(t *testing.T) {
 	}
 }
 
-
 func TestTransportErrFromConn(t *testing.T) {
 	t.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "true")
 

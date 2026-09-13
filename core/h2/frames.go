@@ -141,7 +141,7 @@ func (ga *GoAway) Serialize(fr *FrameHeader) {
 // Headers carries HPACK-compressed HTTP metadata and optionally opens/terminates streams (RFC 9113 §6.2).
 type Headers struct {
 	hasPadding bool
-	stream uint32
+	stream     uint32
 	weight     uint8
 	endStream  bool
 	endHeaders bool
@@ -314,9 +314,9 @@ type PushPromise struct {
 	header []byte
 }
 
-func (pp *PushPromise) Type() FrameType { return FramePushPromise }
+func (pp *PushPromise) Type() FrameType        { return FramePushPromise }
 func (pp *PushPromise) PromisedStream() uint32 { return pp.stream }
-func (pp *PushPromise) Headers() []byte { return pp.header }
+func (pp *PushPromise) Headers() []byte        { return pp.header }
 
 func (pp *PushPromise) Reset() {
 	pp.pad = false

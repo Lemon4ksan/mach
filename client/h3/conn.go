@@ -5,10 +5,10 @@
 package h3
 
 import (
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
 	"context"
 	"errors"
 	"fmt"
+	coreh3 "github.com/lemon4ksan/mach/core/h3"
 	"io"
 	"sync"
 
@@ -490,5 +490,3 @@ func (cc *ClientConn) Close() error {
 
 	return nil
 }
-
-

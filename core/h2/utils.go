@@ -5,13 +5,13 @@
 package h2
 
 import (
-	"net/http"
-	"strings"
 	"bufio"
 	"bytes"
 	"errors"
 	"io"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/lemon4ksan/foundation/silicon/randkit"
 
@@ -193,7 +193,6 @@ func FasthttpResponseHeaders(dst *Headers, hp *HPACK, res *h1.Response) {
 		dst.AppendHeaderField(hp, hf, false)
 	}
 }
-
 
 // SerializeResponseHeaders serializes response status and headers into HPACK-encoded header fields.
 func SerializeResponseHeaders(dst *Headers, hp *HPACK, statusCode int, headers http.Header, bodyLen int) {

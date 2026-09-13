@@ -21,8 +21,8 @@ type sender interface {
 }
 
 type syncSender struct {
-	conn sendConn
-    onError func(error)
+	conn    sendConn
+	onError func(error)
 }
 
 func newSendQueue(conn sendConn, onError func(error)) sender {

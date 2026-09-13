@@ -289,4 +289,3 @@ func TestOrderedHeadersSequenceOnWire(t *testing.T) {
 		t.Fatalf("headers order sequence violated: got %v, want %v", headers, orderedKeys)
 	}
 }
-

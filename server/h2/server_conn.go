@@ -5,11 +5,11 @@
 package h2
 
 import (
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"bufio"
 	"bytes"
 	"context"
 	"errors"
+	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"io"
 	"net"
 	"net/http"
@@ -559,4 +559,3 @@ func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error 
 
 	return sc.bw.Flush()
 }
-

@@ -5,11 +5,11 @@
 package h3
 
 import (
-	"net/http"
-	"strings"
 	"bytes"
 	"io"
+	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
@@ -322,7 +322,6 @@ func (q *QPACKCodec) DecodeResponseTrailers(headerBlock []byte) (map[string][]st
 	return trailers, nil
 }
 
-
 func (q *QPACKCodec) DecodeRequestHeaders(
 	headerBlock []byte,
 ) (method, path, scheme, authority string, headers http.Header, err error) {
@@ -469,4 +468,3 @@ func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers http.Header, 
 
 	return result
 }
-
