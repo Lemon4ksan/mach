@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strconv"
+
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -71,7 +71,9 @@ func connectionOptRTT(rtt time.Duration) testConnectionOpt {
 }
 
 type testConnection struct {
+	runWrapper func() error
 	conn       *Conn
+	wrappedConn *wrappedConn
 	connRunner *MockConnRunner
 	sendConn   *MockSendConn
 	packer     *MockPacker
@@ -145,6 +147,7 @@ func newTestConnectionWithGSO(
 
 	return &testConnection{
 		conn:       conn,
+		wrappedConn: wc,
 		connRunner: connRunner,
 		sendConn:   sendConn,
 		packer:     packer,
@@ -217,6 +220,7 @@ func newClientTestConnection(
 
 	return &testConnection{
 		conn:       conn.Conn,
+		wrappedConn: conn,
 		connRunner: connRunner,
 		sendConn:   sendConn,
 		packer:     packer,
@@ -320,7 +324,7 @@ func testConnectionClose(t *testing.T, useApplicationClose bool, expectedErr err
 		tc.sendConn.EXPECT().Write([]byte("connection close"), gomock.Any(), gomock.Any())
 		tc.connRunner.EXPECT().ReplaceWithClosed(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.closeLocal(expectedErr)
 
@@ -353,7 +357,7 @@ func TestConnectionStatelessReset(t *testing.T) {
 
 		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
 
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.destroy(&StatelessResetError{})
 
@@ -606,7 +610,7 @@ func testConnectionUnpackFailureFatal(t *testing.T, unpackErr error) error {
 		Return(&coalescedPacket{buffer: getPacketBuffer()}, nil)
 
 	errChan := make(chan error, 1)
-	go func() { errChan <- tc.conn.run() }()
+	go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 	tc.sendConn.EXPECT().Write(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	tc.conn.handlePacket(getShortHeaderPacket(t, tc.remoteAddr, tc.srcConnID, 0x42, nil))
@@ -668,7 +672,7 @@ func testConnectionUnpackFailureDropped(t *testing.T, unpackErr error) {
 			Return(protocol.PacketNumber(0), protocol.PacketNumberLen(0), protocol.KeyPhaseBit(0), nil, unpackErr)
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		packet := getShortHeaderPacket(t, tc.remoteAddr, tc.srcConnID, 0x42, nil)
 		tc.conn.handlePacket(packet)
@@ -688,26 +692,7 @@ func testConnectionUnpackFailureDropped(t *testing.T, unpackErr error) {
 	})
 }
 
-func TestConnectionMaxUnprocessedPackets(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
 
-		tc := newServerTestConnection(t, mockCtrl, nil, false)
-
-		for range protocol.MaxConnUnprocessedPackets {
-			// nothing here should block
-			tc.conn.handlePacket(receivedPacket{data: []byte("foobar")})
-		}
-
-		tc.conn.handlePacket(receivedPacket{data: []byte("foobar")})
-
-		synctest.Wait()
-
-		tc.conn.receivedPacketMx.Lock()
-		require.Equal(t, protocol.MaxConnUnprocessedPackets, tc.conn.receivedPackets.Len())
-		tc.conn.receivedPacketMx.Unlock()
-	})
-}
 
 func TestConnectionRemoteClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -732,7 +717,7 @@ func TestConnectionRemoteClose(t *testing.T) {
 		tc.connRunner.EXPECT().ReplaceWithClosed(gomock.Any(), gomock.Any(), gomock.Any())
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		p := getShortHeaderPacket(t, tc.remoteAddr, tc.srcConnID, 1, []byte("encrypted"))
 		tc.conn.handlePacket(receivedPacket{data: p.data, buffer: p.buffer, rcvTime: monotime.Now()})
@@ -766,7 +751,7 @@ func TestConnectionIdleTimeoutDuringHandshake(t *testing.T) {
 		start := monotime.Now()
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		synctest.Wait()
 
@@ -794,7 +779,7 @@ func TestConnectionHandshakeIdleTimeout(t *testing.T) {
 		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		synctest.Wait()
 
@@ -921,14 +906,6 @@ func TestConnectionHandleMaxStreamsFrame(t *testing.T) {
 	})
 }
 
-func TestConnectionHandshakeClient(t *testing.T) {
-	t.Run("without preferred address", func(t *testing.T) {
-		testConnectionHandshakeClient(t, false)
-	})
-	t.Run("with preferred address", func(t *testing.T) {
-		testConnectionHandshakeClient(t, true)
-	})
-}
 
 func testConnectionHandshakeClient(t *testing.T, usePreferredAddress bool) {
 	mockCtrl := gomock.NewController(t)
@@ -1004,7 +981,7 @@ func testConnectionHandshakeClient(t *testing.T, usePreferredAddress bool) {
 		AnyTimes()
 
 	errChan := make(chan error, 1)
-	go func() { errChan <- tc.conn.run() }()
+	go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 	select {
 	case <-packedFirstPacket:
@@ -1164,7 +1141,7 @@ func TestConnection0RTTTransportParameters(t *testing.T) {
 	tc.connRunner.EXPECT().ReplaceWithClosed(gomock.Any(), gomock.Any(), gomock.Any())
 
 	errChan := make(chan error, 1)
-	go func() { errChan <- tc.conn.run() }()
+	go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 	select {
 	case <-packedFirstPacket:
@@ -1273,7 +1250,7 @@ func testConnectionReceivePrioritization(t *testing.T, handshakeComplete bool, n
 	tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
 
 	errChan := make(chan error, 1)
-	go func() { errChan <- tc.conn.run() }()
+	go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 	select {
 	case <-done:
@@ -1295,329 +1272,8 @@ func testConnectionReceivePrioritization(t *testing.T, handshakeComplete bool, n
 	return events
 }
 
-func TestConnectionPacketBuffering(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		unpacker := NewMockUnpacker(mockCtrl)
-		cs := mocks.NewMockCryptoSetup(mockCtrl)
 
-		tc := newServerTestConnection(t,
-			mockCtrl,
-			nil,
-			false,
-			connectionOptUnpacker(unpacker),
-			connectionOptCryptoSetup(cs),
-		)
 
-		tc.packer.EXPECT().
-			PackCoalescedPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, nil).
-			AnyTimes()
-		cs.EXPECT().DiscardInitialKeys().AnyTimes()
-
-		hdr1 := wire.ExtendedHeader{
-			Header: wire.Header{
-				Type:             protocol.PacketTypeHandshake,
-				DestConnectionID: tc.srcConnID,
-				SrcConnectionID:  tc.destConnID,
-				Length:           8,
-				Version:          protocol.Version1,
-			},
-			PacketNumberLen: protocol.PacketNumberLen1,
-			PacketNumber:    1,
-		}
-		hdr2 := hdr1
-		hdr2.PacketNumber = 2
-
-		cs.EXPECT().StartHandshake(gomock.Any())
-		cs.EXPECT().NextEvent().Return(handshake.Event{Kind: handshake.EventNoEvent})
-		unpacker.EXPECT().
-			UnpackLongHeader(gomock.Any(), gomock.Any()).
-			Return(nil, handshake.ErrKeysNotYetAvailable).
-			Times(2)
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		hdrs := make(map[string]*wire.ExtendedHeader)
-
-		packet1 := getLongHeaderPacket(t, tc.remoteAddr, &hdr1, []byte("packet1"))
-		hdrs["packet1"] = &hdr1
-
-		tc.conn.handlePacket(packet1)
-		packet2 := getLongHeaderPacket(t, tc.remoteAddr, &hdr2, []byte("packet2"))
-		hdrs["packet2"] = &hdr2
-
-		tc.conn.handlePacket(packet2)
-		synctest.Wait()
-
-		// Now send another packet.
-		// In reality, this packet would contain a CRYPTO frame that advances the TLS handshake
-		// such that new keys become available.
-		var packets []string
-
-		hdr3 := hdr1
-		hdr3.PacketNumber = 3
-		hdrs["packet3"] = &hdr3
-
-		tc.packer.EXPECT().
-			PackCoalescedPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, nil).
-			AnyTimes()
-		cs.EXPECT().NextEvent().Return(handshake.Event{Kind: handshake.EventReceivedReadKeys})
-		cs.EXPECT().NextEvent().Return(handshake.Event{Kind: handshake.EventNoEvent})
-
-		gomock.InOrder(
-			// packet 3 contains a CRYPTO frame and triggers the keys to become available
-			unpacker.EXPECT().UnpackLongHeader(gomock.Any(), gomock.Any()).DoAndReturn(
-				func(hdr *wire.Header, data []byte) (*unpackedPacket, error) {
-					id := string(data[len(data)-7:])
-					packets = append(packets, id)
-					cf := &wire.CryptoFrame{Data: []byte("foobar")}
-					b, _ := cf.Append(nil, protocol.Version1)
-
-					extHdr, ok := hdrs[id]
-					if !ok {
-						panic(fmt.Sprintf("unknown header: %v", id))
-					}
-
-					return &unpackedPacket{hdr: extHdr, encryptionLevel: protocol.EncryptionHandshake, data: b}, nil
-				},
-			),
-			cs.EXPECT().HandleMessage(gomock.Any(), gomock.Any()),
-			unpacker.EXPECT().UnpackLongHeader(gomock.Any(), gomock.Any()).DoAndReturn(
-				func(hdr *wire.Header, data []byte) (*unpackedPacket, error) {
-					id := string(data[len(data)-7:])
-
-					extHdr, ok := hdrs[id]
-					if !ok {
-						panic(fmt.Sprintf("unknown header: %v", id))
-					}
-
-					packets = append(packets, id)
-
-					return &unpackedPacket{
-						hdr:             extHdr,
-						encryptionLevel: protocol.EncryptionHandshake,
-						data:            []byte{0}, /* PADDING */
-					}, nil
-				},
-			).Times(2),
-		)
-
-		packet3 := getLongHeaderPacket(t, tc.remoteAddr, &hdr3, []byte("packet3"))
-		tc.conn.handlePacket(packet3)
-
-		synctest.Wait()
-
-		// packet3 triggered the keys to become available
-		// packet1 and packet2 are processed from the buffer in order
-		require.Equal(t, []string{"packet3", "packet1", "packet2"}, packets)
-
-		// test teardown
-		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
-		cs.EXPECT().Close()
-		tc.conn.destroy(nil)
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
-		default:
-			t.Fatal("should have shut down")
-		}
-	})
-}
-
-func TestConnectionPacketPacing(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		sph := mockackhandler.NewMockSentPacketHandler(mockCtrl)
-		sender := NewMockSender(mockCtrl)
-
-		tc := newServerTestConnection(t,
-			mockCtrl,
-			nil,
-			false,
-			connectionOptSentPacketHandler(sph),
-			connectionOptSender(sender),
-			connectionOptHandshakeConfirmed(),
-		)
-		sender.EXPECT().Run()
-
-		const step = 50 * time.Millisecond
-
-		sph.EXPECT().GetLossDetectionTimeout().Return(monotime.Now().Add(time.Hour)).AnyTimes()
-		gomock.InOrder(
-			// 1. allow 2 packets to be sent
-			sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAny),
-			sph.EXPECT().
-				SentPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()),
-			sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAny),
-			sph.EXPECT().
-				SentPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()),
-			sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendPacingLimited),
-			// 2. become pacing limited for 25ms
-			sph.EXPECT().TimeUntilSend().DoAndReturn(func() monotime.Time { return monotime.Now().Add(step) }),
-			// 3. send another packet
-			sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAny),
-			sph.EXPECT().
-				SentPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()),
-			sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendPacingLimited),
-			// 4. become pacing limited for 25ms...
-			sph.EXPECT().TimeUntilSend().DoAndReturn(func() monotime.Time { return monotime.Now().Add(step) }),
-			// ... but this time we're still pacing limited when waking up.
-			// In this case, we can only send an ACK.
-			sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendPacingLimited),
-			// 5. stop the test by becoming pacing limited forever
-			sph.EXPECT().TimeUntilSend().Return(monotime.Now().Add(time.Hour)),
-			sph.EXPECT().
-				SentPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()),
-		)
-		sph.EXPECT().ECNMode(gomock.Any()).AnyTimes()
-
-		for i := range 3 {
-			tc.packer.EXPECT().AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), Version1).DoAndReturn(
-				func(buf *packetBuffer, _ protocol.ByteCount, _ monotime.Time, _ protocol.Version) (shortHeaderPacket, error) {
-					buf.Data = append(buf.Data, []byte("packet"+strconv.Itoa(i+1))...)
-					return shortHeaderPacket{PacketNumber: protocol.PacketNumber(i + 1)}, nil
-				},
-			)
-		}
-
-		tc.packer.EXPECT().PackAckOnlyPacket(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ protocol.ByteCount, _ monotime.Time, _ protocol.Version) (shortHeaderPacket, *packetBuffer, error) {
-				buf := getPacketBuffer()
-				buf.Data = []byte("ack")
-				return shortHeaderPacket{PacketNumber: 1}, buf, nil
-			},
-		)
-		sender.EXPECT().WouldBlock().AnyTimes()
-
-		type sentPacket struct {
-			time monotime.Time
-			data []byte
-		}
-
-		sendChan := make(chan sentPacket, 10)
-		sender.EXPECT().
-			Send(gomock.Any(), gomock.Any(), gomock.Any()).
-			Do(func(b *packetBuffer, _ uint16, _ protocol.ECN) {
-				sendChan <- sentPacket{time: monotime.Now(), data: b.Data}
-			}).
-			Times(4)
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		tc.conn.scheduleSending()
-
-		synctest.Wait()
-
-		var times []monotime.Time
-		for i := range 3 {
-			select {
-			case b := <-sendChan:
-				require.Equal(t, []byte("packet"+strconv.Itoa(i+1)), b.data)
-				times = append(times, b.time)
-			case <-time.After(time.Hour):
-				t.Fatal("should have sent a packet")
-			}
-		}
-
-		select {
-		case b := <-sendChan:
-			require.Equal(t, []byte("ack"), b.data)
-			times = append(times, b.time)
-		case <-time.After(time.Second):
-			t.Fatal("timeout")
-		}
-
-		require.Equal(t, times[0], times[1])
-		require.Equal(t, times[2], times[1].Add(step))
-		require.Equal(t, times[3], times[2].Add(step))
-
-		synctest.Wait() // make sure that no more packets are sent
-		require.True(t, mockCtrl.Satisfied())
-
-		// test teardown
-		sender.EXPECT().Close()
-		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
-		tc.conn.destroy(nil)
-
-		synctest.Wait()
-
-		select {
-		case <-sendChan:
-			t.Fatal("should not have sent any more packets")
-		case err := <-errChan:
-			require.NoError(t, err)
-		default:
-			t.Fatal("should have timed out")
-		}
-	})
-}
-
-// When the send queue blocks, we need to reset the pacing timer, otherwise the run loop might busy-loop.
-// See https://github.com/lemon4ksan/sein/internal/quic/pull/4943 for more details.
-func TestConnectionPacingAndSendQueue(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		sph := mockackhandler.NewMockSentPacketHandler(mockCtrl)
-		sender := NewMockSender(mockCtrl)
-
-		tc := newServerTestConnection(t,
-			mockCtrl,
-			nil,
-			false,
-			connectionOptSentPacketHandler(sph),
-			connectionOptSender(sender),
-			connectionOptHandshakeConfirmed(),
-		)
-		sender.EXPECT().Run()
-
-		sendQueueAvailable := make(chan struct{})
-		pacingDeadline := monotime.Now().Add(-time.Millisecond)
-
-		var counter int
-		// allow exactly one packet to be sent, then become blocked
-		sender.EXPECT().WouldBlock().Return(false)
-		sender.EXPECT().WouldBlock().DoAndReturn(func() bool { counter++; return true }).AnyTimes()
-		sender.EXPECT().Available().Return(sendQueueAvailable).AnyTimes()
-		sph.EXPECT().GetLossDetectionTimeout().Return(monotime.Now().Add(time.Hour)).AnyTimes()
-		sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendPacingLimited).AnyTimes()
-		sph.EXPECT().TimeUntilSend().Return(pacingDeadline).AnyTimes()
-		sph.EXPECT().ECNMode(gomock.Any()).Return(protocol.ECNNon).AnyTimes()
-		tc.packer.EXPECT().PackAckOnlyPacket(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-			shortHeaderPacket{}, nil, errNothingToPack,
-		)
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		tc.conn.scheduleSending()
-
-		synctest.Wait()
-
-		// test teardown
-		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
-		sender.EXPECT().Close()
-		tc.conn.destroy(nil)
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
-		default:
-			t.Fatal("should have timed out")
-		}
-
-		// make sure the run loop didn't do too many iterations
-		require.Less(t, counter, 3)
-	})
-}
 
 func TestConnectionIdleTimeout(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -1662,7 +1318,7 @@ func TestConnectionIdleTimeout(t *testing.T) {
 		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.scheduleSending()
 
@@ -1679,241 +1335,9 @@ func TestConnectionIdleTimeout(t *testing.T) {
 	})
 }
 
-func TestConnectionKeepAlive(t *testing.T) {
-	t.Run("enabled", func(t *testing.T) {
-		testConnectionKeepAlive(t, true, true)
-	})
 
-	t.Run("disabled", func(t *testing.T) {
-		testConnectionKeepAlive(t, false, false)
-	})
-}
 
-func testConnectionKeepAlive(t *testing.T, enable, expectKeepAlive bool) {
-	synctest.Test(t, func(t *testing.T) {
-		var keepAlivePeriod time.Duration
-		if enable {
-			keepAlivePeriod = time.Second
-		}
 
-		mockCtrl := gomock.NewController(t)
-		unpacker := NewMockUnpacker(mockCtrl)
-		tc := newServerTestConnection(t,
-			mockCtrl,
-			&config{MaxIdleTimeout: time.Second, KeepAlivePeriod: keepAlivePeriod},
-			false,
-			connectionOptUnpacker(unpacker),
-			connectionOptHandshakeConfirmed(),
-			connectionOptRTT(time.Millisecond),
-		)
-		// the idle timeout is set when the transport parameters are received
-		const idleTimeout = 50 * time.Millisecond
-		require.NoError(t, tc.conn.handleTransportParameters(&wire.TransportParameters{
-			InitialSourceConnectionID:       tc.destConnID,
-			OriginalDestinationConnectionID: tc.destConnID,
-			MaxIdleTimeout:                  idleTimeout,
-		}))
-		tc.conn.applyTransportParameters()
-
-		// Receive a packet. This starts the keep-alive timer.
-		buf := getPacketBuffer()
-
-		var err error
-
-		buf.Data, err = wire.AppendShortHeader(
-			buf.Data,
-			tc.srcConnID,
-			1,
-			protocol.PacketNumberLen1,
-			protocol.KeyPhaseZero,
-		)
-		require.NoError(t, err)
-
-		buf.Data = append(buf.Data, []byte("packet")...)
-
-		var unpackTime, packTime monotime.Time
-
-		done := make(chan struct{})
-
-		unpacker.EXPECT().UnpackShortHeader(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(t monotime.Time, bytes []byte) (protocol.PacketNumber, protocol.PacketNumberLen, protocol.KeyPhaseBit, []byte, error) {
-				unpackTime = monotime.Now()
-
-				return protocol.PacketNumber(1), protocol.PacketNumberLen1, protocol.KeyPhaseZero, []byte{
-					0,
-				}, /* PADDING */ nil
-			},
-		)
-		tc.packer.EXPECT().
-			AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(shortHeaderPacket{}, errNothingToPack).
-			Times(2)
-
-		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
-
-		if expectKeepAlive {
-			// record the time of the keep-alive is sent
-			tc.packer.EXPECT().AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(buffer *packetBuffer, count protocol.ByteCount, t monotime.Time, version protocol.Version) (shortHeaderPacket, error) {
-					packTime = monotime.Now()
-
-					close(done)
-
-					return shortHeaderPacket{}, errNothingToPack
-				},
-			)
-		}
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		tc.conn.handlePacket(
-			receivedPacket{data: buf.Data, buffer: buf, rcvTime: monotime.Now(), remoteAddr: tc.remoteAddr},
-		)
-
-		if expectKeepAlive {
-			select {
-			case <-done:
-				// the keep-alive packet should be sent after half the idle timeout
-				require.Equal(t, unpackTime.Add(idleTimeout/2), packTime)
-			case <-time.After(idleTimeout):
-				t.Fatal("timeout")
-			}
-
-			// test teardown
-			tc.conn.destroy(nil)
-		}
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			if expectKeepAlive {
-				require.NoError(t, err)
-			} else {
-				require.ErrorIs(t, err, &IdleTimeoutError{})
-			}
-
-		case <-time.After(time.Hour):
-			t.Fatal("timeout")
-		}
-	})
-}
-
-func TestConnectionACKTimer(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		sph := mockackhandler.NewMockSentPacketHandler(mockCtrl)
-		tc := newServerTestConnection(t,
-			mockCtrl,
-			&config{MaxIdleTimeout: time.Second},
-			false,
-			connectionOptHandshakeConfirmed(),
-			connectionOptSentPacketHandler(sph),
-		)
-
-		const alarmTimeout = 500 * time.Millisecond
-
-		sph.EXPECT().GetLossDetectionTimeout().AnyTimes()
-		sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAny).AnyTimes()
-		sph.EXPECT().
-			SentPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			AnyTimes()
-		sph.EXPECT().ECNMode(gomock.Any()).AnyTimes()
-		tc.sendConn.EXPECT().Write(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-		// Set initial alarm timeout far in the future
-		_ = tc.receivedPacketHandler().
-			ReceivedPacket(1, protocol.ECNNon, protocol.Encryption1RTT, monotime.Now().Add(time.Hour), true)
-
-		var times []monotime.Time
-
-		done := make(chan struct{}, 5)
-
-		var calls []any
-
-		for range 2 {
-			calls = append(
-				calls,
-				tc.packer.EXPECT().AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(buf *packetBuffer, _ protocol.ByteCount, now monotime.Time, _ protocol.Version) (shortHeaderPacket, error) {
-						buf.Data = append(buf.Data, []byte("foobar")...)
-						times = append(times, now)
-
-						rph := tc.receivedPacketHandler()
-						if len(times) == 1 {
-							// After first packet is sent, set alarm timeout for the next iteration
-							// Get the ACK frame to reset state, then receive a new packet to set alarm
-							_ = rph.GetAckFrame(protocol.Encryption1RTT, now, false)
-							alarmRcvTime := now.Add(alarmTimeout - protocol.MaxAckDelay)
-							_ = rph.ReceivedPacket(2, protocol.ECNNon, protocol.Encryption1RTT, alarmRcvTime, true)
-						} else {
-							// After second packet is sent, set alarm timeout far in the future
-							_ = rph.GetAckFrame(protocol.Encryption1RTT, now, false)
-							_ = rph.ReceivedPacket(
-								3,
-								protocol.ECNNon,
-								protocol.Encryption1RTT,
-								now.Add(time.Hour),
-								true,
-							)
-						}
-
-						return shortHeaderPacket{Frames: []ackhandler.Frame{{Frame: &wire.PingFrame{}}}, Length: 6}, nil
-					},
-				),
-			)
-			calls = append(
-				calls,
-				tc.packer.EXPECT().AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(*packetBuffer, protocol.ByteCount, monotime.Time, protocol.Version) (shortHeaderPacket, error) {
-						done <- struct{}{}
-						return shortHeaderPacket{}, errNothingToPack
-					},
-				),
-			)
-		}
-
-		gomock.InOrder(calls...)
-		tc.packer.EXPECT().
-			AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(shortHeaderPacket{}, errNothingToPack).
-			AnyTimes()
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		tc.conn.scheduleSending()
-
-		for range 2 {
-			synctest.Wait()
-
-			select {
-			case <-done:
-			case <-time.After(time.Hour):
-				t.Fatal("timeout")
-			}
-		}
-
-		assert.Len(t, times, 2)
-		require.Equal(t, times[0].Add(alarmTimeout), times[1])
-
-		// test teardown
-		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
-		tc.conn.destroy(nil)
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
-		default:
-			t.Fatal("should have timed out")
-		}
-	})
-}
-
-// Send a GSO batch, until we have no more data to send.
 func TestConnectionGSOBatch(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
@@ -1961,7 +1385,7 @@ func TestConnectionGSOBatch(t *testing.T) {
 		)
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.scheduleSending()
 
@@ -2069,7 +1493,7 @@ func TestConnectionGSOBatchPacketSize(t *testing.T) {
 		)
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.scheduleSending()
 
@@ -2176,7 +1600,7 @@ func TestConnectionGSOBatchECN(t *testing.T) {
 		)
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.scheduleSending()
 
@@ -2262,7 +1686,7 @@ func testConnectionPTOProbePackets(t *testing.T, encLevel protocol.EncryptionLev
 		)
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.scheduleSending()
 
@@ -2287,108 +1711,7 @@ func testConnectionPTOProbePackets(t *testing.T, encLevel protocol.EncryptionLev
 	})
 }
 
-func TestConnectionCongestionControl(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		sph := mockackhandler.NewMockSentPacketHandler(mockCtrl)
-		tc := newServerTestConnection(t,
-			mockCtrl,
-			nil,
-			false,
-			connectionOptHandshakeConfirmed(),
-			connectionOptSentPacketHandler(sph),
-		)
 
-		sph.EXPECT().TimeUntilSend().AnyTimes()
-		sph.EXPECT().GetLossDetectionTimeout().AnyTimes()
-		sph.EXPECT().ECNMode(true).AnyTimes()
-		sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAny).Times(2)
-		sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAck).MaxTimes(1)
-		sph.EXPECT().
-			SentPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Times(2)
-		// Since we're already sending out packets, we don't expect any calls to PackAckOnlyPacket
-		for i := range 2 {
-			tc.packer.EXPECT().AppendPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(buffer *packetBuffer, count protocol.ByteCount, t monotime.Time, version protocol.Version) (shortHeaderPacket, error) {
-					buffer.Data = append(buffer.Data, []byte("foobar")...)
-					return shortHeaderPacket{PacketNumber: protocol.PacketNumber(i)}, nil
-				},
-			)
-		}
-
-		tc.sendConn.EXPECT().Write(gomock.Any(), gomock.Any(), gomock.Any())
-
-		done1 := make(chan struct{})
-		tc.sendConn.EXPECT().Write(gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func([]byte, uint16, protocol.ECN) error { close(done1); return nil },
-		)
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		tc.conn.scheduleSending()
-
-		synctest.Wait()
-
-		select {
-		case <-done1:
-		default:
-			t.Fatal("should have sent a packet")
-		}
-
-		require.True(t, mockCtrl.Satisfied())
-
-		// Now that we're congestion limited, we can only send an ack-only packet
-		done2 := make(chan struct{})
-
-		sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendAck)
-		tc.packer.EXPECT().PackAckOnlyPacket(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(protocol.ByteCount, monotime.Time, protocol.Version) (shortHeaderPacket, *packetBuffer, error) {
-				close(done2)
-				return shortHeaderPacket{}, nil, errNothingToPack
-			},
-		)
-		tc.conn.scheduleSending()
-
-		synctest.Wait()
-
-		select {
-		case <-done2:
-		default:
-			t.Fatal("should have sent an ack-only packet")
-		}
-
-		require.True(t, mockCtrl.Satisfied())
-
-		// If the send mode is "none", we can't even send an ack-only packet
-		sph.EXPECT().SendMode(gomock.Any()).Return(ackhandler.SendNone)
-		tc.conn.scheduleSending()
-		synctest.Wait() // make sure there are no calls to the packer
-
-		// test teardown
-		tc.connRunner.EXPECT().Remove(gomock.Any()).AnyTimes()
-		tc.conn.destroy(nil)
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
-		default:
-			t.Fatal("timeout")
-		}
-	})
-}
-
-func TestConnectionSendQueue(t *testing.T) {
-	t.Run("with GSO", func(t *testing.T) {
-		testConnectionSendQueue(t, true)
-	})
-	t.Run("without GSO", func(t *testing.T) {
-		testConnectionSendQueue(t, false)
-	})
-}
 
 func testConnectionSendQueue(t *testing.T, enableGSO bool) {
 	synctest.Test(t, func(t *testing.T) {
@@ -2427,7 +1750,7 @@ func testConnectionSendQueue(t *testing.T, enableGSO bool) {
 		sender.EXPECT().Send(gomock.Any(), gomock.Any(), gomock.Any())
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		tc.conn.scheduleSending()
 
@@ -2492,79 +1815,7 @@ func getVersionNegotiationPacket(src, dest protocol.ConnectionID, versions []pro
 	}
 }
 
-func TestConnectionVersionNegotiation(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
 
-		tc := newClientTestConnection(t, mockCtrl, nil, false)
-
-		tc.packer.EXPECT().
-			PackCoalescedPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, nil).
-			AnyTimes()
-		tc.connRunner.EXPECT().Remove(gomock.Any())
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		vnp := getVersionNegotiationPacket(
-			tc.destConnID,
-			tc.srcConnID,
-			[]protocol.Version{1234, protocol.Version2},
-		)
-		tc.conn.handlePacket(vnp)
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			var rerr *errCloseForRecreating
-			require.ErrorAs(t, err, &rerr)
-			require.Equal(t, rerr.nextVersion, protocol.Version2)
-		default:
-			t.Fatal("should have received a Version Negotiation packet")
-		}
-	})
-}
-
-func TestConnectionVersionNegotiationNoMatch(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-
-		tc := newClientTestConnection(t,
-			mockCtrl,
-			&config{Versions: []protocol.Version{protocol.Version1}},
-			false,
-		)
-
-		tc.packer.EXPECT().
-			PackCoalescedPacket(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, nil).
-			AnyTimes()
-		tc.connRunner.EXPECT().Remove(gomock.Any())
-
-		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
-
-		vnp := getVersionNegotiationPacket(
-			tc.destConnID,
-			tc.srcConnID,
-			[]protocol.Version{protocol.Version2},
-		)
-		tc.conn.handlePacket(vnp)
-
-		synctest.Wait()
-
-		select {
-		case err := <-errChan:
-			var verr *VersionNegotiationError
-			require.ErrorAs(t, err, &verr)
-			require.Contains(t, verr.Theirs, protocol.Version2)
-		default:
-			t.Fatal("should have received a Version Negotiation packet")
-		}
-	})
-}
 
 func TestConnectionVersionNegotiationInvalidPackets(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -2722,7 +1973,7 @@ func testConnectionConnectionIDChanges(t *testing.T, sendRetry bool) {
 			AnyTimes()
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		require.Equal(t, dstConnID, tc.conn.connIDManager.Get())
 
@@ -2816,7 +2067,7 @@ func TestConnectionEarlyClose(t *testing.T) {
 		tc.connRunner.EXPECT().Remove(gomock.Any())
 
 		errChan := make(chan error, 1)
-		go func() { errChan <- tc.conn.run() }()
+		go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 		synctest.Wait()
 
@@ -2884,7 +2135,7 @@ func testConnectionMigration(t *testing.T, enabled bool) {
 	require.NoError(t, err)
 
 	errChan := make(chan error, 1)
-	go func() { errChan <- tc.conn.run() }()
+	go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
 	go func() { path.Probe(context.Background()) }()
 

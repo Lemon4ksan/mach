@@ -5,19 +5,10 @@
 
 package quic
 
+import "time"
+
 import "context"
 
-func (c *wrappedConn) run() error {
-	if c.testHooks == nil {
-		return c.Conn.run()
-	}
-
-	if c.testHooks.run != nil {
-		return c.testHooks.run()
-	}
-
-	return nil
-}
 
 func (c *wrappedConn) earlyConnReady() <-chan struct{} {
 	if c.testHooks == nil {
@@ -86,4 +77,19 @@ func (c *wrappedConn) handlePacket(p receivedPacket) {
 	if c.testHooks.handlePacket != nil {
 		c.testHooks.handlePacket(p)
 	}
+}
+
+func (c *wrappedConn) Start() error {
+	if c.testHooks != nil {
+		return nil
+	}
+	return c.Conn.Start()
+}
+
+
+func (c *wrappedConn) Tick(now time.Time) error {
+	if c.testHooks != nil {
+		return nil
+	}
+	return c.Conn.Tick(now)
 }

@@ -25,7 +25,7 @@ import (
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
 	"github.com/lemon4ksan/mach/quic/internal/utils"
-	"github.com/lemon4ksan/mach/quic/internal/utils/ringbuffer"
+
 	"github.com/lemon4ksan/mach/quic/internal/wire"
 )
 
@@ -131,6 +131,7 @@ const (
 //   - [StatelessResetError]: when we receive a stateless reset
 //   - [VersionNegotiationError]: returned by the client, when there's no version overlap between the peers
 type Conn struct {
+	mu sync.Mutex
 	// Destination connection ID used during the handshake.
 	// Used to check source connection ID on incoming packets.
 	handshakeDestConnID protocol.ConnectionID
@@ -180,13 +181,7 @@ type Conn struct {
 	oneRTTStream        *cryptoStream // only set for the server
 	cryptoStreamHandler cryptoStreamHandler
 
-	notifyReceivedPacket chan struct{}
-	sendingScheduled     chan struct{}
-	receivedPacketMx     sync.Mutex
-	receivedPackets      ringbuffer.RingBuffer[receivedPacket]
 
-	// closeChan is used to notify the run loop that it should terminate
-	closeChan chan struct{}
 	closeErr  atomic.Pointer[closeError]
 
 	ctx                   context.Context
@@ -220,7 +215,6 @@ type Conn struct {
 
 	peerParams *wire.TransportParameters
 
-	timer *time.Timer
 	// keepAlivePingSent stores whether a keep alive PING is in flight.
 	// It is reset as soon as we receive a packet from the peer.
 	keepAlivePingSent bool
@@ -245,6 +239,32 @@ type connTestHooks struct {
 	closeWithTransportError func(TransportErrorCode)
 	destroy                 func(error)
 	handlePacket            func(receivedPacket)
+}
+
+
+func (c *wrappedConn) run() error {
+	if c.testHooks != nil {
+		if c.testHooks.run != nil {
+			return c.testHooks.run()
+		}
+		return nil
+	}
+	ticker := time.NewTicker(time.Millisecond * 10)
+	defer ticker.Stop()
+	for {
+		if err := c.Conn.Tick(time.Now()); err != nil {
+			return err
+		}
+		select {
+		case <-c.Context().Done():
+			err := context.Cause(c.Context())
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return err
+		case <-ticker.C:
+		}
+	}
 }
 
 type wrappedConn struct {
@@ -511,7 +531,7 @@ func (c *Conn) preSetup() {
 	c.largestRcvdAppData = protocol.InvalidPacketNumber
 	c.initialStream = newInitialCryptoStream(c.perspective == protocol.PerspectiveClient)
 	c.handshakeStream = newCryptoStream()
-	c.sendQueue = newSendQueue(c.conn)
+	c.sendQueue = newSendQueue(c.conn, func(err error) { c.setCloseError(&closeError{err: err}) })
 	c.retransmissionQueue = newRetransmissionQueue()
 	c.frameParser = *wire.NewFrameParser(
 		c.config.EnableDatagrams,
@@ -543,10 +563,7 @@ func (c *Conn) preSetup() {
 		c.perspective,
 	)
 	c.framer = newFramer(c.connFlowController)
-	c.receivedPackets.Init(8)
-	c.notifyReceivedPacket = make(chan struct{}, 1)
-	c.closeChan = make(chan struct{}, 1)
-	c.sendingScheduled = make(chan struct{}, 1)
+	
 	c.handshakeCompleteChan = make(chan struct{})
 
 	now := monotime.Now()
@@ -559,23 +576,10 @@ func (c *Conn) preSetup() {
 	c.connState.Version = c.version
 }
 
-// run the connection main loop
-func (c *Conn) run() (err error) {
-	defer func() { c.ctxCancel(err) }()
-
-	defer func() {
-		// drain queued packets that will never be processed
-		c.receivedPacketMx.Lock()
-		defer c.receivedPacketMx.Unlock()
-
-		for !c.receivedPackets.Empty() {
-			p := c.receivedPackets.PopFront()
-			p.buffer.Decrement()
-			p.buffer.MaybeRelease()
-		}
-	}()
-
-	c.timer = time.NewTimer(monotime.Until(c.idleTimeoutStartTime().Add(c.config.HandshakeIdleTimeout)))
+// Start starts the FSM.
+func (c *Conn) Start() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if err := c.cryptoStreamHandler.StartHandshake(c.ctx); err != nil {
 		return err
@@ -585,183 +589,108 @@ func (c *Conn) run() (err error) {
 		return err
 	}
 
-	go func() {
-		if err := c.sendQueue.Run(); err != nil {
-			c.destroyImpl(err)
-		}
-	}()
-
 	if c.perspective == protocol.PerspectiveClient {
 		c.scheduleSending() // so the ClientHello actually gets sent
 	}
+	return nil
+}
 
-	var sendQueueAvailable <-chan struct{}
+// Tick drives the FSM based on time
+func (c *Conn) Tick(now time.Time) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	mt := monotime.Now() // we use true monotonic time instead of converted time
 
-runLoop:
-	for {
-		if c.framer.QueuedTooManyControlFrames() {
-			c.setCloseError(&closeError{err: &qerr.TransportError{ErrorCode: InternalError}})
-			break runLoop
-		}
+	if err := c.closeErr.Load(); err != nil {
+		return err.err
+	}
 
-		// Close immediately if requested
-		select {
-		case <-c.closeChan:
-			break runLoop
-		default:
-		}
-
-		// no need to set a timer if we can send packets immediately
-		if c.pacingDeadline != deadlineSendImmediately {
-			c.maybeResetTimer()
-		}
-
-		// 1st: handle undecryptable packets, if any.
-		// This can only occur before completion of the handshake.
-		if len(c.undecryptablePacketsToProcess) > 0 {
-			var processedUndecryptablePacket bool
-
-			queue := c.undecryptablePacketsToProcess
-
-			c.undecryptablePacketsToProcess = nil
-			for _, p := range queue {
-				processed, err := c.handleOnePacket(p)
-				if err != nil {
-					c.setCloseError(&closeError{err: err})
-					break runLoop
-				}
-
-				if processed {
-					processedUndecryptablePacket = true
-				}
-			}
-
-			if processedUndecryptablePacket {
-				// if we processed any undecryptable packets, jump to the resetting of the timers directly
-				continue
-			}
-		}
-
-		// 2nd: receive packets.
-		processed, err := c.handlePackets() // don't check receivedPackets.Len() in the run loop to avoid locking the mutex
-		if err != nil {
-			c.setCloseError(&closeError{err: err})
-			break runLoop
-		}
-
-		// We don't need to wait for new events if:
-		// * we processed packets: we probably need to send an ACK, and potentially more data
-		// * the pacer allows us to send more packets immediately
-		shouldProceedImmediately := sendQueueAvailable == nil && (processed || c.pacingDeadline.Equal(deadlineSendImmediately))
-		if !shouldProceedImmediately {
-			// 3rd: wait for something to happen:
-			// * closing of the connection
-			// * timer firing
-			// * sending scheduled
-			// * send queue available
-			// * received packets
-			select {
-			case <-c.closeChan:
-				break runLoop
-			case <-c.timer.C:
-			case <-c.sendingScheduled:
-			case <-sendQueueAvailable:
-			case <-c.notifyReceivedPacket:
-				wasProcessed, err := c.handlePackets()
-				if err != nil {
-					c.setCloseError(&closeError{err: err})
-					break runLoop
-				}
-
-				// if we processed any undecryptable packets, jump to the resetting of the timers directly
-				if !wasProcessed {
-					continue
-				}
-			}
-		}
-
-		// Check for loss detection timeout.
-		// This could cause packets to be declared lost, and retransmissions to be enqueued.
-		now := monotime.Now()
-		if timeout := c.sentPacketHandler.GetLossDetectionTimeout(); !timeout.IsZero() && !timeout.After(now) {
-			if err := c.sentPacketHandler.OnLossDetectionTimeout(now); err != nil {
+	// 1st: handle undecryptable packets, if any.
+	if len(c.undecryptablePacketsToProcess) > 0 {
+		queue := c.undecryptablePacketsToProcess
+		c.undecryptablePacketsToProcess = nil
+		for _, p := range queue {
+			_, err := c.handleOnePacket(p)
+			if err != nil {
 				c.setCloseError(&closeError{err: err})
-				break runLoop
+				return err
 			}
-		}
-
-		if keepAliveTime := c.nextKeepAliveTime(); !keepAliveTime.IsZero() && !now.Before(keepAliveTime) {
-			// send a PING frame since there is no activity in the connection
-			c.logger.Debugf("Sending a keep-alive PING to keep the connection alive.")
-			c.framer.QueueControlFrame(&wire.PingFrame{})
-			c.keepAlivePingSent = true
-		} else if !c.handshakeComplete && now.Sub(c.creationTime) >= c.config.handshakeTimeout() {
-			c.destroyImpl(qerr.ErrHandshakeTimeout)
-			break runLoop
-		} else {
-			idleTimeoutStartTime := c.idleTimeoutStartTime()
-			if (!c.handshakeComplete && now.Sub(idleTimeoutStartTime) >= c.config.HandshakeIdleTimeout) ||
-				(c.handshakeComplete && !now.Before(c.nextIdleTimeoutTime())) {
-				c.destroyImpl(qerr.ErrIdleTimeout)
-				break runLoop
-			}
-		}
-
-		c.connIDGenerator.RemoveRetiredConnIDs(now)
-
-		if c.perspective == protocol.PerspectiveClient {
-			pm := c.pathManagerOutgoing.Load()
-			if pm != nil {
-				tr, ok := pm.ShouldSwitchPath()
-				if ok {
-					c.switchToNewPath(tr, now)
-				}
-			}
-		}
-
-		if c.sendQueue.WouldBlock() {
-			// The send queue is still busy sending out packets. Wait until there's space to enqueue new packets.
-			sendQueueAvailable = c.sendQueue.Available()
-			// Cancel the pacing timer, as we can't send any more packets until the send queue is available again.
-			c.pacingDeadline = 0
-			c.blocked = blockModeHardBlocked
-
-			continue
-		}
-
-		if c.closeErr.Load() != nil {
-			break runLoop
-		}
-
-		c.blocked = blockModeNone // sending might set it back to true if we're congestion limited
-		if err := c.triggerSending(now); err != nil {
-			c.setCloseError(&closeError{err: err})
-			break runLoop
-		}
-
-		if c.sendQueue.WouldBlock() {
-			// The send queue is still busy sending out packets. Wait until there's space to enqueue new packets.
-			sendQueueAvailable = c.sendQueue.Available()
-			// Cancel the pacing timer, as we can't send any more packets until the send queue is available again.
-			c.pacingDeadline = 0
-			c.blocked = blockModeHardBlocked
-		} else {
-			sendQueueAvailable = nil
 		}
 	}
 
-	closeErr := c.closeErr.Load()
-	_ = c.cryptoStreamHandler.Close()
-	c.sendQueue.Close() // close the send queue before sending the CONNECTION_CLOSE
-	c.handleCloseError(closeErr)
+	// Check for loss detection timeout.
+	if timeout := c.sentPacketHandler.GetLossDetectionTimeout(); !timeout.IsZero() && !timeout.After(mt) {
+		if err := c.sentPacketHandler.OnLossDetectionTimeout(mt); err != nil {
+			c.setCloseError(&closeError{err: err})
+			return err
+		}
+	}
 
-	c.logger.Infof("Connection %s closed.", c.logID)
-	c.timer.Stop()
+	if keepAliveTime := c.nextKeepAliveTime(); !keepAliveTime.IsZero() && !mt.Before(keepAliveTime) {
+		// send a PING frame since there is no activity in the connection
+		c.logger.Debugf("Sending a keep-alive PING to keep the connection alive.")
+		c.framer.QueueControlFrame(&wire.PingFrame{})
+		c.keepAlivePingSent = true
+	} else if !c.handshakeComplete && mt.Sub(c.creationTime) >= c.config.handshakeTimeout() {
+		c.destroyImpl(qerr.ErrHandshakeTimeout)
+		return qerr.ErrHandshakeTimeout
+	} else {
+		idleTimeoutStartTime := c.idleTimeoutStartTime()
+		if (!c.handshakeComplete && mt.Sub(idleTimeoutStartTime) >= c.config.HandshakeIdleTimeout) ||
+			(c.handshakeComplete && !mt.Before(c.nextIdleTimeoutTime())) {
+			c.destroyImpl(qerr.ErrIdleTimeout)
+			return qerr.ErrIdleTimeout
+		}
+	}
 
-	return closeErr.err
+	c.connIDGenerator.RemoveRetiredConnIDs(mt)
+
+	if c.perspective == protocol.PerspectiveClient {
+		pm := c.pathManagerOutgoing.Load()
+		if pm != nil {
+			tr, ok := pm.ShouldSwitchPath()
+			if ok {
+				c.switchToNewPath(tr, mt)
+			}
+		}
+	}
+
+	if err := c.closeErr.Load(); err != nil {
+		return err.err
+	}
+
+	c.blocked = blockModeNone // sending might set it back to true if we're congestion limited
+	if err := c.triggerSending(mt); err != nil {
+		c.setCloseError(&closeError{err: err})
+		return err
+	}
+	
+	return nil
 }
 
-// blocks until the early connection can be used
+// HandlePacket processes a raw packet (implementation for requirement).
+func (c *Conn) HandlePacket(p []byte) {
+	rp := receivedPacket{
+		data:       p,
+		rcvTime:    monotime.Now(),
+		remoteAddr: c.conn.RemoteAddr(),
+		ecn:        protocol.ECNNon,
+	}
+	c.handlePacket(rp)
+}
+
+// handlePacket is called by the server with a new packet
+func (c *Conn) handlePacket(p receivedPacket) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	_, err := c.handleOnePacket(p)
+	if err != nil {
+		c.setCloseError(&closeError{err: err})
+	}
+}
+
 func (c *Conn) earlyConnReady() <-chan struct{} {
 	return c.earlyConnReadyChan
 }
@@ -870,53 +799,7 @@ func (c *Conn) nextKeepAliveTime() monotime.Time {
 	return c.lastPacketReceivedTime.Add(keepAliveInterval)
 }
 
-func (c *Conn) maybeResetTimer() {
-	var deadline monotime.Time
-	if !c.handshakeComplete {
-		deadline = c.creationTime.Add(c.config.handshakeTimeout())
-		if t := c.idleTimeoutStartTime().Add(c.config.HandshakeIdleTimeout); t.Before(deadline) {
-			deadline = t
-		}
-	} else {
-		// A keep-alive packet is ack-eliciting, so it can only be sent if the connection is
-		// neither congestion limited nor hard-blocked.
-		if c.blocked != blockModeNone {
-			deadline = c.nextIdleTimeoutTime()
-		} else {
-			if keepAliveTime := c.nextKeepAliveTime(); !keepAliveTime.IsZero() {
-				deadline = keepAliveTime
-			} else {
-				deadline = c.nextIdleTimeoutTime()
-			}
-		}
-	}
-
-	// If the connection is hard-blocked, we can't even send acknowledgments,
-	// nor can we send PTO probe packets.
-	if c.blocked == blockModeHardBlocked {
-		c.timer.Reset(monotime.Until(deadline))
-		return
-	}
-
-	if t := c.receivedPacketHandler.GetAlarmTimeout(); !t.IsZero() && t.Before(deadline) {
-		deadline = t
-	}
-
-	if t := c.sentPacketHandler.GetLossDetectionTimeout(); !t.IsZero() && t.Before(deadline) {
-		deadline = t
-	}
-
-	if c.blocked == blockModeCongestionLimited {
-		c.timer.Reset(monotime.Until(deadline))
-		return
-	}
-
-	if !c.pacingDeadline.IsZero() && c.pacingDeadline.Before(deadline) {
-		deadline = c.pacingDeadline
-	}
-
-	c.timer.Reset(monotime.Until(deadline))
-}
+func (c *Conn) maybeResetTimer() {}
 
 func (c *Conn) idleTimeoutStartTime() monotime.Time {
 	startTime := c.lastPacketReceivedTime
@@ -940,7 +823,7 @@ func (c *Conn) switchToNewPath(tr *Transport, now monotime.Time) {
 	c.conn = newSendConn(tr.conn, c.conn.RemoteAddr(), packetInfo{}, utils.DefaultLogger) // TODO: find a better way
 	c.sendQueue.Close()
 
-	c.sendQueue = newSendQueue(c.conn)
+	c.sendQueue = newSendQueue(c.conn, func(err error) { c.setCloseError(&closeError{err: err}) })
 	go func() {
 		if err := c.sendQueue.Run(); err != nil {
 			c.destroyImpl(err)
@@ -1019,57 +902,6 @@ func (c *Conn) handleHandshakeConfirmed(now monotime.Time) error {
 }
 
 const maxPacketsToProcess = 32
-
-func (c *Conn) handlePackets() (wasProcessed bool, _ error) {
-	// Process packets from the receivedPackets queue.
-	// Limit the number of packets to process to maxPacketsToProcess,
-	// so we eventually get a chance to send out an ACK when receiving a lot of packets.
-	c.receivedPacketMx.Lock()
-
-	if c.receivedPackets.Empty() {
-		c.receivedPacketMx.Unlock()
-		return false, nil
-	}
-
-	var hasMorePackets bool
-	for range maxPacketsToProcess {
-		p := c.receivedPackets.PopFront()
-		c.receivedPacketMx.Unlock()
-
-		processed, err := c.handleOnePacket(p)
-		if err != nil {
-			return false, err
-		}
-
-		if processed {
-			wasProcessed = true
-		}
-
-		c.receivedPacketMx.Lock()
-
-		hasMorePackets = !c.receivedPackets.Empty()
-		if !hasMorePackets {
-			break
-		}
-
-		// Prioritize sending of new CRYPTO data.
-		// This is especially relevant when processing 0-RTT packets.
-		if !c.handshakeComplete && (c.initialStream.HasData() || c.handshakeStream.HasData()) {
-			break
-		}
-	}
-
-	c.receivedPacketMx.Unlock()
-
-	if hasMorePackets {
-		select {
-		case c.notifyReceivedPacket <- struct{}{}:
-		default:
-		}
-	}
-
-	return wasProcessed, nil
-}
 
 func (c *Conn) handleOnePacket(rp receivedPacket) (wasProcessed bool, _ error) {
 	c.sentPacketHandler.ReceivedBytes(rp.Size(), rp.rcvTime)
@@ -1760,26 +1592,6 @@ func (c *Conn) handleFrame(
 	return pathChallenge, err
 }
 
-// handlePacket is called by the server with a new packet
-func (c *Conn) handlePacket(p receivedPacket) {
-	c.receivedPacketMx.Lock()
-	// Discard packets once the amount of queued packets is larger than
-	// the channel size, protocol.MaxConnUnprocessedPackets
-	if c.receivedPackets.Len() >= protocol.MaxConnUnprocessedPackets {
-		c.receivedPacketMx.Unlock()
-
-		return
-	}
-
-	c.receivedPackets.PushBack(p)
-	c.receivedPacketMx.Unlock()
-
-	select {
-	case c.notifyReceivedPacket <- struct{}{}:
-	default:
-	}
-}
-
 func (c *Conn) handleConnectionCloseFrame(frame *wire.ConnectionCloseFrame) error {
 	if frame.IsApplicationError {
 		return &qerr.ApplicationError{
@@ -1977,11 +1789,11 @@ func (c *Conn) handleDatagramFrame(f *wire.DatagramFrame) error {
 }
 
 func (c *Conn) setCloseError(e *closeError) {
-	c.closeErr.CompareAndSwap(nil, e)
-
-	select {
-	case c.closeChan <- struct{}{}:
-	default:
+	if c.closeErr.CompareAndSwap(nil, e) {
+		c.ctxCancel(e.err)
+		_ = c.cryptoStreamHandler.Close()
+		c.sendQueue.Close()
+		c.handleCloseError(e)
 	}
 }
 
@@ -2409,15 +2221,7 @@ func (c *Conn) sendPacketsWithoutGSO(now monotime.Time) error {
 			return nil
 		}
 
-		// Prioritize receiving of packets over sending out more packets.
-		c.receivedPacketMx.Lock()
-		hasPackets := !c.receivedPackets.Empty()
-		c.receivedPacketMx.Unlock()
 
-		if hasPackets {
-			c.pacingDeadline = deadlineSendImmediately
-			return nil
-		}
 	}
 }
 
@@ -2476,15 +2280,7 @@ func (c *Conn) sendPacketsWithGSO(now monotime.Time) error {
 			return nil
 		}
 
-		// Prioritize receiving of packets over sending out more packets.
-		c.receivedPacketMx.Lock()
-		hasPackets := !c.receivedPackets.Empty()
-		c.receivedPacketMx.Unlock()
 
-		if hasPackets {
-			c.pacingDeadline = deadlineSendImmediately
-			return nil
-		}
 
 		ecn = nextECN
 		buf = getLargePacketBuffer()
@@ -2839,10 +2635,8 @@ func (c *Conn) newFlowController(id protocol.StreamID) *streamFlowController {
 
 // scheduleSending signals that we have data for sending
 func (c *Conn) scheduleSending() {
-	select {
-	case c.sendingScheduled <- struct{}{}:
-	default:
-	}
+	// In FSM, triggerSending happens on Tick or HandlePacket if needed.
+	// We can ignore this or trigger immediate tick.
 }
 
 // tryQueueingUndecryptablePacket queues a packet for which we're missing the decryption keys.

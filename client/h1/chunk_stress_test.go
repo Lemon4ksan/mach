@@ -77,7 +77,7 @@ func TestH1_ParseHexUint_Adversarial(t *testing.T) {
 
 	// 3. Fuzzing with random byte arrays
 	buf := make([]byte, 64)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		_, _ = rand.Read(buf[:i%64])
 		// Calling with arbitrary random bytes MUST NEVER panic or segfault
 		_, _, _ = h1.ParseHexUint(buf[:i%64])

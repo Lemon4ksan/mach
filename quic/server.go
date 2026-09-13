@@ -220,11 +220,14 @@ func (l *Listener) handlePacket(p receivedPacket) {
 		return
 	}
 
+	if err := wConn.Start(); err != nil {
+		return
+	}
+	wConn.handlePacket(p)
+
 	go func() {
 		_ = wConn.run()
 	}()
-
-	wConn.handlePacket(p)
 
 	select {
 	case l.connChan <- wConn.Conn:
