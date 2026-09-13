@@ -5,9 +5,10 @@
 package quicvarint
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/lemon4ksan/foundation/silicon/endian"
 )
 
 // taken from the QUIC draft
@@ -125,22 +126,21 @@ func Parse(b []byte) (uint64 /* value */, int /* bytes consumed */, error) {
 			return 0, 0, io.ErrUnexpectedEOF
 		}
 
-		return uint64(b[1]) | uint64(first&0b00111111)<<8, 2, nil
+		return uint64(endian.LoadBE16(b, 0)) & 0x3fff, 2, nil
 
 	case 2: // 4-byte encoding: 10xxxxxx
 		if len(b) < 4 {
 			return 0, 0, io.ErrUnexpectedEOF
 		}
 
-		return uint64(b[3]) | uint64(b[2])<<8 | uint64(b[1])<<16 | uint64(first&0b00111111)<<24, 4, nil
+		return uint64(endian.LoadBE32(b, 0)) & 0x3fffffff, 4, nil
 
-	case 3: // 8-byte encoding: 00xxxxxx
+	case 3: // 8-byte encoding: 11xxxxxx
 		if len(b) < 8 {
 			return 0, 0, io.ErrUnexpectedEOF
 		}
 
-		// binary.BigEndian.Uint64 only reads the first 8 bytes. Passing the full slice avoids slicing overhead.
-		return binary.BigEndian.Uint64(b) & 0x3fffffffffffffff, 8, nil
+		return endian.LoadBE64(b, 0) & 0x3fffffffffffffff, 8, nil
 	}
 
 	panic("unreachable")
