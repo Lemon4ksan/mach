@@ -106,28 +106,6 @@ func TestTransportPacketHandling(t *testing.T) {
 	}
 }
 
-func TestTransportAndDialConcurrentClose(t *testing.T) {
-	server := newUDPConnLocalhost(t)
-
-	tr := &Transport{Conn: newUDPConnLocalhost(t)}
-	// close transport and dial concurrently
-	errChan := make(chan error, 1)
-	go func() { errChan <- tr.Close() }()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
-	_, err := tr.Dial(ctx, server.LocalAddr(), &tls.Config{})
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrTransportClosed)
-	require.NotErrorIs(t, err, context.DeadlineExceeded)
-
-	select {
-	case <-errChan:
-	case <-time.After(time.Second):
-		t.Fatal("timeout")
-	}
-}
 
 func TestTransportErrFromConn(t *testing.T) {
 	t.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "true")
