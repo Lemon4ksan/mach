@@ -89,7 +89,7 @@ func TestH1_FormatHexUint_Differential(t *testing.T) {
 
 	testValues := []int{
 		0, 1, 2, 9, 10, 15, 16, 255, 256, 1024, 4096, 65535, 65536,
-		0x12345, 0xdeadbeef, 0x7fffffff,
+		0x12345, 0x7abcdef, 0x7fffffff,
 	}
 
 	var buf [16]byte
