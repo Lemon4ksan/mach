@@ -31,12 +31,12 @@ const (
 	FrameTypeRetireConnectionID FrameType = 0x19
 	FrameTypePathChallenge      FrameType = 0x1a
 	FrameTypePathResponse       FrameType = 0x1b
+	FrameTypePathAbandon        FrameType = 0x152
 	FrameTypeConnectionClose    FrameType = 0x1c
 	FrameTypeApplicationClose   FrameType = 0x1d
 	FrameTypeHandshakeDone      FrameType = 0x1e
 	// https://datatracker.ietf.org/doc/draft-ietf-quic-reliable-stream-reset/09/
 	FrameTypeResetStreamAt FrameType = 0x24
-	// https://datatracker.ietf.org/doc/draft-ietf-quic-ack-frequency/11/
 	FrameTypeAckFrequency FrameType = 0xaf
 	FrameTypeImmediateAck FrameType = 0x1f
 
@@ -79,7 +79,8 @@ func (t FrameType) isAllowedAtEncLevel(encLevel protocol.EncryptionLevel) bool {
 			FrameTypeConnectionClose,
 			FrameTypeNewToken,
 			FrameTypePathResponse,
-			FrameTypeRetireConnectionID:
+			FrameTypeRetireConnectionID,
+			FrameTypePathAbandon:
 			return false
 		default:
 			return true
