@@ -22,7 +22,7 @@ var generateConnectionIDForInitial = protocol.GenerateConnectionIDForInitial
 // When the QUIC connection is closed, this UDP connection is closed.
 // See [Dial] for more details.
 func DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
-	conf := &config{}
+	conf := &Config{}
 	for _, opt := range opts {
 		opt(conf)
 	}
@@ -54,7 +54,7 @@ func DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, opts ...Opt
 // DialAddrEarly establishes a new 0-RTT QUIC connection to a server.
 // See [DialAddr] for more details.
 func DialAddrEarly(ctx context.Context, addr string, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
-	conf := &config{}
+	conf := &Config{}
 	for _, opt := range opts {
 		opt(conf)
 	}

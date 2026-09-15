@@ -14,16 +14,16 @@ import (
 )
 
 // Clone clones a conf.
-func (c *config) Clone() *config {
+func (c *Config) Clone() *Config {
 	copy := *c
 	return &copy
 }
 
-func (c *config) handshakeTimeout() time.Duration {
+func (c *Config) handshakeTimeout() time.Duration {
 	return 2 * c.HandshakeIdleTimeout
 }
 
-func validateConfig(conf *config) error {
+func validateConfig(conf *Config) error {
 	if conf == nil {
 		return nil
 	}
@@ -65,9 +65,9 @@ func validateConfig(conf *config) error {
 
 // populateConfig populates fields in the quic.Config with their default values, if none are set
 // it may be called with nil
-func populateConfig(conf *config) *config {
+func populateConfig(conf *Config) *Config {
 	if conf == nil {
-		conf = &config{}
+		conf = &Config{}
 	}
 
 	versions := conf.Versions
@@ -124,7 +124,7 @@ func populateConfig(conf *config) *config {
 		initialPacketSize = protocol.InitialPacketSize
 	}
 
-	return &config{
+	return &Config{
 		GetConfigForClient:               conf.GetConfigForClient,
 		Versions:                         versions,
 		HandshakeIdleTimeout:             handshakeIdleTimeout,
@@ -147,7 +147,7 @@ func populateConfig(conf *config) *config {
 }
 
 // Option is a functional option for configuring a QUIC connection or server.
-type Option func(*config)
+type Option func(*Config)
 
-func WithDatagrams(enable bool) Option           { return func(c *config) { c.EnableDatagrams = enable } }
-func WithKeepAlivePeriod(p time.Duration) Option { return func(c *config) { c.KeepAlivePeriod = p } }
+func WithDatagrams(enable bool) Option           { return func(c *Config) { c.EnableDatagrams = enable } }
+func WithKeepAlivePeriod(p time.Duration) Option { return func(c *Config) { c.KeepAlivePeriod = p } }

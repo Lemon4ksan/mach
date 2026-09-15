@@ -15,7 +15,7 @@ The name **mach** (from the Mach number) represents the speed of sound and the a
 Unlike standard `net/http` or monolithic libraries, `mach` implements a strict separation of protocol mechanics from business logic:
 * **Agnostic Core**: The engine knows nothing about routing, middleware, or application logic. It accepts raw bytes from a socket and yields protocol frames.
 * **Forever-Frozen Standard**: The core mechanics are rigidly locked to IETF RFCs (RFC 9000, RFC 7540, RFC 9114, RFC 9204). No product-specific hacks are allowed at this layer.
-* **Symmetric Isolation**: Client and server architectures often require fundamentally different memory layouts and optimizations. `mach` isolates them explicitly (e.g., `mach/h1` vs `mach/server/h1`).
+* **Symmetric Isolation**: Client and server architectures often require fundamentally different memory layouts and optimizations. `mach` isolates them explicitly (e.g., `mach/client/h1` vs `mach/server/h1`).
 
 ## Protocol Index
 
@@ -23,13 +23,19 @@ Unlike standard `net/http` or monolithic libraries, `mach` implements a strict s
 mach/
 ├── quic/                 # IETF QUIC (RFC 9000). Zero-alloc congestion control, AEAD payload encryption.
 ├── qpack/                # HTTP/3 QPACK (RFC 9204) encoder/decoder. Static table lookups.
-├── h1/                   # HTTP/1.1 Client Engine. Pipelining, chunked transfers.
-├── h2/                   # HTTP/2 Client Engine (RFC 7540). Stream multiplexing, HPACK (RFC 7541).
-├── h3/                   # HTTP/3 Client Engine (RFC 9114). UDP-based zero-RTT handshakes.
-└── server/               # Server-optimized protocol implementations for the `sein` framework
-    ├── h1/               # HTTP/1.1 Server Engine
-    ├── h2/               # HTTP/2 Server Engine
-    └── h3/               # HTTP/3 Server Engine
+├── core/                 # Shared protocol mechanics and wire parsers (agnostic to client/server)
+│   ├── h1/               # HTTP/1.1 wire parsers
+│   ├── h2/               # HTTP/2 frame parsers and HPACK (RFC 7541)
+│   └── h3/               # HTTP/3 frame parsers
+├── client/               # Client-optimized protocol implementations for the `aoni` framework
+│   ├── h1/               # HTTP/1.1 Client Engine. Pipelining, chunked transfers.
+│   ├── h2/               # HTTP/2 Client Engine (RFC 7540). Stream multiplexing.
+│   └── h3/               # HTTP/3 Client Engine (RFC 9114). UDP-based zero-RTT handshakes.
+├── server/               # Server-optimized protocol implementations for the `sein` framework
+│   ├── h1/               # HTTP/1.1 Server Engine
+│   ├── h2/               # HTTP/2 Server Engine
+│   └── h3/               # HTTP/3 Server Engine
+└── x/                    # Experimental components, extensions, and raptor proxy core
 ```
 
 ## Performance & Optimization Rules

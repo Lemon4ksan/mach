@@ -26,7 +26,7 @@ var ErrServerClosed = errors.New("quic: server closed")
 type Listener struct {
 	tr          *Transport
 	tlsConf     *tls.Config
-	config      *config
+	config      *Config
 	connChan    chan *Conn
 	errChan     chan error
 	closeChan   chan struct{}
@@ -40,7 +40,7 @@ var _ packetHandler = &Listener{}
 
 // ListenAddr creates a new QUIC listener on the specified UDP address.
 func ListenAddr(addr string, tlsConf *tls.Config, opts ...Option) (*Listener, error) {
-	conf := &config{}
+	conf := &Config{}
 	for _, opt := range opts {
 		opt(conf)
 	}
@@ -78,7 +78,7 @@ func Listen(conn net.PacketConn, tlsConf *tls.Config, opts ...Option) (*Listener
 
 // Listen starts listening for incoming QUIC connections on this Transport.
 func (t *Transport) Listen(tlsConf *tls.Config, opts ...Option) (*Listener, error) {
-	conf := &config{}
+	conf := &Config{}
 	for _, opt := range opts {
 		opt(conf)
 	}

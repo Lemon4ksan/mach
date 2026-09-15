@@ -89,7 +89,7 @@ func (tc *testConnection) receivedPacketHandler() *ackhandler.ReceivedPacketHand
 func newTestConnectionWithGSO(
 	t *testing.T,
 	mockCtrl *gomock.Controller,
-	conf *config,
+	conf *Config,
 	gso bool,
 	opts ...testConnectionOpt,
 ) *testConnection {
@@ -112,7 +112,7 @@ func newTestConnectionWithGSO(
 	srcConnID := protocol.ParseConnectionID(b[6:12])
 
 	if conf == nil {
-		conf = &config{DisablePathMTUDiscovery: true}
+		conf = &Config{DisablePathMTUDiscovery: true}
 	}
 
 	wc := newClientConnection(
@@ -160,7 +160,7 @@ func newTestConnectionWithGSO(
 func newServerTestConnection(
 	t *testing.T,
 	mockCtrl *gomock.Controller,
-	conf *config,
+	conf *Config,
 	gso bool,
 	opts ...testConnectionOpt,
 ) *testConnection {
@@ -170,7 +170,7 @@ func newServerTestConnection(
 func newClientTestConnection(
 	t *testing.T,
 	mockCtrl *gomock.Controller,
-	conf *config,
+	conf *Config,
 	enable0RTT bool,
 	opts ...testConnectionOpt,
 ) *testConnection {
@@ -193,7 +193,7 @@ func newClientTestConnection(
 	srcConnID := protocol.ParseConnectionID(b[6:12])
 
 	if conf == nil {
-		conf = &config{DisablePathMTUDiscovery: true}
+		conf = &Config{DisablePathMTUDiscovery: true}
 	}
 
 	conn := newClientConnection(
@@ -740,7 +740,7 @@ func TestConnectionIdleTimeoutDuringHandshake(t *testing.T) {
 
 		tc := newServerTestConnection(t,
 			mockCtrl,
-			&config{HandshakeIdleTimeout: timeout},
+			&Config{HandshakeIdleTimeout: timeout},
 			false,
 		)
 		tc.packer.EXPECT().PackCoalescedPacket(false, gomock.Any(), gomock.Any(), protocol.Version1).AnyTimes()
@@ -769,7 +769,7 @@ func TestConnectionHandshakeIdleTimeout(t *testing.T) {
 
 		tc := newServerTestConnection(t,
 			mockCtrl,
-			&config{HandshakeIdleTimeout: 7 * time.Second},
+			&Config{HandshakeIdleTimeout: 7 * time.Second},
 			false,
 			func(c *Conn) { c.creationTime = monotime.Now().Add(-20 * time.Second) },
 		)
@@ -1275,7 +1275,7 @@ func TestConnectionIdleTimeout(t *testing.T) {
 		sph := mockackhandler.NewMockSentPacketHandler(mockCtrl)
 		tc := newServerTestConnection(t,
 			mockCtrl,
-			&config{MaxIdleTimeout: time.Minute},
+			&Config{MaxIdleTimeout: time.Minute},
 			false,
 			connectionOptHandshakeConfirmed(),
 			connectionOptSentPacketHandler(sph),
@@ -2153,7 +2153,7 @@ func TestConnectionDatagrams(t *testing.T) {
 }
 
 func testConnectionDatagrams(t *testing.T, enabled bool) {
-	tc := newServerTestConnection(t, nil, &config{EnableDatagrams: enabled}, false)
+	tc := newServerTestConnection(t, nil, &Config{EnableDatagrams: enabled}, false)
 
 	data, err := (&wire.DatagramFrame{Data: []byte("foo"), DataLenPresent: true}).Append(nil, protocol.Version1)
 	require.NoError(t, err)

@@ -273,7 +273,7 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 		_ protocol.ConnectionID,
 		_ protocol.ConnectionID,
 		_ ConnectionIDGenerator,
-		_ *config,
+		_ *Config,
 		_ *tls.Config,
 		pn protocol.PacketNumber,
 		_ bool,

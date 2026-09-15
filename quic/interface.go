@@ -102,10 +102,10 @@ type ConnectionIDGenerator interface {
 }
 
 // Config contains all configuration data needed for a QUIC server or client.
-type config struct {
+type Config struct {
 	// GetConfigForClient is called for incoming connections.
 	// If the error is not nil, the connection attempt is refused.
-	GetConfigForClient func(info *ClientInfo) (*config, error)
+	GetConfigForClient func(info *ClientInfo) (*Config, error)
 	// The QUIC versions that can be negotiated.
 	// If not set, it uses all versions available.
 	Versions []Version

@@ -23,7 +23,7 @@ func TestConfigValidation(t *testing.T) {
 	})
 
 	t.Run("config with a few values set", func(t *testing.T) {
-		conf := populateConfig(&config{
+		conf := populateConfig(&Config{
 			MaxIncomingStreams:     5,
 			MaxStreamReceiveWindow: 10,
 		})
@@ -33,7 +33,7 @@ func TestConfigValidation(t *testing.T) {
 	})
 
 	t.Run("stream limits", func(t *testing.T) {
-		conf := &config{
+		conf := &Config{
 			MaxIncomingStreams:    1<<60 + 1,
 			MaxIncomingUniStreams: 1<<60 + 2,
 		}
@@ -43,7 +43,7 @@ func TestConfigValidation(t *testing.T) {
 	})
 
 	t.Run("flow control windows", func(t *testing.T) {
-		conf := &config{
+		conf := &Config{
 			MaxStreamReceiveWindow:     quicvarint.Max + 1,
 			MaxConnectionReceiveWindow: quicvarint.Max + 2,
 		}
@@ -54,31 +54,31 @@ func TestConfigValidation(t *testing.T) {
 
 	t.Run("initial packet size", func(t *testing.T) {
 		// not set
-		conf := &config{InitialPacketSize: 0}
+		conf := &Config{InitialPacketSize: 0}
 		require.NoError(t, validateConfig(conf))
 		require.Zero(t, conf.InitialPacketSize)
 
 		// too small
-		conf = &config{InitialPacketSize: 10}
+		conf = &Config{InitialPacketSize: 10}
 		require.NoError(t, validateConfig(conf))
 		require.Equal(t, uint16(1200), conf.InitialPacketSize)
 
 		// too large
-		conf = &config{InitialPacketSize: protocol.MaxPacketBufferSize + 1}
+		conf = &Config{InitialPacketSize: protocol.MaxPacketBufferSize + 1}
 		require.NoError(t, validateConfig(conf))
 		require.Equal(t, uint16(protocol.MaxPacketBufferSize), conf.InitialPacketSize)
 	})
 }
 
 func TestConfigHandshakeIdleTimeout(t *testing.T) {
-	c := &config{HandshakeIdleTimeout: time.Second * 11 / 2}
+	c := &Config{HandshakeIdleTimeout: time.Second * 11 / 2}
 	require.Equal(t, 11*time.Second, c.handshakeTimeout())
 }
 
-func configWithNonZeroNonFunctionFields(t *testing.T) *config {
+func configWithNonZeroNonFunctionFields(t *testing.T) *Config {
 	t.Helper()
 
-	c := &config{}
+	c := &Config{}
 	v := reflect.ValueOf(c).Elem()
 
 	typ := v.Type()
@@ -148,8 +148,8 @@ func TestConfigClone(t *testing.T) {
 	t.Run("function fields", func(t *testing.T) {
 		var calledAllowConnectionWindowIncrease bool
 
-		c1 := &config{
-			GetConfigForClient:            func(info *ClientInfo) (*config, error) { return nil, assert.AnError },
+		c1 := &Config{
+			GetConfigForClient:            func(info *ClientInfo) (*Config, error) { return nil, assert.AnError },
 			AllowConnectionWindowIncrease: func(*Conn, uint64) bool { calledAllowConnectionWindowIncrease = true; return true },
 		}
 		c2 := c1.Clone()
@@ -166,7 +166,7 @@ func TestConfigClone(t *testing.T) {
 	})
 
 	t.Run("returns a copy", func(t *testing.T) {
-		c1 := &config{MaxIncomingStreams: 100}
+		c1 := &Config{MaxIncomingStreams: 100}
 		c2 := c1.Clone()
 		c2.MaxIncomingStreams = 200
 		require.EqualValues(t, 100, c1.MaxIncomingStreams)
@@ -179,7 +179,7 @@ func TestConfigDefaultValues(t *testing.T) {
 	require.Equal(t, c, populateConfig(c))
 
 	// if not set, some fields use default values
-	c = populateConfig(&config{})
+	c = populateConfig(&Config{})
 	require.Equal(t, protocol.SupportedVersions, c.Versions)
 	require.Equal(t, protocol.DefaultHandshakeIdleTimeout, c.HandshakeIdleTimeout)
 	require.Equal(t, protocol.DefaultIdleTimeout, c.MaxIdleTimeout)
@@ -194,7 +194,7 @@ func TestConfigDefaultValues(t *testing.T) {
 }
 
 func TestConfigZeroLimits(t *testing.T) {
-	config := &config{
+	config := &Config{
 		MaxIncomingStreams:    -1,
 		MaxIncomingUniStreams: -1,
 	}

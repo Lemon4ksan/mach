@@ -143,7 +143,7 @@ type Conn struct {
 
 	perspective protocol.Perspective
 	version     protocol.Version
-	config      *config
+	config      *Config
 
 	conn      sendConn
 	sendQueue sender
@@ -278,7 +278,7 @@ var newClientConnection = func(
 	destConnID protocol.ConnectionID,
 	srcConnID protocol.ConnectionID,
 	connIDGenerator ConnectionIDGenerator,
-	conf *config,
+	conf *Config,
 	tlsConf *tls.Config,
 	initialPacketNumber protocol.PacketNumber,
 	enable0RTT bool,
@@ -413,7 +413,7 @@ var newServerConnection = func(
 	destConnID protocol.ConnectionID,
 	srcConnID protocol.ConnectionID,
 	connIDGenerator ConnectionIDGenerator,
-	conf *config,
+	conf *Config,
 	tlsConf *tls.Config,
 	tokenGenerator *handshake.TokenGenerator,
 	enable0RTT bool,

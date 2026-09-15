@@ -117,7 +117,7 @@ type Transport struct {
 
 // Dial dials a new connection to a remote host (not using 0-RTT).
 func (t *Transport) Dial(ctx context.Context, addr net.Addr, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
-	conf := &config{}
+	conf := &Config{}
 	for _, opt := range opts {
 		opt(conf)
 	}
@@ -127,7 +127,7 @@ func (t *Transport) Dial(ctx context.Context, addr net.Addr, tlsConf *tls.Config
 
 // DialEarly dials a new connection, attempting to use 0-RTT if possible.
 func (t *Transport) DialEarly(ctx context.Context, addr net.Addr, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
-	conf := &config{}
+	conf := &Config{}
 	for _, opt := range opts {
 		opt(conf)
 	}
@@ -140,7 +140,7 @@ func (t *Transport) dial(
 	addr net.Addr,
 	host string,
 	tlsConf *tls.Config,
-	conf *config,
+	conf *Config,
 	use0RTT bool,
 ) (*Conn, error) {
 	if err := t.init(t.isSingleUse); err != nil {
@@ -170,7 +170,7 @@ func (t *Transport) doDial(
 	ctx context.Context,
 	sendConn sendConn,
 	tlsConf *tls.Config,
-	config *config,
+	config *Config,
 	initialPacketNumber protocol.PacketNumber,
 	hasNegotiatedVersion bool,
 	use0RTT bool,
