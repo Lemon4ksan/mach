@@ -547,7 +547,7 @@ func TestSendStreamLargeWrites(t *testing.T) {
 		errChan := make(chan error, 1)
 		go func() {
 			_, err := (&writerWithTimeout{Writer: str, Timeout: time.Second}).Write(data)
-			str.Close()
+			str.Close() //nolint:errcheck
 
 			errChan <- err
 		}()
@@ -1565,7 +1565,7 @@ func TestSendStreamRetransmitDataUntilAcknowledged(t *testing.T) {
 
 		_, err := str.Write(data)
 		require.NoError(t, err)
-		str.Close()
+		str.Close() //nolint:errcheck
 	}()
 
 	var completed bool

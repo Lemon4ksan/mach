@@ -60,7 +60,7 @@ func TestH1Engine_URIAndArgs(t *testing.T) {
 	u := AcquireURI()
 	defer ReleaseURI(u)
 
-	u.Parse(nil, []byte("https://example.com:8080/path/test?foo=bar&baz=123"))
+	u.Parse(nil, []byte("https://example.com:8080/path/test?foo=bar&baz=123")) //nolint:errcheck
 
 	if string(u.Scheme()) != "https" {
 		t.Fatalf("expected scheme https, got %s", u.Scheme())
@@ -242,7 +242,7 @@ func BenchmarkURI_Scoped(b *testing.B) {
 
 	u := AcquireURI()
 	defer ReleaseURI(u)
-	u.Parse(nil, []byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details"))
+	u.Parse(nil, []byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details")) //nolint:errcheck
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -262,7 +262,7 @@ func BenchmarkURI_Scoped(b *testing.B) {
 func BenchmarkURI_LegacyAlloc(b *testing.B) {
 	u := AcquireURI()
 	defer ReleaseURI(u)
-	u.Parse(nil, []byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details"))
+	u.Parse(nil, []byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details")) //nolint:errcheck
 
 	b.ReportAllocs()
 	b.ResetTimer()

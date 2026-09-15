@@ -129,7 +129,7 @@ func TestSendConnRemoteAddrChange(t *testing.T) {
 	)
 
 	require.NoError(t, c.Write([]byte("foobar"), 0, protocol.ECNUnsupported))
-	ln1.SetReadDeadline(time.Now().Add(time.Second))
+	ln1.SetReadDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 
 	b := make([]byte, 1024)
 	n, err := ln1.Read(b)
@@ -137,7 +137,7 @@ func TestSendConnRemoteAddrChange(t *testing.T) {
 	require.Equal(t, "foobar", string(b[:n]))
 
 	require.NoError(t, c.WriteTo([]byte("foobaz"), ln2.LocalAddr(), packetInfo{}))
-	ln2.SetReadDeadline(time.Now().Add(time.Second))
+	ln2.SetReadDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 
 	b = make([]byte, 1024)
 	n, err = ln2.Read(b)
@@ -146,7 +146,7 @@ func TestSendConnRemoteAddrChange(t *testing.T) {
 
 	c.ChangeRemoteAddr(ln2.LocalAddr(), packetInfo{})
 	require.NoError(t, c.Write([]byte("lorem ipsum"), 0, protocol.ECNUnsupported))
-	ln2.SetReadDeadline(time.Now().Add(time.Second))
+	ln2.SetReadDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 
 	b = make([]byte, 1024)
 	n, err = ln2.Read(b)

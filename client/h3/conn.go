@@ -231,7 +231,7 @@ func (cc *ClientConn) Do(
 		}
 	}()
 
-	defer str.Close()
+	defer str.Close() //nolint:errcheck
 
 	if err := cc.sendRequest(str, req, headerOrder); err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (cc *ClientConn) DoScoped(
 		}
 	}()
 
-	defer str.Close()
+	defer str.Close() //nolint:errcheck
 
 	if err := cc.sendRequest(str, req, headerOrder); err != nil {
 		return nil, err

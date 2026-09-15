@@ -53,6 +53,7 @@ func connectionOptUnpacker(u unpacker) testConnectionOpt {
 	return func(conn *Conn) { conn.unpacker = u }
 }
 
+//nolint:unused
 func connectionOptSender(s sender) testConnectionOpt {
 	return func(conn *Conn) { conn.sendQueue = s }
 }
@@ -71,6 +72,7 @@ func connectionOptRTT(rtt time.Duration) testConnectionOpt {
 }
 
 type testConnection struct {
+	//nolint:unused
 	runWrapper  func() error
 	conn        *Conn
 	wrappedConn *wrappedConn
@@ -82,6 +84,7 @@ type testConnection struct {
 	remoteAddr  *net.UDPAddr
 }
 
+//nolint:unused
 func (tc *testConnection) receivedPacketHandler() *ackhandler.ReceivedPacketHandler {
 	return &tc.conn.receivedPacketHandler
 }
@@ -338,7 +341,7 @@ func testConnectionClose(t *testing.T, useApplicationClose bool, expectedErr err
 		}
 
 		// further calls to CloseWithError don't do anything
-		tc.conn.CloseWithError(42, "another error")
+		tc.conn.CloseWithError(42, "another error") //nolint:errcheck
 	})
 }
 
@@ -833,7 +836,7 @@ func TestConnectionHandleMaxStreamsFrame(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
 		connFC := newConnectionFlowController(0, 0, nil, utils.NewRTTStats(), utils.DefaultLogger)
 		tc := newServerTestConnection(t, mockCtrl, nil, false, connectionOptConnFlowController(connFC))
-		tc.conn.handleTransportParameters(&wire.TransportParameters{})
+		tc.conn.handleTransportParameters(&wire.TransportParameters{}) //nolint:errcheck
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -904,6 +907,7 @@ func TestConnectionHandleMaxStreamsFrame(t *testing.T) {
 	})
 }
 
+//nolint:unused
 func testConnectionHandshakeClient(t *testing.T, usePreferredAddress bool) {
 	mockCtrl := gomock.NewController(t)
 	cs := mocks.NewMockCryptoSetup(mockCtrl)
@@ -1702,6 +1706,7 @@ func testConnectionPTOProbePackets(t *testing.T, encLevel protocol.EncryptionLev
 	})
 }
 
+//nolint:unused
 func testConnectionSendQueue(t *testing.T, enableGSO bool) {
 	synctest.Test(t, func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
@@ -2089,7 +2094,7 @@ func testConnectionMigration(t *testing.T, enabled bool) {
 	tr := &Transport{
 		Conn: newUDPConnLocalhost(t),
 	}
-	defer tr.Close()
+	defer tr.Close() //nolint:errcheck
 
 	path, err := tc.conn.AddPath(tr)
 	if !enabled {
@@ -2124,7 +2129,7 @@ func testConnectionMigration(t *testing.T, enabled bool) {
 	errChan := make(chan error, 1)
 	go func() { errChan <- func() error { _ = tc.conn.Start(); return tc.wrappedConn.run() }() }()
 
-	go func() { path.Probe(context.Background()) }()
+	go func() { path.Probe(context.Background()) }() //nolint:errcheck
 
 	select {
 	case <-packedProbe:

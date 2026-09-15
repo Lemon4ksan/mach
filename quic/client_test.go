@@ -71,7 +71,7 @@ func testDial(t *testing.T,
 	errChan := make(chan error, 1)
 	go func() { errChan <- dialFn(ctx, server.LocalAddr()) }()
 
-	server.SetReadDeadline(time.Now().Add(time.Second))
+	server.SetReadDeadline(time.Now().Add(time.Second)) //nolint:errcheck
 	_, addr, err := server.ReadFrom(make([]byte, 1500))
 	require.NoError(t, err)
 	cancel()
@@ -92,7 +92,7 @@ func testDial(t *testing.T,
 				return false
 			}
 
-			conn.Close()
+			conn.Close() //nolint:errcheck
 
 			return true
 		}, scaleDuration(200*time.Millisecond), scaleDuration(10*time.Millisecond))

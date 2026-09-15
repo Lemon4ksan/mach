@@ -401,6 +401,7 @@ func ReadHexInt(r *bufio.Reader) (int, error) {
 	}
 }
 
+//nolint:unused
 var hexIntBufPool sync.Pool
 
 func WriteHexInt(w *bufio.Writer, n int) error {

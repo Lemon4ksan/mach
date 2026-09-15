@@ -45,7 +45,7 @@ func newUDPConnLocalhost(t testing.TB) *net.UDPConn {
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { conn.Close() }) //nolint:errcheck
 
 	return conn
 }
@@ -78,13 +78,13 @@ func getPacketWithPacketType(
 
 func areConnsRunning() bool {
 	var b bytes.Buffer
-	pprof.Lookup("goroutine").WriteTo(&b, 1)
+	pprof.Lookup("goroutine").WriteTo(&b, 1) //nolint:errcheck
 	return strings.Contains(b.String(), "quic-go.(*connection).run")
 }
 
 func areTransportsRunning() bool {
 	var b bytes.Buffer
-	pprof.Lookup("goroutine").WriteTo(&b, 1)
+	pprof.Lookup("goroutine").WriteTo(&b, 1) //nolint:errcheck
 	return strings.Contains(b.String(), "quic-go.(*Transport).listen")
 }
 

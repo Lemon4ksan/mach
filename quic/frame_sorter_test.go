@@ -103,7 +103,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	getData := func(l protocol.ByteCount) []byte {
 		b := make([]byte, l)
-		random.Read(b)
+		random.Read(b) //nolint:errcheck
 		return b
 	}
 
@@ -1428,7 +1428,7 @@ func testFrameSorterRandomized(t *testing.T, dataLen protocol.ByteCount, injectD
 	var seed [32]byte
 	rand.Read(seed[:])
 	random := mrand.NewChaCha8(seed)
-	random.Read(data)
+	random.Read(data) //nolint:errcheck
 
 	frames := make([]frame, num)
 	for i := range num {
@@ -1525,7 +1525,7 @@ func TestFrameSorterPeek(t *testing.T) {
 	require.ErrorIs(t, s.Peek(3, p), errTooLittleData)
 
 	// peek across multiple frames
-	s.Push([]byte("baz"), 6, nil)
+	s.Push([]byte("baz"), 6, nil) //nolint:errcheck
 
 	p = make([]byte, 9)
 	require.NoError(t, s.Peek(0, p))
@@ -1536,7 +1536,7 @@ func TestFrameSorterPeek(t *testing.T) {
 	require.Equal(t, []byte("baz"), p)
 
 	// peeking across gaps doesn't work
-	s.Push([]byte("qux"), 10, nil)
+	s.Push([]byte("qux"), 10, nil) //nolint:errcheck
 
 	p = make([]byte, 10)
 	require.ErrorIs(t, s.Peek(0, p), errTooLittleData)

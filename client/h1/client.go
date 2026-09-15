@@ -2164,7 +2164,7 @@ func (c *HostClient) connsCleaner() {
 
 func (c *HostClient) CloseConn(cc *clientConn) {
 	c.decConnsCount()
-	cc.c.Close()
+	cc.c.Close() //nolint:errcheck
 	releaseClientConn(cc)
 }
 
@@ -2436,7 +2436,7 @@ var ErrTLSHandshakeTimeout = errors.New("mach: tls handshake timed out")
 func tlsClientHandshake(rawConn net.Conn, tlsConfig *tls.Config, deadline time.Time) (_ net.Conn, retErr error) {
 	defer func() {
 		if retErr != nil {
-			rawConn.Close()
+			rawConn.Close() //nolint:errcheck
 		}
 	}()
 	conn := tls.Client(rawConn, tlsConfig)
@@ -3202,11 +3202,11 @@ func (c *pipelineConnClient) worker(chs *pipelineConnChannels) error {
 	// Wait until reader and writer are stopped
 	select {
 	case err = <-doneW:
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		close(stopR)
 		<-doneR
 	case err = <-doneR:
-		conn.Close()
+		conn.Close() //nolint:errcheck
 		close(stopW)
 		<-doneW
 	}
@@ -3252,7 +3252,7 @@ func (c *pipelineConnClient) writer(conn net.Conn, stopCh <-chan struct{}, chs *
 		writeBufferSize = defaultWriteBufferSize
 	}
 	bw := bufio.NewWriterSize(conn, writeBufferSize)
-	defer bw.Flush()
+	defer bw.Flush() //nolint:errcheck
 	chR := chs.chR
 	chW := chs.chW
 	writeTimeout := c.WriteTimeout

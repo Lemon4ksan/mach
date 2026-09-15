@@ -29,7 +29,7 @@ func TestStreamDeadlines(t *testing.T) {
 	str := newStream(context.Background(), streamID, mockSender, fc, false)
 
 	// SetDeadline sets both read and write deadlines
-	str.SetDeadline(time.Now().Add(-time.Second))
+	str.SetDeadline(time.Now().Add(-time.Second)) //nolint:errcheck
 	n, err := (&writerWithTimeout{Writer: str, Timeout: time.Second}).Write([]byte("foobar"))
 	require.ErrorIs(t, err, os.ErrDeadlineExceeded)
 	require.Zero(t, n)

@@ -95,8 +95,8 @@ func TestReaderHandlesEmptyRead(t *testing.T) {
 
 	go func() {
 		// io.Pipe turns empty writes into empty reads.
-		w.Write(nil)
-		w.Close()
+		w.Write(nil) //nolint:errcheck
+		w.Close() //nolint:errcheck
 	}()
 
 	br := NewReader(r)

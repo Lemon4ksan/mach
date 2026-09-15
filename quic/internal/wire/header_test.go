@@ -478,7 +478,7 @@ func BenchmarkIs0RTTPacket(b *testing.B) {
 	packets := make([][]byte, 1024)
 	for i := range len(packets) {
 		packets[i] = make([]byte, random.IntN(256))
-		src.Read(packets[i])
+		src.Read(packets[i]) //nolint:errcheck
 	}
 
 	var i int
@@ -771,12 +771,12 @@ func FuzzHeaderParser(f *testing.F) {
 		_ = IsPotentialQUICPacket(data[0])
 
 		if IsLongHeaderPacket(data[0]) {
-			ParseVersion(data)
+			ParseVersion(data) //nolint:errcheck
 		} else {
 			_, _, _, err := ParsePacket(data)
 			require.EqualError(t, err, "not a long header packet")
 
-			ParseShortHeader(data, connIDLen)
+			ParseShortHeader(data, connIDLen) //nolint:errcheck
 
 			return
 		}

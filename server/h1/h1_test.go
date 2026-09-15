@@ -309,7 +309,7 @@ func TestRequest_Hijack(t *testing.T) {
 			}
 
 			go func() {
-				defer conn.Close()
+				defer conn.Close() //nolint:errcheck
 
 				_, _ = rw.WriteString("CUSTOM_BINARY_PROTOCOL_OK\n")
 				_ = rw.Flush()
@@ -569,7 +569,7 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read streamed response: %v", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "stream-chunk-data" {

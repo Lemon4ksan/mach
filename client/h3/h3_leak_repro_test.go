@@ -16,13 +16,13 @@ func TestRepro_H3Client_RemoveConnClosesConnection(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(nil, nil)
-	defer client.Close()
+	defer client.Close() //nolint:errcheck
 
 	// Mock or allocate a ClientConn
 	udpConn, err := net.ListenUDP("udp", nil)
 	require.NoError(t, err)
 
-	defer udpConn.Close()
+	defer udpConn.Close() //nolint:errcheck
 
 	cc := &ClientConn{
 		closed: make(chan struct{}),

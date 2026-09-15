@@ -33,7 +33,7 @@ func checkClientHello(clientHello []byte) error {
 		return err
 	}
 
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	return conn.HandleData(tls.QUICEncryptionLevelInitial, clientHello)
 }

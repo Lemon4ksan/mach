@@ -169,14 +169,14 @@ func TestClientServerEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer ln.Close() //nolint:errcheck
 
 	go func() {
 		serverConn, err := ln.Accept()
 		if err != nil {
 			return
 		}
-		defer serverConn.Close()
+		defer serverConn.Close() //nolint:errcheck
 
 		runMockH2Server(t, serverConn, func(req *h1.Request, resp *h1.Response, _ []string) {
 			if string(req.Header.Method()) != "GET" {
@@ -224,7 +224,7 @@ func TestOrderedHeadersSequenceOnWire(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer ln.Close() //nolint:errcheck
 
 	orderedKeys := []string{"accept-language", "user-agent", "x-custom-a"}
 
@@ -238,7 +238,7 @@ func TestOrderedHeadersSequenceOnWire(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer serverConn.Close()
+		defer serverConn.Close() //nolint:errcheck
 
 		runMockH2Server(t, serverConn, func(_ *h1.Request, resp *h1.Response, rawHeaders []string) {
 			mu.Lock()

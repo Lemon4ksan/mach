@@ -164,7 +164,7 @@ func TestSentPacketHistoryFirstOutstandingPacket(t *testing.T) {
 	require.NotNil(t, p)
 
 	// remove the first packet
-	hist.Remove(2)
+	hist.Remove(2) //nolint:errcheck
 	pn, p = hist.FirstOutstanding()
 	require.Equal(t, protocol.PacketNumber(3), pn)
 	require.NotNil(t, p)

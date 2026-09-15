@@ -8,6 +8,7 @@ package quic
 import (
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
@@ -22,6 +23,7 @@ type newConnID struct {
 }
 
 type connIDManager struct {
+	mutex sync.Mutex
 	queue []newConnID
 
 	highestProbingID uint64
@@ -213,6 +215,8 @@ func (h *connIDManager) updateConnectionID() {
 }
 
 func (h *connIDManager) Close() {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	h.closed = true
 	if h.activeStatelessResetToken != nil {
 		h.removeStatelessResetToken(*h.activeStatelessResetToken)
@@ -357,6 +361,8 @@ func (h *connIDManager) IsActiveStatelessResetToken(token protocol.StatelessRese
 // leading to a memory leak of the connection struct.
 // See https://github.com/lemon4ksan/sein/internal/quic/pull/4852 for more details.
 func (h *connIDManager) assertNotClosed() {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	if h.closed {
 		panic("connection ID manager is closed")
 	}

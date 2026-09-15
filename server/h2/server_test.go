@@ -26,7 +26,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
-	defer ln.Close()
+	defer ln.Close() //nolint:errcheck
 
 	handler := func(req *h2.ServerRequest, res *h2.ServerResponse) error {
 		switch req.Path {
@@ -70,8 +70,11 @@ func TestH2Server_EndToEnd(t *testing.T) {
 
 	// Connect using Go's official HTTP/2 client transport over cleartext TCP
 	client := &http.Client{
+		//nolint:staticcheck
 		Transport: &http2.Transport{
+			//nolint:staticcheck
 			AllowHTTP: true,
+			//nolint:staticcheck
 			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
 				return net.Dial(network, addr)
 			},

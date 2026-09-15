@@ -225,7 +225,7 @@ func (resp *Response) SendFile(path string) error {
 	}
 	fileInfo, err := f.Stat()
 	if err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 		return err
 	}
 	size64 := fileInfo.Size()
@@ -1441,6 +1441,7 @@ func (req *Request) readLimitBody(r *bufio.Reader, maxBodySize int, getOnly, pre
 	return req.ContinueReadBody(r, maxBodySize, preParseMultipartForm)
 }
 
+//nolint:unused
 func (req *Request) readBodyStream(r *bufio.Reader, maxBodySize int, getOnly, preParseMultipartForm bool) error {
 	// Do not reset the request here - the caller must reset it before
 	// calling this method.
@@ -2009,6 +2010,7 @@ func (resp *Response) WriteDeflateLevel(w *bufio.Writer, level int) error {
 	return resp.Write(w)
 }
 
+//nolint:unused
 func (resp *Response) brotliBody(level int) {
 	if len(resp.Header.ContentEncoding()) > 0 {
 		// It looks like the body is already compressed.
@@ -2138,6 +2140,7 @@ func (resp *Response) deflateBody(level int) {
 	resp.Header.addVaryBytes(bytesutil.StrAcceptEncoding)
 }
 
+//nolint:unused
 func (resp *Response) zstdBody(level int) {
 	if len(resp.Header.ContentEncoding()) > 0 {
 		return
@@ -2264,6 +2267,7 @@ func newCompressedBodyStream(bodyStream io.Reader, level int, compress compressB
 	return s
 }
 
+//nolint:unused
 func compressBrotliBodyStream(sw *bufio.Writer, bodyStream io.Reader, _ int) error {
 	_, wErr := copyBodyStream(sw, bodyStream)
 	return wErr
@@ -2291,6 +2295,7 @@ func compressDeflateBodyStream(sw *bufio.Writer, bodyStream io.Reader, level int
 	return wErr
 }
 
+//nolint:unused
 func compressZstdBodyStream(sw *bufio.Writer, bodyStream io.Reader, _ int) error {
 	_, wErr := copyBodyStream(sw, bodyStream)
 	return wErr
@@ -2693,6 +2698,7 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 // the given limit.
 var ErrBodyTooLarge = bytesutil.ErrBodyTooLarge
 
+//nolint:unused
 func copyZeroAllocWithLimit(w io.Writer, r io.Reader, maxBodySize int) (int64, error) {
 	return bytesutil.CopyZeroAllocWithLimit(w, r, maxBodySize)
 }

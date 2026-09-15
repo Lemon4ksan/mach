@@ -68,7 +68,7 @@ func FuzzH1URI(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		var u h1.URI
-		u.Parse(nil, raw)
+		u.Parse(nil, raw) //nolint:errcheck
 		_ = u.Scheme()
 		_ = u.Host()
 		_ = u.Path()

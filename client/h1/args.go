@@ -450,6 +450,7 @@ func setArg(h []argsKV, key, value string, noValue bool) []argsKV {
 	return appendArg(h, key, value, noValue)
 }
 
+//nolint:unused
 func appendArgBytes(h []argsKV, key, value []byte, noValue bool) []argsKV {
 	return appendArg(h, bytesutil.B2S(key), bytesutil.B2S(value), noValue)
 }
@@ -557,6 +558,7 @@ func (s *argsScanner) next(kv *argsKV) bool {
 	return true
 }
 
+//nolint:unused
 func peekAllArgBytesToDst(dst [][]byte, h []argsKV, k []byte) [][]byte {
 	for i, n := 0, len(h); i < n; i++ {
 		kv := &h[i]

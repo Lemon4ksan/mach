@@ -225,8 +225,8 @@ func testPackLongHeaders(t *testing.T, includeACK bool) {
 
 	clientHello, err := getClientHello("quic-go.net")
 	require.NoError(t, err)
-	tp.initialStream.Write(clientHello)
-	tp.initialStream.Write(make([]byte, 900-len(clientHello))) // add some more data
+	tp.initialStream.Write(clientHello) //nolint:errcheck
+	tp.initialStream.Write(make([]byte, 900-len(clientHello))) // add some more data //nolint:errcheck
 	tp.packer.retransmissionQueue.addHandshake(&wire.PingFrame{})
 
 	p, err := tp.packer.PackCoalescedPacket(false, maxPacketSize, now, protocol.Version1)
@@ -432,7 +432,7 @@ func testPackCoalescedAppData(t *testing.T, withAck bool) {
 
 	handshakeData := make([]byte, 1000)
 	rand.Read(handshakeData)
-	tp.handshakeStream.Write(handshakeData)
+	tp.handshakeStream.Write(handshakeData) //nolint:errcheck
 	expectAppendFrames(tp.framer, nil, []ackhandler.StreamFrame{{Frame: &wire.StreamFrame{Data: []byte("foobar")}}})
 
 	p, err := tp.packer.PackCoalescedPacket(false, maxPacketSize, monotime.Now(), protocol.Version1)
@@ -759,7 +759,7 @@ func TestPackDatagramFrames(t *testing.T) {
 		Return(protocol.PacketNumber(0x42), protocol.PacketNumberLen2)
 	tp.pnManager.EXPECT().PopPacketNumber(protocol.Encryption1RTT).Return(protocol.PacketNumber(0x42))
 	tp.sealingManager.EXPECT().Get1RTTSealer().Return(newMockShortHeaderSealer(mockCtrl), nil)
-	tp.datagramQueue.Add(&wire.DatagramFrame{
+	tp.datagramQueue.Add(&wire.DatagramFrame{ //nolint:errcheck
 		DataLenPresent: true,
 		Data:           []byte("foobar"),
 	})
@@ -791,7 +791,7 @@ func TestPackLargeDatagramFrame(t *testing.T) {
 	tp.sealingManager.EXPECT().Get1RTTSealer().Return(newMockShortHeaderSealer(mockCtrl), nil)
 
 	f := &wire.DatagramFrame{DataLenPresent: true, Data: make([]byte, maxPacketSize-10)}
-	tp.datagramQueue.Add(f)
+	tp.datagramQueue.Add(f) //nolint:errcheck
 	tp.framer.EXPECT().HasData()
 
 	buffer := getPacketBuffer()
@@ -1051,13 +1051,13 @@ func testPackProbePacket(t *testing.T, encLevel protocol.EncryptionLevel, perspe
 
 		cryptoData, err = getClientHello("")
 		require.NoError(t, err)
-		tp.packer.initialStream.Write(cryptoData)
+		tp.packer.initialStream.Write(cryptoData) //nolint:errcheck
 
 	case protocol.EncryptionHandshake:
 		tp.sealingManager.EXPECT().GetHandshakeSealer().Return(newMockShortHeaderSealer(mockCtrl), nil)
 
 		cryptoData = []byte("foobar")
-		tp.packer.handshakeStream.Write(cryptoData)
+		tp.packer.handshakeStream.Write(cryptoData) //nolint:errcheck
 	}
 
 	tp.ackFramer.EXPECT().GetAckFrame(encLevel, gomock.Any(), false)

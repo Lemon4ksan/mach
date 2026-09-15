@@ -53,7 +53,7 @@ func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
 }
 
 func releaseFlateReader(zr io.ReadCloser) {
-	zr.Close()
+	zr.Close() //nolint:errcheck
 	flateReaderPool.Put(zr)
 }
 
@@ -83,7 +83,7 @@ func AcquireStacklessGzipWriter(w io.Writer, level int) stackless.Writer {
 }
 
 func ReleaseStacklessGzipWriter(sw stackless.Writer, level int) {
-	sw.Close()
+	sw.Close() //nolint:errcheck
 	nLevel := normalizeCompressLevel(level)
 	p := stacklessGzipWriterPoolMap[nLevel]
 	p.Put(sw)
@@ -113,7 +113,7 @@ func acquireRealGzipWriter(w io.Writer, level int) *gzip.Writer {
 }
 
 func releaseRealGzipWriter(zw *gzip.Writer, level int) {
-	zw.Close()
+	zw.Close() //nolint:errcheck
 	nLevel := normalizeCompressLevel(level)
 	p := realGzipWriterPoolMap[nLevel]
 	p.Put(zw)
@@ -391,7 +391,7 @@ func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
 }
 
 func ReleaseStacklessDeflateWriter(sw stackless.Writer, level int) {
-	sw.Close()
+	sw.Close() //nolint:errcheck
 	nLevel := normalizeCompressLevel(level)
 	p := stacklessDeflateWriterPoolMap[nLevel]
 	p.Put(sw)
@@ -421,7 +421,7 @@ func acquireRealDeflateWriter(w io.Writer, level int) *zlib.Writer {
 }
 
 func releaseRealDeflateWriter(zw *zlib.Writer, level int) {
-	zw.Close()
+	zw.Close() //nolint:errcheck
 	nLevel := normalizeCompressLevel(level)
 	p := realDeflateWriterPoolMap[nLevel]
 	p.Put(zw)
@@ -444,6 +444,7 @@ func newCompressWriterPoolMap() []*sync.Pool {
 	return m
 }
 
+//nolint:unused
 func isFileCompressible(f fs.File, minCompressRatio float64) bool {
 	// Try compressing the first 4kb of the file
 	// and see if it can be compressed by more than

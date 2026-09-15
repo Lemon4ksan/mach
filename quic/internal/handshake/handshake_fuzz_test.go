@@ -318,7 +318,7 @@ func fuzzRunHandshake(
 		t.Fatal(err)
 	}
 
-	defer client.Close()
+	defer client.Close() //nolint:errcheck
 
 	server := NewCryptoSetupServer(
 		protocol.ConnectionID{},
@@ -335,7 +335,7 @@ func fuzzRunHandshake(
 		t.Fatal(err)
 	}
 
-	defer server.Close()
+	defer server.Close() //nolint:errcheck
 
 	var clientHandshakeComplete, serverHandshakeComplete bool
 	for {
@@ -454,14 +454,14 @@ func fuzzRunHandshake(
 			t.Fatal("expected non-nil session ticket")
 		}
 
-		client.HandleMessage(ticket, protocol.Encryption1RTT)
+		client.HandleMessage(ticket, protocol.Encryption1RTT) //nolint:errcheck
 	}
 
 	if sendPostHandshakeToClient {
-		client.HandleMessage(data, msgEncLevel)
+		client.HandleMessage(data, msgEncLevel) //nolint:errcheck
 	}
 
 	if sendPostHandshakeToServer {
-		server.HandleMessage(data, msgEncLevel)
+		server.HandleMessage(data, msgEncLevel) //nolint:errcheck
 	}
 }

@@ -79,7 +79,7 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	listener, err := quic.ListenAddr("127.0.0.1:0", serverTLS, quic.WithDatagrams(true))
 	require.NoError(t, err)
 
-	defer listener.Close()
+	defer listener.Close() //nolint:errcheck
 
 	addr := listener.Addr().String()
 
@@ -129,7 +129,7 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	clientConn, err := quic.DialAddr(ctx, addr, clientTLS, quic.WithDatagrams(true))
 	require.NoError(t, err)
 
-	defer clientConn.CloseWithError(0, "")
+	defer clientConn.CloseWithError(0, "") //nolint:errcheck
 
 	// 2. Open client unidirectional Control Stream and send SETTINGS (RFC 9114 §6.2.1)
 	clientCtrl, err := clientConn.OpenUniStreamSync(ctx)

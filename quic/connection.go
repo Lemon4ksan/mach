@@ -797,6 +797,7 @@ func (c *Conn) nextKeepAliveTime() monotime.Time {
 	return c.lastPacketReceivedTime.Add(keepAliveInterval)
 }
 
+//nolint:unused
 func (c *Conn) maybeResetTimer() {}
 
 func (c *Conn) idleTimeoutStartTime() monotime.Time {
@@ -899,6 +900,7 @@ func (c *Conn) handleHandshakeConfirmed(now monotime.Time) error {
 	return nil
 }
 
+//nolint:unused
 const maxPacketsToProcess = 32
 
 func (c *Conn) handleOnePacket(rp receivedPacket) (wasProcessed bool, _ error) {
@@ -1846,7 +1848,7 @@ func (c *Conn) handleCloseError(closeErr *closeError) {
 	if e == nil {
 		e = &qerr.ApplicationError{}
 	} else {
-		defer func() { closeErr.err = e }()
+		defer func() { c.closeErr.Store(&closeError{err: e, immediate: closeErr.immediate}) }()
 	}
 
 	var (

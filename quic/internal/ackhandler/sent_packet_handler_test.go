@@ -684,7 +684,7 @@ func testSentPacketHandlerAmplificationLimitClient(t *testing.T, dropHandshake b
 	require.Equal(t, SendAny, sph.SendMode(monotime.Now()))
 
 	// when the timer expires, we should send a PTO packet
-	sph.OnLossDetectionTimeout(monotime.Now())
+	sph.OnLossDetectionTimeout(monotime.Now()) //nolint:errcheck
 	require.Equal(t, SendPTOInitial, sph.SendMode(monotime.Now()))
 	require.NotZero(t, sph.GetLossDetectionTimeout())
 
@@ -700,7 +700,7 @@ func testSentPacketHandlerAmplificationLimitClient(t *testing.T, dropHandshake b
 	// even if we haven't sent any packet in the Handshake packet number space yet
 	sph.DropPackets(protocol.EncryptionInitial, monotime.Now())
 	require.NotZero(t, sph.GetLossDetectionTimeout())
-	sph.OnLossDetectionTimeout(monotime.Now())
+	sph.OnLossDetectionTimeout(monotime.Now()) //nolint:errcheck
 	require.Equal(t, SendPTOHandshake, sph.SendMode(monotime.Now()))
 
 	// receiving an ACK for a handshake packet shows that the server completed address validation
@@ -786,9 +786,9 @@ func TestSentPacketHandlerDelayBasedLossDetection(t *testing.T) {
 	// ... but we armed a timer to declare packet 2 lost after 9/8 RTTs
 	require.Equal(t, t2.Add(time.Second*9/8), sph.GetLossDetectionTimeout())
 
-	sph.OnLossDetectionTimeout(sph.GetLossDetectionTimeout().Add(-time.Microsecond))
+	sph.OnLossDetectionTimeout(sph.GetLossDetectionTimeout().Add(-time.Microsecond)) //nolint:errcheck
 	require.Len(t, packets.Lost, 1)
-	sph.OnLossDetectionTimeout(sph.GetLossDetectionTimeout())
+	sph.OnLossDetectionTimeout(sph.GetLossDetectionTimeout()) //nolint:errcheck
 	require.Equal(t, []protocol.PacketNumber{pn1, pn2, pn3}, packets.Lost)
 }
 
@@ -933,7 +933,7 @@ func testSentPacketHandlerPTO(t *testing.T, encLevel protocol.EncryptionLevel, p
 	// the PTO is based on the *last* ack-eliciting packet
 	require.Equal(t, sendTimes[2].Add(rttStats.PTO(encLevel == protocol.Encryption1RTT)), timeout)
 
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, uint32(1), sph.(*sentPacketHandler).ptoCount)
 	// PTO timer expiration doesn't declare packets lost
 	require.Empty(t, packets.Lost)
@@ -969,7 +969,7 @@ func testSentPacketHandlerPTO(t *testing.T, encLevel protocol.EncryptionLevel, p
 	require.Equal(t, sendTimes[6].Add(2*rttStats.PTO(encLevel == protocol.Encryption1RTT)), timeout)
 	now = timeout
 
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, uint32(2), sph.(*sentPacketHandler).ptoCount)
 	// PTO timer expiration doesn't declare packets lost
 	require.Empty(t, packets.Lost)
@@ -1080,7 +1080,7 @@ func TestSentPacketHandlerPacketNumberSpacesPTO(t *testing.T) {
 	// i.e. the 2nd Initial packet sent
 	timeout := sph.GetLossDetectionTimeout()
 	require.Equal(t, initialTimes[1].Add(rttStats.PTO(false)), timeout)
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOInitial, sph.SendMode(timeout))
 	// send a PTO probe packet (Initial)
 	now = timeout.Add(100 * time.Millisecond)
@@ -1091,7 +1091,7 @@ func TestSentPacketHandlerPacketNumberSpacesPTO(t *testing.T) {
 	timeout = sph.GetLossDetectionTimeout()
 	// pto_count is a global property, so there's now an exponential backoff
 	require.Equal(t, handshakeTimes[1].Add(2*rttStats.PTO(false)), timeout)
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOHandshake, sph.SendMode(timeout))
 	// send a PTO probe packet (Handshake)
 	now = timeout.Add(100 * time.Millisecond)
@@ -1101,7 +1101,7 @@ func TestSentPacketHandlerPacketNumberSpacesPTO(t *testing.T) {
 	// the earliest PTO time is now the 3rd Initial packet
 	timeout = sph.GetLossDetectionTimeout()
 	require.Equal(t, initialTimes[2].Add(4*rttStats.PTO(false)), timeout)
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOInitial, sph.SendMode(timeout))
 
 	// drop the Initial packet number space
@@ -1880,7 +1880,7 @@ func testSentPacketHandlerRandomized(t *testing.T, seed uint64) {
 				ackPns = slices.Compact(ackPns)
 			}
 
-			sph.ReceivedAck(&wire.AckFrame{AckRanges: ackRanges(ackPns...)}, protocol.Encryption1RTT, now)
+			sph.ReceivedAck(&wire.AckFrame{AckRanges: ackRanges(ackPns...)}, protocol.Encryption1RTT, now) //nolint:errcheck
 			t.Logf(
 				"t=%dms: received ACK for packets %v (acked: %v, lost: %v)",
 				now.Sub(start).Milliseconds(),
@@ -2063,7 +2063,7 @@ func benchmarkSendAndAcknowledge(b *testing.B, ackEvery, inFlight int) {
 		pns = append(pns, pn)
 
 		if counter > inFlight && counter%ackEvery == 0 {
-			sph.ReceivedAck(
+			sph.ReceivedAck( //nolint:errcheck
 				&wire.AckFrame{AckRanges: appendAckRanges(ranges, pns[:ackEvery]...)},
 				protocol.Encryption1RTT,
 				now,

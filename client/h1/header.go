@@ -2641,6 +2641,7 @@ func (h *RequestHeader) parse(buf []byte) (int, error) {
 	return m + n, nil
 }
 
+//nolint:unused
 func parseTrailer(src []byte, dest []argsKV, disableNormalizing bool) ([]argsKV, int, error) {
 	var s headerScanner
 	s.b = src

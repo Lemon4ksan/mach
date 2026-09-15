@@ -476,7 +476,7 @@ func benchmarkConnIDManager(b *testing.B, reordered bool) {
 			seq += offsets[i%len(offsets)]
 		}
 
-		m.Add(&wire.NewConnectionIDFrame{
+		m.Add(&wire.NewConnectionIDFrame{ //nolint:errcheck
 			SequenceNumber:      uint64(seq),
 			ConnectionID:        connIDs[i%len(connIDs)],
 			StatelessResetToken: statelessResetTokens[i%len(statelessResetTokens)],

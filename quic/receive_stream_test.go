@@ -1112,7 +1112,7 @@ func TestReceiveStreamResetStreamAtBeforeReadOffset(t *testing.T) {
 	require.Equal(t, 3, n)
 	require.Equal(t, []byte("foo"), b)
 
-	str.handleResetStreamFrame(
+	str.handleResetStreamFrame( //nolint:errcheck
 		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10, ReliableSize: 3},
 		monotime.Now(),
 	)
@@ -1145,7 +1145,7 @@ func TestReceiveStreamResetStreamAtAfterReadOffset(t *testing.T) {
 	require.Equal(t, 2, n)
 	require.Equal(t, []byte("fo"), b)
 
-	str.handleResetStreamFrame(
+	str.handleResetStreamFrame( //nolint:errcheck
 		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10, ReliableSize: 6},
 		monotime.Now(),
 	)
@@ -1195,21 +1195,21 @@ func TestReceiveStreamMultipleResetStreamAt(t *testing.T) {
 	require.Equal(t, []byte("foo"), b)
 	require.True(t, mockCtrl.Satisfied())
 
-	str.handleResetStreamFrame(
+	str.handleResetStreamFrame( //nolint:errcheck
 		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10, ReliableSize: 6},
 		monotime.Now(),
 	)
 	require.True(t, mockCtrl.Satisfied())
 
 	// receiving a reordered RESET_STREAM_AT frame has no effect
-	str.handleResetStreamFrame(
+	str.handleResetStreamFrame( //nolint:errcheck
 		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10, ReliableSize: 8},
 		monotime.Now(),
 	)
 	require.True(t, mockCtrl.Satisfied())
 
 	// receiving a RESET_STREAM_AT frame with a smaller reliable size is valid
-	str.handleResetStreamFrame(
+	str.handleResetStreamFrame( //nolint:errcheck
 		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10, ReliableSize: 3},
 		monotime.Now(),
 	)
@@ -1237,11 +1237,11 @@ func TestReceiveStreamResetStreamAtAfterResetStream(t *testing.T) {
 	require.Equal(t, []byte("foo"), b)
 	require.True(t, mockCtrl.Satisfied())
 
-	str.handleResetStreamFrame(&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10}, monotime.Now())
+	str.handleResetStreamFrame(&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10}, monotime.Now()) //nolint:errcheck
 	require.True(t, mockCtrl.Satisfied())
 
 	// receiving a reordered RESET_STREAM_AT frame has no effect
-	str.handleResetStreamFrame(
+	str.handleResetStreamFrame( //nolint:errcheck
 		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10, ReliableSize: 8},
 		monotime.Now(),
 	)

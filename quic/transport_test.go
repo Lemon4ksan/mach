@@ -65,8 +65,8 @@ func (h *mockPacketHandler) closeWithTransportError(code qerr.TransportErrorCode
 func TestTransportPacketHandling(t *testing.T) {
 	tr := &Transport{Conn: newUDPConnLocalhost(t)}
 
-	tr.init(true)
-	defer tr.Close()
+	tr.init(true) //nolint:errcheck
+	defer tr.Close() //nolint:errcheck
 
 	connID1 := protocol.ParseConnectionID([]byte{1, 2, 3, 4, 5, 6, 7, 8})
 	connID2 := protocol.ParseConnectionID([]byte{8, 7, 6, 5, 4, 3, 2, 1})
@@ -118,9 +118,9 @@ func TestTransportErrFromConn(t *testing.T) {
 				localAddr: &net.UDPAddr{IP: net.IPv4(1, 2, 3, 4), Port: 1234},
 			},
 		}
-		defer tr.Close()
+		defer tr.Close() //nolint:errcheck
 
-		tr.init(true)
+		tr.init(true) //nolint:errcheck
 
 		errChan := make(chan error, 1)
 		ph := &mockPacketHandler{destruction: errChan}
@@ -160,8 +160,8 @@ func TestTransportStatelessResetReceiving(t *testing.T) {
 		ConnectionIDLength: 4,
 	}
 
-	tr.init(true)
-	defer tr.Close()
+	tr.init(true) //nolint:errcheck
+	defer tr.Close() //nolint:errcheck
 
 	connID := protocol.ParseConnectionID([]byte{9, 10, 11, 12})
 	// now send a packet with a connection ID that doesn't exist
@@ -293,8 +293,8 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 
 	tr := &Transport{Conn: newUDPConnLocalhost(t)}
 
-	tr.init(true)
-	defer tr.Close()
+	tr.init(true) //nolint:errcheck
+	defer tr.Close() //nolint:errcheck
 
 	_, err := tr.Dial(context.Background(), nil, &tls.Config{})
 	require.ErrorIs(t, err, assert.AnError)

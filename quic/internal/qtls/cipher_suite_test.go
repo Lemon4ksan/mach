@@ -23,7 +23,7 @@ func TestCipherSuiteSelection(t *testing.T) {
 	ln, err := tls.Listen("tcp4", "localhost:0", testdata.GetTLSConfig())
 	require.NoError(t, err)
 
-	defer ln.Close()
+	defer ln.Close() //nolint:errcheck
 
 	done := make(chan struct{})
 	go func() {
