@@ -2493,7 +2493,10 @@ func callDialFunc(
 	if dial != nil {
 		return dial(addr)
 	}
-	return nil, errors.New("no dialer configured")
+	if timeout > 0 {
+		return net.DialTimeout("tcp", addr, timeout)
+	}
+	return net.Dial("tcp", addr)
 }
 
 // AddMissingPort adds a port to a host if it is missing.
