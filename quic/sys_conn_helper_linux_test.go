@@ -59,7 +59,7 @@ func TestForcingSendBufferSize(t *testing.T) {
 	c, err := net.ListenPacket("udp", "127.0.0.1:0")
 	require.NoError(t, err)
 
-	defer c.Close()
+	defer c.Close() //nolint:errcheck
 
 	syscallConn, err := c.(*net.UDPConn).SyscallConn()
 	require.NoError(t, err)

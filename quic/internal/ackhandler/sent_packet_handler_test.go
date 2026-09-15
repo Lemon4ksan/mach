@@ -1124,7 +1124,7 @@ func TestSentPacketHandlerPacketNumberSpacesPTO(t *testing.T) {
 
 	// until handshake confirmation, the PTO timer is based on the Handshake packet number space
 	require.Equal(t, timeout, sph.GetLossDetectionTimeout())
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOHandshake, sph.SendMode(now))
 
 	// Drop Handshake packet number space.
@@ -1176,7 +1176,7 @@ func TestSentPacketHandler0RTT(t *testing.T) {
 	// The PTO timer is based on the Handshake packet number space, not the 0-RTT packets
 	timeout := sph.GetLossDetectionTimeout()
 	require.NotZero(t, timeout)
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOHandshake, sph.SendMode(timeout))
 
 	now = timeout.Add(100 * time.Millisecond)
@@ -1281,7 +1281,7 @@ func TestSentPacketHandlerCongestion(t *testing.T) {
 	// we should now have a PTO timer armed for the 4th packet
 	timeout := sph.GetLossDetectionTimeout()
 	require.NotZero(t, timeout)
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOInitial, sph.SendMode(timeout))
 
 	// send another packet to check that bytes_in_flight was correctly adjusted
@@ -1425,7 +1425,7 @@ func TestSentPacketHandlerRetryAfterPTO(t *testing.T) {
 
 	timeout := sph.GetLossDetectionTimeout()
 	require.NotZero(t, timeout)
-	sph.OnLossDetectionTimeout(timeout)
+	sph.OnLossDetectionTimeout(timeout) //nolint:errcheck
 	require.Equal(t, SendPTOInitial, sph.SendMode(timeout))
 	require.True(t, sph.QueueProbePacket(protocol.EncryptionInitial))
 
@@ -1858,7 +1858,7 @@ func testSentPacketHandlerRandomized(t *testing.T, seed uint64) {
 
 		now = now.Add(randDuration(0, 500*time.Millisecond))
 		if r.Int()%3 == 0 {
-			sph.OnLossDetectionTimeout(now)
+			sph.OnLossDetectionTimeout(now) //nolint:errcheck
 			t.Logf("t=%dms: loss detection timeout (lost: %v)", now.Sub(start).Milliseconds(), packets.Lost)
 			packets.Reset()
 
@@ -1900,7 +1900,7 @@ func testSentPacketHandlerRandomized(t *testing.T, seed uint64) {
 	}
 
 	t.Logf("t=%dms: loss detection timeout (lost: %v)", now.Sub(start).Milliseconds(), packets.Lost)
-	sph.OnLossDetectionTimeout(now)
+	sph.OnLossDetectionTimeout(now) //nolint:errcheck
 }
 
 func TestSentPacketHandlerSpuriousLoss(t *testing.T) {

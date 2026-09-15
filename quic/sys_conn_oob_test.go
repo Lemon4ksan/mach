@@ -27,7 +27,7 @@ func runSysConnServer(t *testing.T, network string, addr *net.UDPAddr) (*net.UDP
 
 	udpConn, err := net.ListenUDP(network, addr)
 	require.NoError(t, err)
-	t.Cleanup(func() { udpConn.Close() })
+	t.Cleanup(func() { _ = udpConn.Close() })
 
 	oobConn, err := newConn(udpConn, true)
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func runSysConnServer(t *testing.T, network string, addr *net.UDPAddr) (*net.UDP
 func sendUDPPacketWithECN(t *testing.T, network string, addr *net.UDPAddr, setECN func(uintptr)) net.Addr {
 	conn, err := net.DialUDP(network, nil, addr)
 	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 
 	rawConn, err := conn.SyscallConn()
 	require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestSendPacketsWithECNOnIPv4(t *testing.T) {
 	c, err := net.ListenUDP("udp4", nil)
 	require.NoError(t, err)
 
-	defer c.Close()
+	defer c.Close() //nolint:errcheck
 
 	for _, val := range []protocol.ECN{protocol.ECNNon, protocol.ECT1, protocol.ECT0, protocol.ECNCE} {
 		_, _, err = c.WriteMsgUDP([]byte("foobar"), appendIPv4ECNMsg([]byte{}, val), addr)
@@ -177,7 +177,7 @@ func TestSendPacketsWithECNOnIPv6(t *testing.T) {
 	c, err := net.ListenUDP("udp6", nil)
 	require.NoError(t, err)
 
-	defer c.Close()
+	defer c.Close() //nolint:errcheck
 
 	for _, val := range []protocol.ECN{protocol.ECNNon, protocol.ECT1, protocol.ECT0, protocol.ECNCE} {
 		_, _, err = c.WriteMsgUDP([]byte("foobar"), appendIPv6ECNMsg([]byte{}, val), addr)
@@ -200,7 +200,7 @@ func TestSysConnPacketInfoIPv4(t *testing.T) {
 	conn, err := net.DialUDP("udp4", nil, addr)
 	require.NoError(t, err)
 
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	_, err = conn.Write([]byte("foobar"))
 	require.NoError(t, err)
@@ -226,7 +226,7 @@ func TestSysConnPacketInfoIPv6(t *testing.T) {
 	conn, err := net.DialUDP("udp6", nil, addr)
 	require.NoError(t, err)
 
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	_, err = conn.Write([]byte("foobar"))
 	require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestSysConnPacketInfoDualStack(t *testing.T) {
 	conn4, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: addr.Port})
 	require.NoError(t, err)
 
-	defer conn4.Close()
+	defer conn4.Close() //nolint:errcheck
 
 	_, err = conn4.Write([]byte("foobar"))
 	require.NoError(t, err)
@@ -270,7 +270,7 @@ func TestSysConnPacketInfoDualStack(t *testing.T) {
 	conn6, err := net.DialUDP("udp6", nil, addr)
 	require.NoError(t, err)
 
-	defer conn6.Close()
+	defer conn6.Close() //nolint:errcheck
 
 	_, err = conn6.Write([]byte("foobar"))
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestSysConnSendGSO(t *testing.T) {
 	require.True(t, oobConn.capabilities().GSO)
 
 	oob := make([]byte, 0, 123)
-	oobConn.WritePacket([]byte("foobar"), udpConn.LocalAddr(), oob, 3, protocol.ECNCE)
+	oobConn.WritePacket([]byte("foobar"), udpConn.LocalAddr(), oob, 3, protocol.ECNCE) //nolint:errcheck
 	require.Len(t, c.oobs, 1)
 	oobMsg := c.oobs[0]
 	require.NotEmpty(t, oobMsg)
