@@ -95,7 +95,7 @@ func appendString(dst []byte, s string) []byte {
 	return append(dst, s...)
 }
 
-func readString(data []byte) (string, int, error) {
+func readString(data []byte, arena *[]byte) (string, int, error) {
 	if len(data) == 0 {
 		return "", 0, io.ErrUnexpectedEOF
 	}
@@ -115,7 +115,7 @@ func readString(data []byte) (string, int, error) {
 	totalConsumed := n + int(strLen)
 
 	if isHuffman {
-		s, err := decodeHuffman(raw)
+		s, err := decodeHuffman(raw, arena)
 		if err != nil {
 			return "", 0, err
 		}
@@ -123,5 +123,11 @@ func readString(data []byte) (string, int, error) {
 		return s, totalConsumed, nil
 	}
 
-	return bytesconv.B2S(raw), totalConsumed, nil
+	if arena == nil {
+		return bytesconv.B2S(raw), totalConsumed, nil
+	}
+
+	start := len(*arena)
+	*arena = append(*arena, raw...)
+	return bytesconv.B2S((*arena)[start:]), totalConsumed, nil
 }

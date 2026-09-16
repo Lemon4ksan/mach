@@ -31,7 +31,7 @@ type incomingStreamsMap[T incomingStream] struct {
 	newStreamChan chan struct{}
 
 	streamType protocol.StreamType
-	streams    map[protocol.StreamID]incomingStreamEntry[T]
+	streams    *streamsMatrix[T]
 
 	nextStreamToAccept protocol.StreamID // the next stream that will be returned by AcceptStream()
 	nextStreamToOpen   protocol.StreamID // the highest stream that the peer opened
@@ -66,7 +66,7 @@ func newIncomingStreamsMap[T incomingStream](
 	return &incomingStreamsMap[T]{
 		newStreamChan:      make(chan struct{}, 1),
 		streamType:         streamType,
-		streams:            make(map[protocol.StreamID]incomingStreamEntry[T]),
+		streams:            newStreamsMatrix[T](),
 		maxStream:          protocol.StreamNum(maxStreams).StreamID(streamType, pers.Opposite()),
 		maxNumStreams:      maxStreams,
 		newStream:          newStream,
@@ -99,7 +99,7 @@ func (m *incomingStreamsMap[T]) AcceptStream(ctx context.Context) (T, error) {
 
 		var ok bool
 
-		entry, ok = m.streams[id]
+		entry, ok = m.streams.get(id)
 		if ok {
 			break
 		}
@@ -130,6 +130,13 @@ func (m *incomingStreamsMap[T]) AcceptStream(ctx context.Context) (T, error) {
 }
 
 func (m *incomingStreamsMap[T]) GetOrOpenStream(id protocol.StreamID) (T, error) {
+	// LOCK-FREE FAST PATH
+	if entry, ok := m.streams.get(id); ok {
+		if !entry.shouldDelete {
+			return entry.stream, nil
+		}
+	}
+
 	m.mutex.RLock()
 
 	if id > m.maxStream {
@@ -141,13 +148,9 @@ func (m *incomingStreamsMap[T]) GetOrOpenStream(id protocol.StreamID) (T, error)
 		}
 	}
 
-	// if the num is smaller than the highest we accepted
-	// * this stream exists in the map, and we can return it, or
-	// * this stream was already closed, then we can return the nil
 	if id < m.nextStreamToOpen {
 		var s T
-		// If the stream was already queued for deletion, and is just waiting to be accepted, don't return it.
-		if entry, ok := m.streams[id]; ok && !entry.shouldDelete {
+		if entry, ok := m.streams.get(id); ok && !entry.shouldDelete {
 			s = entry.stream
 		}
 
@@ -163,7 +166,7 @@ func (m *incomingStreamsMap[T]) GetOrOpenStream(id protocol.StreamID) (T, error)
 	// * maxStream can only increase, so if the id was valid before, it definitely is valid now
 	// * highestStream is only modified by this function
 	for newNum := m.nextStreamToOpen; newNum <= id; newNum += 4 {
-		m.streams[newNum] = incomingStreamEntry[T]{stream: m.newStream(newNum)}
+		m.streams.set(newNum, incomingStreamEntry[T]{stream: m.newStream(newNum)})
 		select {
 		case m.newStreamChan <- struct{}{}:
 		default:
@@ -171,7 +174,7 @@ func (m *incomingStreamsMap[T]) GetOrOpenStream(id protocol.StreamID) (T, error)
 	}
 
 	m.nextStreamToOpen = id + 4
-	entry := m.streams[id]
+	entry, _ := m.streams.get(id)
 	m.mutex.Unlock()
 
 	return entry.stream, nil
@@ -192,28 +195,28 @@ func (m *incomingStreamsMap[T]) DeleteStream(id protocol.StreamID) error {
 }
 
 func (m *incomingStreamsMap[T]) deleteStream(id protocol.StreamID) error {
-	if _, ok := m.streams[id]; !ok {
+	if _, ok := m.streams.get(id); !ok {
 		return fmt.Errorf("tried to delete unknown incoming stream %d", id)
 	}
 
 	// Don't delete this stream yet, if it was not yet accepted.
 	// Just save it to streamsToDelete map, to make sure it is deleted as soon as it gets accepted.
 	if id >= m.nextStreamToAccept {
-		entry, ok := m.streams[id]
+		entry, ok := m.streams.get(id)
 		if ok && entry.shouldDelete {
 			return fmt.Errorf("tried to delete incoming stream %d multiple times", id)
 		}
 
 		entry.shouldDelete = true
-		m.streams[id] = entry // can't assign to struct in map, so we need to reassign
+		m.streams.set(id, entry) // can't assign to struct in map, so we need to reassign
 
 		return nil
 	}
 
-	delete(m.streams, id)
+	m.streams.del(id)
 	// queue a MAX_STREAM_ID frame, giving the peer the option to open a new stream
-	if m.maxNumStreams > uint64(len(m.streams)) {
-		maxStream := m.nextStreamToOpen + 4*protocol.StreamID(m.maxNumStreams-uint64(len(m.streams))-1)
+	if m.maxNumStreams > uint64(m.streams.len()) {
+		maxStream := m.nextStreamToOpen + 4*protocol.StreamID(m.maxNumStreams-uint64(m.streams.len())-1)
 		// never send a value larger than the maximum value for a stream number
 		if maxStream <= protocol.MaxStreamID {
 			m.maxStream = maxStream
@@ -231,9 +234,9 @@ func (m *incomingStreamsMap[T]) CloseWithError(err error) {
 	m.mutex.Lock()
 
 	m.closeErr = err
-	for _, entry := range m.streams {
+	m.streams.iterate(func(entry incomingStreamEntry[T]) {
 		entry.stream.closeForShutdown(err)
-	}
+	})
 
 	m.mutex.Unlock()
 	close(m.newStreamChan)

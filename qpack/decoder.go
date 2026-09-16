@@ -7,6 +7,8 @@ package qpack
 import (
 	"errors"
 	"io"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 var (
@@ -23,7 +25,7 @@ func NewDecoder() *Decoder {
 }
 
 // DecodeFields iterates over all QPACK header fields in data, calling emit for each field with zero closure allocations.
-func (d *Decoder) DecodeFields(data []byte, emit func(hf HeaderField) bool) error {
+func (d *Decoder) DecodeFields(data []byte, arena *[]byte, emit func(hf HeaderField) bool) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -99,7 +101,7 @@ func (d *Decoder) DecodeFields(data []byte, emit func(hf HeaderField) bool) erro
 				return errInvalidHeaderBlock
 			}
 
-			val, vn, err := readString(data[offset:])
+			val, vn, err := readString(data[offset:], arena)
 			if err != nil {
 				return err
 			}
@@ -129,15 +131,21 @@ func (d *Decoder) DecodeFields(data []byte, emit func(hf HeaderField) bool) erro
 
 			var name string
 			if isHuffmanName {
-				name, err = decodeHuffman(nameRaw)
+				name, err = decodeHuffman(nameRaw, arena)
 				if err != nil {
 					return err
 				}
 			} else {
-				name = string(nameRaw)
+				if arena != nil {
+					start := len(*arena)
+					*arena = append(*arena, nameRaw...)
+					name = bytesconv.B2S((*arena)[start:])
+				} else {
+					name = string(nameRaw)
+				}
 			}
 
-			val, vn, err := readString(data[offset:])
+			val, vn, err := readString(data[offset:], arena)
 			if err != nil {
 				return err
 			}
@@ -157,7 +165,7 @@ func (d *Decoder) DecodeFields(data []byte, emit func(hf HeaderField) bool) erro
 }
 
 // Decode returns an iterator function that parses HeaderField items sequentially until io.EOF.
-func (d *Decoder) Decode(data []byte) func() (HeaderField, error) {
+func (d *Decoder) Decode(data []byte, arena *[]byte) func() (HeaderField, error) {
 	offset := 0
 	prefixParsed := false
 
@@ -241,7 +249,7 @@ func (d *Decoder) Decode(data []byte) func() (HeaderField, error) {
 				return HeaderField{}, errInvalidHeaderBlock
 			}
 
-			val, vn, err := readString(data[offset:])
+			val, vn, err := readString(data[offset:], arena)
 			if err != nil {
 				return HeaderField{}, err
 			}
@@ -270,15 +278,21 @@ func (d *Decoder) Decode(data []byte) func() (HeaderField, error) {
 
 			var name string
 			if isHuffmanName {
-				name, err = decodeHuffman(nameRaw)
+				name, err = decodeHuffman(nameRaw, arena)
 				if err != nil {
 					return HeaderField{}, err
 				}
 			} else {
-				name = string(nameRaw)
+				if arena != nil {
+					start := len(*arena)
+					*arena = append(*arena, nameRaw...)
+					name = bytesconv.B2S((*arena)[start:])
+				} else {
+					name = string(nameRaw)
+				}
 			}
 
-			val, vn, err := readString(data[offset:])
+			val, vn, err := readString(data[offset:], arena)
 			if err != nil {
 				return HeaderField{}, err
 			}

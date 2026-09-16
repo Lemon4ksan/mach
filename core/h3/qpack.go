@@ -7,12 +7,12 @@ package h3
 import (
 	"bytes"
 	"io"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"github.com/lemon4ksan/mach/client/h1"
 	"github.com/lemon4ksan/mach/qpack"
@@ -253,7 +253,7 @@ func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *h1.ResponseH
 		parseErr   error
 	)
 
-	err := q.decoder.DecodeFields(headerBlock, func(hf qpack.HeaderField) bool {
+	err := q.decoder.DecodeFields(headerBlock, nil, func(hf qpack.HeaderField) bool {
 		if hf.Name == ":status" {
 			code, err := strconv.Atoi(hf.Value)
 			if err != nil {
@@ -306,7 +306,7 @@ func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *h1.ResponseH
 func (q *QPACKCodec) DecodeResponseTrailers(headerBlock []byte) (map[string][]string, error) {
 	trailers := make(map[string][]string)
 
-	err := q.decoder.DecodeFields(headerBlock, func(hf qpack.HeaderField) bool {
+	err := q.decoder.DecodeFields(headerBlock, nil, func(hf qpack.HeaderField) bool {
 		if hf.IsPseudo() {
 			return true
 		}
@@ -324,19 +324,19 @@ func (q *QPACKCodec) DecodeResponseTrailers(headerBlock []byte) (map[string][]st
 
 func (q *QPACKCodec) DecodeRequestHeaders(
 	headerBlock []byte,
-) (method, path, scheme, authority string, headers http.Header, err error) {
-	headers = make(http.Header)
+) (method, path, scheme, authority string, headers coreheaders.Headers, err error) {
+	headers = coreheaders.NewWithCapacity(16)
 
 	var (
 		hasSeenRegularHeader bool
 		malformed            bool
 	)
 
-	decodeErr := q.decoder.DecodeFields(headerBlock, func(hf qpack.HeaderField) bool {
+	decodeErr := q.decoder.DecodeFields(headerBlock, &headerBlock, func(hf qpack.HeaderField) bool {
 		k := hf.Name
 		v := hf.Value
 
-		// RFC 9114 Â§4.1.2: All field names MUST be lowercase ASCII
+		// RFC 9114 §4.1.2: All field names MUST be lowercase ASCII
 		for i := 0; i < len(k); i++ {
 			if k[i] >= 'A' && k[i] <= 'Z' {
 				malformed = true
@@ -345,7 +345,7 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 		}
 
 		if hf.IsPseudo() {
-			// RFC 9114 Â§4.3: Pseudo-headers MUST appear before regular headers
+			// RFC 9114 §4.3: Pseudo-headers MUST appear before regular headers
 			if hasSeenRegularHeader {
 				malformed = true
 				return false
@@ -412,21 +412,23 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 		return true
 	})
 	if decodeErr != nil {
-		return "", "", "", "", nil, ErrQPACKDecompressFailed
+		return "", "", "", "", coreheaders.Headers{}, ErrQPACKDecompressFailed
 	}
 
 	if malformed {
-		return "", "", "", "", nil, ErrMalformedHeader
+		return "", "", "", "", coreheaders.Headers{}, ErrMalformedHeader
 	}
 
 	if method == "" || (method != "CONNECT" && (scheme == "" || path == "")) {
-		return "", "", "", "", nil, ErrMissingMethodOrPath
+		return "", "", "", "", coreheaders.Headers{}, ErrMissingMethodOrPath
 	}
+
+	headers.SetRawBuf(headerBlock)
 
 	return method, path, scheme, authority, headers, nil
 }
 
-func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers http.Header, bodyLen int) []byte {
+func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers coreheaders.Headers, bodyLen int) []byte {
 	pe := encoderPool.Get().(*PooledEncoder)
 	defer encoderPool.Put(pe)
 
@@ -447,21 +449,18 @@ func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers http.Header, 
 		})
 	}
 
-	// 3. Normal response headers
-	for k, vv := range headers {
+	headers.VisitAll(func(k, v string) {
 		kLower := strings.ToLower(k)
 
-		for _, v := range vv {
-			if isForbiddenH3Header([]byte(k), []byte(v)) {
-				continue
-			}
-
-			_ = pe.enc.WriteField(qpack.HeaderField{
-				Name:  kLower,
-				Value: v,
-			})
+		if isForbiddenH3Header([]byte(kLower), []byte(v)) {
+			return // skip in VisitAll
 		}
-	}
+
+		_ = pe.enc.WriteField(qpack.HeaderField{
+			Name:  kLower,
+			Value: v,
+		})
+	})
 
 	result := make([]byte, pe.buf.Len())
 	copy(result, pe.buf.Bytes())

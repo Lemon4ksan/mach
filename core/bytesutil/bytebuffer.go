@@ -9,6 +9,7 @@ import (
 type ByteBuffer struct {
 	// B is the underlying byte slice.
 	B []byte
+	w io.Writer
 }
 
 // Len returns the number of bytes of the unread portion of the buffer.
@@ -29,6 +30,23 @@ func (b *ByteBuffer) String() string {
 // Reset resets the buffer to be empty.
 func (b *ByteBuffer) Reset() {
 	b.B = b.B[:0]
+	b.w = nil
+}
+
+// ResetWriter resets the buffer and binds an io.Writer for Flush().
+func (b *ByteBuffer) ResetWriter(w io.Writer) {
+	b.B = b.B[:0]
+	b.w = w
+}
+
+// Flush writes buffered data to the underlying writer and resets the buffer.
+func (b *ByteBuffer) Flush() error {
+	if len(b.B) == 0 || b.w == nil {
+		return nil
+	}
+	_, err := b.w.Write(b.B)
+	b.B = b.B[:0]
+	return err
 }
 
 // Write appends the contents of p to the buffer.

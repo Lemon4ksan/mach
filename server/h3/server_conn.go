@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	coreh3 "github.com/lemon4ksan/mach/core/h3"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"github.com/lemon4ksan/mach/quic"
 	"github.com/lemon4ksan/mach/quic/quicvarint"
@@ -28,7 +29,7 @@ type ServerRequest struct {
 	Path       string
 	Scheme     string
 	Authority  string
-	Headers    http.Header
+	Headers    coreheaders.Headers
 	Body       []byte
 	RemoteAddr string
 	Ctx        context.Context
@@ -37,7 +38,7 @@ type ServerRequest struct {
 // ServerResponse represents an outgoing HTTP/3 response.
 type ServerResponse struct {
 	StatusCode int
-	Headers    http.Header
+	Headers    coreheaders.Headers
 	Body       []byte
 }
 
@@ -283,7 +284,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 	res := &ServerResponse{
 		StatusCode: http.StatusOK,
-		Headers:    make(http.Header),
+		Headers:    coreheaders.NewWithCapacity(16),
 	}
 
 	if sc.handler != nil {

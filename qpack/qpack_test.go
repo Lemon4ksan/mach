@@ -38,7 +38,7 @@ func TestQPACK_EncoderDecoderRoundtrip(t *testing.T) {
 	}
 
 	dec := NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes())
+	decodeFn := dec.Decode(buf.Bytes(), nil)
 
 	var decoded []HeaderField
 
@@ -73,7 +73,7 @@ func TestQPACK_RFC9204AppendixBExamples(t *testing.T) {
 	require.NoError(t, err)
 
 	dec := NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes())
+	decodeFn := dec.Decode(buf.Bytes(), nil)
 
 	hf, err := decodeFn()
 	require.NoError(t, err)

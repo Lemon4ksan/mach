@@ -1,8 +1,8 @@
 package h1
 
-import coreh1 "github.com/lemon4ksan/mach/core/h1"
+import coreheaders "github.com/lemon4ksan/mach/core/headers"
 
-type Headers = coreh1.Headers
-type HeaderEntry = coreh1.HeaderEntry
+type Headers = coreheaders.Headers
+type HeaderEntry = coreheaders.HeaderEntry
 
-var NewHeadersWithCapacity = coreh1.NewHeadersWithCapacity
+var NewHeadersWithCapacity = coreheaders.NewWithCapacity

@@ -4,10 +4,10 @@ import (
 	"bytes"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 )
 
-func peekArgBytesHeaders(h *coreh1.Headers, key []byte) []byte {
+func peekArgBytesHeaders(h *coreheaders.Headers, key []byte) []byte {
 	v := h.Get(bytesconv.B2S(key))
 	if v == "" {
 		return nil
@@ -15,22 +15,22 @@ func peekArgBytesHeaders(h *coreh1.Headers, key []byte) []byte {
 	return bytesconv.S2B(v)
 }
 
-func setArgBytesHeaders(h *coreh1.Headers, key, value []byte, noValue bool) {
+func setArgBytesHeaders(h *coreheaders.Headers, key, value []byte, noValue bool) {
 	h.Set(string(key), string(value))
 }
 
-func appendArgBytesHeaders(h *coreh1.Headers, key, value []byte, noValue bool) {
+func appendArgBytesHeaders(h *coreheaders.Headers, key, value []byte, noValue bool) {
 	h.Add(string(key), string(value))
 }
 
-func copyHeaders(dst *coreh1.Headers, src *coreh1.Headers) {
+func copyHeaders(dst *coreheaders.Headers, src *coreheaders.Headers) {
 	dst.Reset()
 	for _, e := range src.Entries() {
 		dst.Add(e.Key, e.Value)
 	}
 }
 
-func peekAllArgBytesToDstHeaders(dst [][]byte, h *coreh1.Headers, key []byte) [][]byte {
+func peekAllArgBytesToDstHeaders(dst [][]byte, h *coreheaders.Headers, key []byte) [][]byte {
 	kStr := bytesconv.B2S(key)
 	for _, e := range h.Entries() {
 		if bytesconv.EqualFoldASCII(e.Key, kStr) {
@@ -40,7 +40,7 @@ func peekAllArgBytesToDstHeaders(dst [][]byte, h *coreh1.Headers, key []byte) []
 	return dst
 }
 
-func parseTrailerHeaders(src []byte, dest *coreh1.Headers, disableNormalizing bool) (int, error) {
+func parseTrailerHeaders(src []byte, dest *coreheaders.Headers, disableNormalizing bool) (int, error) {
 	var err error
 	n := 0
 	for len(src) > 0 {

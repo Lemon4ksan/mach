@@ -24,12 +24,18 @@ func huffmanLen(s string) int {
 	return h2.HuffmanEncodeLength(bytesconv.S2B(s))
 }
 
-func decodeHuffman(src []byte) (string, error) {
-	bufPtr := huffmanDecStorage.Get()
-	defer huffmanDecStorage.Put(bufPtr)
+func decodeHuffman(src []byte, arena *[]byte) (string, error) {
+	if arena == nil {
+		bufPtr := huffmanDecStorage.Get()
+		defer huffmanDecStorage.Put(bufPtr)
 
-	dst := h2.HuffmanDecode((*bufPtr)[:0], src)
-	*bufPtr = dst
+		dst := h2.HuffmanDecode((*bufPtr)[:0], src)
+		*bufPtr = dst
 
-	return string(dst), nil
+		return string(dst), nil
+	}
+
+	start := len(*arena)
+	*arena = h2.HuffmanDecode(*arena, src)
+	return bytesconv.B2S((*arena)[start:]), nil
 }

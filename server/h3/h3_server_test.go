@@ -5,7 +5,7 @@
 package h3_test
 
 import (
-	h3 "github.com/lemon4ksan/mach/server/h3"
+	"github.com/lemon4ksan/mach/server/h3"
 
 	coreh3 "github.com/lemon4ksan/mach/core/h3"
 
@@ -190,7 +190,7 @@ func TestH3Server_EndToEnd(t *testing.T) {
 		contentType string
 	)
 
-	err = dec.DecodeFields(respHeaderBytes, func(hf qpack.HeaderField) bool {
+	err = dec.DecodeFields(respHeaderBytes, nil, func(hf qpack.HeaderField) bool {
 		if hf.Name == ":status" {
 			statusCode = hf.Value
 		}

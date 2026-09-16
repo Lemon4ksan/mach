@@ -15,7 +15,7 @@ func FuzzQPACKDecoder(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := NewDecoder()
-		_ = dec.DecodeFields(data, func(hf HeaderField) bool {
+		_ = dec.DecodeFields(data, nil, func(hf HeaderField) bool {
 			return true
 		})
 	})

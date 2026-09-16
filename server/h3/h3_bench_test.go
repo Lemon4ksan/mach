@@ -6,6 +6,7 @@ package h3_test
 
 import (
 	coreh3 "github.com/lemon4ksan/mach/core/h3"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"bytes"
 	"net/http"
@@ -17,15 +18,14 @@ import (
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
 	codec := coreh3.NewQPACKCodec()
-	headers := make(http.Header)
+	headers := coreheaders.NewWithCapacity(16)
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Server", "Sein/2.0")
 	headers.Set("X-Powered-By", "Plan9-AVX2")
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = codec.EncodeResponseHeaders(http.StatusOK, headers, 128)
 	}
 }
@@ -46,9 +46,8 @@ func BenchmarkQPACK_DecodeRequestHeaders(b *testing.B) {
 	raw := buf.Bytes()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _, _, _, _ = codec.DecodeRequestHeaders(raw)
 	}
 }
@@ -57,9 +56,8 @@ func BenchmarkH3_FrameHeaderPack(b *testing.B) {
 	var frameHdr [16]byte
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		hdrBytes := quicvarint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
 		_ = quicvarint.Append(hdrBytes, 16384)
 	}

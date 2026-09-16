@@ -37,7 +37,7 @@ func TestQPACKEncodeRequestHeaders(t *testing.T) {
 	}
 
 	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes())
+	decodeFn := dec.Decode(buf.Bytes(), nil)
 
 	decodedMap := make(map[string]string)
 
@@ -99,7 +99,7 @@ func TestQPACKOrderedHeadersSequence(t *testing.T) {
 	}
 
 	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes())
+	decodeFn := dec.Decode(buf.Bytes(), nil)
 
 	var capturedKeys []string
 
@@ -197,7 +197,7 @@ func TestQPACKEncodeExtendedCONNECTProtocolHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes())
+	decodeFn := dec.Decode(buf.Bytes(), nil)
 
 	decodedMap := make(map[string]string)
 	for {
@@ -292,7 +292,7 @@ func TestQPACKForbiddenHeadersFilteringInEncode(t *testing.T) {
 	require.NoError(t, err)
 
 	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes())
+	decodeFn := dec.Decode(buf.Bytes(), nil)
 
 	decodedMap := make(map[string]string)
 	for {
@@ -338,7 +338,7 @@ func TestRFC9204AppendixBExamples(t *testing.T) {
 	}
 
 	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(rawBlock)
+	decodeFn := dec.Decode(rawBlock, nil)
 
 	fields := make(map[string]string)
 	for {

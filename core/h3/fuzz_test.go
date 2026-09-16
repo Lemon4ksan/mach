@@ -25,7 +25,7 @@ func FuzzQPACKDecode(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := qpack.NewDecoder()
 
-		decodeFn := dec.Decode(data)
+		decodeFn := dec.Decode(data, nil)
 		for {
 			_, err := decodeFn()
 			if err != nil {

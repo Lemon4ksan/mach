@@ -18,7 +18,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 	"github.com/lemon4ksan/mach/core/bytesutil"
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 )
 
 type header struct {
-	h       coreh1.Headers
+	h       coreheaders.Headers
 	cookies []argsKV
 
 	bufK               []byte

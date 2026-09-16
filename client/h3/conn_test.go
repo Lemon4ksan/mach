@@ -56,7 +56,7 @@ func TestSendRequest_HeadersAndBody(t *testing.T) {
 	require.NoError(t, err)
 
 	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(headerBlock)
+	decodeFn := dec.Decode(headerBlock, nil)
 
 	headers := make(map[string]string)
 	for {
