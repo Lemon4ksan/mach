@@ -5,12 +5,13 @@
 package h1
 
 import (
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
-	"bufio"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/lemon4ksan/mach/core/bytesutil"
 
 	"github.com/lemon4ksan/foundation/net/http/header"
 )
@@ -18,7 +19,7 @@ import (
 // Response carries HTTP/1.1 response state to be serialized directly over the wire.
 type Response struct {
 	StatusCode   int
-	Headers      coreh1.Headers
+	Headers      coreheaders.Headers
 	Cookies      []*http.Cookie
 	Body         []byte
 	StreamWriter func(w io.Writer) error
@@ -35,7 +36,7 @@ func (res *Response) Reset() {
 
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to the writer.
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
-func (res *Response) WriteTo(bw *bufio.Writer, keepAlive bool, flush bool) error {
+func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive bool, flush bool) error {
 	status := res.StatusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -90,12 +91,7 @@ func (res *Response) WriteTo(bw *bufio.Writer, keepAlive bool, flush bool) error
 	}
 
 	// 5. User Headers
-	for _, entry := range res.Headers.Entries() {
-		_, _ = bw.WriteString(entry.Key)
-		_, _ = bw.Write(hdrColonSpace)
-		_, _ = bw.WriteString(entry.Value)
-		_, _ = bw.Write(hdrCRLF)
-	}
+	res.Headers.WriteTo(bw)
 
 	// 6. Cookies
 	for _, c := range res.Cookies {
@@ -119,15 +115,15 @@ func (res *Response) WriteTo(bw *bufio.Writer, keepAlive bool, flush bool) error
 	}
 
 	if flush {
-		return bw.Flush()
+		return nil
 	}
 
 	return nil
 }
 
 //go:noinline
-func (res *Response) writeStreamBody(bw *bufio.Writer) error {
-	_ = bw.Flush()
+func (res *Response) writeStreamBody(bw *bytesutil.ByteBuffer) error {
+
 	cw := NewChunkedWriter(bw)
 	err := res.StreamWriter(cw)
 	closeErr := cw.Close()
@@ -140,5 +136,5 @@ func (res *Response) writeStreamBody(bw *bufio.Writer) error {
 		return closeErr
 	}
 
-	return bw.Flush()
+	return nil
 }

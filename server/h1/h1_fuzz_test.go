@@ -5,7 +5,7 @@
 package h1_test
 
 import (
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"bufio"
 	"bytes"
@@ -48,7 +48,7 @@ func FuzzH1Header(f *testing.F) {
 	f.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiJ9")
 
 	f.Fuzz(func(t *testing.T, key, val string) {
-		var headers coreh1.Headers
+		var headers coreheaders.Headers
 		headers.Set(key, val)
 		_ = headers.Get(key)
 		headers.Add(key, val)

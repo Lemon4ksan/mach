@@ -5,7 +5,8 @@
 package h1
 
 import (
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	"github.com/lemon4ksan/mach/core/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"bufio"
 	"crypto/tls"
@@ -23,13 +24,13 @@ var (
 	readerStorage = pool.NewPerPStorage(func() *bufio.Reader {
 		return bufio.NewReaderSize(nil, 4096)
 	})
-	writerStorage = pool.NewPerPStorage(func() *bufio.Writer {
-		return bufio.NewWriterSize(nil, 4096)
+	writerStorage = pool.NewPerPStorage(func() *bytesutil.ByteBuffer {
+		return bytesutil.AcquireByteBuffer()
 	})
 	reqStorage = pool.NewPerPStorage(func() *Request {
 		return &Request{
 			Body:    make([]byte, 0, 1024),
-			Headers: coreh1.NewHeadersWithCapacity(16),
+			Headers: coreheaders.NewWithCapacity(16),
 		}
 	})
 	resStorage = pool.NewPerPStorage(func() *Response {
@@ -57,7 +58,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 	br.Reset(conn)
 
 	bw := writerStorage.Get()
-	bw.Reset(conn)
+	bw.ResetWriter(conn)
 
 	var isHijacked bool
 	defer func() {
@@ -65,10 +66,30 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			_ = bw.Flush()
 			_ = conn.Close()
 			readerStorage.Put(br)
-			writerStorage.Put(bw)
+			bytesutil.ReleaseByteBuffer(bw)
 		}
 	}()
 
+	earlyHintsFn := func(h http.Header) error {
+		if len(h) == 0 {
+			return nil
+		}
+		_, _ = bw.WriteString("HTTP/1.1 103 Early Hints\r\n")
+		for k, vv := range h {
+			for _, v := range vv {
+				_, _ = bw.WriteString(k)
+				_, _ = bw.WriteString(": ")
+				_, _ = bw.WriteString(v)
+				_, _ = bw.WriteString("\r\n")
+			}
+		}
+		_, _ = bw.WriteString("\r\n")
+		if _, err := bw.WriteTo(conn); err != nil {
+			return err
+		}
+		bw.ResetWriter(conn)
+		return nil
+	}
 	req := reqStorage.Get()
 	defer reqStorage.Put(req)
 
@@ -89,12 +110,13 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 	}
 
 	hijackFn := func() (net.Conn, *bufio.ReadWriter, error) {
+
 		if isHijacked {
 			return nil, nil, errors.New("h1: connection already hijacked")
 		}
 
 		isHijacked = true
-		rw := bufio.NewReadWriter(br, bw)
+		rw := bufio.NewReadWriter(br, bufio.NewWriter(conn))
 
 		return conn, rw, nil
 	}
@@ -103,25 +125,11 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		req.Reset()
 		res.Reset()
 
+		req.Conn = conn
 		req.RemoteAddr = remoteAddr
 		req.TLS = tlsState
 		req.HijackFn = hijackFn
-		req.EarlyHintsFn = func(h http.Header) error {
-			if len(h) == 0 {
-				return nil
-			}
-			_, _ = bw.WriteString("HTTP/1.1 103 Early Hints\r\n")
-			for k, vv := range h {
-				for _, v := range vv {
-					_, _ = bw.WriteString(k)
-					_, _ = bw.WriteString(": ")
-					_, _ = bw.WriteString(v)
-					_, _ = bw.WriteString("\r\n")
-				}
-			}
-			_, _ = bw.WriteString("\r\n")
-			return bw.Flush()
-		}
+		req.EarlyHintsFn = earlyHintsFn
 
 		// Set read timeout
 		if ch.ReadTimeout > 0 {
@@ -131,6 +139,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		}
 
 		err := req.ReadRequest(br, bw, maxBody)
+
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return nil
@@ -168,8 +177,15 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		// defer bw.Flush() to combine multiple pipelined responses into a single TCP write.
 		hasMorePipelined := keepAlive && br.Buffered() > 0
 
-		if err := res.WriteTo(bw, keepAlive, !hasMorePipelined); err != nil {
+		if err := res.WriteTo(bw, keepAlive, false); err != nil {
 			return err
+		}
+
+		if !hasMorePipelined {
+			if _, err := bw.WriteTo(conn); err != nil {
+				return err
+			}
+			bw.ResetWriter(conn)
 		}
 
 		if !keepAlive {

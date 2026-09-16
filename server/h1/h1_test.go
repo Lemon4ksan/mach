@@ -5,7 +5,8 @@
 package h1_test
 
 import (
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
+	"github.com/lemon4ksan/mach/core/bytesutil"
 
 	"bufio"
 	"bytes"
@@ -126,13 +127,15 @@ func TestResponseSerialization(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	bw := bufio.NewWriter(&buf)
+	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
+	bw.ResetWriter(&buf)
 
 	err := res.WriteTo(bw, true, true)
 	if err != nil {
 		t.Fatalf("unexpected error writing response: %v", err)
 	}
 
+	bw.Flush()
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("HTTP/1.1 201 Created\r\n")) {
 		t.Errorf("missing status line in response: %s", out)
@@ -434,7 +437,8 @@ func stringsReader(s string) io.Reader {
 
 func TestChunkedWriter_And_FormatHex(t *testing.T) {
 	var buf bytes.Buffer
-	bw := bufio.NewWriter(&buf)
+	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
+	bw.ResetWriter(&buf)
 	cw := h1.NewChunkedWriter(bw)
 
 	// Test zero byte write
@@ -483,7 +487,7 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 }
 
 func TestHeaders_Comprehensive(t *testing.T) {
-	h := coreh1.NewHeadersWithCapacity(8)
+	h := coreheaders.NewWithCapacity(8)
 	h.Set("Content-Type", "application/json")
 	h.Set("X-Custom", "initial")
 	h.Set("X-Custom", "updated") // overwrite
@@ -516,7 +520,7 @@ func TestHeaders_Comprehensive(t *testing.T) {
 func TestRequest_ClientIP_And_EarlyHints_Hijack(t *testing.T) {
 	req := &h1.Request{
 		RemoteAddr: "192.0.2.1:12345",
-		Headers:    coreh1.NewHeadersWithCapacity(4),
+		Headers:    coreheaders.NewWithCapacity(4),
 	}
 
 	// 1. Direct RemoteAddr with port
@@ -558,7 +562,8 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	bw := bufio.NewWriter(&buf)
+	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
+	bw.ResetWriter(&buf)
 	err := res.WriteTo(bw, true, true)
 	if err != nil {
 		t.Fatalf("unexpected WriteTo error: %v", err)
@@ -604,7 +609,7 @@ func TestServer_ListenErrors_And_Shutdown(t *testing.T) {
 }
 
 func TestHeaderLine_EdgeCases(t *testing.T) {
-	var h coreh1.Headers
+	var h coreheaders.Headers
 
 	// Header line with leading/trailing spaces
 	line := []byte("   X-Custom-Header   :    custom-value   ")

@@ -5,7 +5,8 @@
 package h1
 
 import (
-	coreh1 "github.com/lemon4ksan/mach/core/h1"
+	"github.com/lemon4ksan/mach/core/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"bufio"
 	"bytes"
@@ -34,13 +35,14 @@ var (
 
 // Request holds parsed HTTP/1.1 request data without net/http wrapping.
 type Request struct {
+	Conn         net.Conn
 	Method       string
 	URI          string
 	Path         string
 	Query        string
 	Proto        string
 	Host         string
-	Headers      coreh1.Headers
+	Headers      coreheaders.Headers
 	Body         []byte
 	RemoteAddr   string
 	TLS          *tls.ConnectionState
@@ -88,60 +90,80 @@ func (r *Request) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 //   - RFC 9112 §3.2 (Request Target & Host Header Enforcement)
 //   - RFC 9112 §6.3 (Message Body Length & Request Smuggling Protection)
 //   - RFC 9931 §4 & §8 (Security Considerations for Optimistic Transitions)
-func (r *Request) ReadRequest(br *bufio.Reader, bw *bufio.Writer, maxBodySize int64) error {
+func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBodySize int64) error {
 	// 1. Fast SIMD Path: Check if complete header block (\r\n\r\n) is already in read buffer
+	if br.Buffered() < 4 {
+		_, _ = br.Peek(4)
+	}
+
 	buffered := br.Buffered()
 	if buffered >= 4 {
 		peekBytes, err := br.Peek(buffered)
-		if err == nil {
-			headerEnd := simd.IndexCRLFCRLFVector(peekBytes)
-			if headerEnd != -1 {
-				headerBlock := peekBytes[:headerEnd-4]
-				_, _ = br.Discard(headerEnd)
+		if err == nil || err == io.EOF {
+			startIdx := 0
+			for startIdx < len(peekBytes) && (peekBytes[startIdx] == '\r' || peekBytes[startIdx] == '\n') {
+				startIdx++
+			}
 
-				if err := r.parseHeaderBlock(headerBlock); err != nil {
-					return err
+			if startIdx < len(peekBytes) {
+				headerEnd := simd.IndexCRLFCRLFVector(peekBytes[startIdx:])
+				if headerEnd != -1 {
+					headerEnd += startIdx
+					headerBlock := peekBytes[startIdx : headerEnd-4]
+					_, _ = br.Discard(headerEnd)
+
+					if err := r.parseHeaderBlock(headerBlock); err != nil {
+						return err
+					}
+
+					return r.finishRequestRead(br, bw, maxBodySize)
 				}
-
-				return r.finishRequestRead(br, bw, maxBodySize)
 			}
 		}
 	}
 
 	// 2. Fallback Streaming Path: Read line by line
-	// Robustness (RFC 9112 §2.2): Ignore leading CRLFs before the request-line
 	for {
-		line, err := br.ReadBytes('\n')
-		if err != nil {
+		line, err := br.ReadSlice('\n')
+		if err != nil && err != io.EOF {
 			return err
 		}
 
-		line = bytes.TrimRight(line, "\r\n")
-		if len(line) == 0 {
+		trimmed := bytes.TrimRight(line, "\r\n")
+		if len(trimmed) == 0 {
+			if err == io.EOF {
+				return io.EOF
+			}
 			continue
 		}
 
-		if err := r.parseRequestLine(line); err != nil {
+		if err := r.parseRequestLine(trimmed); err != nil {
 			return err
 		}
 
 		break
 	}
 
+	var fallbackBuf []byte
 	for {
-		headerLine, err := br.ReadBytes('\n')
-		if err != nil {
+		headerLine, err := br.ReadSlice('\n')
+		if err != nil && err != io.EOF {
 			return err
 		}
 
-		headerLine = bytes.TrimRight(headerLine, "\r\n")
-		if len(headerLine) == 0 {
+		fallbackBuf = append(fallbackBuf, headerLine...)
+
+		trimmed := bytes.TrimRight(headerLine, "\r\n")
+		if len(trimmed) == 0 {
 			break
 		}
 
-		r.Headers.ParseHeaderLine(headerLine)
+		if err == io.EOF {
+			break
+		}
 	}
 
+	r.Headers.ParseHeaderBlockSWAR(fallbackBuf)
 	return r.finishRequestRead(br, bw, maxBodySize)
 }
 
@@ -160,49 +182,33 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 		return err
 	}
 
-	rest := headerBlock[crlfIdx+1:]
-	for len(rest) > 0 {
-		nextLF := simd.ScanByteVector(rest, '\n')
-
-		var line []byte
-		if nextLF == -1 {
-			line = rest
-			rest = nil
-		} else {
-			line = rest[:nextLF]
-			rest = rest[nextLF+1:]
-		}
-
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
-		}
-
-		if len(line) == 0 {
-			break
-		}
-
-		r.Headers.ParseHeaderLine(line)
-	}
+	r.Headers.ParseHeaderBlockSWAR(headerBlock[crlfIdx+1:])
 
 	return nil
 }
 
 func (r *Request) parseRequestLine(line []byte) error {
-	sp1 := simd.ScanByteVector(line, ' ')
-	if sp1 <= 0 {
+	var s1, s2 int = -1, -1
+
+	_ = line[len(line)-1] // BCE
+	for i := 0; i < len(line); i++ {
+		if line[i] == ' ' {
+			if s1 == -1 {
+				s1 = i
+			} else {
+				s2 = i
+				break
+			}
+		}
+	}
+
+	if s1 == -1 || s2 == -1 {
 		return ErrMalformedRequestLine
 	}
 
-	sp2 := simd.ScanByteVector(line[sp1+1:], ' ')
-	if sp2 <= 0 {
-		return ErrMalformedRequestLine
-	}
-
-	secondSpace := sp1 + 1 + sp2
-
-	r.Method = bytesconv.B2S(line[:sp1])
-	r.URI = bytesconv.B2S(line[sp1+1 : secondSpace])
-	r.Proto = bytesconv.B2S(line[secondSpace+1:])
+	r.Method = bytesconv.B2S(line[:s1])
+	r.URI = bytesconv.B2S(line[s1+1 : s2])
+	r.Proto = bytesconv.B2S(line[s2+1:])
 
 	if qIdx := strings.IndexByte(r.URI, '?'); qIdx != -1 {
 		r.Path = r.URI[:qIdx]
@@ -215,7 +221,7 @@ func (r *Request) parseRequestLine(line []byte) error {
 	return nil
 }
 
-func (r *Request) finishRequestRead(br *bufio.Reader, bw *bufio.Writer, maxBodySize int64) error {
+func (r *Request) finishRequestRead(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBodySize int64) error {
 	r.Host = r.Headers.Get(header.Host)
 
 	// RFC 9112 §3.2: HTTP/1.1 requests MUST include a valid Host header
@@ -235,7 +241,7 @@ func (r *Request) finishRequestRead(br *bufio.Reader, bw *bufio.Writer, maxBodyS
 }
 
 //go:noinline
-func (r *Request) finishRequestBodyRead(br *bufio.Reader, bw *bufio.Writer, maxBodySize int64, hasTE, hasCL bool) error {
+func (r *Request) finishRequestBodyRead(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBodySize int64, hasTE, hasCL bool) error {
 	// RFC 9112 §6.3 Item 3: If both Transfer-Encoding and Content-Length are present,
 	// Transfer-Encoding overrides Content-Length to mitigate Request Smuggling (RFC 9112 §11.2).
 	if hasTE && hasCL {
@@ -245,7 +251,10 @@ func (r *Request) finishRequestBodyRead(br *bufio.Reader, bw *bufio.Writer, maxB
 	// Handle "Expect: 100-continue" (RFC 9110 §10.1.1)
 	if bytesconv.EqualFoldASCII(r.Headers.Get(header.Expect), header.Value100Continue) && bw != nil {
 		_, _ = bw.WriteString("HTTP/1.1 100 Continue\r\n\r\n")
-		_ = bw.Flush()
+		if r.Conn != nil {
+			_, _ = bw.WriteTo(r.Conn)
+			bw.Reset()
+		}
 	}
 
 	// Read body if present
