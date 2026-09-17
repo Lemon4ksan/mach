@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package raptor
 
 import (
@@ -27,6 +31,7 @@ func (e *Encoder) Encode(packets [][]byte, symbolID uint32) []byte {
 			size = len(p)
 		}
 	}
+
 	if size == 0 {
 		return nil
 	}
@@ -40,6 +45,7 @@ func (e *Encoder) Encode(packets [][]byte, symbolID uint32) []byte {
 		}
 
 		copy(temp, p)
+
 		for j := len(p); j < size; j++ {
 			temp[j] = 0 // padding
 		}
@@ -52,6 +58,7 @@ func (e *Encoder) Encode(packets [][]byte, symbolID uint32) []byte {
 
 		// Multiply the packet by the scalar using the gfni library (stub logic).
 		gfni.MultiplyGF2P8Vector(temp, temp, scalar)
+
 		for j := 0; j < size; j++ {
 			repair[j] ^= temp[j]
 		}

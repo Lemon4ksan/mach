@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -45,6 +49,7 @@ func main() {
 	fmt.Printf("=== Starting Heavy Fuzzing Suite (%d targets, %s each) ===\n\n", len(targets), *fuzzDuration)
 
 	var failed []string
+
 	startTotal := time.Now()
 
 	for i, tgt := range targets {
@@ -62,6 +67,7 @@ func main() {
 		)
 
 		var outBuf bytes.Buffer
+
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &outBuf
 
@@ -73,6 +79,7 @@ func main() {
 			fmt.Println("----------------- OUTPUT -----------------")
 			fmt.Println(strings.TrimSpace(outBuf.String()))
 			fmt.Println("------------------------------------------")
+
 			failed = append(failed, fmt.Sprintf("%s :: %s", tgt.pkg, tgt.name))
 		} else {
 			fmt.Printf("PASSED (%s)\n", elapsed)
@@ -84,9 +91,11 @@ func main() {
 
 	if len(failed) > 0 {
 		fmt.Printf("FAILURES (%d targets failed):\n", len(failed))
+
 		for _, f := range failed {
 			fmt.Printf("  - %s\n", f)
 		}
+
 		os.Exit(1)
 	}
 
