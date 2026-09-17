@@ -114,7 +114,7 @@ func init() {
 
 var (
 	staticNameMap  = make(map[string]int, len(staticTable))
-	staticExactMap = make(map[string]map[string]int)
+	staticExactMap = make(map[HeaderField]int, len(staticTable))
 )
 
 func init() {
@@ -123,12 +123,8 @@ func init() {
 			staticNameMap[entry.Name] = i
 		}
 
-		if entry.Value != "" {
-			if staticExactMap[entry.Name] == nil {
-				staticExactMap[entry.Name] = make(map[string]int)
-			}
-
-			staticExactMap[entry.Name][entry.Value] = i
+		if _, exists := staticExactMap[entry]; !exists {
+			staticExactMap[entry] = i
 		}
 	}
 }
@@ -141,11 +137,9 @@ func findStatic(name, value string) (exactIdx, nameIdx int, hasExact, hasName bo
 		nameIdx = nIdx
 		hasName = true
 
-		if valMap, ok := staticExactMap[name]; ok {
-			if eIdx, ok := valMap[value]; ok {
-				exactIdx = eIdx
-				hasExact = true
-			}
+		if eIdx, ok := staticExactMap[HeaderField{Name: name, Value: value}]; ok {
+			exactIdx = eIdx
+			hasExact = true
 		}
 	}
 

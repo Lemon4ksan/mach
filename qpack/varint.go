@@ -107,7 +107,7 @@ func readString(data []byte, arena *[]byte) (string, int, error) {
 		return "", 0, err
 	}
 
-	if int(strLen) < 0 || n+int(strLen) > len(data) {
+	if n < 0 || int(strLen) < 0 || n+int(strLen) > len(data) {
 		return "", 0, io.ErrUnexpectedEOF
 	}
 
