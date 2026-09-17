@@ -17,7 +17,7 @@ import (
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestFrameTypeParsingReturnsNilWhenNothingToRead(t *testing.T) {
@@ -357,12 +357,12 @@ func TestFrameParserFrames(t *testing.T) {
 			frameType, l, err := parser.ParseType(b, protocol.Encryption1RTT)
 			require.NoError(t, err)
 			require.Equal(t, test.frameType, frameType)
-			require.Equal(t, quicvarint.Len(uint64(test.frameType)), l)
+			require.Equal(t, varint.Len(uint64(test.frameType)), l)
 
 			frame, l, err := parser.ParseLessCommonFrame(frameType, b[l:], protocol.Version1)
 			require.NoError(t, err)
 			require.Equal(t, test.frame, frame)
-			require.Equal(t, len(b)-quicvarint.Len(uint64(test.frameType)), l)
+			require.Equal(t, len(b)-varint.Len(uint64(test.frameType)), l)
 		})
 	}
 }
@@ -914,7 +914,7 @@ func FuzzFrames(f *testing.F) {
 		&StreamFrame{StreamID: 0x42, Fin: true},
 		&StreamFrame{StreamID: 0x42, Data: []byte("foobar"), Fin: true},
 		&StreamFrame{StreamID: 0x1337, Offset: 0xcafe, Data: []byte("foobar")},
-		&StreamFrame{Offset: quicvarint.Max, Data: []byte("foo")}, // exceeds maximum offset
+		&StreamFrame{Offset: varint.Max, Data: []byte("foo")}, // exceeds maximum offset
 		&StreamFrame{Offset: 0xcafe, DataLenPresent: true, Data: []byte("foobar")},
 		&AckFrame{AckRanges: []AckRange{{Smallest: 1, Largest: 10}}},
 		&AckFrame{DelayTime: 1337 * time.Millisecond, AckRanges: []AckRange{{Smallest: 1, Largest: 10}}},

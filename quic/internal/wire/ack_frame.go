@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 var errInvalidAckRanges = errors.New("AckFrame: ACK frame contains invalid ACK ranges")
@@ -29,7 +29,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 	startLen := len(b)
 	ecn := typ == FrameTypeAckECN
 
-	la, l, err := quicvarint.Parse(b)
+	la, l, err := varint.Parse(b)
 	if err != nil {
 		return 0, replaceUnexpectedEOF(err)
 	}
@@ -37,7 +37,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 	b = b[l:]
 	largestAcked := protocol.PacketNumber(la)
 
-	delay, l, err := quicvarint.Parse(b)
+	delay, l, err := varint.Parse(b)
 	if err != nil {
 		return 0, replaceUnexpectedEOF(err)
 	}
@@ -52,7 +52,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 
 	frame.DelayTime = delayTime
 
-	numBlocks, l, err := quicvarint.Parse(b)
+	numBlocks, l, err := varint.Parse(b)
 	if err != nil {
 		return 0, replaceUnexpectedEOF(err)
 	}
@@ -60,7 +60,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 	b = b[l:]
 
 	// read the first ACK range
-	ab, l, err := quicvarint.Parse(b)
+	ab, l, err := varint.Parse(b)
 	if err != nil {
 		return 0, replaceUnexpectedEOF(err)
 	}
@@ -77,7 +77,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 
 	// read all the other ACK ranges
 	for range numBlocks {
-		g, l, err := quicvarint.Parse(b)
+		g, l, err := varint.Parse(b)
 		if err != nil {
 			return 0, replaceUnexpectedEOF(err)
 		}
@@ -91,7 +91,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 
 		largest := smallest - gap - 2
 
-		ab, l, err := quicvarint.Parse(b)
+		ab, l, err := varint.Parse(b)
 		if err != nil {
 			return 0, replaceUnexpectedEOF(err)
 		}
@@ -112,7 +112,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 	}
 
 	if ecn {
-		ect0, l, err := quicvarint.Parse(b)
+		ect0, l, err := varint.Parse(b)
 		if err != nil {
 			return 0, replaceUnexpectedEOF(err)
 		}
@@ -120,7 +120,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 		b = b[l:]
 		frame.ECT0 = ect0
 
-		ect1, l, err := quicvarint.Parse(b)
+		ect1, l, err := varint.Parse(b)
 		if err != nil {
 			return 0, replaceUnexpectedEOF(err)
 		}
@@ -128,7 +128,7 @@ func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent ui
 		b = b[l:]
 		frame.ECT1 = ect1
 
-		ecnce, l, err := quicvarint.Parse(b)
+		ecnce, l, err := varint.Parse(b)
 		if err != nil {
 			return 0, replaceUnexpectedEOF(err)
 		}
@@ -149,27 +149,27 @@ func (f *AckFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 		b = append(b, byte(FrameTypeAck))
 	}
 
-	b = quicvarint.Append(b, uint64(f.LargestAcked()))
-	b = quicvarint.Append(b, encodeAckDelay(f.DelayTime))
+	b = varint.Append(b, uint64(f.LargestAcked()))
+	b = varint.Append(b, encodeAckDelay(f.DelayTime))
 
 	numRanges := min(len(f.AckRanges), protocol.MaxNumAckRanges)
-	b = quicvarint.Append(b, uint64(numRanges-1))
+	b = varint.Append(b, uint64(numRanges-1))
 
 	// write the first range
 	_, firstRange := f.encodeAckRange(0)
-	b = quicvarint.Append(b, firstRange)
+	b = varint.Append(b, firstRange)
 
 	// write all the other range
 	for i := 1; i < numRanges; i++ {
 		gap, len := f.encodeAckRange(i)
-		b = quicvarint.Append(b, gap)
-		b = quicvarint.Append(b, len)
+		b = varint.Append(b, gap)
+		b = varint.Append(b, len)
 	}
 
 	if hasECN {
-		b = quicvarint.Append(b, f.ECT0)
-		b = quicvarint.Append(b, f.ECT1)
-		b = quicvarint.Append(b, f.ECNCE)
+		b = varint.Append(b, f.ECT0)
+		b = varint.Append(b, f.ECT1)
+		b = varint.Append(b, f.ECNCE)
 	}
 
 	return b, nil
@@ -181,19 +181,19 @@ func (f *AckFrame) Length(_ protocol.Version) protocol.ByteCount {
 
 	// The number of ACK ranges is limited to 64, which guarantees that the
 	// ACK Range Count value can be encoded in a single byte varint.
-	length := 1 + quicvarint.Len(uint64(largestAcked)) + quicvarint.Len(encodeAckDelay(f.DelayTime)) + 1
+	length := 1 + varint.Len(uint64(largestAcked)) + varint.Len(encodeAckDelay(f.DelayTime)) + 1
 
 	lowestInFirstRange := f.AckRanges[0].Smallest
-	length += quicvarint.Len(uint64(largestAcked - lowestInFirstRange))
+	length += varint.Len(uint64(largestAcked - lowestInFirstRange))
 
 	for i := 1; i < min(len(f.AckRanges), protocol.MaxNumAckRanges); i++ {
 		gap, len := f.encodeAckRange(i)
-		length += quicvarint.Len(gap)
-		length += quicvarint.Len(len)
+		length += varint.Len(gap)
+		length += varint.Len(len)
 	}
 
 	if f.ECT0 > 0 || f.ECT1 > 0 || f.ECNCE > 0 {
-		length += quicvarint.Len(f.ECT0) + quicvarint.Len(f.ECT1) + quicvarint.Len(f.ECNCE)
+		length += varint.Len(f.ECT0) + varint.Len(f.ECT1) + varint.Len(f.ECNCE)
 	}
 
 	return protocol.ByteCount(length)
@@ -225,18 +225,18 @@ func (f *AckFrame) numEncodableAckRanges(maxSize protocol.ByteCount) int {
 	}
 
 	// Slow path: Calculate the exact length of the ACK frame.
-	length = 1 + quicvarint.Len(uint64(f.LargestAcked())) + quicvarint.Len(encodeAckDelay(f.DelayTime)) + 1
+	length = 1 + varint.Len(uint64(f.LargestAcked())) + varint.Len(encodeAckDelay(f.DelayTime)) + 1
 	_, firstRange := f.encodeAckRange(0)
 
-	length += quicvarint.Len(firstRange)
+	length += varint.Len(firstRange)
 	if f.ECT0 > 0 || f.ECT1 > 0 || f.ECNCE > 0 {
-		length += quicvarint.Len(f.ECT0) + quicvarint.Len(f.ECT1) + quicvarint.Len(f.ECNCE)
+		length += varint.Len(f.ECT0) + varint.Len(f.ECT1) + varint.Len(f.ECNCE)
 	}
 
 	for i := 1; i < numRanges; i++ {
 		gap, l := f.encodeAckRange(i)
 
-		rangeLen := quicvarint.Len(gap) + quicvarint.Len(l)
+		rangeLen := varint.Len(gap) + varint.Len(l)
 		if protocol.ByteCount(length+rangeLen) > maxSize {
 			// Writing range i would exceed the maximum size,
 			// so encode one range less than that.

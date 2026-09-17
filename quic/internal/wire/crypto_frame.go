@@ -9,7 +9,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A CryptoFrame is a CRYPTO frame
@@ -22,7 +22,7 @@ func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
 	startLen := len(b)
 	frame := &CryptoFrame{}
 
-	offset, l, err := quicvarint.Parse(b)
+	offset, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -30,7 +30,7 @@ func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
 	b = b[l:]
 	frame.Offset = protocol.ByteCount(offset)
 
-	dataLen, l, err := quicvarint.Parse(b)
+	dataLen, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -50,8 +50,8 @@ func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
 
 func (f *CryptoFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, byte(FrameTypeCrypto))
-	b = quicvarint.Append(b, uint64(f.Offset))
-	b = quicvarint.Append(b, uint64(len(f.Data)))
+	b = varint.Append(b, uint64(f.Offset))
+	b = varint.Append(b, uint64(len(f.Data)))
 	b = append(b, f.Data...)
 
 	return b, nil
@@ -59,20 +59,20 @@ func (f *CryptoFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 // Length of a written frame
 func (f *CryptoFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return protocol.ByteCount(1 + quicvarint.Len(uint64(f.Offset)) + quicvarint.Len(uint64(len(f.Data))) + len(f.Data))
+	return protocol.ByteCount(1 + varint.Len(uint64(f.Offset)) + varint.Len(uint64(len(f.Data))) + len(f.Data))
 }
 
 // MaxDataLen returns the maximum data length
 func (f *CryptoFrame) MaxDataLen(maxSize protocol.ByteCount) protocol.ByteCount {
 	// pretend that the data size will be 1 bytes
 	// if it turns out that varint encoding the length will consume 2 bytes, we need to adjust the data length afterwards
-	headerLen := protocol.ByteCount(1 + quicvarint.Len(uint64(f.Offset)) + 1)
+	headerLen := protocol.ByteCount(1 + varint.Len(uint64(f.Offset)) + 1)
 	if headerLen > maxSize {
 		return 0
 	}
 
 	maxDataLen := maxSize - headerLen
-	if quicvarint.Len(uint64(maxDataLen)) != 1 {
+	if varint.Len(uint64(maxDataLen)) != 1 {
 		maxDataLen--
 	}
 

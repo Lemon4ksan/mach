@@ -4,7 +4,7 @@
 
 package protocol
 
-import "github.com/lemon4ksan/mach/quic/quicvarint"
+import "github.com/lemon4ksan/foundation/encoding/varint"
 
 // StreamType encodes if this is a unidirectional or bidirectional stream
 type StreamType uint8
@@ -30,7 +30,7 @@ const (
 	// and as the stream count in the transport parameters
 	MaxStreamCount StreamNum = 1 << 60
 	// MaxStreamID is the maximum stream ID
-	MaxStreamID StreamID = quicvarint.Max
+	MaxStreamID StreamID = varint.Max
 )
 
 const (

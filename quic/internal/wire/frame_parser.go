@@ -11,7 +11,7 @@ import (
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 var errUnknownFrameType = errors.New("unknown frame type")
@@ -40,7 +40,7 @@ func NewFrameParser(supportsDatagrams, supportsResetStreamAt, supportsAckFrequen
 func (p *FrameParser) ParseType(b []byte, encLevel protocol.EncryptionLevel) (FrameType, int, error) {
 	var parsed int
 	for len(b) != 0 {
-		typ, l, err := quicvarint.Parse(b)
+		typ, l, err := varint.Parse(b)
 
 		parsed += l
 		if err != nil {

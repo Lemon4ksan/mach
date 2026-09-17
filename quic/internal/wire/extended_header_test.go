@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestWritesLongHeaderVersion1(t *testing.T) {
@@ -117,7 +117,7 @@ func TestUses2ByteEncodingForLengthOnInitialPackets(t *testing.T) {
 	b, err := header.Append(nil, protocol.Version1)
 	require.NoError(t, err)
 
-	lengthEncoded := quicvarint.AppendWithLen(nil, 37, 2)
+	lengthEncoded := varint.AppendWithLen(nil, 37, 2)
 	require.Equal(t, lengthEncoded, b[len(b)-6:len(b)-4])
 	require.Equal(t, protocol.ByteCount(len(b)), header.GetLength(protocol.Version1))
 }

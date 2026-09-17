@@ -18,7 +18,7 @@ import (
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
 	"github.com/lemon4ksan/mach/quic/internal/utils"
 	"github.com/lemon4ksan/mach/quic/internal/wire"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 type quicVersionContextKey struct{}
@@ -326,7 +326,7 @@ func (h *cryptoSetup) handleTransportParameters(data []byte) error {
 func (h *cryptoSetup) marshalDataForSessionState(earlyData bool) []byte {
 	b := make([]byte, 0, 256)
 
-	b = quicvarint.Append(b, clientSessionStateRevision)
+	b = varint.Append(b, clientSessionStateRevision)
 	if earlyData {
 		// only save the transport parameters for 0-RTT enabled session tickets
 		return h.peerParams.MarshalForSessionTicket(b)
@@ -354,7 +354,7 @@ func (h *cryptoSetup) handleDataFromSessionState(data []byte, earlyData bool) (a
 }
 
 func decodeDataFromSessionState(b []byte, earlyData bool) (*wire.TransportParameters, error) {
-	ver, l, err := quicvarint.Parse(b)
+	ver, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, err
 	}

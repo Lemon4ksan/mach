@@ -6,7 +6,7 @@ package wire
 
 import (
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A MaxDataFrame carries flow control information for the connection
@@ -18,7 +18,7 @@ type MaxDataFrame struct {
 func parseMaxDataFrame(b []byte, _ protocol.Version) (*MaxDataFrame, int, error) {
 	frame := &MaxDataFrame{}
 
-	byteOffset, l, err := quicvarint.Parse(b)
+	byteOffset, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -30,11 +30,11 @@ func parseMaxDataFrame(b []byte, _ protocol.Version) (*MaxDataFrame, int, error)
 
 func (f *MaxDataFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, byte(FrameTypeMaxData))
-	b = quicvarint.Append(b, uint64(f.MaximumData))
+	b = varint.Append(b, uint64(f.MaximumData))
 	return b, nil
 }
 
 // Length of a written frame
 func (f *MaxDataFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.MaximumData)))
+	return 1 + protocol.ByteCount(varint.Len(uint64(f.MaximumData)))
 }

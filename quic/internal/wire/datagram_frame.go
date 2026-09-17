@@ -9,7 +9,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // MaxDatagramSize is the maximum size of a DATAGRAM frame (RFC 9221).
@@ -36,7 +36,7 @@ func parseDatagramFrame(b []byte, typ FrameType, _ protocol.Version) (*DatagramF
 			l   int
 		)
 
-		length, l, err = quicvarint.Parse(b)
+		length, l, err = varint.Parse(b)
 		if err != nil {
 			return nil, 0, replaceUnexpectedEOF(err)
 		}
@@ -62,7 +62,7 @@ func (f *DatagramFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 	b = append(b, typ)
 	if f.DataLenPresent {
-		b = quicvarint.Append(b, uint64(len(f.Data)))
+		b = varint.Append(b, uint64(len(f.Data)))
 	}
 
 	b = append(b, f.Data...)
@@ -84,7 +84,7 @@ func (f *DatagramFrame) MaxDataLen(maxSize protocol.ByteCount, version protocol.
 	}
 
 	maxDataLen := maxSize - headerLen
-	if f.DataLenPresent && quicvarint.Len(uint64(maxDataLen)) != 1 {
+	if f.DataLenPresent && varint.Len(uint64(maxDataLen)) != 1 {
 		maxDataLen--
 	}
 
@@ -95,7 +95,7 @@ func (f *DatagramFrame) MaxDataLen(maxSize protocol.ByteCount, version protocol.
 func (f *DatagramFrame) Length(_ protocol.Version) protocol.ByteCount {
 	length := 1 + protocol.ByteCount(len(f.Data))
 	if f.DataLenPresent {
-		length += protocol.ByteCount(quicvarint.Len(uint64(len(f.Data))))
+		length += protocol.ByteCount(varint.Len(uint64(len(f.Data))))
 	}
 
 	return length

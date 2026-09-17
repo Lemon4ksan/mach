@@ -6,7 +6,7 @@ package wire
 
 import (
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A MaxStreamDataFrame is a MAX_STREAM_DATA frame
@@ -18,14 +18,14 @@ type MaxStreamDataFrame struct {
 func parseMaxStreamDataFrame(b []byte, _ protocol.Version) (*MaxStreamDataFrame, int, error) {
 	startLen := len(b)
 
-	sid, l, err := quicvarint.Parse(b)
+	sid, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
 
 	b = b[l:]
 
-	offset, l, err := quicvarint.Parse(b)
+	offset, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -40,13 +40,13 @@ func parseMaxStreamDataFrame(b []byte, _ protocol.Version) (*MaxStreamDataFrame,
 
 func (f *MaxStreamDataFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, byte(FrameTypeMaxStreamData))
-	b = quicvarint.Append(b, uint64(f.StreamID))
-	b = quicvarint.Append(b, uint64(f.MaximumStreamData))
+	b = varint.Append(b, uint64(f.StreamID))
+	b = varint.Append(b, uint64(f.MaximumStreamData))
 
 	return b, nil
 }
 
 // Length of a written frame
 func (f *MaxStreamDataFrame) Length(protocol.Version) protocol.ByteCount {
-	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.StreamID))+quicvarint.Len(uint64(f.MaximumStreamData)))
+	return 1 + protocol.ByteCount(varint.Len(uint64(f.StreamID))+varint.Len(uint64(f.MaximumStreamData)))
 }

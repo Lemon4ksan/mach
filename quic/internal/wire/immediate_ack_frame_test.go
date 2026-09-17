@@ -10,7 +10,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestImmediateAckFrame(t *testing.T) {
@@ -18,7 +18,7 @@ func TestImmediateAckFrame(t *testing.T) {
 	b, err := frame.Append(nil, protocol.Version1)
 	require.NoError(t, err)
 
-	val, l, err := quicvarint.Parse(b)
+	val, l, err := varint.Parse(b)
 	require.NoError(t, err)
 	require.Equal(t, uint64(FrameTypeImmediateAck), val)
 	require.Equal(t, len(b), l)

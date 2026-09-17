@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A MaxStreamsFrame is a MAX_STREAMS frame
@@ -27,7 +27,7 @@ func parseMaxStreamsFrame(b []byte, typ FrameType, _ protocol.Version) (*MaxStre
 		f.Type = protocol.StreamTypeUni
 	}
 
-	streamID, l, err := quicvarint.Parse(b)
+	streamID, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -48,12 +48,12 @@ func (f *MaxStreamsFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 		b = append(b, byte(FrameTypeUniMaxStreams))
 	}
 
-	b = quicvarint.Append(b, uint64(f.MaxStreamNum))
+	b = varint.Append(b, uint64(f.MaxStreamNum))
 
 	return b, nil
 }
 
 // Length of a written frame
 func (f *MaxStreamsFrame) Length(protocol.Version) protocol.ByteCount {
-	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.MaxStreamNum)))
+	return 1 + protocol.ByteCount(varint.Len(uint64(f.MaxStreamNum)))
 }

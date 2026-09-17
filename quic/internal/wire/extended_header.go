@@ -12,7 +12,7 @@ import (
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/utils"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // ErrInvalidReservedBits is returned when the reserved bits are incorrect.
@@ -112,11 +112,11 @@ func (h *ExtendedHeader) Append(b []byte, v protocol.Version) ([]byte, error) {
 		b = append(b, h.Token...)
 		return b, nil
 	case protocol.PacketTypeInitial:
-		b = quicvarint.Append(b, uint64(len(h.Token)))
+		b = varint.Append(b, uint64(len(h.Token)))
 		b = append(b, h.Token...)
 	}
 
-	b = quicvarint.AppendWithLen(b, uint64(h.Length), 2)
+	b = varint.AppendWithLen(b, uint64(h.Length), 2)
 
 	return appendPacketNumber(b, h.PacketNumber, h.PacketNumberLen)
 }
@@ -136,7 +136,7 @@ func (h *ExtendedHeader) GetLength(_ protocol.Version) protocol.ByteCount {
 		h.PacketNumberLen,
 	) + 2 /* length */
 	if h.Type == protocol.PacketTypeInitial {
-		length += protocol.ByteCount(quicvarint.Len(uint64(len(h.Token))) + len(h.Token))
+		length += protocol.ByteCount(varint.Len(uint64(len(h.Token))) + len(h.Token))
 	}
 
 	return length

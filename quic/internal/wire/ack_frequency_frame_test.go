@@ -13,7 +13,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestParseAckFrequency(t *testing.T) {
@@ -33,7 +33,7 @@ func TestParseAckFrequency(t *testing.T) {
 func TestParseAckFrequencyMaxAckDelayOverflow(t *testing.T) {
 	data := encodeVarInt(0xdeadbeef)                     // sequence number
 	data = append(data, encodeVarInt(0xcafe)...)         // threshold
-	data = append(data, encodeVarInt(quicvarint.Max)...) // update max ack delay
+	data = append(data, encodeVarInt(varint.Max)...) // update max ack delay
 	data = append(data, encodeVarInt(12345)...)          // reordering threshold
 	frame, l, err := parseAckFrequencyFrame(data, protocol.Version1)
 	require.NoError(t, err)

@@ -12,10 +12,10 @@ import (
 	"github.com/lemon4ksan/mach/quic/internal/ackhandler"
 	"github.com/lemon4ksan/mach/quic/internal/monotime"
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/internal/utils/minheap"
-	"github.com/lemon4ksan/mach/quic/internal/utils/ringbuffer"
+	"github.com/lemon4ksan/foundation/structures/minheap"
+	"github.com/lemon4ksan/foundation/structures/ringbuffer"
 	"github.com/lemon4ksan/mach/quic/internal/wire"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 const (
@@ -174,7 +174,7 @@ retransmissions:
 			}
 
 			// For the last STREAM frame, we'll remove the DataLen field later.
-			frameMaxLen := maxLen + protocol.ByteCount(quicvarint.Len(uint64(maxLen)))
+			frameMaxLen := maxLen + protocol.ByteCount(varint.Len(uint64(maxLen)))
 
 			sf, hasMoreRetransmissions := str.popRetransmissionFrame(frameMaxLen, v)
 			if !hasMoreRetransmissions {
@@ -495,7 +495,7 @@ func (f *framer) popStreamFrame(
 	// For the last STREAM frame, we'll remove the DataLen field later.
 	// Therefore, we can pretend to have more bytes available when popping
 	// the STREAM frame (which will always have the DataLen set).
-	maxLen += protocol.ByteCount(quicvarint.Len(uint64(maxLen)))
+	maxLen += protocol.ByteCount(varint.Len(uint64(maxLen)))
 
 	frame, blocked, hasMoreData := str.popStreamFrame(maxLen, v)
 	if !hasMoreData {

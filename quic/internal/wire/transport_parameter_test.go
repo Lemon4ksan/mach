@@ -19,7 +19,7 @@ import (
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func getRandomValueUpTo(max uint64) uint64 {
@@ -27,11 +27,11 @@ func getRandomValueUpTo(max uint64) uint64 {
 	return mrand.Uint64N(min(max, maxVals[mrand.IntN(4)]))
 }
 
-func getRandomValue() uint64 { return getRandomValueUpTo(quicvarint.Max) }
+func getRandomValue() uint64 { return getRandomValueUpTo(varint.Max) }
 
 func appendInitialSourceConnectionID(b []byte) []byte {
-	b = quicvarint.Append(b, uint64(initialSourceConnectionIDParameterID))
-	b = quicvarint.Append(b, 6)
+	b = varint.Append(b, uint64(initialSourceConnectionIDParameterID))
+	b = varint.Append(b, 6)
 	return append(b, []byte("foobar")...)
 }
 
@@ -119,8 +119,8 @@ func TestMarshalAndUnmarshalTransportParameters(t *testing.T) {
 		RetrySourceConnectionID:         &rcid,
 		AckDelayExponent:                13,
 		MaxAckDelay:                     42 * time.Millisecond,
-		ActiveConnectionIDLimit:         2 + getRandomValueUpTo(quicvarint.Max-2),
-		MaxUDPPayloadSize:               1200 + protocol.ByteCount(getRandomValueUpTo(quicvarint.Max-1200)),
+		ActiveConnectionIDLimit:         2 + getRandomValueUpTo(varint.Max-2),
+		MaxUDPPayloadSize:               1200 + protocol.ByteCount(getRandomValueUpTo(varint.Max-1200)),
 		MaxDatagramFrameSize:            protocol.ByteCount(getRandomValue()),
 		EnableResetStreamAt:             getRandomValue()%2 == 0,
 		MinAckDelay:                     &minAckDelay,
@@ -163,8 +163,8 @@ func TestResetStreamAtTransportParameterCodepoints(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var data []byte
 			for _, id := range tc.ids {
-				data = quicvarint.Append(data, uint64(id))
-				data = quicvarint.Append(data, 0)
+				data = varint.Append(data, uint64(id))
+				data = varint.Append(data, 0)
 			}
 
 			data = appendInitialSourceConnectionID(data)
@@ -184,8 +184,8 @@ func TestMarshalAdditionalTransportParameters(t *testing.T) {
 
 	AdditionalTransportParametersClient = map[uint64][]byte{1337: []byte("foobar")}
 
-	result := quicvarint.Append([]byte{}, 1337)
-	result = quicvarint.Append(result, 6)
+	result := varint.Append([]byte{}, 1337)
+	result = varint.Append(result, 6)
 	result = append(result, []byte("foobar")...)
 
 	params := &TransportParameters{}
@@ -236,9 +236,9 @@ func TestTransportParameterNoMaxAckDelayIfDefault(t *testing.T) {
 		dataLen += len(data)
 	}
 
-	entryLen := quicvarint.Len(uint64(ackDelayExponentParameterID)) +
-		quicvarint.Len(uint64(quicvarint.Len(uint64(maxAckDelay.Milliseconds())))) +
-		quicvarint.Len(uint64(maxAckDelay.Milliseconds()))
+	entryLen := varint.Len(uint64(ackDelayExponentParameterID)) +
+		varint.Len(uint64(varint.Len(uint64(maxAckDelay.Milliseconds())))) +
+		varint.Len(uint64(maxAckDelay.Milliseconds()))
 	require.InDelta(t, float32(defaultLen)/num+float32(entryLen), float32(dataLen)/num, 1)
 }
 
@@ -259,9 +259,9 @@ func TestTransportParameterNoAckDelayExponentIfDefault(t *testing.T) {
 		dataLen += len(data)
 	}
 
-	entryLen := quicvarint.Len(uint64(ackDelayExponentParameterID)) +
-		quicvarint.Len(uint64(quicvarint.Len(protocol.DefaultAckDelayExponent+1))) +
-		quicvarint.Len(protocol.DefaultAckDelayExponent+1)
+	entryLen := varint.Len(uint64(ackDelayExponentParameterID)) +
+		varint.Len(uint64(varint.Len(protocol.DefaultAckDelayExponent+1))) +
+		varint.Len(protocol.DefaultAckDelayExponent+1)
 	require.InDelta(t, float32(defaultLen)/num+float32(entryLen), float32(dataLen)/num, 1)
 }
 
@@ -288,8 +288,8 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "invalid stateless reset token length",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(statelessResetTokenParameterID))
-				b = quicvarint.Append(b, 15)
+				b := varint.Append(nil, uint64(statelessResetTokenParameterID))
+				b = varint.Append(b, 15)
 				return append(b, make([]byte, 15)...)
 			}(),
 			perspective:    protocol.PerspectiveServer,
@@ -298,9 +298,9 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "small max UDP payload size",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(maxUDPPayloadSizeParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(1199)))
-				return quicvarint.Append(b, 1199)
+				b := varint.Append(nil, uint64(maxUDPPayloadSizeParameterID))
+				b = varint.Append(b, uint64(varint.Len(1199)))
+				return varint.Append(b, 1199)
 			}(),
 			perspective:    protocol.PerspectiveServer,
 			expectedErrMsg: "invalid value for max_udp_payload_size: 1199 (minimum 1200)",
@@ -326,8 +326,8 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "disable active migration has content",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(disableActiveMigrationParameterID))
-				b = quicvarint.Append(b, 6)
+				b := varint.Append(nil, uint64(disableActiveMigrationParameterID))
+				b = varint.Append(b, 6)
 				return append(b, []byte("foobar")...)
 			}(),
 			perspective:    protocol.PerspectiveServer,
@@ -336,8 +336,8 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "server doesn't set original destination connection ID",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(statelessResetTokenParameterID))
-				b = quicvarint.Append(b, 16)
+				b := varint.Append(nil, uint64(statelessResetTokenParameterID))
+				b = varint.Append(b, 16)
 				b = append(b, make([]byte, 16)...)
 
 				return appendInitialSourceConnectionID(b)
@@ -363,10 +363,10 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "varint value has wrong length",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(initialMaxStreamDataBidiLocalParameterID))
-				b = quicvarint.Append(b, 2)
+				b := varint.Append(nil, uint64(initialMaxStreamDataBidiLocalParameterID))
+				b = varint.Append(b, 2)
 				val := uint64(0xdeadbeef)
-				b = quicvarint.Append(b, val)
+				b = varint.Append(b, val)
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -379,9 +379,9 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "initial max streams bidi is too large",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(initialMaxStreamsBidiParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(uint64(protocol.MaxStreamCount+1))))
-				b = quicvarint.Append(b, uint64(protocol.MaxStreamCount+1))
+				b := varint.Append(nil, uint64(initialMaxStreamsBidiParameterID))
+				b = varint.Append(b, uint64(varint.Len(uint64(protocol.MaxStreamCount+1))))
+				b = varint.Append(b, uint64(protocol.MaxStreamCount+1))
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -391,9 +391,9 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "initial max streams uni is too large",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(initialMaxStreamsUniParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(uint64(protocol.MaxStreamCount+1))))
-				b = quicvarint.Append(b, uint64(protocol.MaxStreamCount+1))
+				b := varint.Append(nil, uint64(initialMaxStreamsUniParameterID))
+				b = varint.Append(b, uint64(varint.Len(uint64(protocol.MaxStreamCount+1))))
+				b = varint.Append(b, uint64(protocol.MaxStreamCount+1))
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -403,8 +403,8 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "not enough data to read",
 			data: func() []byte {
-				b := quicvarint.Append(nil, 0x42)
-				b = quicvarint.Append(b, 7)
+				b := varint.Append(nil, 0x42)
+				b = varint.Append(b, 7)
 				return append(b, []byte("foobar")...)
 			}(),
 			perspective:    protocol.PerspectiveServer,
@@ -413,8 +413,8 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "client sent stateless reset token",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(statelessResetTokenParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(16)))
+				b := varint.Append(nil, uint64(statelessResetTokenParameterID))
+				b = varint.Append(b, uint64(varint.Len(16)))
 				return append(b, make([]byte, 16)...)
 			}(),
 			perspective:    protocol.PerspectiveClient,
@@ -423,8 +423,8 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "client sent original destination connection ID",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(originalDestinationConnectionIDParameterID))
-				b = quicvarint.Append(b, 6)
+				b := varint.Append(nil, uint64(originalDestinationConnectionIDParameterID))
+				b = varint.Append(b, 6)
 				return append(b, []byte("foobar")...)
 			}(),
 			perspective:    protocol.PerspectiveClient,
@@ -434,9 +434,9 @@ func TestTransportParameterErrors(t *testing.T) {
 			name: "huge max ack delay value",
 			data: func() []byte {
 				val := uint64(math.MaxUint64) / 5
-				b := quicvarint.Append(nil, uint64(maxAckDelayParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(val)))
-				b = quicvarint.Append(b, val)
+				b := varint.Append(nil, uint64(maxAckDelayParameterID))
+				b = varint.Append(b, uint64(varint.Len(val)))
+				b = varint.Append(b, val)
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -446,9 +446,9 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "invalid value for reset_stream_at",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(resetStreamAtParameterID))
-				b = quicvarint.Append(b, 1)
-				b = quicvarint.Append(b, 1)
+				b := varint.Append(nil, uint64(resetStreamAtParameterID))
+				b = varint.Append(b, 1)
+				b = varint.Append(b, 1)
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -458,9 +458,9 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "invalid value for legacy reset_stream_at",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(legacyResetStreamAtParameterID))
-				b = quicvarint.Append(b, 1)
-				b = quicvarint.Append(b, 1)
+				b := varint.Append(nil, uint64(legacyResetStreamAtParameterID))
+				b = varint.Append(b, 1)
+				b = varint.Append(b, 1)
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -470,12 +470,12 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "min ack delay is greater than max ack delay",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(minAckDelayParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(42001)))
-				b = quicvarint.Append(b, 42001) // 42001 microseconds
-				b = quicvarint.Append(b, uint64(maxAckDelayParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(42)))
-				b = quicvarint.Append(b, 42) // 42 microseconds
+				b := varint.Append(nil, uint64(minAckDelayParameterID))
+				b = varint.Append(b, uint64(varint.Len(42001)))
+				b = varint.Append(b, 42001) // 42001 microseconds
+				b = varint.Append(b, uint64(maxAckDelayParameterID))
+				b = varint.Append(b, uint64(varint.Len(42)))
+				b = varint.Append(b, 42) // 42 microseconds
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -485,12 +485,12 @@ func TestTransportParameterErrors(t *testing.T) {
 		{
 			name: "huge min ack delay value",
 			data: func() []byte {
-				b := quicvarint.Append(nil, uint64(minAckDelayParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(quicvarint.Max)))
-				b = quicvarint.Append(b, quicvarint.Max)
-				b = quicvarint.Append(b, uint64(maxAckDelayParameterID))
-				b = quicvarint.Append(b, uint64(quicvarint.Len(42)))
-				b = quicvarint.Append(b, 42) // 42 microseconds
+				b := varint.Append(nil, uint64(minAckDelayParameterID))
+				b = varint.Append(b, uint64(varint.Len(varint.Max)))
+				b = varint.Append(b, varint.Max)
+				b = varint.Append(b, uint64(maxAckDelayParameterID))
+				b = varint.Append(b, uint64(varint.Len(42)))
+				b = varint.Append(b, 42) // 42 microseconds
 
 				return appendInitialSourceConnectionID(b)
 			}(),
@@ -522,17 +522,17 @@ func TestTransportParameterErrors(t *testing.T) {
 
 func TestTransportParameterUnknownParameters(t *testing.T) {
 	// write a known parameter
-	b := quicvarint.Append(nil, uint64(initialMaxStreamDataBidiLocalParameterID))
-	b = quicvarint.Append(b, uint64(quicvarint.Len(0x1337)))
-	b = quicvarint.Append(b, 0x1337)
+	b := varint.Append(nil, uint64(initialMaxStreamDataBidiLocalParameterID))
+	b = varint.Append(b, uint64(varint.Len(0x1337)))
+	b = varint.Append(b, 0x1337)
 	// write an unknown parameter
-	b = quicvarint.Append(b, 0x42)
-	b = quicvarint.Append(b, 6)
+	b = varint.Append(b, 0x42)
+	b = varint.Append(b, 6)
 	b = append(b, []byte("foobar")...)
 	// write a known parameter
-	b = quicvarint.Append(b, uint64(initialMaxStreamDataBidiRemoteParameterID))
-	b = quicvarint.Append(b, uint64(quicvarint.Len(0x42)))
-	b = quicvarint.Append(b, 0x42)
+	b = varint.Append(b, uint64(initialMaxStreamDataBidiRemoteParameterID))
+	b = varint.Append(b, uint64(varint.Len(0x42)))
+	b = varint.Append(b, 0x42)
 	b = appendInitialSourceConnectionID(b)
 	p := &TransportParameters{}
 	err := p.Unmarshal(b, protocol.PerspectiveClient)
@@ -546,8 +546,8 @@ func TestSessionTicketTransportParameterRejectsUnknownParameter(t *testing.T) {
 		ActiveConnectionIDLimit: 2,
 		MaxDatagramFrameSize:    protocol.InvalidByteCount,
 	}).MarshalForSessionTicket(nil)
-	b = quicvarint.Append(b, 0x42)
-	b = quicvarint.Append(b, 6)
+	b = varint.Append(b, 0x42)
+	b = varint.Append(b, 6)
 	b = append(b, []byte("foobar")...)
 
 	var p TransportParameters
@@ -558,17 +558,17 @@ func TestSessionTicketTransportParameterRejectsUnknownParameter(t *testing.T) {
 
 func TestTransportParameterRejectsDuplicateParameters(t *testing.T) {
 	// write first parameter
-	b := quicvarint.Append(nil, uint64(initialMaxStreamDataBidiLocalParameterID))
-	b = quicvarint.Append(b, uint64(quicvarint.Len(0x1337)))
-	b = quicvarint.Append(b, 0x1337)
+	b := varint.Append(nil, uint64(initialMaxStreamDataBidiLocalParameterID))
+	b = varint.Append(b, uint64(varint.Len(0x1337)))
+	b = varint.Append(b, 0x1337)
 	// write a second parameter
-	b = quicvarint.Append(b, uint64(initialMaxStreamDataBidiRemoteParameterID))
-	b = quicvarint.Append(b, uint64(quicvarint.Len(0x42)))
-	b = quicvarint.Append(b, 0x42)
+	b = varint.Append(b, uint64(initialMaxStreamDataBidiRemoteParameterID))
+	b = varint.Append(b, uint64(varint.Len(0x42)))
+	b = varint.Append(b, 0x42)
 	// write first parameter again
-	b = quicvarint.Append(b, uint64(initialMaxStreamDataBidiLocalParameterID))
-	b = quicvarint.Append(b, uint64(quicvarint.Len(0x1337)))
-	b = quicvarint.Append(b, 0x1337)
+	b = varint.Append(b, uint64(initialMaxStreamDataBidiLocalParameterID))
+	b = varint.Append(b, uint64(varint.Len(0x1337)))
+	b = varint.Append(b, 0x1337)
 	b = appendInitialSourceConnectionID(b)
 	err := (&TransportParameters{}).Unmarshal(b, protocol.PerspectiveClient)
 	require.Error(t, err)
@@ -646,8 +646,8 @@ func testTransportParameterPreferredAddress(t *testing.T, hasIPv4, hasIPv6 bool)
 }
 
 func TestTransportParameterPreferredAddressFromClient(t *testing.T) {
-	b := quicvarint.Append(nil, uint64(preferredAddressParameterID))
-	b = quicvarint.Append(b, 6)
+	b := varint.Append(nil, uint64(preferredAddressParameterID))
+	b = varint.Append(b, 6)
 	b = append(b, []byte("foobar")...)
 	p := &TransportParameters{}
 	err := p.Unmarshal(b, protocol.PerspectiveClient)
@@ -702,7 +702,7 @@ func TestPreferredAddressErrorOnEOF(t *testing.T) {
 		16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, // stateless reset token
 	}
 	for i := 1; i < len(raw); i++ {
-		b := quicvarint.Append(nil, uint64(preferredAddressParameterID))
+		b := varint.Append(nil, uint64(preferredAddressParameterID))
 		b = append(b, raw[:i]...)
 		p := &TransportParameters{}
 		err := p.Unmarshal(b, protocol.PerspectiveServer)
@@ -718,7 +718,7 @@ func TestTransportParametersFromSessionTicket(t *testing.T) {
 		InitialMaxData:                 protocol.ByteCount(getRandomValue()),
 		MaxBidiStreamNum:               protocol.StreamNum(getRandomValueUpTo(uint64(protocol.MaxStreamCount))),
 		MaxUniStreamNum:                protocol.StreamNum(getRandomValueUpTo(uint64(protocol.MaxStreamCount))),
-		ActiveConnectionIDLimit:        2 + getRandomValueUpTo(quicvarint.Max-2),
+		ActiveConnectionIDLimit:        2 + getRandomValueUpTo(varint.Max-2),
 		MaxDatagramFrameSize:           protocol.ByteCount(getRandomValueUpTo(uint64(MaxDatagramSize))),
 		EnableResetStreamAt:            getRandomValue()%2 == 0,
 	}
@@ -744,9 +744,9 @@ func TestSessionTicketInvalidTransportParameters(t *testing.T) {
 }
 
 func TestSessionTicketLegacyResetStreamAtTransportParameter(t *testing.T) {
-	b := quicvarint.Append(nil, transportParameterMarshalingVersion)
-	b = quicvarint.Append(b, uint64(legacyResetStreamAtParameterID))
-	b = quicvarint.Append(b, 0)
+	b := varint.Append(nil, transportParameterMarshalingVersion)
+	b = varint.Append(b, uint64(legacyResetStreamAtParameterID))
+	b = varint.Append(b, 0)
 
 	var p TransportParameters
 	require.NoError(t, p.UnmarshalFromSessionTicket(b))
@@ -757,8 +757,8 @@ func TestSessionTicketTransportParameterVersionMismatch(t *testing.T) {
 	var p TransportParameters
 
 	data := p.MarshalForSessionTicket(nil)
-	b := quicvarint.Append(nil, transportParameterMarshalingVersion+1)
-	b = append(b, data[quicvarint.Len(transportParameterMarshalingVersion):]...)
+	b := varint.Append(nil, transportParameterMarshalingVersion+1)
+	b = append(b, data[varint.Len(transportParameterMarshalingVersion):]...)
 	err := p.UnmarshalFromSessionTicket(b)
 	require.EqualError(
 		t,
@@ -1062,7 +1062,7 @@ func benchmarkTransportParameters(b *testing.B, withPreferredAddress bool) {
 		RetrySourceConnectionID:         &rcid,
 		AckDelayExponent:                13,
 		MaxAckDelay:                     42 * time.Millisecond,
-		ActiveConnectionIDLimit:         2 + getRandomValueUpTo(quicvarint.Max-2),
+		ActiveConnectionIDLimit:         2 + getRandomValueUpTo(varint.Max-2),
 		MaxDatagramFrameSize:            protocol.ByteCount(getRandomValue()),
 	}
 

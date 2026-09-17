@@ -17,7 +17,7 @@ import (
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // AdditionalTransportParametersClient are additional transport parameters that will be added
@@ -118,7 +118,7 @@ func (p *TransportParameters) unmarshal(b []byte, sentBy protocol.Perspective, f
 	p.ActiveConnectionIDLimit = protocol.DefaultActiveConnectionIDLimit
 
 	for len(b) > 0 {
-		paramIDInt, l, err := quicvarint.Parse(b)
+		paramIDInt, l, err := varint.Parse(b)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (p *TransportParameters) unmarshal(b []byte, sentBy protocol.Perspective, f
 		paramID := transportParameterID(paramIDInt)
 		b = b[l:]
 
-		paramLen, l, err := quicvarint.Parse(b)
+		paramLen, l, err := varint.Parse(b)
 		if err != nil {
 			return err
 		}
@@ -333,7 +333,7 @@ func (p *TransportParameters) readNumericTransportParameter(
 	paramID transportParameterID,
 	expectedLen int,
 ) error {
-	val, l, err := quicvarint.Parse(b)
+	val, l, err := varint.Parse(b)
 	if err != nil {
 		return fmt.Errorf("error while reading transport parameter %d: %w", paramID, err)
 	}
@@ -437,9 +437,9 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	// add a greased value
 	random := make([]byte, 18)
 	rand.Read(random)
-	b = quicvarint.Append(b, 27+31*uint64(random[0]))
+	b = varint.Append(b, 27+31*uint64(random[0]))
 	length := random[1] % 16
-	b = quicvarint.Append(b, uint64(length))
+	b = varint.Append(b, uint64(length))
 	b = append(b, random[2:2+length]...)
 
 	// initial_max_stream_data_bidi_local
@@ -475,27 +475,27 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 
 	// disable_active_migration
 	if p.DisableActiveMigration {
-		b = quicvarint.Append(b, uint64(disableActiveMigrationParameterID))
-		b = quicvarint.Append(b, 0)
+		b = varint.Append(b, uint64(disableActiveMigrationParameterID))
+		b = varint.Append(b, 0)
 	}
 
 	if pers == protocol.PerspectiveServer {
 		// stateless_reset_token
 		if p.StatelessResetToken != nil {
-			b = quicvarint.Append(b, uint64(statelessResetTokenParameterID))
-			b = quicvarint.Append(b, 16)
+			b = varint.Append(b, uint64(statelessResetTokenParameterID))
+			b = varint.Append(b, 16)
 			b = append(b, p.StatelessResetToken[:]...)
 		}
 
 		// original_destination_connection_id
-		b = quicvarint.Append(b, uint64(originalDestinationConnectionIDParameterID))
-		b = quicvarint.Append(b, uint64(p.OriginalDestinationConnectionID.Len()))
+		b = varint.Append(b, uint64(originalDestinationConnectionIDParameterID))
+		b = varint.Append(b, uint64(p.OriginalDestinationConnectionID.Len()))
 		b = append(b, p.OriginalDestinationConnectionID.Bytes()...)
 		// preferred_address
 		if p.PreferredAddress != nil {
-			b = quicvarint.Append(b, uint64(preferredAddressParameterID))
+			b = varint.Append(b, uint64(preferredAddressParameterID))
 
-			b = quicvarint.Append(b, 4+2+16+2+1+uint64(p.PreferredAddress.ConnectionID.Len())+16)
+			b = varint.Append(b, 4+2+16+2+1+uint64(p.PreferredAddress.ConnectionID.Len())+16)
 			if p.PreferredAddress.IPv4.IsValid() {
 				ipv4 := p.PreferredAddress.IPv4.Addr().As4()
 				b = append(b, ipv4[:]...)
@@ -524,13 +524,13 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	}
 
 	// initial_source_connection_id
-	b = quicvarint.Append(b, uint64(initialSourceConnectionIDParameterID))
-	b = quicvarint.Append(b, uint64(p.InitialSourceConnectionID.Len()))
+	b = varint.Append(b, uint64(initialSourceConnectionIDParameterID))
+	b = varint.Append(b, uint64(p.InitialSourceConnectionID.Len()))
 	b = append(b, p.InitialSourceConnectionID.Bytes()...)
 	// retry_source_connection_id
 	if pers == protocol.PerspectiveServer && p.RetrySourceConnectionID != nil {
-		b = quicvarint.Append(b, uint64(retrySourceConnectionIDParameterID))
-		b = quicvarint.Append(b, uint64(p.RetrySourceConnectionID.Len()))
+		b = varint.Append(b, uint64(retrySourceConnectionIDParameterID))
+		b = varint.Append(b, uint64(p.RetrySourceConnectionID.Len()))
 		b = append(b, p.RetrySourceConnectionID.Bytes()...)
 	}
 
@@ -541,10 +541,10 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 
 	// QUIC Stream Resets with Partial Delivery
 	if p.EnableResetStreamAt {
-		b = quicvarint.Append(b, uint64(resetStreamAtParameterID))
-		b = quicvarint.Append(b, 0)
-		b = quicvarint.Append(b, uint64(legacyResetStreamAtParameterID))
-		b = quicvarint.Append(b, 0)
+		b = varint.Append(b, uint64(resetStreamAtParameterID))
+		b = varint.Append(b, 0)
+		b = varint.Append(b, uint64(legacyResetStreamAtParameterID))
+		b = varint.Append(b, 0)
 	}
 
 	if p.MinAckDelay != nil {
@@ -553,8 +553,8 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 
 	if pers == protocol.PerspectiveClient && len(AdditionalTransportParametersClient) > 0 {
 		for k, v := range AdditionalTransportParametersClient {
-			b = quicvarint.Append(b, k)
-			b = quicvarint.Append(b, uint64(len(v)))
+			b = varint.Append(b, k)
+			b = varint.Append(b, uint64(len(v)))
 			b = append(b, v...)
 		}
 	}
@@ -563,9 +563,9 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 }
 
 func (p *TransportParameters) marshalVarintParam(b []byte, id transportParameterID, val uint64) []byte {
-	b = quicvarint.Append(b, uint64(id))
-	b = quicvarint.Append(b, uint64(quicvarint.Len(val)))
-	return quicvarint.Append(b, val)
+	b = varint.Append(b, uint64(id))
+	b = varint.Append(b, uint64(varint.Len(val)))
+	return varint.Append(b, val)
 }
 
 // MarshalForSessionTicket marshals the transport parameters we save in the session ticket.
@@ -577,7 +577,7 @@ func (p *TransportParameters) marshalVarintParam(b []byte, id transportParameter
 // Since the session ticket is encrypted, the serialization format is defined by the server.
 // For convenience, we use the same format that we also use for sending the transport parameters.
 func (p *TransportParameters) MarshalForSessionTicket(b []byte) []byte {
-	b = quicvarint.Append(b, transportParameterMarshalingVersion)
+	b = varint.Append(b, transportParameterMarshalingVersion)
 
 	// initial_max_stream_data_bidi_local
 	b = p.marshalVarintParam(b, initialMaxStreamDataBidiLocalParameterID, uint64(p.InitialMaxStreamDataBidiLocal))
@@ -600,8 +600,8 @@ func (p *TransportParameters) MarshalForSessionTicket(b []byte) []byte {
 
 	// reset_stream_at
 	if p.EnableResetStreamAt {
-		b = quicvarint.Append(b, uint64(resetStreamAtParameterID))
-		b = quicvarint.Append(b, 0)
+		b = varint.Append(b, uint64(resetStreamAtParameterID))
+		b = varint.Append(b, 0)
 	}
 
 	return b
@@ -609,7 +609,7 @@ func (p *TransportParameters) MarshalForSessionTicket(b []byte) []byte {
 
 // UnmarshalFromSessionTicket unmarshals transport parameters from a session ticket.
 func (p *TransportParameters) UnmarshalFromSessionTicket(b []byte) error {
-	version, l, err := quicvarint.Parse(b)
+	version, l, err := varint.Parse(b)
 	if err != nil {
 		return err
 	}

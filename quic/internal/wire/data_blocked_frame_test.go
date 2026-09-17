@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestParseDataBlocked(t *testing.T) {
@@ -42,5 +42,5 @@ func TestWriteDataBlocked(t *testing.T) {
 	expected := []byte{byte(FrameTypeDataBlocked)}
 	expected = append(expected, encodeVarInt(0xdeadbeef)...)
 	require.Equal(t, expected, b)
-	require.Equal(t, protocol.ByteCount(1+quicvarint.Len(uint64(frame.MaximumData))), frame.Length(protocol.Version1))
+	require.Equal(t, protocol.ByteCount(1+varint.Len(uint64(frame.MaximumData))), frame.Length(protocol.Version1))
 }

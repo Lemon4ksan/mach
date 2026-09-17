@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	"github.com/lemon4ksan/mach/quic/internal/wire"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 const sessionTicketRevision = 5
@@ -21,12 +21,12 @@ type sessionTicket struct {
 
 func (t *sessionTicket) Marshal() []byte {
 	b := make([]byte, 0, 256)
-	b = quicvarint.Append(b, sessionTicketRevision)
+	b = varint.Append(b, sessionTicketRevision)
 	return t.Parameters.MarshalForSessionTicket(b)
 }
 
 func (t *sessionTicket) Unmarshal(b []byte) error {
-	rev, l, err := quicvarint.Parse(b)
+	rev, l, err := varint.Parse(b)
 	if err != nil {
 		return errors.New("failed to read session ticket revision")
 	}

@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/lemon4ksan/mach/quic/internal/utils"
-	"github.com/lemon4ksan/mach/quic/internal/utils/ringbuffer"
+	"github.com/lemon4ksan/foundation/structures/ringbuffer"
 	"github.com/lemon4ksan/mach/quic/internal/wire"
 )
 

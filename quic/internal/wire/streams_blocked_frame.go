@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A StreamsBlockedFrame is a STREAMS_BLOCKED frame
@@ -27,7 +27,7 @@ func parseStreamsBlockedFrame(b []byte, typ FrameType, _ protocol.Version) (*Str
 		f.Type = protocol.StreamTypeUni
 	}
 
-	streamLimit, l, err := quicvarint.Parse(b)
+	streamLimit, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -48,12 +48,12 @@ func (f *StreamsBlockedFrame) Append(b []byte, _ protocol.Version) ([]byte, erro
 		b = append(b, byte(FrameTypeUniStreamBlocked))
 	}
 
-	b = quicvarint.Append(b, uint64(f.StreamLimit))
+	b = varint.Append(b, uint64(f.StreamLimit))
 
 	return b, nil
 }
 
 // Length of a written frame
 func (f *StreamsBlockedFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.StreamLimit)))
+	return 1 + protocol.ByteCount(varint.Len(uint64(f.StreamLimit)))
 }

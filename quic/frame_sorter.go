@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	list "github.com/lemon4ksan/mach/quic/internal/utils/linkedlist"
+	list "github.com/lemon4ksan/foundation/structures/linkedlist"
 )
 
 // byteInterval is an interval from one ByteCount to the other

@@ -9,7 +9,7 @@ import (
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A ResetStreamFrame is a RESET_STREAM or RESET_STREAM_AT frame in QUIC
@@ -23,21 +23,21 @@ type ResetStreamFrame struct {
 func parseResetStreamFrame(b []byte, isResetStreamAt bool, _ protocol.Version) (*ResetStreamFrame, int, error) {
 	startLen := len(b)
 
-	streamID, l, err := quicvarint.Parse(b)
+	streamID, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
 
 	b = b[l:]
 
-	errorCode, l, err := quicvarint.Parse(b)
+	errorCode, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
 
 	b = b[l:]
 
-	finalSize, l, err := quicvarint.Parse(b)
+	finalSize, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -46,7 +46,7 @@ func parseResetStreamFrame(b []byte, isResetStreamAt bool, _ protocol.Version) (
 
 	var reliableSize uint64
 	if isResetStreamAt {
-		reliableSize, l, err = quicvarint.Parse(b)
+		reliableSize, l, err = varint.Parse(b)
 		if err != nil {
 			return nil, 0, replaceUnexpectedEOF(err)
 		}
@@ -72,17 +72,17 @@ func parseResetStreamFrame(b []byte, isResetStreamAt bool, _ protocol.Version) (
 
 func (f *ResetStreamFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	if f.ReliableSize == 0 {
-		b = quicvarint.Append(b, uint64(FrameTypeResetStream))
+		b = varint.Append(b, uint64(FrameTypeResetStream))
 	} else {
-		b = quicvarint.Append(b, uint64(FrameTypeResetStreamAt))
+		b = varint.Append(b, uint64(FrameTypeResetStreamAt))
 	}
 
-	b = quicvarint.Append(b, uint64(f.StreamID))
-	b = quicvarint.Append(b, uint64(f.ErrorCode))
+	b = varint.Append(b, uint64(f.StreamID))
+	b = varint.Append(b, uint64(f.ErrorCode))
 
-	b = quicvarint.Append(b, uint64(f.FinalSize))
+	b = varint.Append(b, uint64(f.FinalSize))
 	if f.ReliableSize > 0 {
-		b = quicvarint.Append(b, uint64(f.ReliableSize))
+		b = varint.Append(b, uint64(f.ReliableSize))
 	}
 
 	return b, nil
@@ -92,15 +92,15 @@ func (f *ResetStreamFrame) Append(b []byte, _ protocol.Version) ([]byte, error) 
 func (f *ResetStreamFrame) Length(protocol.Version) protocol.ByteCount {
 	size := 1 // the frame type for both RESET_STREAM and RESET_STREAM_AT fits into 1 byte
 	if f.ReliableSize > 0 {
-		size += quicvarint.Len(uint64(f.ReliableSize))
+		size += varint.Len(uint64(f.ReliableSize))
 	}
 
 	return protocol.ByteCount(
-		size + quicvarint.Len(
+		size + varint.Len(
 			uint64(f.StreamID),
-		) + quicvarint.Len(
+		) + varint.Len(
 			uint64(f.ErrorCode),
-		) + quicvarint.Len(
+		) + varint.Len(
 			uint64(f.FinalSize),
 		),
 	)

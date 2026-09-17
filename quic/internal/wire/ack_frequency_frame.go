@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 type AckFrequencyFrame struct {
@@ -22,21 +22,21 @@ type AckFrequencyFrame struct {
 func parseAckFrequencyFrame(b []byte, _ protocol.Version) (*AckFrequencyFrame, int, error) {
 	startLen := len(b)
 
-	seq, l, err := quicvarint.Parse(b)
+	seq, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
 
 	b = b[l:]
 
-	aeth, l, err := quicvarint.Parse(b)
+	aeth, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
 
 	b = b[l:]
 
-	mad, l, err := quicvarint.Parse(b)
+	mad, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -49,7 +49,7 @@ func parseAckFrequencyFrame(b []byte, _ protocol.Version) (*AckFrequencyFrame, i
 
 	b = b[l:]
 
-	rth, l, err := quicvarint.Parse(b)
+	rth, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -65,15 +65,15 @@ func parseAckFrequencyFrame(b []byte, _ protocol.Version) (*AckFrequencyFrame, i
 }
 
 func (f *AckFrequencyFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
-	b = quicvarint.Append(b, uint64(FrameTypeAckFrequency))
-	b = quicvarint.Append(b, f.SequenceNumber)
-	b = quicvarint.Append(b, f.AckElicitingThreshold)
-	b = quicvarint.Append(b, uint64(f.RequestMaxAckDelay/time.Microsecond))
+	b = varint.Append(b, uint64(FrameTypeAckFrequency))
+	b = varint.Append(b, f.SequenceNumber)
+	b = varint.Append(b, f.AckElicitingThreshold)
+	b = varint.Append(b, uint64(f.RequestMaxAckDelay/time.Microsecond))
 
-	return quicvarint.Append(b, uint64(f.ReorderingThreshold)), nil
+	return varint.Append(b, uint64(f.ReorderingThreshold)), nil
 }
 
 func (f *AckFrequencyFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return protocol.ByteCount(2 + quicvarint.Len(f.SequenceNumber) + quicvarint.Len(f.AckElicitingThreshold) +
-		quicvarint.Len(uint64(f.RequestMaxAckDelay/time.Microsecond)) + quicvarint.Len(uint64(f.ReorderingThreshold)))
+	return protocol.ByteCount(2 + varint.Len(f.SequenceNumber) + varint.Len(f.AckElicitingThreshold) +
+		varint.Len(uint64(f.RequestMaxAckDelay/time.Microsecond)) + varint.Len(uint64(f.ReorderingThreshold)))
 }

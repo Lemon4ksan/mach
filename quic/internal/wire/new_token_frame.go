@@ -10,7 +10,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A NewTokenFrame is a NEW_TOKEN frame
@@ -19,7 +19,7 @@ type NewTokenFrame struct {
 }
 
 func parseNewTokenFrame(b []byte, _ protocol.Version) (*NewTokenFrame, int, error) {
-	tokenLen, l, err := quicvarint.Parse(b)
+	tokenLen, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -41,7 +41,7 @@ func parseNewTokenFrame(b []byte, _ protocol.Version) (*NewTokenFrame, int, erro
 
 func (f *NewTokenFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, byte(FrameTypeNewToken))
-	b = quicvarint.Append(b, uint64(len(f.Token)))
+	b = varint.Append(b, uint64(len(f.Token)))
 	b = append(b, f.Token...)
 
 	return b, nil
@@ -49,5 +49,5 @@ func (f *NewTokenFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 // Length of a written frame
 func (f *NewTokenFrame) Length(protocol.Version) protocol.ByteCount {
-	return 1 + protocol.ByteCount(quicvarint.Len(uint64(len(f.Token)))+len(f.Token))
+	return 1 + protocol.ByteCount(varint.Len(uint64(len(f.Token)))+len(f.Token))
 }

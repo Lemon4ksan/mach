@@ -9,7 +9,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A StreamFrame of QUIC
@@ -28,7 +28,7 @@ func ParseStreamFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamFrame
 	fin := typ&0b1 > 0
 	hasDataLen := typ&0b10 > 0
 
-	streamID, l, err := quicvarint.Parse(b)
+	streamID, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -37,7 +37,7 @@ func ParseStreamFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamFrame
 
 	var offset uint64
 	if hasOffset {
-		offset, l, err = quicvarint.Parse(b)
+		offset, l, err = varint.Parse(b)
 		if err != nil {
 			return nil, 0, replaceUnexpectedEOF(err)
 		}
@@ -52,7 +52,7 @@ func ParseStreamFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamFrame
 			l   int
 		)
 
-		dataLen, l, err = quicvarint.Parse(b)
+		dataLen, l, err = varint.Parse(b)
 		if err != nil {
 			return nil, 0, replaceUnexpectedEOF(err)
 		}
@@ -120,13 +120,13 @@ func (f *StreamFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 	b = append(b, typ)
 
-	b = quicvarint.Append(b, uint64(f.StreamID))
+	b = varint.Append(b, uint64(f.StreamID))
 	if hasOffset {
-		b = quicvarint.Append(b, uint64(f.Offset))
+		b = varint.Append(b, uint64(f.Offset))
 	}
 
 	if f.DataLenPresent {
-		b = quicvarint.Append(b, uint64(f.DataLen()))
+		b = varint.Append(b, uint64(f.DataLen()))
 	}
 
 	b = append(b, f.Data...)
@@ -136,13 +136,13 @@ func (f *StreamFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 // Length returns the total length of the STREAM frame
 func (f *StreamFrame) Length(protocol.Version) protocol.ByteCount {
-	length := 1 + quicvarint.Len(uint64(f.StreamID))
+	length := 1 + varint.Len(uint64(f.StreamID))
 	if f.Offset != 0 {
-		length += quicvarint.Len(uint64(f.Offset))
+		length += varint.Len(uint64(f.Offset))
 	}
 
 	if f.DataLenPresent {
-		length += quicvarint.Len(uint64(f.DataLen()))
+		length += varint.Len(uint64(f.DataLen()))
 	}
 
 	return protocol.ByteCount(length) + f.DataLen()
@@ -156,9 +156,9 @@ func (f *StreamFrame) DataLen() protocol.ByteCount {
 // MaxDataLen returns the maximum data length
 // If 0 is returned, writing will fail (a STREAM frame must contain at least 1 byte of data).
 func (f *StreamFrame) MaxDataLen(maxSize protocol.ByteCount, _ protocol.Version) protocol.ByteCount {
-	headerLen := 1 + protocol.ByteCount(quicvarint.Len(uint64(f.StreamID)))
+	headerLen := 1 + protocol.ByteCount(varint.Len(uint64(f.StreamID)))
 	if f.Offset != 0 {
-		headerLen += protocol.ByteCount(quicvarint.Len(uint64(f.Offset)))
+		headerLen += protocol.ByteCount(varint.Len(uint64(f.Offset)))
 	}
 
 	if f.DataLenPresent {
@@ -172,7 +172,7 @@ func (f *StreamFrame) MaxDataLen(maxSize protocol.ByteCount, _ protocol.Version)
 	}
 
 	maxDataLen := maxSize - headerLen
-	if f.DataLenPresent && quicvarint.Len(uint64(maxDataLen)) != 1 {
+	if f.DataLenPresent && varint.Len(uint64(maxDataLen)) != 1 {
 		maxDataLen--
 	}
 

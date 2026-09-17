@@ -14,7 +14,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestParseACKWithoutRanges(t *testing.T) {
@@ -135,7 +135,7 @@ func TestParseACKUseAckDelayExponent(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := range uint8(8) {
-		typ, l, err := quicvarint.Parse(b)
+		typ, l, err := varint.Parse(b)
 		require.NoError(t, err)
 
 		var frame AckFrame
@@ -275,7 +275,7 @@ func TestWriteACKSinglePacket(t *testing.T) {
 	b, err := f.Append(nil, protocol.Version1)
 	require.NoError(t, err)
 	require.Len(t, b, int(f.Length(protocol.Version1)))
-	typ, l, err := quicvarint.Parse(b)
+	typ, l, err := varint.Parse(b)
 	require.NoError(t, err)
 
 	b = b[l:]
@@ -297,7 +297,7 @@ func TestWriteACKManyPackets(t *testing.T) {
 	b, err := f.Append(nil, protocol.Version1)
 	require.NoError(t, err)
 	require.Len(t, b, int(f.Length(protocol.Version1)))
-	typ, l, err := quicvarint.Parse(b)
+	typ, l, err := varint.Parse(b)
 	require.NoError(t, err)
 
 	b = b[l:]
@@ -322,7 +322,7 @@ func TestWriteACKSingleGap(t *testing.T) {
 	b, err := f.Append(nil, protocol.Version1)
 	require.NoError(t, err)
 	require.Len(t, b, int(f.Length(protocol.Version1)))
-	typ, l, err := quicvarint.Parse(b)
+	typ, l, err := varint.Parse(b)
 	require.NoError(t, err)
 
 	b = b[l:]
@@ -349,7 +349,7 @@ func TestWriteACKMultipleRanges(t *testing.T) {
 	b, err := f.Append(nil, protocol.Version1)
 	require.NoError(t, err)
 	require.Len(t, b, int(f.Length(protocol.Version1)))
-	typ, l, err := quicvarint.Parse(b)
+	typ, l, err := varint.Parse(b)
 	require.NoError(t, err)
 
 	b = b[l:]

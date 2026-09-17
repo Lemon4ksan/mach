@@ -10,7 +10,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/wire"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestMarshalUnmarshalSessionTicket(t *testing.T) {
@@ -37,13 +37,13 @@ func TestUnmarshalRefusesTooShortTicket(t *testing.T) {
 }
 
 func TestUnmarshalRefusesUnknownRevision(t *testing.T) {
-	b := quicvarint.Append(nil, 1337)
+	b := varint.Append(nil, 1337)
 	err := (&sessionTicket{}).Unmarshal(b)
 	require.EqualError(t, err, "unknown session ticket revision: 1337")
 }
 
 func TestUnmarshal0RTTRefusesInvalidTransportParameters(t *testing.T) {
-	b := quicvarint.Append(nil, sessionTicketRevision)
+	b := varint.Append(nil, sessionTicketRevision)
 	b = append(b, []byte("foobar")...)
 	err := (&sessionTicket{}).Unmarshal(b)
 	require.Error(t, err)

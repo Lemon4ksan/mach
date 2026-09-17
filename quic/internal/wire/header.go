@@ -12,7 +12,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // ParseConnectionID parses the destination connection ID of a packet.
@@ -275,7 +275,7 @@ func (h *Header) parseLongHeader(b []byte) (int, error) {
 	}
 
 	if h.Type == protocol.PacketTypeInitial {
-		tokenLen, n, err := quicvarint.Parse(b)
+		tokenLen, n, err := varint.Parse(b)
 		if err != nil {
 			return startLen - len(b), err
 		}
@@ -289,7 +289,7 @@ func (h *Header) parseLongHeader(b []byte) (int, error) {
 		b = b[tokenLen:]
 	}
 
-	pl, n, err := quicvarint.Parse(b)
+	pl, n, err := varint.Parse(b)
 	if err != nil {
 		return 0, err
 	}

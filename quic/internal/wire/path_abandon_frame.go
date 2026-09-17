@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A PathAbandonFrame is a PATH_ABANDON frame
@@ -17,7 +17,7 @@ func parsePathAbandonFrame(b []byte, _ protocol.Version) (*PathAbandonFrame, int
 	f := &PathAbandonFrame{}
 	var parsed int
 
-	pathID, l, err := quicvarint.Parse(b)
+	pathID, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, parsed, err
 	}
@@ -25,7 +25,7 @@ func parsePathAbandonFrame(b []byte, _ protocol.Version) (*PathAbandonFrame, int
 	b = b[l:]
 	parsed += l
 
-	errorCode, l, err := quicvarint.Parse(b)
+	errorCode, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, parsed, err
 	}
@@ -33,7 +33,7 @@ func parsePathAbandonFrame(b []byte, _ protocol.Version) (*PathAbandonFrame, int
 	b = b[l:]
 	parsed += l
 
-	reasonLen, l, err := quicvarint.Parse(b)
+	reasonLen, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, parsed, err
 	}
@@ -50,17 +50,17 @@ func parsePathAbandonFrame(b []byte, _ protocol.Version) (*PathAbandonFrame, int
 }
 
 func (f *PathAbandonFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
-	b = quicvarint.Append(b, uint64(FrameTypePathAbandon))
-	b = quicvarint.Append(b, f.PathID)
-	b = quicvarint.Append(b, f.ErrorCode)
-	b = quicvarint.Append(b, 0)
+	b = varint.Append(b, uint64(FrameTypePathAbandon))
+	b = varint.Append(b, f.PathID)
+	b = varint.Append(b, f.ErrorCode)
+	b = varint.Append(b, 0)
 	return b, nil
 }
 
 // Length of a written frame
 func (f *PathAbandonFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return protocol.ByteCount(quicvarint.Len(uint64(FrameTypePathAbandon)) +
-		quicvarint.Len(f.PathID) +
-		quicvarint.Len(f.ErrorCode) +
-		quicvarint.Len(0))
+	return protocol.ByteCount(varint.Len(uint64(FrameTypePathAbandon)) +
+		varint.Len(f.PathID) +
+		varint.Len(f.ErrorCode) +
+		varint.Len(0))
 }

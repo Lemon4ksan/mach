@@ -6,7 +6,7 @@ package wire
 
 import (
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A RetireConnectionIDFrame is a RETIRE_CONNECTION_ID frame
@@ -15,7 +15,7 @@ type RetireConnectionIDFrame struct {
 }
 
 func parseRetireConnectionIDFrame(b []byte, _ protocol.Version) (*RetireConnectionIDFrame, int, error) {
-	seq, l, err := quicvarint.Parse(b)
+	seq, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -25,11 +25,11 @@ func parseRetireConnectionIDFrame(b []byte, _ protocol.Version) (*RetireConnecti
 
 func (f *RetireConnectionIDFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, byte(FrameTypeRetireConnectionID))
-	b = quicvarint.Append(b, f.SequenceNumber)
+	b = varint.Append(b, f.SequenceNumber)
 	return b, nil
 }
 
 // Length of a written frame
 func (f *RetireConnectionIDFrame) Length(protocol.Version) protocol.ByteCount {
-	return 1 + protocol.ByteCount(quicvarint.Len(f.SequenceNumber))
+	return 1 + protocol.ByteCount(varint.Len(f.SequenceNumber))
 }

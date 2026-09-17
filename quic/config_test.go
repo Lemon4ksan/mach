@@ -14,7 +14,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestConfigValidation(t *testing.T) {
@@ -44,12 +44,12 @@ func TestConfigValidation(t *testing.T) {
 
 	t.Run("flow control windows", func(t *testing.T) {
 		conf := &Config{
-			MaxStreamReceiveWindow:     quicvarint.Max + 1,
-			MaxConnectionReceiveWindow: quicvarint.Max + 2,
+			MaxStreamReceiveWindow:     varint.Max + 1,
+			MaxConnectionReceiveWindow: varint.Max + 2,
 		}
 		require.NoError(t, validateConfig(conf))
-		require.Equal(t, uint64(quicvarint.Max), conf.MaxStreamReceiveWindow)
-		require.Equal(t, uint64(quicvarint.Max), conf.MaxConnectionReceiveWindow)
+		require.Equal(t, uint64(varint.Max), conf.MaxStreamReceiveWindow)
+		require.Equal(t, uint64(varint.Max), conf.MaxConnectionReceiveWindow)
 	})
 
 	t.Run("initial packet size", func(t *testing.T) {

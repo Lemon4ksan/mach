@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // Clone clones a conf.
@@ -37,12 +37,12 @@ func validateConfig(conf *Config) error {
 		conf.MaxIncomingUniStreams = maxStreams
 	}
 
-	if conf.MaxStreamReceiveWindow > quicvarint.Max {
-		conf.MaxStreamReceiveWindow = quicvarint.Max
+	if conf.MaxStreamReceiveWindow > varint.Max {
+		conf.MaxStreamReceiveWindow = varint.Max
 	}
 
-	if conf.MaxConnectionReceiveWindow > quicvarint.Max {
-		conf.MaxConnectionReceiveWindow = quicvarint.Max
+	if conf.MaxConnectionReceiveWindow > varint.Max {
+		conf.MaxConnectionReceiveWindow = varint.Max
 	}
 
 	if conf.InitialPacketSize > 0 && conf.InitialPacketSize < protocol.MinInitialPacketSize {

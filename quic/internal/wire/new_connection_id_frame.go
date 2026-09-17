@@ -10,7 +10,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A NewConnectionIDFrame is a NEW_CONNECTION_ID frame
@@ -24,14 +24,14 @@ type NewConnectionIDFrame struct {
 func parseNewConnectionIDFrame(b []byte, _ protocol.Version) (*NewConnectionIDFrame, int, error) {
 	startLen := len(b)
 
-	seq, l, err := quicvarint.Parse(b)
+	seq, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
 
 	b = b[l:]
 
-	ret, l, err := quicvarint.Parse(b)
+	ret, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -80,8 +80,8 @@ func parseNewConnectionIDFrame(b []byte, _ protocol.Version) (*NewConnectionIDFr
 
 func (f *NewConnectionIDFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, byte(FrameTypeNewConnectionID))
-	b = quicvarint.Append(b, f.SequenceNumber)
-	b = quicvarint.Append(b, f.RetirePriorTo)
+	b = varint.Append(b, f.SequenceNumber)
+	b = varint.Append(b, f.RetirePriorTo)
 
 	connIDLen := f.ConnectionID.Len()
 	if connIDLen > protocol.MaxConnIDLen {
@@ -98,9 +98,9 @@ func (f *NewConnectionIDFrame) Append(b []byte, _ protocol.Version) ([]byte, err
 // Length of a written frame
 func (f *NewConnectionIDFrame) Length(protocol.Version) protocol.ByteCount {
 	return 1 + protocol.ByteCount(
-		quicvarint.Len(
+		varint.Len(
 			f.SequenceNumber,
-		)+quicvarint.Len(
+		)+varint.Len(
 			f.RetirePriorTo,
 		)+1 /* connection ID length */ +f.ConnectionID.Len(),
 	) + 16

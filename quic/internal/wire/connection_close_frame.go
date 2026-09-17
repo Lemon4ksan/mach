@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A ConnectionCloseFrame is a CONNECTION_CLOSE frame
@@ -23,7 +23,7 @@ func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*Co
 	startLen := len(b)
 	f := &ConnectionCloseFrame{IsApplicationError: typ == FrameTypeApplicationClose}
 
-	ec, l, err := quicvarint.Parse(b)
+	ec, l, err := varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -32,7 +32,7 @@ func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*Co
 	f.ErrorCode = ec
 	// read the Frame Type, if this is not an application error
 	if !f.IsApplicationError {
-		ft, l, err := quicvarint.Parse(b)
+		ft, l, err := varint.Parse(b)
 		if err != nil {
 			return nil, 0, replaceUnexpectedEOF(err)
 		}
@@ -43,7 +43,7 @@ func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*Co
 
 	var reasonPhraseLen uint64
 
-	reasonPhraseLen, l, err = quicvarint.Parse(b)
+	reasonPhraseLen, l, err = varint.Parse(b)
 	if err != nil {
 		return nil, 0, replaceUnexpectedEOF(err)
 	}
@@ -63,12 +63,12 @@ func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*Co
 // Length of a written frame
 func (f *ConnectionCloseFrame) Length(protocol.Version) protocol.ByteCount {
 	length := 1 + protocol.ByteCount(
-		quicvarint.Len(f.ErrorCode)+quicvarint.Len(uint64(len(f.ReasonPhrase))),
+		varint.Len(f.ErrorCode)+varint.Len(uint64(len(f.ReasonPhrase))),
 	) + protocol.ByteCount(
 		len(f.ReasonPhrase),
 	)
 	if !f.IsApplicationError {
-		length += protocol.ByteCount(quicvarint.Len(f.FrameType)) // for the frame type
+		length += protocol.ByteCount(varint.Len(f.FrameType)) // for the frame type
 	}
 
 	return length
@@ -81,12 +81,12 @@ func (f *ConnectionCloseFrame) Append(b []byte, _ protocol.Version) ([]byte, err
 		b = append(b, byte(FrameTypeConnectionClose))
 	}
 
-	b = quicvarint.Append(b, f.ErrorCode)
+	b = varint.Append(b, f.ErrorCode)
 	if !f.IsApplicationError {
-		b = quicvarint.Append(b, f.FrameType)
+		b = varint.Append(b, f.FrameType)
 	}
 
-	b = quicvarint.Append(b, uint64(len(f.ReasonPhrase)))
+	b = varint.Append(b, uint64(len(f.ReasonPhrase)))
 	b = append(b, []byte(f.ReasonPhrase)...)
 
 	return b, nil

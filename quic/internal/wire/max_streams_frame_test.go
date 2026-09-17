@@ -12,7 +12,7 @@ import (
 	"github.com/lemon4ksan/foundation/testkit/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestParseMaxStreamsFrameBidirectional(t *testing.T) {
@@ -63,7 +63,7 @@ func TestParseMaxStreamsMaxValue(t *testing.T) {
 			}
 			b, err := f.Append(nil, protocol.Version1)
 			require.NoError(t, err)
-			typ, l, err := quicvarint.Parse(b)
+			typ, l, err := varint.Parse(b)
 			require.NoError(t, err)
 
 			b = b[l:]
@@ -90,7 +90,7 @@ func TestParseMaxStreamsErrorsOnTooLargeStreamCount(t *testing.T) {
 			}
 			b, err := f.Append(nil, protocol.Version1)
 			require.NoError(t, err)
-			typ, l, err := quicvarint.Parse(b)
+			typ, l, err := varint.Parse(b)
 			require.NoError(t, err)
 
 			b = b[l:]
