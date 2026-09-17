@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/mach/qpack"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
@@ -58,7 +58,7 @@ func BenchmarkH3_FrameHeaderPack(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		hdrBytes := quicvarint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-		_ = quicvarint.Append(hdrBytes, 16384)
+		hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+		_ = varint.Append(hdrBytes, 16384)
 	}
 }

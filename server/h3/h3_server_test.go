@@ -29,7 +29,7 @@ import (
 
 	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/mach/quic"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func generateTestTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {
@@ -137,7 +137,7 @@ func TestH3Server_EndToEnd(t *testing.T) {
 
 	var typeBuf [8]byte
 
-	n := quicvarint.Append(typeBuf[:0], coreh3.StreamTypeControl)
+	n := varint.Append(typeBuf[:0], coreh3.StreamTypeControl)
 	_, err = clientCtrl.Write(n)
 	require.NoError(t, err)
 
@@ -159,8 +159,8 @@ func TestH3Server_EndToEnd(t *testing.T) {
 
 	var frameHdr [16]byte
 
-	hdrBytes := quicvarint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-	hdrBytes = quicvarint.Append(hdrBytes, uint64(qpackBuf.Len()))
+	hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+	hdrBytes = varint.Append(hdrBytes, uint64(qpackBuf.Len()))
 
 	_, err = reqStream.Write(hdrBytes)
 	require.NoError(t, err)
@@ -169,14 +169,14 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	require.NoError(t, reqStream.Close()) // Close write side to signal end of stream
 
 	// 4. Read server response on stream
-	qr := quicvarint.NewReader(reqStream)
+	qr := varint.NewReader(reqStream)
 
 	// Read HEADERS frame
-	respFrameType, err := quicvarint.Read(qr)
+	respFrameType, err := varint.Read(qr)
 	require.NoError(t, err)
 	assert.Equal(t, coreh3.FrameTypeHeaders, respFrameType)
 
-	respHeaderLen, err := quicvarint.Read(qr)
+	respHeaderLen, err := varint.Read(qr)
 	require.NoError(t, err)
 
 	respHeaderBytes := make([]byte, respHeaderLen)
@@ -206,11 +206,11 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	assert.Equal(t, "text/plain", contentType)
 
 	// Read DATA frame
-	respDataFrameType, err := quicvarint.Read(qr)
+	respDataFrameType, err := varint.Read(qr)
 	require.NoError(t, err)
 	assert.Equal(t, coreh3.FrameTypeData, respDataFrameType)
 
-	respDataLen, err := quicvarint.Read(qr)
+	respDataLen, err := varint.Read(qr)
 	require.NoError(t, err)
 
 	respBody := make([]byte, respDataLen)

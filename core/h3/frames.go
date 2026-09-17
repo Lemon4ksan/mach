@@ -8,7 +8,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 var ErrH3SettingsError = errors.New("aoni/h3engine: reserved H2 setting ID in H3 SETTINGS frame (RFC 9114 §7.2.4.1)")
@@ -85,39 +85,39 @@ func (s *Settings) Encode() []byte {
 	var payload []byte
 
 	if s.MaxFieldSectionSize >= 0 {
-		payload = quicvarint.Append(payload, SettingMaxFieldSectionSize)
-		payload = quicvarint.Append(payload, uint64(s.MaxFieldSectionSize))
+		payload = varint.Append(payload, SettingMaxFieldSectionSize)
+		payload = varint.Append(payload, uint64(s.MaxFieldSectionSize))
 	}
 
 	if s.QpackMaxTableCap > 0 {
-		payload = quicvarint.Append(payload, SettingQpackMaxTableCapacity)
-		payload = quicvarint.Append(payload, s.QpackMaxTableCap)
+		payload = varint.Append(payload, SettingQpackMaxTableCapacity)
+		payload = varint.Append(payload, s.QpackMaxTableCap)
 	}
 
 	if s.QpackBlockedStreams > 0 {
-		payload = quicvarint.Append(payload, SettingQpackBlockedStreams)
-		payload = quicvarint.Append(payload, s.QpackBlockedStreams)
+		payload = varint.Append(payload, SettingQpackBlockedStreams)
+		payload = varint.Append(payload, s.QpackBlockedStreams)
 	}
 
 	if s.EnableDatagrams {
-		payload = quicvarint.Append(payload, SettingH3Datagram)
-		payload = quicvarint.Append(payload, 1)
+		payload = varint.Append(payload, SettingH3Datagram)
+		payload = varint.Append(payload, 1)
 	}
 
 	if s.EnableConnect {
-		payload = quicvarint.Append(payload, SettingEnableConnectProtocol)
-		payload = quicvarint.Append(payload, 1)
+		payload = varint.Append(payload, SettingEnableConnectProtocol)
+		payload = varint.Append(payload, 1)
 	}
 
 	for k, v := range s.Other {
-		payload = quicvarint.Append(payload, k)
-		payload = quicvarint.Append(payload, v)
+		payload = varint.Append(payload, k)
+		payload = varint.Append(payload, v)
 	}
 
 	var frame []byte
 
-	frame = quicvarint.Append(frame, FrameTypeSettings)
-	frame = quicvarint.Append(frame, uint64(len(payload)))
+	frame = varint.Append(frame, FrameTypeSettings)
+	frame = varint.Append(frame, uint64(len(payload)))
 
 	return append(frame, payload...)
 }
@@ -125,14 +125,14 @@ func (s *Settings) Encode() []byte {
 // DecodeSettings decodes an incoming H3 SETTINGS frame and verifies that no reserved HTTP/2 settings are present (RFC 9114 §7.2.4 & §7.2.4.1).
 func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 	lr := io.LimitReader(r, int64(payloadLen))
-	qr := quicvarint.NewReader(lr)
+	qr := varint.NewReader(lr)
 
 	st := &Settings{
 		Other: make(map[uint64]uint64),
 	}
 
 	for {
-		id, err := quicvarint.Read(qr)
+		id, err := varint.Read(qr)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -141,7 +141,7 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 			return nil, err
 		}
 
-		val, err := quicvarint.Read(qr)
+		val, err := varint.Read(qr)
 		if err != nil {
 			return nil, err
 		}
@@ -170,13 +170,13 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 }
 
 // ReadFrameHeader decodes the QUIC variable-length integer frame type and payload length (RFC 9114 §7.1).
-func ReadFrameHeader(r quicvarint.Reader) (frameType, payloadLen uint64, err error) {
-	frameType, err = quicvarint.Read(r)
+func ReadFrameHeader(r varint.Reader) (frameType, payloadLen uint64, err error) {
+	frameType, err = varint.Read(r)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	payloadLen, err = quicvarint.Read(r)
+	payloadLen, err = varint.Read(r)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -185,11 +185,11 @@ func ReadFrameHeader(r quicvarint.Reader) (frameType, payloadLen uint64, err err
 }
 
 func AppendHeadersHeader(b []byte, length uint64) []byte {
-	b = quicvarint.Append(b, FrameTypeHeaders)
-	return quicvarint.Append(b, length)
+	b = varint.Append(b, FrameTypeHeaders)
+	return varint.Append(b, length)
 }
 
 func AppendDataHeader(b []byte, length uint64) []byte {
-	b = quicvarint.Append(b, FrameTypeData)
-	return quicvarint.Append(b, length)
+	b = varint.Append(b, FrameTypeData)
+	return varint.Append(b, length)
 }

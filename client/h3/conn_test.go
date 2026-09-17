@@ -19,7 +19,7 @@ import (
 	"github.com/lemon4ksan/mach/client/h1"
 	"github.com/lemon4ksan/mach/qpack"
 
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestSendRequest_HeadersAndBody(t *testing.T) {
@@ -329,8 +329,8 @@ func TestReadResponse_UnknownFrameDiscarded(t *testing.T) {
 	// 1. Unknown frame type 0x33 with 4 bytes payload (RFC 9114 §7.2.8: MUST ignore unknown frame types)
 	var unknownHeader []byte
 
-	unknownHeader = quicvarint.Append(unknownHeader, 0x33)
-	unknownHeader = quicvarint.Append(unknownHeader, 4)
+	unknownHeader = varint.Append(unknownHeader, 0x33)
+	unknownHeader = varint.Append(unknownHeader, 4)
 	streamBuf.Write(unknownHeader)
 	streamBuf.Write([]byte("abcd"))
 
@@ -360,8 +360,8 @@ func TestSettings_ReservedH2SettingsError(t *testing.T) {
 	for _, id := range reservedIDs {
 		var buf []byte
 
-		buf = quicvarint.Append(buf, id)
-		buf = quicvarint.Append(buf, 100)
+		buf = varint.Append(buf, id)
+		buf = varint.Append(buf, 100)
 
 		r := bytes.NewReader(buf)
 		_, err := coreh3.DecodeSettings(r, uint64(len(buf)))

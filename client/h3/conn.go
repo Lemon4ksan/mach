@@ -18,7 +18,7 @@ import (
 
 	"github.com/lemon4ksan/mach/client/h1"
 	"github.com/lemon4ksan/mach/quic"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 const errCodeH3RequestCancelled = quic.StreamErrorCode(coreh3.ErrCodeH3RequestCancelled)
@@ -103,7 +103,7 @@ func (cc *ClientConn) setupControlStream() error {
 
 	var buf []byte
 
-	buf = quicvarint.Append(buf, coreh3.StreamTypeControl)
+	buf = varint.Append(buf, coreh3.StreamTypeControl)
 	buf = append(buf, cc.settings.Encode()...)
 
 	_, err = str.Write(buf)
@@ -123,9 +123,9 @@ func (cc *ClientConn) readUnidirectionalStreams() {
 }
 
 func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
-	r := quicvarint.NewReader(str)
+	r := varint.NewReader(str)
 
-	streamType, err := quicvarint.Read(r)
+	streamType, err := varint.Read(r)
 	if err != nil {
 		return
 	}
@@ -140,7 +140,7 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 	}
 }
 
-func (cc *ClientConn) handleControlStream(r quicvarint.Reader) {
+func (cc *ClientConn) handleControlStream(r varint.Reader) {
 	firstFrame := true
 
 	for {
@@ -195,9 +195,9 @@ func (cc *ClientConn) handleControlStream(r quicvarint.Reader) {
 	}
 }
 
-func (cc *ClientConn) handleGoAway(r quicvarint.Reader, payloadLen uint64) {
+func (cc *ClientConn) handleGoAway(r varint.Reader, payloadLen uint64) {
 	if payloadLen > 0 {
-		_, _ = quicvarint.Read(r)
+		_, _ = varint.Read(r)
 	}
 
 	_ = cc.Close()
@@ -301,11 +301,11 @@ func (cc *ClientConn) sendRequestTo(w io.Writer, req *h1.Request, headerOrder []
 
 	body := req.Body()
 
-	headLen := quicvarint.Len(coreh3.FrameTypeHeaders) + quicvarint.Len(uint64(len(headerBlock)))
+	headLen := varint.Len(coreh3.FrameTypeHeaders) + varint.Len(uint64(len(headerBlock)))
 
 	totalLen := headLen + len(headerBlock)
 	if len(body) > 0 {
-		totalLen += quicvarint.Len(coreh3.FrameTypeData) + quicvarint.Len(uint64(len(body))) + len(body)
+		totalLen += varint.Len(coreh3.FrameTypeData) + varint.Len(uint64(len(body))) + len(body)
 	}
 
 	var (
@@ -355,7 +355,7 @@ func (cc *ClientConn) readResponseFrom(
 	reader io.Reader,
 	resp *h1.Response,
 ) (trailers map[string][]string, err error) {
-	r := quicvarint.NewReader(reader)
+	r := varint.NewReader(reader)
 	headersParsed := false
 
 	var stackHeaderBuf [4096]byte

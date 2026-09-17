@@ -16,7 +16,7 @@ import (
 	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"github.com/lemon4ksan/mach/quic"
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H3 stream request.
@@ -77,7 +77,7 @@ func (sc *ServerConn) Serve() error {
 	// Write Control Stream Type (0x00)
 	var typeBuf [8]byte
 
-	n := quicvarint.Append(typeBuf[:0], coreh3.StreamTypeControl)
+	n := varint.Append(typeBuf[:0], coreh3.StreamTypeControl)
 	if _, err := ctrlStream.Write(n); err != nil {
 		return err
 	}
@@ -128,9 +128,9 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 	defer stream.CancelRead(0)
 
 	// Read stream type varint (RFC 9114 §6.2)
-	qr := quicvarint.NewReader(stream)
+	qr := varint.NewReader(stream)
 
-	streamType, err := quicvarint.Read(qr)
+	streamType, err := varint.Read(qr)
 	if err != nil {
 		return
 	}
@@ -147,7 +147,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 		}
 
 		// Read peer settings frame (RFC 9114 §6.2.1 & §7.2.4)
-		frameType, err := quicvarint.Read(qr)
+		frameType, err := varint.Read(qr)
 		if err != nil || frameType != coreh3.FrameTypeSettings {
 			_ = sc.quicConn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
@@ -156,7 +156,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 			return
 		}
 
-		frameLen, err := quicvarint.Read(qr)
+		frameLen, err := varint.Read(qr)
 		if err != nil {
 			return
 		}
@@ -178,7 +178,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	defer func() { _ = stream.Close() }()
 
-	qr := quicvarint.NewReader(stream)
+	qr := varint.NewReader(stream)
 
 	var (
 		headerBlock    []byte
@@ -189,7 +189,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 	// Read frames on request stream (RFC 9114 §4.1 & §7.1)
 	for {
-		frameType, err := quicvarint.Read(qr)
+		frameType, err := varint.Read(qr)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
@@ -198,7 +198,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 			return
 		}
 
-		frameLen, err := quicvarint.Read(qr)
+		frameLen, err := varint.Read(qr)
 		if err != nil {
 			return
 		}
@@ -296,8 +296,8 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 	var frameHdr [16]byte
 
-	hdrBytes := quicvarint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-	hdrBytes = quicvarint.Append(hdrBytes, uint64(len(respBlock)))
+	hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+	hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
 
 	if _, err := stream.Write(hdrBytes); err != nil {
 		return
@@ -309,8 +309,8 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 	// Write response DATA frame
 	if len(res.Body) > 0 {
-		dataHdrBytes := quicvarint.Append(frameHdr[:0], coreh3.FrameTypeData)
-		dataHdrBytes = quicvarint.Append(dataHdrBytes, uint64(len(res.Body)))
+		dataHdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeData)
+		dataHdrBytes = varint.Append(dataHdrBytes, uint64(len(res.Body)))
 
 		if _, err := stream.Write(dataHdrBytes); err != nil {
 			return

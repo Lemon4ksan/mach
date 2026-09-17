@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/mach/quic/quicvarint"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestSettingsEncodeAndParse(t *testing.T) {
@@ -52,8 +52,8 @@ func TestSettingsEncodeAndParse(t *testing.T) {
 func TestReadFrameHeader(t *testing.T) {
 	var buf []byte
 
-	buf = quicvarint.Append(buf, FrameTypeHeaders)
-	buf = quicvarint.Append(buf, 1024)
+	buf = varint.Append(buf, FrameTypeHeaders)
+	buf = varint.Append(buf, 1024)
 
 	r := bytes.NewReader(buf)
 
