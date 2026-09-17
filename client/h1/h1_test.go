@@ -21,6 +21,7 @@ func TestH1Engine_ClientDo(t *testing.T) {
 			http.Error(w, "missing header", http.StatusBadRequest)
 			return
 		}
+
 		w.Header().Set("X-Resp", "ok")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("hello from h1 server"))
@@ -34,6 +35,7 @@ func TestH1Engine_ClientDo(t *testing.T) {
 	}
 	req := AcquireRequest()
 	resp := AcquireResponse()
+
 	defer ReleaseRequest(req)
 	defer ReleaseResponse(resp)
 
@@ -48,9 +50,11 @@ func TestH1Engine_ClientDo(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode())
 	}
+
 	if string(resp.Header.Peek("X-Resp")) != "ok" {
 		t.Fatalf("expected header ok, got %s", string(resp.Header.Peek("X-Resp")))
 	}
+
 	if !bytes.Equal(resp.Body(), []byte("hello from h1 server")) {
 		t.Fatalf("unexpected body: %s", string(resp.Body()))
 	}
@@ -65,15 +69,19 @@ func TestH1Engine_URIAndArgs(t *testing.T) {
 	if string(u.Scheme()) != "https" {
 		t.Fatalf("expected scheme https, got %s", u.Scheme())
 	}
+
 	if string(u.Host()) != "example.com:8080" {
 		t.Fatalf("expected host example.com:8080, got %s", u.Host())
 	}
+
 	if string(u.Path()) != "/path/test" {
 		t.Fatalf("expected path /path/test, got %s", u.Path())
 	}
+
 	if string(u.QueryArgs().Peek("foo")) != "bar" {
 		t.Fatalf("expected foo=bar, got %s", u.QueryArgs().Peek("foo"))
 	}
+
 	if u.QueryArgs().GetUintOrZero("baz") != 123 {
 		t.Fatalf("expected baz=123, got %d", u.QueryArgs().GetUintOrZero("baz"))
 	}
@@ -111,6 +119,7 @@ func BenchmarkPool_PerPStorage_Parallel(b *testing.B) {
 func BenchmarkBorrow_Scoped(b *testing.B) {
 	resp := AcquireResponse()
 	defer ReleaseResponse(resp)
+
 	resp.SetBodyString(`{"status":"ok","code":200,"message":"high-performance"}`)
 
 	b.ReportAllocs()
@@ -121,6 +130,7 @@ func BenchmarkBorrow_Scoped(b *testing.B) {
 			if len(body) == 0 {
 				b.Fatal("empty body")
 			}
+
 			return nil
 		})
 	}
@@ -129,6 +139,7 @@ func BenchmarkBorrow_Scoped(b *testing.B) {
 func BenchmarkBorrow_LegacyCloneCopy(b *testing.B) {
 	resp := AcquireResponse()
 	defer ReleaseResponse(resp)
+
 	resp.SetBodyString(`{"status":"ok","code":200,"message":"high-performance"}`)
 
 	b.ReportAllocs()
@@ -136,6 +147,7 @@ func BenchmarkBorrow_LegacyCloneCopy(b *testing.B) {
 
 	for b.Loop() {
 		raw := resp.Body()
+
 		copied := append([]byte(nil), raw...)
 		if len(copied) == 0 {
 			b.Fatal("empty body")
@@ -168,6 +180,7 @@ func BenchmarkHeaderScanner_SIMD(b *testing.B) {
 
 	for b.Loop() {
 		var s headerScanner
+
 		s.b = testHeaderRaw1KB
 		for s.next() {
 			if len(s.key) == 0 || len(s.value) == 0 {
@@ -185,6 +198,7 @@ func BenchmarkHeaderParse_ResponseHeader_SIMD(b *testing.B) {
 	var h ResponseHeader
 	for b.Loop() {
 		h.Reset()
+
 		if _, err := h.parse(testHeaderRaw1KB); err != nil {
 			b.Fatal(err)
 		}
@@ -208,6 +222,7 @@ func BenchmarkCookie_Scoped(b *testing.B) {
 		k := c.KeyScoped(scope)
 		v := c.ValueScoped(scope)
 		d := c.DomainScoped(scope)
+
 		p := c.PathScoped(scope)
 		if len(k.AsSlice()) == 0 || len(v.AsSlice()) == 0 || len(d.AsSlice()) == 0 || len(p.AsSlice()) == 0 {
 			b.Fatal("empty cookie field")
@@ -229,6 +244,7 @@ func BenchmarkCookie_LegacyAlloc(b *testing.B) {
 		k := string(c.Key())
 		v := string(c.Value())
 		d := string(c.Domain())
+
 		p := string(c.Path())
 		if len(k) == 0 || len(v) == 0 || len(d) == 0 || len(p) == 0 {
 			b.Fatal("empty cookie field")
@@ -242,7 +258,11 @@ func BenchmarkURI_Scoped(b *testing.B) {
 
 	u := AcquireURI()
 	defer ReleaseURI(u)
-	u.Parse(nil, []byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details")) //nolint:errcheck
+
+	u.Parse(
+		nil,
+		[]byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details"),
+	) //nolint:errcheck
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -252,8 +272,11 @@ func BenchmarkURI_Scoped(b *testing.B) {
 		scheme := u.SchemeScoped(scope)
 		path := u.PathScoped(scope)
 		query := u.QueryScoped(scope)
+
 		full := u.FullURIScoped(scope)
-		if len(host.AsSlice()) == 0 || len(scheme.AsSlice()) == 0 || len(path.AsSlice()) == 0 || len(query.AsSlice()) == 0 || len(full.AsSlice()) == 0 {
+		if len(host.AsSlice()) == 0 || len(scheme.AsSlice()) == 0 || len(path.AsSlice()) == 0 ||
+			len(query.AsSlice()) == 0 ||
+			len(full.AsSlice()) == 0 {
 			b.Fatal("empty uri field")
 		}
 	}
@@ -262,7 +285,11 @@ func BenchmarkURI_Scoped(b *testing.B) {
 func BenchmarkURI_LegacyAlloc(b *testing.B) {
 	u := AcquireURI()
 	defer ReleaseURI(u)
-	u.Parse(nil, []byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details")) //nolint:errcheck
+
+	u.Parse(
+		nil,
+		[]byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details"),
+	) //nolint:errcheck
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -272,6 +299,7 @@ func BenchmarkURI_LegacyAlloc(b *testing.B) {
 		scheme := string(u.Scheme())
 		path := string(u.Path())
 		query := string(u.QueryString())
+
 		full := string(u.FullURI())
 		if len(host) == 0 || len(scheme) == 0 || len(path) == 0 || len(query) == 0 || len(full) == 0 {
 			b.Fatal("empty uri field")
@@ -285,9 +313,11 @@ func BenchmarkFullPipeline_ScopedBorrow(b *testing.B) {
 
 	resp := AcquireResponse()
 	defer ReleaseResponse(resp)
+
 	if _, err := resp.Header.parse(testHeaderRaw1KB); err != nil {
 		b.Fatal(err)
 	}
+
 	resp.SetBodyString(`{"id":42,"username":"admin","status":"authenticated","role":"superadmin"}`)
 
 	b.ReportAllocs()
@@ -299,7 +329,8 @@ func BenchmarkFullPipeline_ScopedBorrow(b *testing.B) {
 		etag := resp.Header.PeekScoped(scope, "ETag")
 		body := resp.BodyScoped(scope)
 
-		if len(contentType.AsSlice()) == 0 || len(server.AsSlice()) == 0 || len(etag.AsSlice()) == 0 || len(body.AsSlice()) == 0 {
+		if len(contentType.AsSlice()) == 0 || len(server.AsSlice()) == 0 || len(etag.AsSlice()) == 0 ||
+			len(body.AsSlice()) == 0 {
 			b.Fatal("empty pipeline field")
 		}
 	}
@@ -308,9 +339,11 @@ func BenchmarkFullPipeline_ScopedBorrow(b *testing.B) {
 func BenchmarkFullPipeline_LegacyCopy(b *testing.B) {
 	resp := AcquireResponse()
 	defer ReleaseResponse(resp)
+
 	if _, err := resp.Header.parse(testHeaderRaw1KB); err != nil {
 		b.Fatal(err)
 	}
+
 	resp.SetBodyString(`{"id":42,"username":"admin","status":"authenticated","role":"superadmin"}`)
 
 	b.ReportAllocs()

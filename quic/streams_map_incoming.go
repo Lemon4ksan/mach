@@ -167,6 +167,7 @@ func (m *incomingStreamsMap[T]) GetOrOpenStream(id protocol.StreamID) (T, error)
 	// * highestStream is only modified by this function
 	for newNum := m.nextStreamToOpen; newNum <= id; newNum += 4 {
 		m.streams.set(newNum, incomingStreamEntry[T]{stream: m.newStream(newNum)})
+
 		select {
 		case m.newStreamChan <- struct{}{}:
 		default:

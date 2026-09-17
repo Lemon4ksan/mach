@@ -9,12 +9,12 @@ import (
 	"container/list"
 	"context"
 	"errors"
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/lemon4ksan/mach/client/h1"
+	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
 const DefaultPingInterval = 15 * time.Second

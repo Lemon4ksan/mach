@@ -14,11 +14,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
+
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
 	"github.com/lemon4ksan/mach/quic/internal/utils"
 	"github.com/lemon4ksan/mach/quic/internal/wire"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 type quicVersionContextKey struct{}

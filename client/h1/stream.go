@@ -34,6 +34,7 @@ func NewStreamReader(sw StreamWriter) io.ReadCloser {
 	pr := pc.Conn2()
 
 	var bw *bufio.Writer
+
 	v := streamWriterBufPool.Get()
 	if v == nil {
 		bw = bufio.NewWriter(pw)

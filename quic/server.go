@@ -49,21 +49,26 @@ func ListenAddr(addr string, tlsConf *tls.Config, opts ...Option) (*Listener, er
 	if err != nil {
 		return nil, err
 	}
+
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		return nil, err
 	}
+
 	tr := &Transport{
 		Conn:        conn,
 		createdConn: true,
 		isSingleUse: true,
 	}
+
 	ln, err := tr.Listen(tlsConf, opts...)
 	if err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
+
 	ln.createdConn = true
+
 	return ln, nil
 }
 
@@ -73,6 +78,7 @@ func Listen(conn net.PacketConn, tlsConf *tls.Config, opts ...Option) (*Listener
 		Conn:        conn,
 		isSingleUse: true,
 	}
+
 	return tr.Listen(tlsConf, opts...)
 }
 
@@ -86,6 +92,7 @@ func (t *Transport) Listen(tlsConf *tls.Config, opts ...Option) (*Listener, erro
 	if tlsConf == nil {
 		return nil, errors.New("quic: nil tls.Config")
 	}
+
 	if err := t.init(true); err != nil {
 		return nil, err
 	}
@@ -97,6 +104,7 @@ func (t *Transport) Listen(tlsConf *tls.Config, opts ...Option) (*Listener, erro
 	if _, err := rand.Read(tokenGenKey[:]); err != nil {
 		return nil, err
 	}
+
 	tokenGen := handshake.NewTokenGenerator(tokenGenKey)
 
 	ln := &Listener{
@@ -141,17 +149,20 @@ func (l *Listener) Close() error {
 	if l.isClosed.Swap(true) {
 		return nil
 	}
+
 	close(l.closeChan)
 
 	l.tr.mutex.Lock()
 	if l.tr.serverHandler == packetHandler(l) {
 		l.tr.serverHandler = nil
 	}
+
 	l.tr.mutex.Unlock()
 
 	if l.createdConn {
 		return l.tr.Close()
 	}
+
 	return nil
 }
 
@@ -187,6 +198,7 @@ func (l *Listener) handlePacket(p receivedPacket) {
 	var serverConnID protocol.ConnectionID
 	if l.tr.connIDGenerator != nil {
 		var err error
+
 		serverConnID, err = l.tr.connIDGenerator.GenerateConnectionID()
 		if err != nil {
 			p.buffer.MaybeRelease()
@@ -223,6 +235,7 @@ func (l *Listener) handlePacket(p receivedPacket) {
 	if err := wConn.Start(); err != nil {
 		return
 	}
+
 	wConn.handlePacket(p)
 
 	go func() {

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package quic
 
 import (
@@ -22,8 +26,11 @@ func (s *RoundRobinScheduler) SelectPath(paths map[protocol.PathID]struct{}) pro
 	}
 
 	var first protocol.PathID
+
 	foundFirst := false
+
 	var next protocol.PathID
+
 	foundNext := false
 
 	for id := range paths {
@@ -31,6 +38,7 @@ func (s *RoundRobinScheduler) SelectPath(paths map[protocol.PathID]struct{}) pro
 			first = id
 			foundFirst = true
 		}
+
 		if id > s.lastPath && (!foundNext || id < next) {
 			next = id
 			foundNext = true
@@ -41,6 +49,8 @@ func (s *RoundRobinScheduler) SelectPath(paths map[protocol.PathID]struct{}) pro
 		s.lastPath = next
 		return next
 	}
+
 	s.lastPath = first
+
 	return first
 }

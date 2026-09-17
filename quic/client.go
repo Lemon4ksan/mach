@@ -85,7 +85,13 @@ func DialAddrEarly(ctx context.Context, addr string, tlsConf *tls.Config, opts .
 
 // DialEarly establishes a new 0-RTT QUIC connection to a server using a [net.PacketConn].
 // See [Dial] for more details.
-func DialEarly(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
+func DialEarly(
+	ctx context.Context,
+	c net.PacketConn,
+	addr net.Addr,
+	tlsConf *tls.Config,
+	opts ...Option,
+) (*Conn, error) {
 	dl, err := setupTransport(c, tlsConf, false)
 	if err != nil {
 		return nil, err

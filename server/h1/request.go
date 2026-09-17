@@ -5,9 +5,6 @@
 package h1
 
 import (
-	"github.com/lemon4ksan/mach/core/bytesutil"
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
-
 	"bufio"
 	"bytes"
 	"crypto/tls"
@@ -22,6 +19,9 @@ import (
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
 var (
@@ -55,6 +55,7 @@ func (r *Request) WriteEarlyHints(h http.Header) error {
 	if r.EarlyHintsFn != nil {
 		return r.EarlyHintsFn(h)
 	}
+
 	return nil
 }
 
@@ -134,6 +135,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBod
 			if err == io.EOF {
 				return io.EOF
 			}
+
 			continue
 		}
 
@@ -164,6 +166,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBod
 	}
 
 	r.Headers.ParseHeaderBlockSWAR(fallbackBuf)
+
 	return r.finishRequestRead(br, bw, maxBodySize)
 }
 
@@ -188,7 +191,7 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 }
 
 func (r *Request) parseRequestLine(line []byte) error {
-	var s1, s2 int = -1, -1
+	s1, s2 := -1, -1
 
 	_ = line[len(line)-1] // BCE
 	for i := range line {
@@ -241,7 +244,12 @@ func (r *Request) finishRequestRead(br *bufio.Reader, bw *bytesutil.ByteBuffer, 
 }
 
 //go:noinline
-func (r *Request) finishRequestBodyRead(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBodySize int64, hasTE, hasCL bool) error {
+func (r *Request) finishRequestBodyRead(
+	br *bufio.Reader,
+	bw *bytesutil.ByteBuffer,
+	maxBodySize int64,
+	hasTE, hasCL bool,
+) error {
 	// RFC 9112 §6.3 Item 3: If both Transfer-Encoding and Content-Length are present,
 	// Transfer-Encoding overrides Content-Length to mitigate Request Smuggling (RFC 9112 §11.2).
 	if hasTE && hasCL {

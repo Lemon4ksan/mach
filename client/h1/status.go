@@ -7,7 +7,7 @@ package h1
 import (
 	"strconv"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 const (
@@ -166,6 +166,7 @@ func StatusMessage(statusCode int) string {
 	if s := statusMessages[statusCode]; s != "" {
 		return s
 	}
+
 	return unknownStatusCode
 }
 
@@ -173,6 +174,7 @@ func formatStatusLine(dst, protocol []byte, statusCode int, statusText []byte) [
 	if len(statusText) == 0 {
 		statusText = bytesutil.S2B(StatusMessage(statusCode))
 	}
+
 	need := len(protocol) + 1 + statusCodeLen(statusCode) + 1 + len(statusText) + len(bytesutil.StrCRLF)
 	if cap(dst)-len(dst) < need {
 		ndst := make([]byte, len(dst), len(dst)+need)
@@ -185,6 +187,7 @@ func formatStatusLine(dst, protocol []byte, statusCode int, statusText []byte) [
 	dst = appendStatusCode(dst, statusCode)
 	dst = append(dst, ' ')
 	dst = append(dst, statusText...)
+
 	return append(dst, bytesutil.StrCRLF...)
 }
 
@@ -209,6 +212,7 @@ func digits10Int(v int) int {
 		v /= 10
 		n++
 	}
+
 	return n
 }
 
@@ -219,7 +223,9 @@ func appendStatusCode(dst []byte, statusCode int) []byte {
 			byte('0'+(statusCode/10)%10),
 			byte('0'+statusCode%10),
 		)
+
 		return dst
 	}
+
 	return strconv.AppendInt(dst, int64(statusCode), 10)
 }

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package wire
 
 import (
@@ -32,6 +36,7 @@ func BenchmarkParseStreamFrame_Overlay(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, raw := range rawFrames {
 			typ := FrameType(raw[0])
+
 			_, _, err := ParseStreamFrameOverlay(raw[1:], typ)
 			if err != nil {
 				b.Fatal(err)
@@ -63,6 +68,7 @@ func BenchmarkParseStreamFrame_Classic(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, raw := range rawFrames {
 			typ := FrameType(raw[0])
+
 			_, _, err := ParseStreamFrame(raw[1:], typ, protocol.Version1)
 			if err != nil {
 				b.Fatal(err)

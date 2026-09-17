@@ -5,11 +5,12 @@
 package wire
 
 import (
-	"slices"
 	"io"
+	"slices"
+
+	"github.com/lemon4ksan/foundation/encoding/varint"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A CryptoFrame is a CRYPTO frame
@@ -41,7 +42,6 @@ func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
 	}
 
 	if dataLen != 0 {
-		
 		frame.Data = slices.Clone(b[:dataLen])
 	}
 

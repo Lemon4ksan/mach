@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package wire
 
 import (
@@ -22,6 +26,7 @@ func TestStreamFrameOverlay_ParsesCorrectly(t *testing.T) {
 	}
 
 	typ := FrameType(buf[0])
+
 	overlay, consumed, err := ParseStreamFrameOverlay(buf[1:], typ)
 	if err != nil {
 		t.Fatalf("Failed to parse overlay: %v", err)

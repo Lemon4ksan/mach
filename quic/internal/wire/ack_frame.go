@@ -10,8 +10,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
+	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )
 
 var errInvalidAckRanges = errors.New("AckFrame: ACK frame contains invalid ACK ranges")
@@ -279,9 +280,11 @@ func (f *AckFrame) validateAckRanges() bool {
 	if len(f.AckRanges) == 0 {
 		return true
 	}
+
 	_ = f.AckRanges[len(f.AckRanges)-1]
 	for i := 1; i < len(f.AckRanges); i++ {
 		ackRange := f.AckRanges[i]
+
 		lastAckRange := f.AckRanges[i-1]
 		if lastAckRange.Smallest <= ackRange.Smallest {
 			return false

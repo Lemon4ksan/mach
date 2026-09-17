@@ -1,10 +1,15 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package h1
 
 import (
 	"bytes"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
+
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
 func peekArgBytesHeaders(h *coreheaders.Headers, key []byte) []byte {
@@ -12,6 +17,7 @@ func peekArgBytesHeaders(h *coreheaders.Headers, key []byte) []byte {
 	if v == "" {
 		return nil
 	}
+
 	return bytesconv.S2B(v)
 }
 
@@ -23,8 +29,9 @@ func appendArgBytesHeaders(h *coreheaders.Headers, key, value []byte, noValue bo
 	h.Add(string(key), string(value))
 }
 
-func copyHeaders(dst *coreheaders.Headers, src *coreheaders.Headers) {
+func copyHeaders(dst, src *coreheaders.Headers) {
 	dst.Reset()
+
 	for _, e := range src.Entries() {
 		dst.Add(e.Key, e.Value)
 	}
@@ -37,17 +44,20 @@ func peekAllArgBytesToDstHeaders(dst [][]byte, h *coreheaders.Headers, key []byt
 			dst = append(dst, bytesconv.S2B(e.Value))
 		}
 	}
+
 	return dst
 }
 
 func parseTrailerHeaders(src []byte, dest *coreheaders.Headers, disableNormalizing bool) (int, error) {
 	var err error
+
 	n := 0
 	for len(src) > 0 {
 		idxSemi := bytes.IndexByte(src, '\n')
 		if idxSemi < 0 {
 			break
 		}
+
 		line := src[:idxSemi]
 		src = src[idxSemi+1:]
 		n += idxSemi + 1
@@ -55,10 +65,13 @@ func parseTrailerHeaders(src []byte, dest *coreheaders.Headers, disableNormalizi
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
+
 		if len(line) == 0 {
 			break
 		}
+
 		dest.ParseHeaderLine(line)
 	}
+
 	return n, err
 }

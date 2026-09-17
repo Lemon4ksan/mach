@@ -1237,7 +1237,10 @@ func TestReceiveStreamResetStreamAtAfterResetStream(t *testing.T) {
 	require.Equal(t, []byte("foo"), b)
 	require.True(t, mockCtrl.Satisfied())
 
-	str.handleResetStreamFrame(&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10}, monotime.Now()) //nolint:errcheck
+	str.handleResetStreamFrame(
+		&wire.ResetStreamFrame{StreamID: 42, ErrorCode: 1337, FinalSize: 10},
+		monotime.Now(),
+	) //nolint:errcheck
 	require.True(t, mockCtrl.Satisfied())
 
 	// receiving a reordered RESET_STREAM_AT frame has no effect

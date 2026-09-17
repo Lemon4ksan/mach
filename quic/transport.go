@@ -226,9 +226,11 @@ func (t *Transport) doDial(
 	// Similarly, the recreateChan needs to be buffered; in case a different case is selected.
 	errChan := make(chan error, 1)
 	recreateChan := make(chan errCloseForRecreating, 1)
+
 	if err := conn.Start(); err != nil {
 		return nil, err
 	}
+
 	go func() {
 		err := conn.run()
 

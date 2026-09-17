@@ -225,7 +225,7 @@ func testPackLongHeaders(t *testing.T, includeACK bool) {
 
 	clientHello, err := getClientHello("quic-go.net")
 	require.NoError(t, err)
-	tp.initialStream.Write(clientHello) //nolint:errcheck
+	tp.initialStream.Write(clientHello)                        //nolint:errcheck
 	tp.initialStream.Write(make([]byte, 900-len(clientHello))) // add some more data //nolint:errcheck
 	tp.packer.retransmissionQueue.addHandshake(&wire.PingFrame{})
 

@@ -15,9 +15,10 @@ import (
 	"slices"
 	"time"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
+
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // AdditionalTransportParametersClient are additional transport parameters that will be added

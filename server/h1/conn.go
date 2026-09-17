@@ -5,9 +5,6 @@
 package h1
 
 import (
-	"github.com/lemon4ksan/mach/core/bytesutil"
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
-
 	"bufio"
 	"crypto/tls"
 	"errors"
@@ -18,6 +15,9 @@ import (
 
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/pool"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
 var (
@@ -65,6 +65,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		if !isHijacked {
 			_ = bw.Flush()
 			_ = conn.Close()
+
 			readerStorage.Put(br)
 			bytesutil.ReleaseByteBuffer(bw)
 		}
@@ -74,6 +75,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		if len(h) == 0 {
 			return nil
 		}
+
 		_, _ = bw.WriteString("HTTP/1.1 103 Early Hints\r\n")
 		for k, vv := range h {
 			for _, v := range vv {
@@ -83,13 +85,17 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 				_, _ = bw.WriteString("\r\n")
 			}
 		}
+
 		_, _ = bw.WriteString("\r\n")
 		if _, err := bw.WriteTo(conn); err != nil {
 			return err
 		}
+
 		bw.ResetWriter(conn)
+
 		return nil
 	}
+
 	req := reqStorage.Get()
 	defer reqStorage.Put(req)
 
@@ -110,7 +116,6 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 	}
 
 	hijackFn := func() (net.Conn, *bufio.ReadWriter, error) {
-
 		if isHijacked {
 			return nil, nil, errors.New("h1: connection already hijacked")
 		}
@@ -139,7 +144,6 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		}
 
 		err := req.ReadRequest(br, bw, maxBody)
-
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return nil
@@ -185,6 +189,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			if _, err := bw.WriteTo(conn); err != nil {
 				return err
 			}
+
 			bw.ResetWriter(conn)
 		}
 

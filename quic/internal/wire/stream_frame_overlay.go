@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package wire
 
 import (
@@ -26,10 +30,12 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 
 	// 1. StreamID
 	first := b[0]
+
 	l1 := int(1 << (first >> 6))
 	if len(b) < l1 {
 		return StreamFrameOverlay{}, 0, io.EOF
 	}
+
 	var streamID uint64
 	switch l1 {
 	case 1:
@@ -45,6 +51,7 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 		streamID = uint64(first&0x3f)<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 |
 			uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
 	}
+
 	b = b[l1:]
 
 	// 2. Offset
@@ -53,11 +60,14 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 		if len(b) == 0 {
 			return StreamFrameOverlay{}, 0, io.EOF
 		}
+
 		first = b[0]
+
 		l2 := int(1 << (first >> 6))
 		if len(b) < l2 {
 			return StreamFrameOverlay{}, 0, io.EOF
 		}
+
 		switch l2 {
 		case 1:
 			offset = uint64(first & 0x3f)
@@ -72,6 +82,7 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 			offset = uint64(first&0x3f)<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 |
 				uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
 		}
+
 		b = b[l2:]
 	}
 
@@ -81,11 +92,14 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 		if len(b) == 0 {
 			return StreamFrameOverlay{}, 0, io.EOF
 		}
+
 		first = b[0]
+
 		l3 := int(1 << (first >> 6))
 		if len(b) < l3 {
 			return StreamFrameOverlay{}, 0, io.EOF
 		}
+
 		var v uint64
 		switch l3 {
 		case 1:
@@ -101,9 +115,10 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 			v = uint64(first&0x3f)<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 |
 				uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
 		}
+
 		dataLen = int(v)
 		b = b[l3:]
-		
+
 		if dataLen > len(b) {
 			return StreamFrameOverlay{}, 0, io.EOF
 		}
@@ -121,7 +136,7 @@ func ParseStreamFrameOverlay(b []byte, typ FrameType) (StreamFrameOverlay, int, 
 	}, consumed + dataLen, nil
 }
 
-func (o StreamFrameOverlay) Data() []byte { return o.data }
-func (o StreamFrameOverlay) Fin() bool { return o.typ&0b1 > 0 }
+func (o StreamFrameOverlay) Data() []byte                { return o.data }
+func (o StreamFrameOverlay) Fin() bool                   { return o.typ&0b1 > 0 }
 func (o StreamFrameOverlay) StreamID() protocol.StreamID { return o.streamID }
-func (o StreamFrameOverlay) Offset() protocol.ByteCount { return o.offset }
+func (o StreamFrameOverlay) Offset() protocol.ByteCount  { return o.offset }

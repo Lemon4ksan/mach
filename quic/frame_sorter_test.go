@@ -1777,6 +1777,7 @@ func BenchmarkFrameSorterSequential(b *testing.B) {
 			_, _, _ = s.Pop()
 			offset += 1024
 		}
+
 		releaseFrameSorter(s)
 	}
 }
@@ -1799,6 +1800,7 @@ func BenchmarkFrameSorterSequentialBatch(b *testing.B) {
 		for range 100 {
 			_, _, _ = s.Pop()
 		}
+
 		releaseFrameSorter(s)
 	}
 }

@@ -22,6 +22,7 @@ func GenerateTestCertificate(host string) ([]byte, []byte, error) {
 	}
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, nil, err

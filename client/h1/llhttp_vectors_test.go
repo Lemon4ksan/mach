@@ -7,10 +7,12 @@ package h1_test
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/testing/assert"
+
 	"github.com/lemon4ksan/mach/client/h1"
 )
 
@@ -94,11 +96,12 @@ func TestLLHTTP_Chunked_OfficialVectors(t *testing.T) {
 			decoded, err := h1.ReadBodyChunked(r, 0, nil)
 
 			if tv.shouldError {
-				assert.Equal(t, true, err != nil && err != io.EOF)
+				assert.Equal(t, true, err != nil && !errors.Is(err, io.EOF))
 			} else {
-				if err != nil && err != io.EOF {
+				if err != nil && !errors.Is(err, io.EOF) {
 					t.Fatalf("unexpected chunk decoding error: %v", err)
 				}
+
 				assert.Equal(t, tv.expected, string(decoded))
 			}
 		})

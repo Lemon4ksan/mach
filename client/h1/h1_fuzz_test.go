@@ -15,7 +15,11 @@ import (
 func FuzzH1Request(f *testing.F) {
 	f.Add([]byte("GET /index.html HTTP/1.1\r\nHost: example.com\r\nUser-Agent: aoni\r\n\r\n"))
 	f.Add([]byte("POST /api/v1 HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello"))
-	f.Add([]byte("POST /chunked HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"))
+	f.Add(
+		[]byte(
+			"POST /chunked HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n",
+		),
+	)
 	f.Add([]byte(""))
 	f.Add([]byte("\r\n\r\n\r\n"))
 	f.Add([]byte("INVALID REQUEST LINE WITH NO SPACES\r\n\r\n"))
@@ -26,6 +30,7 @@ func FuzzH1Request(f *testing.F) {
 		}
 
 		var req h1.Request
+
 		br := bufio.NewReader(bytes.NewReader(data))
 		if err := req.Read(br); err == nil {
 			_ = req.Header.Method()
@@ -50,6 +55,7 @@ func FuzzH1Response(f *testing.F) {
 		}
 
 		var resp h1.Response
+
 		br := bufio.NewReader(bytes.NewReader(data))
 		if err := resp.ReadLimitBody(br, 64*1024); err == nil {
 			_ = resp.StatusCode()

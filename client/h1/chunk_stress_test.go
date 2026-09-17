@@ -11,8 +11,9 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/testing/assert"
+
 	"github.com/lemon4ksan/mach/client/h1"
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 func TestH1_ParseHexUint_Adversarial(t *testing.T) {
@@ -104,6 +105,7 @@ func TestH1_FormatHexUint_Differential(t *testing.T) {
 	// 2. Exhaustive test 0..100000
 	for val := range 100000 {
 		n := bytesutil.FormatHexUint(&buf, val)
+
 		expected := strconv.FormatInt(int64(val), 16)
 		if string(buf[:n]) != expected {
 			t.Fatalf("mismatch at val %d: got %s, want %s", val, string(buf[:n]), expected)

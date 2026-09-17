@@ -65,7 +65,7 @@ func (h *mockPacketHandler) closeWithTransportError(code qerr.TransportErrorCode
 func TestTransportPacketHandling(t *testing.T) {
 	tr := &Transport{Conn: newUDPConnLocalhost(t)}
 
-	tr.init(true) //nolint:errcheck
+	tr.init(true)    //nolint:errcheck
 	defer tr.Close() //nolint:errcheck
 
 	connID1 := protocol.ParseConnectionID([]byte{1, 2, 3, 4, 5, 6, 7, 8})
@@ -160,7 +160,7 @@ func TestTransportStatelessResetReceiving(t *testing.T) {
 		ConnectionIDLength: 4,
 	}
 
-	tr.init(true) //nolint:errcheck
+	tr.init(true)    //nolint:errcheck
 	defer tr.Close() //nolint:errcheck
 
 	connID := protocol.ParseConnectionID([]byte{9, 10, 11, 12})
@@ -293,7 +293,7 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 
 	tr := &Transport{Conn: newUDPConnLocalhost(t)}
 
-	tr.init(true) //nolint:errcheck
+	tr.init(true)    //nolint:errcheck
 	defer tr.Close() //nolint:errcheck
 
 	_, err := tr.Dial(context.Background(), nil, &tls.Config{})

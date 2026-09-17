@@ -8,7 +8,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
-	"github.com/lemon4ksan/mach/core/h2"
+	"github.com/lemon4ksan/mach/proto/h2"
 )
 
 var huffmanDecStorage = pool.NewPerPStorage(func() *[]byte {
@@ -37,5 +37,6 @@ func decodeHuffman(src []byte, arena *[]byte) (string, error) {
 
 	start := len(*arena)
 	*arena = h2.HuffmanDecode(*arena, src)
+
 	return bytesconv.B2S((*arena)[start:]), nil
 }

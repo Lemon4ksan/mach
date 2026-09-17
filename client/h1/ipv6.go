@@ -19,10 +19,12 @@ func validateIPv6Literal(host []byte) error {
 	if len(host) == 0 || host[0] != '[' {
 		return nil
 	}
+
 	end := bytes.IndexByte(host, ']')
 	if end < 0 || end == 1 {
 		return errInvalidIPv6Host
 	}
+
 	addr := host[1:end]
 
 	// Optional zone.
@@ -30,6 +32,7 @@ func validateIPv6Literal(host []byte) error {
 		if zi == len(addr)-1 {
 			return errInvalidIPv6Zone
 		}
+
 		addr = addr[:zi]
 	}
 
@@ -51,6 +54,7 @@ func validateIPv6Literal(host []byte) error {
 		}
 
 		head := addr[:lastColon]
+
 		seenDoubleAtSplit := lastColon > 0 && addr[lastColon-1] == ':'
 		if seenDoubleAtSplit {
 			head = addr[:lastColon-1]
@@ -72,6 +76,7 @@ func validateIPv6Literal(host []byte) error {
 		if (!seenDouble && hextets != 8) || (seenDouble && hextets >= 8) {
 			return errInvalidIPv6Address
 		}
+
 		return nil
 	}
 
@@ -80,9 +85,11 @@ func validateIPv6Literal(host []byte) error {
 	if !ok {
 		return errInvalidIPv6Address
 	}
+
 	if (!seenDouble && hextets != 8) || (seenDouble && hextets >= 8) {
 		return errInvalidIPv6Address
 	}
+
 	return nil
 }
 
@@ -91,6 +98,7 @@ func parseIPv6Hextets(s []byte, allowTrailingColon bool) (groups int, seenDouble
 	if n == 0 {
 		return 0, false, true
 	}
+
 	i := 0
 	justSawDouble := false
 
@@ -100,48 +108,62 @@ func parseIPv6Hextets(s []byte, allowTrailingColon bool) (groups int, seenDouble
 				if seenDouble || justSawDouble {
 					return 0, false, false
 				}
+
 				seenDouble = true
 				justSawDouble = true
+
 				i += 2
 				if i == n {
 					break
 				}
+
 				continue
 			}
+
 			if i == 0 {
 				return 0, false, false
 			}
+
 			if justSawDouble {
 				return 0, false, false
 			}
+
 			if i == n-1 {
 				if allowTrailingColon {
 					break
 				}
+
 				return 0, false, false
 			}
+
 			if !ishex(s[i+1]) {
 				return 0, false, false
 			}
+
 			i++
+
 			continue
 		}
 
 		justSawDouble = false
+
 		cnt := 0
 		for cnt < 4 && i < n && ishex(s[i]) {
 			i++
 			cnt++
 		}
+
 		if cnt == 0 {
 			return 0, false, false
 		}
+
 		groups++
 
 		if i < n && s[i] != ':' {
 			return 0, false, false
 		}
 	}
+
 	return groups, seenDouble, true
 }
 
@@ -166,16 +188,20 @@ func validIPv4(s []byte) bool {
 			if c < '0' || c > '9' {
 				break
 			}
+
 			val = val*10 + int(c-'0')
 			if val > 255 {
 				return false
 			}
+
 			i++
+
 			digits++
 			if digits > 3 {
 				return false
 			}
 		}
+
 		if digits == 0 {
 			return false
 		}
@@ -190,10 +216,13 @@ func validIPv4(s []byte) bool {
 		if parts == 4 {
 			return i == n // must consume all input
 		}
+
 		if i >= n || s[i] != '.' {
 			return false
 		}
+
 		i++ // skip dot
 	}
+
 	return false
 }

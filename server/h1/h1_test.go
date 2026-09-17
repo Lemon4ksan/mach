@@ -5,9 +5,6 @@
 package h1_test
 
 import (
-	"github.com/lemon4ksan/mach/core/bytesutil"
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
-
 	"bufio"
 	"bytes"
 	"context"
@@ -17,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lemon4ksan/mach/proto/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -136,6 +135,7 @@ func TestResponseSerialization(t *testing.T) {
 	}
 
 	bw.Flush()
+
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("HTTP/1.1 201 Created\r\n")) {
 		t.Errorf("missing status line in response: %s", out)
@@ -377,6 +377,7 @@ func TestH1_HTTP_Pipelining_Batching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
+
 	defer func() { _ = ln.Close() }()
 
 	server := &h1.Server{
@@ -396,10 +397,12 @@ func TestH1_HTTP_Pipelining_Batching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
+
 	defer func() { _ = conn.Close() }()
 
 	// Send 16 pipelined requests in a single TCP write
 	const pipelineCount = 16
+
 	var batch bytes.Buffer
 	for i := range pipelineCount {
 		batch.WriteString("GET /pipeline/" + string(rune('A'+i)) + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
@@ -420,6 +423,7 @@ func TestH1_HTTP_Pipelining_Batching(t *testing.T) {
 
 		body, err := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
+
 		if err != nil {
 			t.Fatalf("failed reading body #%d: %v", i, err)
 		}
@@ -437,6 +441,7 @@ func stringsReader(s string) io.Reader {
 
 func TestChunkedWriter_And_FormatHex(t *testing.T) {
 	var buf bytes.Buffer
+
 	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
 	bw.ResetWriter(&buf)
 	cw := h1.NewChunkedWriter(bw)
@@ -463,6 +468,7 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 
 	// Verify with ChunkedReader
 	cr := h1.NewChunkedReader(bufio.NewReader(&buf))
+
 	decoded, err := io.ReadAll(cr)
 	if err != nil {
 		t.Fatalf("failed decoding chunked output: %v", err)
@@ -475,6 +481,7 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 
 	// Test FormatHexUint zero and numbers
 	var hexBuf [16]byte
+
 	n0 := h1.FormatHexUint(&hexBuf, 0)
 	if string(hexBuf[:n0]) != "0" {
 		t.Fatalf("expected 0, got %s", string(hexBuf[:n0]))
@@ -495,6 +502,7 @@ func TestHeaders_Comprehensive(t *testing.T) {
 	if h.Get("X-Custom") != "updated" {
 		t.Fatalf("expected updated, got %q", h.Get("X-Custom"))
 	}
+
 	if !h.Has("Content-Type") {
 		t.Fatal("expected Content-Type to exist")
 	}
@@ -512,6 +520,7 @@ func TestHeaders_Comprehensive(t *testing.T) {
 	}
 
 	h.Del("X-Custom")
+
 	if h.Has("X-Custom") || h.Get("X-Custom") != "" {
 		t.Fatal("expected X-Custom to be deleted")
 	}
@@ -536,11 +545,13 @@ func TestRequest_ClientIP_And_EarlyHints_Hijack(t *testing.T) {
 
 	// 4. Early Hints
 	var hintsHeader http.Header
+
 	req.EarlyHintsFn = func(h http.Header) error {
 		hintsHeader = h
 		return nil
 	}
 	_ = req.WriteEarlyHints(http.Header{"Link": []string{"</app.css>; rel=preload"}})
+
 	if len(hintsHeader["Link"]) == 0 {
 		t.Fatal("expected EarlyHints to be dispatched")
 	}
@@ -562,8 +573,10 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+
 	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
 	bw.ResetWriter(&buf)
+
 	err := res.WriteTo(bw, true, true)
 	if err != nil {
 		t.Fatalf("unexpected WriteTo error: %v", err)
@@ -613,10 +626,12 @@ func TestHeaderLine_EdgeCases(t *testing.T) {
 
 	// Header line with leading/trailing spaces
 	line := []byte("   X-Custom-Header   :    custom-value   ")
+
 	ok := h.ParseHeaderLine(line)
 	if !ok {
 		t.Fatal("expected ParseHeaderLine to succeed")
 	}
+
 	if h.Get("X-Custom-Header") != "custom-value" {
 		t.Fatalf("unexpected header parsed: %q", h.Get("X-Custom-Header"))
 	}
@@ -633,14 +648,19 @@ func TestHeaderLine_EdgeCases(t *testing.T) {
 
 	// IsKeepAlive checks
 	h.Reset()
+
 	if h.IsKeepAlive("HTTP/1.0") {
 		t.Fatal("HTTP/1.0 without keep-alive should be false")
 	}
+
 	h.Set("Connection", "Keep-Alive")
+
 	if !h.IsKeepAlive("HTTP/1.0") {
 		t.Fatal("HTTP/1.0 with Connection: Keep-Alive should be true")
 	}
+
 	h.Set("Connection", "close")
+
 	if h.IsKeepAlive("HTTP/1.1") {
 		t.Fatal("HTTP/1.1 with Connection: close should be false")
 	}

@@ -16,6 +16,7 @@ func (req *Request) BodyScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -25,6 +26,7 @@ func (req *Request) ReadBodyScoped(fn func([]byte) error) error {
 	defer s.Release()
 
 	b := req.Body()
+
 	return fn(b)
 }
 
@@ -34,6 +36,7 @@ func (resp *Response) BodyScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -43,6 +46,7 @@ func (resp *Response) ReadBodyScoped(fn func([]byte) error) error {
 	defer s.Release()
 
 	b := resp.Body()
+
 	return fn(b)
 }
 
@@ -54,6 +58,7 @@ func (resp *Response) ReadStreamScoped(s *borrow.Scope, fn func(chunk borrow.Byt
 		if len(b) > 0 {
 			return fn(borrow.NewBytes(b, nil))
 		}
+
 		return nil
 	}
 
@@ -65,13 +70,16 @@ func (resp *Response) ReadStreamScoped(s *borrow.Scope, fn func(chunk borrow.Byt
 				return callErr
 			}
 		}
+
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
+
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -81,6 +89,7 @@ func (h *RequestHeader) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -90,6 +99,7 @@ func (h *RequestHeader) CookieScoped(s *borrow.Scope, key string) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -99,10 +109,12 @@ func (h *RequestHeader) PeekAllScoped(s *borrow.Scope, key string) []borrow.Byte
 	if len(values) == 0 {
 		return nil
 	}
+
 	res := make([]borrow.Bytes, len(values))
 	for i, v := range values {
 		res[i] = borrow.NewBytes(v, nil)
 	}
+
 	return res
 }
 
@@ -112,6 +124,7 @@ func (h *RequestHeader) TrailerScoped(s *borrow.Scope, key string) borrow.Bytes 
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -121,6 +134,7 @@ func (h *ResponseHeader) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -128,13 +142,16 @@ func (h *ResponseHeader) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
 func (h *ResponseHeader) CookieScoped(s *borrow.Scope, key string) borrow.Bytes {
 	var c Cookie
 	c.SetKey(key)
+
 	if !h.Cookie(&c) {
 		return borrow.Bytes{}
 	}
+
 	b := c.Value()
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -144,10 +161,12 @@ func (h *ResponseHeader) PeekAllScoped(s *borrow.Scope, key string) []borrow.Byt
 	if len(values) == 0 {
 		return nil
 	}
+
 	res := make([]borrow.Bytes, len(values))
 	for i, v := range values {
 		res[i] = borrow.NewBytes(v, nil)
 	}
+
 	return res
 }
 
@@ -157,6 +176,7 @@ func (h *ResponseHeader) TrailerScoped(s *borrow.Scope, key string) borrow.Bytes
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -166,6 +186,7 @@ func (u *URI) PathScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -175,6 +196,7 @@ func (u *URI) QueryScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -184,6 +206,7 @@ func (u *URI) HostScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -193,6 +216,7 @@ func (u *URI) SchemeScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -202,6 +226,7 @@ func (u *URI) UsernameScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -211,6 +236,7 @@ func (u *URI) PasswordScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -220,6 +246,7 @@ func (u *URI) FullURIScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -229,6 +256,7 @@ func (u *URI) RequestURIScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -238,6 +266,7 @@ func (u *URI) HashScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -247,6 +276,7 @@ func (a *Args) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -256,10 +286,12 @@ func (a *Args) PeekAllScoped(s *borrow.Scope, key string) []borrow.Bytes {
 	if len(values) == 0 {
 		return nil
 	}
+
 	res := make([]borrow.Bytes, len(values))
 	for i, v := range values {
 		res[i] = borrow.NewBytes(v, nil)
 	}
+
 	return res
 }
 
@@ -269,6 +301,7 @@ func (c *Cookie) KeyScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -278,6 +311,7 @@ func (c *Cookie) ValueScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -287,6 +321,7 @@ func (c *Cookie) DomainScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -296,6 +331,7 @@ func (c *Cookie) PathScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }
 
@@ -305,5 +341,6 @@ func (c *Cookie) CookieScoped(s *borrow.Scope) borrow.Bytes {
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
+
 	return borrow.NewBytes(b, nil)
 }

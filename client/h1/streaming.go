@@ -7,10 +7,11 @@ package h1
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"sync"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 type bodyStreamHeader interface {
@@ -37,48 +38,63 @@ func (rs *requestStream) Read(p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
+
 			if chunkSize == 0 {
 				err = rs.header.ReadTrailer(rs.reader)
-				if err != nil && err != io.EOF {
+				if err != nil && !errors.Is(err, io.EOF) {
 					return 0, err
 				}
+
 				return 0, io.EOF
 			}
+
 			rs.chunkLeft = chunkSize
 		}
+
 		bytesToRead := min(rs.chunkLeft, len(p))
 		n, err = rs.reader.Read(p[:bytesToRead])
 		rs.totalBytesRead += n
 		rs.chunkLeft -= n
-		if err == io.EOF {
+
+		if errors.Is(err, io.EOF) {
 			err = io.ErrUnexpectedEOF
 		}
+
 		if err == nil && rs.chunkLeft == 0 {
 			err = readCrLf(rs.reader)
 		}
+
 		return n, err
 	}
+
 	if rs.totalBytesRead == rs.header.ContentLength() {
 		return 0, io.EOF
 	}
+
 	prefetchedSize := int(rs.prefetchedBytes.Size())
 	if prefetchedSize > rs.totalBytesRead {
 		left := prefetchedSize - rs.totalBytesRead
 		if len(p) > left {
 			p = p[:left]
 		}
+
 		n, err := rs.prefetchedBytes.Read(p)
+
 		rs.totalBytesRead += n
 		if n == rs.header.ContentLength() {
 			return n, io.EOF
 		}
+
 		return n, err
 	}
+
 	left := rs.header.ContentLength() - rs.totalBytesRead
 	if left > 0 && len(p) > left {
 		p = p[:left]
 	}
+
 	n, err = rs.reader.Read(p)
+
 	rs.totalBytesRead += n
 	if err != nil {
 		return n, err
@@ -87,6 +103,7 @@ func (rs *requestStream) Read(p []byte) (int, error) {
 	if rs.totalBytesRead == rs.header.ContentLength() {
 		err = io.EOF
 	}
+
 	return n, err
 }
 
@@ -95,6 +112,7 @@ func acquireRequestStream(b *bytesutil.ByteBuffer, r *bufio.Reader, h bodyStream
 	rs.prefetchedBytes = bytes.NewReader(b.B)
 	rs.reader = r
 	rs.header = h
+
 	return rs
 }
 

@@ -5,12 +5,13 @@
 package wire
 
 import (
-	"slices"
 	"errors"
 	"io"
+	"slices"
+
+	"github.com/lemon4ksan/foundation/encoding/varint"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A NewTokenFrame is a NEW_TOKEN frame

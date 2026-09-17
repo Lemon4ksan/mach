@@ -8,9 +8,9 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )
 
@@ -148,7 +148,8 @@ func TestWritesRetryPacket(t *testing.T) {
 			header := &ExtendedHeader{
 				Version: version,
 				Type:    protocol.PacketTypeRetry,
-				Token:   token}
+				Token:   token,
+			}
 			b, err := header.Append(nil, version)
 			require.NoError(t, err)
 

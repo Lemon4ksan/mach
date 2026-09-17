@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +16,8 @@ import (
 	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/silicon/pool"
+
+	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H2 stream request.
@@ -378,24 +379,28 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 				}
 
 				st.method = v
+
 			case ":path":
 				if st.path != "" {
 					return coreh2.ProtocolError
 				}
 
 				st.path = v
+
 			case ":scheme":
 				if st.scheme != "" {
 					return coreh2.ProtocolError
 				}
 
 				st.scheme = v
+
 			case ":authority":
 				if st.authority != "" {
 					return coreh2.ProtocolError
 				}
 
 				st.authority = v
+
 			case ":protocol":
 				// RFC 8441 §4: Extended CONNECT pseudo-header
 				if st.protocol != "" {
@@ -403,6 +408,7 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 				}
 
 				st.protocol = v
+
 			default:
 				// RFC 9113 §8.3: Unknown or invalid pseudo-header
 				return coreh2.ProtocolError

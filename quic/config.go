@@ -9,8 +9,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
+	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )
 
 // Clone clones a conf.
@@ -149,5 +150,6 @@ func populateConfig(conf *Config) *Config {
 // Option is a functional option for configuring a QUIC connection or server.
 type Option func(*Config)
 
-func WithDatagrams(enable bool) Option           { return func(c *Config) { c.EnableDatagrams = enable } }
+func WithDatagrams(enable bool) Option { return func(c *Config) { c.EnableDatagrams = enable } }
+
 func WithKeepAlivePeriod(p time.Duration) Option { return func(c *Config) { c.KeepAlivePeriod = p } }

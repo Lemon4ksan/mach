@@ -93,6 +93,7 @@ var (
 
 func init() {
 	var seed [16]byte
+
 	_, _ = rand.Read(seed[:])
 	// #nosec G404 -- Used only for GREASE version permutation
 	versionNegotiationRand = *mrand.New(mrand.NewPCG(

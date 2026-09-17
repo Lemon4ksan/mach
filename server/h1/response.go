@@ -5,15 +5,14 @@
 package h1
 
 import (
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
-
 	"io"
 	"net/http"
 	"strconv"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
-
 	"github.com/lemon4ksan/foundation/net/http/header"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire.
@@ -36,7 +35,7 @@ func (res *Response) Reset() {
 
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to the writer.
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
-func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive bool, flush bool) error {
+func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive, flush bool) error {
 	status := res.StatusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -52,6 +51,7 @@ func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive bool, flush boo
 		}
 
 		var stBuf [16]byte
+
 		_, _ = bw.WriteString("HTTP/1.1 ")
 		_, _ = bw.Write(strconv.AppendInt(stBuf[:0], int64(status), 10))
 		_ = bw.WriteByte(' ')
@@ -84,6 +84,7 @@ func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive bool, flush boo
 	} else if status != http.StatusNoContent && status != http.StatusNotModified {
 		if res.Headers.Get(header.ContentLength) == "" && res.Headers.Get(header.TransferEncoding) == "" {
 			var clBuf [24]byte
+
 			_, _ = bw.Write(hdrContentLengthPrefix)
 			_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(len(res.Body)), 10))
 			_, _ = bw.Write(hdrCRLF)
@@ -123,7 +124,6 @@ func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive bool, flush boo
 
 //go:noinline
 func (res *Response) writeStreamBody(bw *bytesutil.ByteBuffer) error {
-
 	cw := NewChunkedWriter(bw)
 	err := res.StreamWriter(cw)
 	closeErr := cw.Close()

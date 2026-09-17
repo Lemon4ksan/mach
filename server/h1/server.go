@@ -127,6 +127,7 @@ func (s *Server) ListenAndServe() error {
 	}
 
 	var lc net.ListenConfig
+
 	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return err
@@ -159,6 +160,7 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	config.Certificates = []tls.Certificate{cert}
 
 	var lc net.ListenConfig
+
 	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return err

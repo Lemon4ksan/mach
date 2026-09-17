@@ -13,7 +13,8 @@ import (
 	"strconv"
 
 	"github.com/lemon4ksan/foundation/silicon/pool"
-	"github.com/lemon4ksan/mach/core/bytesutil"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 var uriStorage = pool.NewPerPStorage(func() *URI {
@@ -174,6 +175,7 @@ func (u *URI) Path() []byte {
 	if len(path) == 0 {
 		path = bytesutil.StrSlash
 	}
+
 	return path
 }
 
@@ -206,6 +208,7 @@ func (u *URI) Scheme() []byte {
 	if len(scheme) == 0 {
 		scheme = bytesutil.StrHTTP
 	}
+
 	return scheme
 }
 
@@ -296,7 +299,9 @@ func (u *URI) parse(host, uri []byte, isTLS bool) error {
 		if len(scheme) > 0 && !isValidScheme(scheme) {
 			return fmt.Errorf("invalid scheme %q", scheme)
 		}
+
 		u.SetSchemeBytes(scheme)
+
 		host = newHost
 		uri = newURI
 	}
@@ -310,6 +315,7 @@ func (u *URI) parse(host, uri []byte, isTLS bool) error {
 		if !validUserinfo(auth) {
 			return ErrorInvalidURI
 		}
+
 		host = host[n+1:]
 
 		if before, after, ok := bytes.Cut(auth, []byte{':'}); ok {
@@ -322,10 +328,12 @@ func (u *URI) parse(host, uri []byte, isTLS bool) error {
 	}
 
 	u.host = append(u.host, host...)
+
 	parsedHost, err := parseHost(u.host)
 	if err != nil {
 		return err
 	}
+
 	u.host = parsedHost
 	bytesutil.LowercaseBytes(u.host)
 
@@ -354,6 +362,7 @@ func (u *URI) parse(host, uri []byte, isTLS bool) error {
 			u.queryString = append(u.queryString, b[queryIndex+1:fragmentIndex]...)
 			u.hash = append(u.hash, b[fragmentIndex+1:]...)
 		}
+
 		return nil
 	}
 
@@ -376,6 +385,7 @@ func validUserinfo(userinfo []byte) bool {
 		case '0' <= c && c <= '9':
 			continue
 		}
+
 		switch c {
 		case '-', '.', '_', ':', '~', '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=', '%', '@':
 			continue
@@ -383,6 +393,7 @@ func validUserinfo(userinfo []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -390,21 +401,26 @@ func isValidScheme(scheme []byte) bool {
 	if len(scheme) == 0 {
 		return false
 	}
+
 	first := scheme[0]
 	if (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') {
 		return false
 	}
+
 	for i := 1; i < len(scheme); i++ {
 		c := scheme[i]
 		if ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') {
 			continue
 		}
+
 		switch c {
 		case '+', '-', '.':
 			continue
 		}
+
 		return false
 	}
+
 	return true
 }
 
@@ -417,12 +433,15 @@ func isAuthorityDelimiter(uri []byte, n int) bool {
 	if n == 0 {
 		return true
 	}
+
 	scheme := uri[:n]
 	if scheme[len(scheme)-1] != ':' {
 		return false
 	}
+
 	// splitHostURI also accepts the empty scheme in "://host".
 	scheme = scheme[:len(scheme)-1]
+
 	return len(scheme) == 0 || isValidScheme(scheme)
 }
 
@@ -440,6 +459,7 @@ func parseHost(host []byte) ([]byte, error) {
 		if i < 0 {
 			return nil, errors.New("missing ']' in host")
 		}
+
 		colonPort := host[i+1:]
 		if !validOptionalPort(colonPort) {
 			return nil, fmt.Errorf("invalid port %q after host", colonPort)
@@ -457,14 +477,17 @@ func parseHost(host []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			host2, err := unescape(host[zone:i], encodeZone)
 			if err != nil {
 				return nil, err
 			}
+
 			host3, err := unescape(host[i:], encodeHost)
 			if err != nil {
 				return nil, err
 			}
+
 			return append(host1, append(host2, host3...)...), nil
 		}
 	} else {
@@ -488,9 +511,11 @@ func parseHost(host []byte) ([]byte, error) {
 	if host, err = unescape(host, encodeHost); err != nil {
 		return nil, err
 	}
+
 	if err = validateIPv6Literal(host); err != nil {
 		return nil, err
 	}
+
 	return host, nil
 }
 
@@ -526,13 +551,16 @@ func unescape(s []byte, mode encoding) ([]byte, error) {
 		switch s[i] {
 		case '%':
 			n++
+
 			if i+2 >= len(s) || !ishex(s[i+1]) || !ishex(s[i+2]) {
 				s = s[i:]
 				if len(s) > 3 {
 					s = s[:3]
 				}
+
 				return nil, EscapeError(s)
 			}
+
 			// Per https://tools.ietf.org/html/rfc3986#page-21
 			// in the host component %-encoding can only be used
 			// for non-ASCII bytes.
@@ -542,6 +570,7 @@ func unescape(s []byte, mode encoding) ([]byte, error) {
 			if mode == encodeHost && unhex(s[i+1]) < 8 && !bytes.Equal(s[i:i+3], []byte("%25")) {
 				return nil, EscapeError(s[i : i+3])
 			}
+
 			if mode == encodeZone {
 				// RFC 6874 says basically "anything goes" for zone identifiers
 				// and that even non-ASCII can be redundantly escaped,
@@ -555,11 +584,14 @@ func unescape(s []byte, mode encoding) ([]byte, error) {
 					return nil, EscapeError(s[i : i+3])
 				}
 			}
+
 			i += 3
+
 		default:
 			if (mode == encodeHost || mode == encodeZone) && s[i] < 0x80 && shouldEscape(s[i], mode) {
 				return nil, InvalidHostError(s[i : i+1])
 			}
+
 			i++
 		}
 	}
@@ -578,6 +610,7 @@ func unescape(s []byte, mode encoding) ([]byte, error) {
 			t = append(t, s[i])
 		}
 	}
+
 	return t, nil
 }
 
@@ -632,14 +665,17 @@ func validOptionalPort(port []byte) bool {
 	if len(port) == 0 {
 		return true
 	}
+
 	if port[0] != ':' {
 		return false
 	}
+
 	for _, b := range port[1:] {
 		if b < '0' || b > '9' {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -648,21 +684,25 @@ func normalizePath(dst, src []byte) []byte {
 	if len(src) == 0 || src[0] != '/' {
 		dst = append(dst, '/')
 	}
+
 	dst = bytesutil.DecodeArgAppendNoPlus(dst, src)
 
 	// remove duplicate slashes
 	b := dst
+
 	bSize := len(b)
 	for {
 		n := bytes.Index(b, bytesutil.StrSlashSlash)
 		if n < 0 {
 			break
 		}
+
 		b = b[n:]
 		copy(b, b[1:])
 		b = b[:len(b)-1]
 		bSize--
 	}
+
 	dst = dst[:bSize]
 
 	// No '.' means no "/./", "/../" or "/.." to remove.
@@ -677,6 +717,7 @@ func normalizePath(dst, src []byte) []byte {
 		if n < 0 {
 			break
 		}
+
 		nn := n + len(bytesutil.StrSlashDotSlash) - 1
 		copy(b[n:], b[nn:])
 		b = b[:len(b)-nn+n]
@@ -688,6 +729,7 @@ func normalizePath(dst, src []byte) []byte {
 		if n < 0 {
 			break
 		}
+
 		nn := max(bytes.LastIndexByte(b[:n], '/'), 0)
 		n += len(bytesutil.StrSlashDotDotSlash) - 1
 		copy(b[nn:], b[n:])
@@ -701,6 +743,7 @@ func normalizePath(dst, src []byte) []byte {
 		if nn < 0 {
 			return append(dst[:0], bytesutil.StrSlash...)
 		}
+
 		b = b[:nn+1]
 	}
 
@@ -711,6 +754,7 @@ func normalizePath(dst, src []byte) []byte {
 			if n < 0 {
 				break
 			}
+
 			nn := n + len(bytesutil.StrSlashDotSlash) - 1
 			copy(b[n:], b[nn:])
 			b = b[:len(b)-nn+n]
@@ -722,6 +766,7 @@ func normalizePath(dst, src []byte) []byte {
 			if n < 0 {
 				break
 			}
+
 			nn := max(bytes.LastIndexByte(b[:n], '/'), 0)
 			nn++
 			n += len(bytesutil.StrSlashDotDotBackSlash)
@@ -735,6 +780,7 @@ func normalizePath(dst, src []byte) []byte {
 			if n < 0 {
 				break
 			}
+
 			nn := max(bytes.LastIndexByte(b[:n], '/'), 0)
 			n += len(bytesutil.StrBackSlashDotDotBackSlash) - 1
 			copy(b[nn:], b[n:])
@@ -748,6 +794,7 @@ func normalizePath(dst, src []byte) []byte {
 			if nn < 0 {
 				return append(dst[:0], bytesutil.StrSlash...)
 			}
+
 			b = b[:nn+1]
 		}
 	}
@@ -764,6 +811,7 @@ func (u *URI) RequestURI() []byte {
 	} else {
 		dst = bytesutil.AppendQuotedPath(u.requestURI[:0], u.Path())
 	}
+
 	if u.parsedQueryArgs && u.queryArgs.Len() > 0 {
 		dst = append(dst, '?')
 		dst = u.queryArgs.AppendBytes(dst)
@@ -771,7 +819,9 @@ func (u *URI) RequestURI() []byte {
 		dst = append(dst, '?')
 		dst = append(dst, u.queryString...)
 	}
+
 	u.requestURI = dst
+
 	return u.requestURI
 }
 
@@ -786,10 +836,12 @@ func (u *URI) RequestURI() []byte {
 // The returned bytes are valid until the next URI method call.
 func (u *URI) LastPathSegment() []byte {
 	path := u.Path()
+
 	n := bytes.LastIndexByte(path, '/')
 	if n < 0 {
 		return path
 	}
+
 	return path[n+1:]
 }
 
@@ -834,26 +886,32 @@ func (u *URI) updateBytes(newURI, buf []byte) []byte {
 	if n >= 0 && isAuthorityDelimiter(newURI, n) {
 		// absolute uri
 		var b [32]byte
+
 		schemeOriginal := b[:0]
 		if len(u.scheme) > 0 {
 			schemeOriginal = append([]byte(nil), u.scheme...)
 		}
+
 		if err := u.Parse(nil, newURI); err != nil {
 			return nil
 		}
+
 		if len(schemeOriginal) > 0 && len(u.scheme) == 0 {
 			u.scheme = append(u.scheme[:0], schemeOriginal...)
 		}
+
 		return buf
 	}
 
 	if newURI[0] == '/' {
 		// uri without host
 		buf = u.appendSchemeHost(buf[:0])
+
 		buf = append(buf, newURI...)
 		if err := u.Parse(nil, buf); err != nil {
 			return nil
 		}
+
 		return buf
 	}
 
@@ -870,16 +928,20 @@ func (u *URI) updateBytes(newURI, buf []byte) []byte {
 	default:
 		// update the last path part after the slash
 		path := u.Path()
+
 		n = bytes.LastIndexByte(path, '/')
 		if n < 0 {
 			panic(fmt.Sprintf("BUG: path must contain at least one slash: %q %q", u.Path(), newURI))
 		}
+
 		buf = u.appendSchemeHost(buf[:0])
 		buf = bytesutil.AppendQuotedPath(buf, path[:n+1])
+
 		buf = append(buf, newURI...)
 		if err := u.Parse(nil, buf); err != nil {
 			return nil
 		}
+
 		return buf
 	}
 }
@@ -895,11 +957,13 @@ func (u *URI) FullURI() []byte {
 // AppendBytes appends full uri to dst and returns the extended dst.
 func (u *URI) AppendBytes(dst []byte) []byte {
 	dst = u.appendSchemeHost(dst)
+
 	dst = append(dst, u.RequestURI()...)
 	if len(u.hash) > 0 {
 		dst = append(dst, '#')
 		dst = append(dst, u.hash...)
 	}
+
 	return dst
 }
 
@@ -927,29 +991,36 @@ func splitHostURI(host, uri []byte) ([]byte, []byte, []byte) {
 	if n < 0 {
 		return bytesutil.StrHTTP, host, uri
 	}
+
 	scheme := uri[:n]
 	if bytes.IndexByte(scheme, '/') >= 0 {
 		return bytesutil.StrHTTP, host, uri
 	}
+
 	if len(scheme) > 0 && scheme[len(scheme)-1] == ':' {
 		scheme = scheme[:len(scheme)-1]
 	}
+
 	n += len(bytesutil.StrSlashSlash)
 	uri = uri[n:]
 	n = bytes.IndexByte(uri, '/')
+
 	nq := bytes.IndexByte(uri, '?')
 	if nq >= 0 && (n < 0 || nq < n) {
 		// A hack for urls like foobar.com?a=b/xyz
 		n = nq
 	}
+
 	nh := bytes.IndexByte(uri, '#')
 	if nh >= 0 && (n < 0 || nh < n) {
 		// A hack for urls like foobar.com#abc.com
 		n = nh
 	}
+
 	if n < 0 {
 		return scheme, uri, bytesutil.StrSlash
 	}
+
 	return scheme, uri[:n], uri[n:]
 }
 
@@ -965,6 +1036,7 @@ func (u *URI) parseQueryArgs() {
 	if u.parsedQueryArgs {
 		return
 	}
+
 	u.queryArgs.ParseBytes(u.queryString)
 	u.parsedQueryArgs = true
 }
@@ -977,5 +1049,6 @@ func stringContainsCTLByte(s []byte) bool {
 			return true
 		}
 	}
+
 	return false
 }

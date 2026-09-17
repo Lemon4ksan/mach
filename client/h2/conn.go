@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
 	"io"
 	"net"
 	"net/http"
@@ -30,6 +29,7 @@ import (
 	"golang.org/x/sys/cpu"
 
 	"github.com/lemon4ksan/mach/client/h1"
+	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
 // maxConsecutiveControlFrames bounds consecutive control frames to prevent denial of service (RFC 9113 §10.5).

@@ -7,7 +7,7 @@ package h1
 import (
 	"bufio"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 // ParseHexUint parses a hex-encoded uint from src.
@@ -27,6 +27,7 @@ func FormatChunkHeader(buf *[24]byte, val int) int {
 	n := bytesutil.FormatHexUint((*[16]byte)(buf[:16]), val)
 	buf[n] = '\r'
 	buf[n+1] = '\n'
+
 	return n + 2
 }
 
@@ -38,16 +39,20 @@ func parseHexUintFallback(src []byte) (int, int, error) {
 	var n, i int
 	for i = 0; i < len(src); i++ {
 		c := src[i]
+
 		k := int(bytesutil.Hex2intTable[c])
 		if k == 16 {
 			if i == 0 {
 				return 0, 0, bytesutil.ErrEmptyHexNum
 			}
+
 			return n, i, nil
 		}
+
 		if i >= 16 {
 			return n, i, bytesutil.ErrTooLargeHexNum
 		}
+
 		n = (n << 4) | k
 	}
 

@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
 	"net"
 	"sync"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/sysnet"
 
 	"github.com/lemon4ksan/mach/client/h1"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/quic"
 )
 

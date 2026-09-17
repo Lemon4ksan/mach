@@ -5,14 +5,15 @@
 package wire
 
 import (
-	"slices"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+
+	"github.com/lemon4ksan/foundation/encoding/varint"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // ParseConnectionID parses the destination connection ID of a packet.

@@ -1880,7 +1880,11 @@ func testSentPacketHandlerRandomized(t *testing.T, seed uint64) {
 				ackPns = slices.Compact(ackPns)
 			}
 
-			sph.ReceivedAck(&wire.AckFrame{AckRanges: ackRanges(ackPns...)}, protocol.Encryption1RTT, now) //nolint:errcheck
+			sph.ReceivedAck(
+				&wire.AckFrame{AckRanges: ackRanges(ackPns...)},
+				protocol.Encryption1RTT,
+				now,
+			) //nolint:errcheck
 			t.Logf(
 				"t=%dms: received ACK for packets %v (acked: %v, lost: %v)",
 				now.Sub(start).Milliseconds(),

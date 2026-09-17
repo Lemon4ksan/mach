@@ -147,7 +147,6 @@ func (h *receivedPacketHistory) HighestMissingUpTo(p protocol.PacketNumber) prot
 
 	p = min(h.ranges[len(h.ranges)-1].End, p)
 	for i, r := range slices.Backward(h.ranges) {
-
 		if p >= r.Start && p <= r.End { // p is contained in this range
 			highest := r.Start - 1 // highest packet in the gap before this range
 			if h.deletedBelow != protocol.InvalidPacketNumber && highest < h.deletedBelow {

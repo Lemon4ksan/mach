@@ -5,10 +5,6 @@
 package h3_test
 
 import (
-	"github.com/lemon4ksan/mach/server/h3"
-
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
-
 	"bytes"
 	"context"
 	"crypto/ecdsa"
@@ -24,12 +20,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/mach/quic"
-	"github.com/lemon4ksan/foundation/encoding/varint"
+	"github.com/lemon4ksan/mach/server/h3"
 )
 
 func generateTestTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {

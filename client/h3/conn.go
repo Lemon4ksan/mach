@@ -8,17 +8,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
 	"io"
 	"sync"
 
 	"github.com/lemon4ksan/foundation/borrow"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/client/h1"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/quic"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 const errCodeH3RequestCancelled = quic.StreamErrorCode(coreh3.ErrCodeH3RequestCancelled)

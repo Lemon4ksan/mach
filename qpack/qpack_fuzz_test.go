@@ -30,6 +30,7 @@ func FuzzVarint(f *testing.F) {
 		if n == 0 || n > 8 {
 			return
 		}
+
 		_, _, _ = readInt(n, data)
 	})
 }

@@ -129,5 +129,6 @@ func readString(data []byte, arena *[]byte) (string, int, error) {
 
 	start := len(*arena)
 	*arena = append(*arena, raw...)
+
 	return bytesconv.B2S((*arena)[start:]), totalConsumed, nil
 }

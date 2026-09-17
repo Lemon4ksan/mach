@@ -5,11 +5,12 @@
 package wire
 
 import (
-	"slices"
 	"io"
+	"slices"
+
+	"github.com/lemon4ksan/foundation/encoding/varint"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // MaxDatagramSize is the maximum size of a DATAGRAM frame (RFC 9221).

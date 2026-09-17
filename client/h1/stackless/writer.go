@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 // Writer is an interface stackless writer must conform to.
@@ -39,6 +39,7 @@ func NewWriter(dstW io.Writer, newWriter NewWriterFunc) Writer {
 		dstW: dstW,
 	}
 	w.zw = newWriter(&w.xw)
+
 	return w
 }
 
@@ -68,6 +69,7 @@ func (w *writer) Write(p []byte) (int, error) {
 	w.p = p
 	err := w.do(opWrite)
 	w.p = nil
+
 	return w.n, err
 }
 
@@ -75,6 +77,7 @@ func (w *writer) WriteString(s string) (int, error) {
 	w.p = bytesutil.S2B(s)
 	err := w.do(opWrite)
 	w.p = nil
+
 	return w.n, err
 }
 
@@ -97,13 +100,16 @@ func (w *writer) do(op op) error {
 	if !stacklessWriterFunc(w) {
 		return errHighLoad
 	}
+
 	err := w.err
 	if err != nil {
 		return err
 	}
+
 	if w.xw.bb != nil && len(w.xw.bb.b) > 0 {
 		_, err = w.dstW.Write(w.xw.bb.b)
 	}
+
 	w.xw.Reset()
 
 	return err
@@ -120,6 +126,7 @@ func stacklessWriterFunc(ctx any) bool {
 	stacklessWriterFuncOnce.Do(func() {
 		stacklessWriterFuncFunc = NewFunc(writerFunc)
 	})
+
 	return stacklessWriterFuncFunc(ctx)
 }
 
@@ -161,6 +168,7 @@ func (w *xWriter) Write(p []byte) (int, error) {
 	if w.bb == nil {
 		w.bb = acquireByteBuffer()
 	}
+
 	return w.bb.Write(p)
 }
 

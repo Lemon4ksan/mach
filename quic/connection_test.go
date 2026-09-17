@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-
 	"sync"
 	"testing"
 	"testing/synctest"

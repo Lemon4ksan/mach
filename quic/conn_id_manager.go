@@ -217,6 +217,7 @@ func (h *connIDManager) updateConnectionID() {
 func (h *connIDManager) Close() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
+
 	h.closed = true
 	if h.activeStatelessResetToken != nil {
 		h.removeStatelessResetToken(*h.activeStatelessResetToken)
@@ -363,6 +364,7 @@ func (h *connIDManager) IsActiveStatelessResetToken(token protocol.StatelessRese
 func (h *connIDManager) assertNotClosed() {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
+
 	if h.closed {
 		panic("connection ID manager is closed")
 	}

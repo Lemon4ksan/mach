@@ -5,21 +5,19 @@
 package h3
 
 import (
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
-
 	"bytes"
 	"crypto/tls"
 	"io"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/client/h1"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/qpack"
-
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestSendRequest_HeadersAndBody(t *testing.T) {

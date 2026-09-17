@@ -1,8 +1,13 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package h2
 
 import (
 	"bufio"
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
+
+	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
 type HPACK = coreh2.HPACK
@@ -10,8 +15,10 @@ type HPACK = coreh2.HPACK
 func AcquireHPACK() *HPACK   { return coreh2.AcquireHPACK() }
 func ReleaseHPACK(hp *HPACK) { coreh2.ReleaseHPACK(hp) }
 
-type FrameType = coreh2.FrameType
-type Frame = coreh2.Frame
+type (
+	FrameType = coreh2.FrameType
+	Frame     = coreh2.Frame
+)
 
 func AcquireFrame(t FrameType) Frame { return coreh2.AcquireFrame(t) }
 func ReleaseFrame(f Frame)           { coreh2.ReleaseFrame(f) }
@@ -23,8 +30,10 @@ func ReleaseHeaderField(hf *HeaderField) { coreh2.ReleaseHeaderField(hf) }
 
 const FrameHeaders = coreh2.FrameHeaders
 
-type Headers = coreh2.Headers
-type FrameHeader = coreh2.FrameHeader
+type (
+	Headers     = coreh2.Headers
+	FrameHeader = coreh2.FrameHeader
+)
 
 func AcquireFrameHeader() *FrameHeader   { return coreh2.AcquireFrameHeader() }
 func ReleaseFrameHeader(fh *FrameHeader) { coreh2.ReleaseFrameHeader(fh) }

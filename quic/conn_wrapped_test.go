@@ -5,9 +5,10 @@
 
 package quic
 
-import "time"
-
-import "context"
+import (
+	"context"
+	"time"
+)
 
 func (c *wrappedConn) earlyConnReady() <-chan struct{} {
 	if c.testHooks == nil {
@@ -82,6 +83,7 @@ func (c *wrappedConn) Start() error {
 	if c.testHooks != nil {
 		return nil
 	}
+
 	return c.Conn.Start()
 }
 
@@ -89,5 +91,6 @@ func (c *wrappedConn) Tick(now time.Time) error {
 	if c.testHooks != nil {
 		return nil
 	}
+
 	return c.Conn.Tick(now)
 }

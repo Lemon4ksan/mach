@@ -9,10 +9,10 @@ import (
 	"io"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestParseMaxStreamsFrameBidirectional(t *testing.T) {

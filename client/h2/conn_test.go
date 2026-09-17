@@ -5,8 +5,6 @@
 package h2
 
 import (
-	coreh2 "github.com/lemon4ksan/mach/core/h2"
-
 	"bufio"
 	"bytes"
 	"context"
@@ -17,6 +15,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/mach/client/h1"
+	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
 func runMockH2Server(

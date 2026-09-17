@@ -5,13 +5,12 @@
 package h1_test
 
 import (
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
-
 	"bufio"
 	"bytes"
 	"io"
 	"testing"
 
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -19,11 +18,16 @@ func FuzzH1Request(f *testing.F) {
 	f.Add([]byte("GET /index.html HTTP/1.1\r\nHost: example.com\r\n\r\n"))
 	f.Add([]byte("POST /api/data HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello"))
 	f.Add([]byte("GET /search?q=test HTTP/1.1\r\nHost: example.com\r\nUser-Agent: Fuzzer\r\n\r\n"))
-	f.Add([]byte("POST /upload HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n"))
+	f.Add(
+		[]byte(
+			"POST /upload HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n",
+		),
+	)
 	f.Add([]byte("GET / HTTP/1.0\r\n\r\n"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var req h1.Request
+
 		br := bufio.NewReader(bytes.NewReader(data))
 		_ = req.ReadRequest(br, nil, 1024*1024)
 	})

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package quic
 
 import (
@@ -23,6 +27,7 @@ func newStreamsMatrix[T incomingStream]() *streamsMatrix[T] {
 	m := &streamsMatrix[T]{}
 	initial := make([]*streamChunk[T], 0)
 	m.chunks.Store(&initial)
+
 	return m
 }
 
@@ -53,6 +58,7 @@ func (m *streamsMatrix[T]) set(id protocol.StreamID, entry incomingStreamEntry[T
 	chunkIdx := idx / streamChunkSize
 
 	chunksPtr := m.chunks.Load()
+
 	var chunks []*streamChunk[T]
 	if chunksPtr != nil {
 		chunks = *chunksPtr
@@ -63,9 +69,11 @@ func (m *streamsMatrix[T]) set(id protocol.StreamID, entry incomingStreamEntry[T
 		newLen := chunkIdx + 1
 		newChunks := make([]*streamChunk[T], newLen)
 		copy(newChunks, chunks)
+
 		for i := protocol.StreamNum(len(chunks)); i < newLen; i++ {
 			newChunks[i] = &streamChunk[T]{}
 		}
+
 		chunks = newChunks
 		m.chunks.Store(&chunks)
 	}
@@ -98,6 +106,7 @@ func (m *streamsMatrix[T]) del(id protocol.StreamID) {
 
 	if chunk.entries[idx%streamChunkSize].Load() != nil {
 		m.count--
+
 		chunk.entries[idx%streamChunkSize].Store(nil)
 	}
 }
@@ -112,10 +121,12 @@ func (m *streamsMatrix[T]) iterate(f func(incomingStreamEntry[T])) {
 	if chunksPtr == nil {
 		return
 	}
+
 	for _, chunk := range *chunksPtr {
 		if chunk == nil {
 			continue
 		}
+
 		for i := range streamChunkSize {
 			entry := chunk.entries[i].Load()
 			if entry != nil {

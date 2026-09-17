@@ -7,9 +7,10 @@ package wire
 import (
 	"fmt"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
+
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 // A ResetStreamFrame is a RESET_STREAM or RESET_STREAM_AT frame in QUIC

@@ -21,8 +21,9 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/clock"
 	"github.com/lemon4ksan/foundation/silicon/pool"
-	"github.com/lemon4ksan/mach/core/bytesutil"
 	"golang.org/x/sys/cpu"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 const (
@@ -834,13 +835,13 @@ type DialFuncWithTimeout func(addr string, timeout time.Duration) (net.Conn, err
 //
 // retry indicates whether to retry the current request. If it is false,
 // the request function will immediately return with the `err`.
-type RetryIfErrFunc func(request *Request, attempts int, err error) (resetTimeout bool, retry bool)
+type RetryIfErrFunc func(request *Request, attempts int, err error) (resetTimeout, retry bool)
 
 // RetryIfErrUpstreamFunc works just like a RetryIfErrFunc and also provides
 // information about which upstream caused the error, if known.
 //
 // Upstream information is a <host>:<port> format.
-type RetryIfErrUpstreamFunc func(request *Request, attempts int, err error, upstream string) (resetTimeout bool, retry bool)
+type RetryIfErrUpstreamFunc func(request *Request, attempts int, err error, upstream string) (resetTimeout, retry bool)
 
 // RoundTripper wraps every request/response.
 type RoundTripper interface {
@@ -1136,7 +1137,11 @@ func (c *HostClient) Get(dst []byte, url string) (statusCode int, body []byte, e
 //
 // ErrTimeout error is returned if url contents couldn't be fetched
 // during the given timeout.
-func (c *HostClient) GetTimeout(dst []byte, url string, timeout time.Duration) (statusCode int, body []byte, err error) {
+func (c *HostClient) GetTimeout(
+	dst []byte,
+	url string,
+	timeout time.Duration,
+) (statusCode int, body []byte, err error) {
 	return clientGetURLTimeout(dst, url, timeout, c)
 }
 
@@ -1178,7 +1183,12 @@ func clientGetURL(dst []byte, url string, c clientDoer) (statusCode int, body []
 	return statusCode, body, err
 }
 
-func clientGetURLTimeout(dst []byte, url string, timeout time.Duration, c clientDoer) (statusCode int, body []byte, err error) {
+func clientGetURLTimeout(
+	dst []byte,
+	url string,
+	timeout time.Duration,
+	c clientDoer,
+) (statusCode int, body []byte, err error) {
 	deadline := time.Now().Add(timeout)
 	return clientGetURLDeadline(dst, url, deadline, c)
 }
@@ -1189,7 +1199,12 @@ type clientURLResponse struct {
 	statusCode int
 }
 
-func clientGetURLDeadline(dst []byte, url string, deadline time.Time, c clientDoer) (statusCode int, body []byte, err error) {
+func clientGetURLDeadline(
+	dst []byte,
+	url string,
+	deadline time.Time,
+	c clientDoer,
+) (statusCode int, body []byte, err error) {
 	timeout := time.Until(deadline)
 	if timeout <= 0 {
 		return 0, dst, ErrTimeout
@@ -1287,13 +1302,20 @@ var (
 	ErrTooManyRedirects = errors.New("mach: too many redirects detected when doing the request")
 
 	// ErrHostClientRedirectToDifferentScheme is returned when a HostClient follows a redirect to a different protocol.
-	ErrHostClientRedirectToDifferentScheme = errors.New("mach: hostclient can't follow redirects to a different protocol," +
-		" please use client instead")
+	ErrHostClientRedirectToDifferentScheme = errors.New(
+		"mach: hostclient can't follow redirects to a different protocol," +
+			" please use client instead",
+	)
 )
 
 const defaultMaxRedirectsCount = 16
 
-func doRequestFollowRedirectsBuffer(req *Request, dst []byte, url string, c clientDoer) (statusCode int, body []byte, err error) {
+func doRequestFollowRedirectsBuffer(
+	req *Request,
+	dst []byte,
+	url string,
+	c clientDoer,
+) (statusCode int, body []byte, err error) {
 	resp := AcquireResponse()
 	bodyBuf := resp.bodyBuffer()
 	resp.keepBodyBuffer = true
@@ -2398,7 +2420,16 @@ func (c *HostClient) dialHostHard(dialTimeout time.Duration) (conn net.Conn, err
 				continue
 			}
 		}
-		conn, err = dialAddr(addr, c.Dial, c.DialTimeout, c.DialDualStack, c.IsTLS, tlsConfig, dialTimeout, c.WriteTimeout)
+		conn, err = dialAddr(
+			addr,
+			c.Dial,
+			c.DialTimeout,
+			c.DialDualStack,
+			c.IsTLS,
+			tlsConfig,
+			dialTimeout,
+			c.WriteTimeout,
+		)
 		if err == nil {
 			return conn, nil
 		}

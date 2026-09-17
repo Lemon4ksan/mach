@@ -36,10 +36,12 @@ func NewFunc(f func(ctx any)) func(ctx any) bool {
 			go funcWorker(funcWorkCh, f)
 		}
 	}
+
 	var once sync.Once
 
 	return func(ctx any) bool {
 		once.Do(onceInit)
+
 		fw := getFuncWork()
 		fw.ctx = ctx
 
@@ -49,8 +51,10 @@ func NewFunc(f func(ctx any)) func(ctx any) bool {
 			putFuncWork(fw)
 			return false
 		}
+
 		<-fw.done
 		putFuncWork(fw)
+
 		return true
 	}
 }
@@ -58,6 +62,7 @@ func NewFunc(f func(ctx any)) func(ctx any) bool {
 func funcWorker(funcWorkCh <-chan *funcWork, f func(ctx any)) {
 	for fw := range funcWorkCh {
 		f(fw.ctx)
+
 		fw.done <- struct{}{}
 	}
 }
@@ -69,6 +74,7 @@ func getFuncWork() *funcWork {
 			done: make(chan struct{}, 1),
 		}
 	}
+
 	return v.(*funcWork) //nolint:forcetypeassert
 }
 

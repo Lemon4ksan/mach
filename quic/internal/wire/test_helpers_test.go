@@ -10,9 +10,10 @@ import (
 	"log"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
+
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/utils"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func encodeVarInt(i uint64) []byte {

@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/pool"
-	"github.com/lemon4ksan/mach/core/bytesutil"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 var zeroTime time.Time
@@ -224,6 +225,7 @@ func (c *Cookie) Expire() time.Time {
 	if expire.IsZero() {
 		expire = CookieExpireUnlimited
 	}
+
 	return expire
 }
 
@@ -298,11 +300,13 @@ func (c *Cookie) AppendBytes(dst []byte) []byte {
 		dst = append(dst, c.key...)
 		dst = append(dst, '=')
 	}
+
 	dst = append(dst, c.value...)
 
 	if c.maxAge != 0 {
 		dst = append(dst, ';', ' ')
 		dst = append(dst, bytesutil.StrCookieMaxAge...)
+
 		dst = append(dst, '=')
 		if c.maxAge < 0 {
 			// See https://github.com/valyala/fasthttp/issues/1900
@@ -312,25 +316,31 @@ func (c *Cookie) AppendBytes(dst []byte) []byte {
 		}
 	} else if !c.expire.IsZero() {
 		c.bufV = bytesutil.AppendHTTPDate(c.bufV[:0], c.expire)
+
 		dst = append(dst, ';', ' ')
 		dst = append(dst, bytesutil.StrCookieExpires...)
 		dst = append(dst, '=')
 		dst = append(dst, c.bufV...)
 	}
+
 	if len(c.domain) > 0 {
 		dst = appendCookiePart(dst, bytesutil.StrCookieDomain, c.domain)
 	}
+
 	if len(c.path) > 0 {
 		dst = appendCookiePart(dst, bytesutil.StrCookiePath, c.path)
 	}
+
 	if c.httpOnly {
 		dst = append(dst, ';', ' ')
 		dst = append(dst, bytesutil.StrCookieHTTPOnly...)
 	}
+
 	if c.secure {
 		dst = append(dst, ';', ' ')
 		dst = append(dst, bytesutil.StrCookieSecure...)
 	}
+
 	switch c.sameSite {
 	case CookieSameSiteDefaultMode:
 		dst = append(dst, ';', ' ')
@@ -351,10 +361,12 @@ func (c *Cookie) AppendBytes(dst []byte) []byte {
 		dst = append(dst, '=')
 		dst = append(dst, bytesutil.StrCookieSameSiteNone...)
 	}
+
 	if c.partitioned {
 		dst = append(dst, ';', ' ')
 		dst = append(dst, bytesutil.StrCookiePartitioned...)
 	}
+
 	return dst
 }
 
@@ -396,12 +408,14 @@ func (c *Cookie) ParseBytes(src []byte) error {
 	c.Reset()
 
 	var s cookieScanner
+
 	s.b = src
 
 	var k, v []byte
 	if !s.nextRaw(&k, &v) {
 		return ErrNoCookies
 	}
+
 	if !validCookieValue(v) {
 		return ErrInvalidCookieValue
 	}
@@ -419,6 +433,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 					if err != nil {
 						return err
 					}
+
 					c.maxAge = maxAge
 				}
 
@@ -428,6 +443,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 					if err != nil {
 						return err
 					}
+
 					c.expire = exptime
 				}
 
@@ -436,6 +452,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 					if !validCookieValue(v) {
 						return ErrInvalidCookieValue
 					}
+
 					c.domain = initHeaderValueBytes(c.domain, v)
 				}
 
@@ -444,6 +461,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 					if !validCookiePathValue(v) {
 						return ErrInvalidCookieValue
 					}
+
 					c.path = initHeaderValueBytes(c.path, v)
 				}
 
@@ -456,10 +474,12 @@ func (c *Cookie) ParseBytes(src []byte) error {
 							if caseInsensitiveCompare(bytesutil.StrCookieSameSiteLax, v) {
 								c.sameSite = CookieSameSiteLaxMode
 							}
+
 						case 's': // "strict"
 							if caseInsensitiveCompare(bytesutil.StrCookieSameSiteStrict, v) {
 								c.sameSite = CookieSameSiteStrictMode
 							}
+
 						case 'n': // "none"
 							if caseInsensitiveCompare(bytesutil.StrCookieSameSiteNone, v) {
 								c.sameSite = CookieSameSiteNoneMode
@@ -482,6 +502,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				} else if caseInsensitiveCompare(bytesutil.StrCookieSameSite, v) {
 					c.sameSite = CookieSameSiteDefaultMode
 				}
+
 			case 'p': // "partitioned"
 				if caseInsensitiveCompare(bytesutil.StrCookiePartitioned, v) {
 					c.partitioned = true
@@ -489,6 +510,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 			}
 		} // else empty or no match
 	}
+
 	return nil
 }
 
@@ -504,6 +526,7 @@ func removeSemicolons(raw []byte) []byte {
 			raw[i] = ' '
 		}
 	}
+
 	return raw
 }
 
@@ -511,6 +534,7 @@ func appendCookiePart(dst, key, value []byte) []byte {
 	dst = append(dst, ';', ' ')
 	dst = append(dst, key...)
 	dst = append(dst, '=')
+
 	return append(dst, value...)
 }
 
@@ -519,6 +543,7 @@ func getCookieKey(dst, src []byte) []byte {
 	if n >= 0 {
 		src = src[:n]
 	}
+
 	return decodeCookieArg(dst, src, false)
 }
 
@@ -529,11 +554,13 @@ func appendRequestCookieBytes(dst []byte, cookies []argsKV) []byte {
 			dst = append(dst, kv.key...)
 			dst = append(dst, '=')
 		}
+
 		dst = append(dst, kv.value...)
 		if i+1 < n {
 			dst = append(dst, ';', ' ')
 		}
 	}
+
 	return dst
 }
 
@@ -542,18 +569,23 @@ func appendRequestCookieBytes(dst []byte, cookies []argsKV) []byte {
 func appendResponseCookieBytes(dst []byte, cookies []argsKV) []byte {
 	for i, n := 0, len(cookies); i < n; i++ {
 		kv := &cookies[i]
+
 		dst = append(dst, kv.value...)
 		if i+1 < n {
 			dst = append(dst, ';', ' ')
 		}
 	}
+
 	return dst
 }
 
 func parseRequestCookies(cookies []argsKV, src []byte) []argsKV {
 	var s cookieScanner
+
 	s.b = src
+
 	var kv *argsKV
+
 	cookies, kv = allocArg(cookies)
 	for s.next(&kv.key, &kv.value) {
 		if len(kv.key) > 0 || len(kv.value) > 0 {
@@ -562,6 +594,7 @@ func parseRequestCookies(cookies []argsKV, src []byte) []argsKV {
 			}
 		}
 	}
+
 	return releaseArg(cookies)
 }
 
@@ -576,6 +609,7 @@ func (s *cookieScanner) nextRaw(key, val *[]byte) bool {
 	}
 
 	isKey := true
+
 	k := 0
 	for i, c := range b {
 		switch c {
@@ -585,16 +619,21 @@ func (s *cookieScanner) nextRaw(key, val *[]byte) bool {
 				*key = trimCookieArgNoCopy(b[:i], false)
 				k = i + 1
 			}
+
 		case ';':
 			if isKey {
 				*key = (*key)[:0]
 			}
+
 			*val = trimCookieArgNoCopy(b[k:i], true)
+
 			j := i + 1
 			if j < len(b) && b[j] == ' ' {
 				j++
 			}
+
 			s.b = b[j:]
+
 			return true
 		}
 	}
@@ -602,8 +641,10 @@ func (s *cookieScanner) nextRaw(key, val *[]byte) bool {
 	if isKey {
 		*key = (*key)[:0]
 	}
+
 	*val = trimCookieArgNoCopy(b[k:], true)
 	s.b = b[len(b):]
+
 	return true
 }
 
@@ -614,6 +655,7 @@ func (s *cookieScanner) next(key, val *[]byte) bool {
 	}
 
 	isKey := true
+
 	k := 0
 	for i, c := range b {
 		switch c {
@@ -623,16 +665,21 @@ func (s *cookieScanner) next(key, val *[]byte) bool {
 				*key = decodeCookieArg(*key, b[:i], false)
 				k = i + 1
 			}
+
 		case ';':
 			if isKey {
 				*key = (*key)[:0]
 			}
+
 			*val = decodeCookieArg(*val, b[k:i], true)
+
 			j := i + 1
 			if j < len(b) && b[j] == ' ' {
 				j++
 			}
+
 			s.b = b[j:]
+
 			return true
 		}
 	}
@@ -640,8 +687,10 @@ func (s *cookieScanner) next(key, val *[]byte) bool {
 	if isKey {
 		*key = (*key)[:0]
 	}
+
 	*val = decodeCookieArg(*val, b[k:], true)
 	s.b = b[len(b):]
+
 	return true
 }
 
@@ -655,14 +704,17 @@ func decodeCookieArg(dst, src []byte, skipQuotes bool) []byte {
 	for len(src) > 0 && src[0] == ' ' {
 		src = src[1:]
 	}
+
 	for len(src) > 0 && src[len(src)-1] == ' ' {
 		src = src[:len(src)-1]
 	}
+
 	if skipQuotes {
 		if len(src) > 1 && src[0] == '"' && src[len(src)-1] == '"' {
 			src = src[1 : len(src)-1]
 		}
 	}
+
 	return append(dst[:0], src...)
 }
 
@@ -672,6 +724,7 @@ func validCookieValue(value []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -688,10 +741,12 @@ func validCookiePathValue(value []byte) bool {
 		if b == '\r' || b == '\n' {
 			continue
 		}
+
 		if b < 0x20 || b >= 0x7f || b == ';' {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -699,12 +754,15 @@ func trimCookieArgNoCopy(src []byte, skipQuotes bool) []byte {
 	for len(src) > 0 && src[0] == ' ' {
 		src = src[1:]
 	}
+
 	for len(src) > 0 && src[len(src)-1] == ' ' {
 		src = src[:len(src)-1]
 	}
+
 	if skipQuotes && len(src) > 1 && src[0] == '"' && src[len(src)-1] == '"' {
 		src = src[1 : len(src)-1]
 	}
+
 	return src
 }
 
@@ -731,18 +789,22 @@ func caseInsensitiveCompare(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
 	}
+
 	i := 0
 	for ; i+8 <= len(a); i += 8 {
 		va := binary.LittleEndian.Uint64(a[i:])
+
 		vb := binary.LittleEndian.Uint64(b[i:])
 		if (va | 0x2020202020202020) != (vb | 0x2020202020202020) {
 			return false
 		}
 	}
+
 	for ; i < len(a); i++ {
 		if a[i]|0x20 != b[i]|0x20 {
 			return false
 		}
 	}
+
 	return true
 }

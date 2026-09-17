@@ -25,7 +25,6 @@ import (
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
 	"github.com/lemon4ksan/mach/quic/internal/utils"
-
 	"github.com/lemon4ksan/mach/quic/internal/wire"
 )
 
@@ -245,21 +244,27 @@ func (c *wrappedConn) run() error {
 		if c.testHooks.run != nil {
 			return c.testHooks.run()
 		}
+
 		return nil
 	}
+
 	ticker := time.NewTicker(time.Millisecond * 10)
 	defer ticker.Stop()
+
 	for {
 		if err := c.Conn.Tick(time.Now()); err != nil {
 			return err
 		}
+
 		select {
 		case <-c.Context().Done():
 			err := context.Cause(c.Context())
 			if errors.Is(err, context.Canceled) {
 				return nil
 			}
+
 			return err
+
 		case <-ticker.C:
 		}
 	}
@@ -590,6 +595,7 @@ func (c *Conn) Start() error {
 	if c.perspective == protocol.PerspectiveClient {
 		c.scheduleSending() // so the ClientHello actually gets sent
 	}
+
 	return nil
 }
 
@@ -607,6 +613,7 @@ func (c *Conn) Tick(now time.Time) error {
 	// 1st: handle undecryptable packets, if any.
 	if len(c.undecryptablePacketsToProcess) > 0 {
 		queue := c.undecryptablePacketsToProcess
+
 		c.undecryptablePacketsToProcess = nil
 		for _, p := range queue {
 			_, err := c.handleOnePacket(p)
@@ -2220,7 +2227,6 @@ func (c *Conn) sendPacketsWithoutGSO(now monotime.Time) error {
 		if sendMode != ackhandler.SendAny {
 			return nil
 		}
-
 	}
 }
 

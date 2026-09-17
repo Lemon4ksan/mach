@@ -9,8 +9,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lemon4ksan/mach/quic/internal/wire"
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
+	"github.com/lemon4ksan/mach/quic/internal/wire"
 )
 
 const sessionTicketRevision = 5

@@ -7,8 +7,9 @@ package wire
 import (
 	"io"
 
-	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
+	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )
 
 // A ConnectionCloseFrame is a CONNECTION_CLOSE frame
@@ -54,7 +55,7 @@ func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*Co
 	}
 
 	f.ReasonPhrase = string(b[:reasonPhraseLen])
-	// Advance b by reasonPhraseLen is not strictly necessary here because we are returning, 
+	// Advance b by reasonPhraseLen is not strictly necessary here because we are returning,
 	// but let's just do it cleanly if needed. Actually the next line uses startLen - len(b) + int(reasonPhraseLen)
 
 	return f, startLen - len(b) + int(reasonPhraseLen), nil

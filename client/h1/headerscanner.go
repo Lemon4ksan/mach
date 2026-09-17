@@ -51,8 +51,10 @@ func (s *headerScanner) next() bool {
 				s.err = ErrNeedMore
 				return false
 			}
+
 			s.b = s.b[:i]
 		}
+
 		if len(s.b) > 0 && (s.b[0] == ' ' || s.b[0] == '\t') {
 			s.err = errors.New("invalid headers, headers cannot start with space or tab")
 			return false
@@ -69,11 +71,13 @@ func (s *headerScanner) next() bool {
 
 	// Key ends at the first colon, already found by readContinuedLineSlice.
 	k, v := kv[:colon], kv[colon+1:]
+
 	valid, innerSpace := isValidHeaderKey(k)
 	if !valid {
 		s.err = fmt.Errorf("malformed mime header line: %q", kv)
 		return false
 	}
+
 	s.keyHasSpace = innerSpace
 
 	// Skip initial spaces in value, without bytes.TrimLeft: it would
@@ -101,11 +105,14 @@ func (s *headerScanner) readLine() []byte {
 	if i < 0 {
 		return nil
 	}
+
 	line := s.b[s.r : s.r+i]
+
 	s.r += i + 1
 	if i > 0 && line[i-1] == '\r' {
 		line = line[:i-1]
 	}
+
 	return line
 }
 
@@ -143,6 +150,7 @@ func (s *headerScanner) readContinuedLineSlice() ([]byte, int, error) {
 		line := s.readLine()
 		mline = append(mline, trim(line)...)
 	}
+
 	return mline, colon, nil
 }
 
@@ -154,9 +162,11 @@ func (s *headerScanner) skipSpace() bool {
 		if c != ' ' && c != '\t' {
 			break
 		}
+
 		s.r++
 		skipped = true
 	}
+
 	return skipped
 }
 
@@ -172,10 +182,12 @@ func trim(s []byte) []byte {
 	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
 		i++
 	}
+
 	n := len(s)
 	for n > i && (s[n-1] == ' ' || s[n-1] == '\t') {
 		n--
 	}
+
 	return s[i:n]
 }
 
@@ -185,7 +197,9 @@ func trimTrailingSpace(s []byte) []byte {
 		if c != ' ' && c != '\t' {
 			break
 		}
+
 		s = s[:len(s)-1]
 	}
+
 	return s
 }

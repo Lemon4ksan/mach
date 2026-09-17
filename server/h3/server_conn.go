@@ -12,11 +12,11 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	coreh3 "github.com/lemon4ksan/mach/core/h3"
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
-
-	"github.com/lemon4ksan/mach/quic"
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	coreheaders "github.com/lemon4ksan/mach/proto/headers"
+	"github.com/lemon4ksan/mach/quic"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H3 stream request.
@@ -143,6 +143,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
 				"duplicate control stream (RFC 9114 §6.2.1)",
 			)
+
 			return
 		}
 
@@ -153,6 +154,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
 				"missing SETTINGS on control stream (RFC 9114 §6.2.1)",
 			)
+
 			return
 		}
 
@@ -211,6 +213,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
 					"frame after trailing headers (RFC 9114 §4.1)",
 				)
+
 				return
 			}
 
@@ -238,6 +241,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
 					"DATA frame unexpected (RFC 9114 §4.1)",
 				)
+
 				return
 			}
 
@@ -266,6 +270,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	// Decode QPACK headers (RFC 9114 §4.1.2)
 	var parsedHeaders coreheaders.Headers
 	parsedHeaders.Reset()
+
 	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(headerBlock, &parsedHeaders)
 	if err != nil {
 		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))

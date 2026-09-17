@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/quic/internal/qerr"
-	"github.com/lemon4ksan/foundation/encoding/varint"
 )
 
 func TestFrameTypeParsingReturnsNilWhenNothingToRead(t *testing.T) {

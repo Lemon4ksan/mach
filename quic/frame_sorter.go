@@ -9,9 +9,9 @@ import (
 	"errors"
 
 	"github.com/lemon4ksan/foundation/silicon/pool"
+	list "github.com/lemon4ksan/foundation/structures/linkedlist"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
-	list "github.com/lemon4ksan/foundation/structures/linkedlist"
 )
 
 // byteInterval is an interval from one ByteCount to the other
@@ -46,6 +46,7 @@ var frameSorterPool = pool.NewPerPStorage(func() *frameSorter {
 		gaps: list.NewCapacity[byteInterval](protocol.MaxStreamFrameSorterGaps + 1),
 	}
 	s.gaps.PushFront(byteInterval{Start: 0, End: protocol.MaxByteCount})
+
 	return s
 })
 

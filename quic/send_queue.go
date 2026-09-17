@@ -35,6 +35,7 @@ func (h *syncSender) Send(p *packetBuffer, gsoSize uint16, ecn protocol.ECN) {
 			h.onError(err)
 		}
 	}
+
 	p.Release()
 }
 

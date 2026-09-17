@@ -12,7 +12,8 @@ import (
 	"sort"
 
 	"github.com/lemon4ksan/foundation/silicon/pool"
-	"github.com/lemon4ksan/mach/core/bytesutil"
+
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 const (
@@ -102,15 +103,18 @@ func (a *Args) ParseBytes(b []byte) {
 	a.Reset()
 
 	var s argsScanner
+
 	s.b = b
 
 	var kv *argsKV
+
 	a.args, kv = allocArg(a.args)
 	for s.next(kv) {
 		if len(kv.key) > 0 || len(kv.value) > 0 {
 			a.args, kv = allocArg(a.args)
 		}
 	}
+
 	a.args = releaseArg(a.args)
 }
 
@@ -137,6 +141,7 @@ func (a *Args) Sort(f func(x, y []byte) int) {
 		if n == 0 {
 			return f(a.args[i].value, a.args[j].value) == -1
 		}
+
 		return n == -1
 	})
 }
@@ -155,6 +160,7 @@ func (a *Args) AppendBytes(dst []byte) []byte {
 	args := a.args
 	for i, n := 0, len(args); i < n; i++ {
 		kv := &args[i]
+
 		dst = bytesutil.AppendQuotedArg(dst, kv.key)
 		if !kv.noValue {
 			dst = append(dst, '=')
@@ -162,10 +168,12 @@ func (a *Args) AppendBytes(dst []byte) []byte {
 				dst = bytesutil.AppendQuotedArg(dst, kv.value)
 			}
 		}
+
 		if i+1 < n {
 			dst = append(dst, '&')
 		}
 	}
+
 	return dst
 }
 
@@ -285,6 +293,7 @@ func (a *Args) PeekMulti(key string) [][]byte {
 			values = append(values, v)
 		}
 	}
+
 	return values
 }
 
@@ -312,6 +321,7 @@ func (a *Args) GetUint(key string) (int, error) {
 	if len(value) == 0 {
 		return -1, ErrNoArgValue
 	}
+
 	return bytesutil.ParseUint(value)
 }
 
@@ -334,6 +344,7 @@ func (a *Args) GetUintOrZero(key string) int {
 	if err != nil {
 		n = 0
 	}
+
 	return n
 }
 
@@ -343,6 +354,7 @@ func (a *Args) GetUfloat(key string) (float64, error) {
 	if len(value) == 0 {
 		return -1, ErrNoArgValue
 	}
+
 	return bytesutil.ParseUfloat(value)
 }
 
@@ -354,6 +366,7 @@ func (a *Args) GetUfloatOrZero(key string) float64 {
 	if err != nil {
 		f = 0
 	}
+
 	return f
 }
 
@@ -379,26 +392,33 @@ func copyArgs(dst, src []argsKV) []argsKV {
 		dstLen := len(dst)
 		dst = dst[:cap(dst)] // copy all of dst.
 		copy(tmp, dst)
+
 		for i := dstLen; i < len(tmp); i++ {
 			// Make sure nothing is nil.
 			tmp[i].key = []byte{}
 			tmp[i].value = []byte{}
 		}
+
 		dst = tmp
 	}
+
 	n := len(src)
+
 	dst = dst[:n]
 	for i := range n {
 		dstKV := &dst[i]
 		srcKV := &src[i]
+
 		dstKV.key = append(dstKV.key[:0], srcKV.key...)
 		if srcKV.noValue {
 			dstKV.value = dstKV.value[:0]
 		} else {
 			dstKV.value = append(dstKV.value[:0], srcKV.value...)
 		}
+
 		dstKV.noValue = srcKV.noValue
 	}
+
 	return dst
 }
 
@@ -407,13 +427,16 @@ func delAllArgsStable(args []argsKV, key string) []argsKV {
 		kv := &args[i]
 		if key == string(kv.key) {
 			tmp := *kv
+
 			copy(args[i:], args[i+1:])
+
 			n--
 			i--
 			args[n] = tmp
 			args = args[:n]
 		}
 	}
+
 	return args
 }
 
@@ -426,6 +449,7 @@ func delAllArgs(args []argsKV, key string) []argsKV {
 			i--
 		}
 	}
+
 	return args[:n]
 }
 
@@ -443,10 +467,13 @@ func setArg(h []argsKV, key, value string, noValue bool) []argsKV {
 			} else {
 				kv.value = append(kv.value[:0], value...)
 			}
+
 			kv.noValue = noValue
+
 			return h
 		}
 	}
+
 	return appendArg(h, key, value, noValue)
 }
 
@@ -457,14 +484,18 @@ func appendArgBytes(h []argsKV, key, value []byte, noValue bool) []argsKV {
 
 func appendArg(args []argsKV, key, value string, noValue bool) []argsKV {
 	var kv *argsKV
+
 	args, kv = allocArg(args)
+
 	kv.key = append(kv.key[:0], key...)
 	if noValue {
 		kv.value = kv.value[:0]
 	} else {
 		kv.value = append(kv.value[:0], value...)
 	}
+
 	kv.noValue = noValue
+
 	return args
 }
 
@@ -477,6 +508,7 @@ func allocArg(h []argsKV) ([]argsKV, *argsKV) {
 			value: []byte{},
 		})
 	}
+
 	return h, &h[n]
 }
 
@@ -491,6 +523,7 @@ func hasArg(h []argsKV, key string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -501,6 +534,7 @@ func peekArgBytes(h []argsKV, k []byte) []byte {
 			return kv.value
 		}
 	}
+
 	return nil
 }
 
@@ -511,6 +545,7 @@ func peekArgStr(h []argsKV, k string) []byte {
 			return kv.value
 		}
 	}
+
 	return nil
 }
 
@@ -522,9 +557,11 @@ func (s *argsScanner) next(kv *argsKV) bool {
 	if len(s.b) == 0 {
 		return false
 	}
+
 	kv.noValue = argsHasValue
 
 	isKey := true
+
 	k := 0
 	for i, c := range s.b {
 		switch c {
@@ -534,6 +571,7 @@ func (s *argsScanner) next(kv *argsKV) bool {
 				kv.key = bytesutil.DecodeArgAppend(kv.key[:0], s.b[:i])
 				k = i + 1
 			}
+
 		case '&':
 			if isKey {
 				kv.key = bytesutil.DecodeArgAppend(kv.key[:0], s.b[:i])
@@ -542,7 +580,9 @@ func (s *argsScanner) next(kv *argsKV) bool {
 			} else {
 				kv.value = bytesutil.DecodeArgAppend(kv.value[:0], s.b[k:i])
 			}
+
 			s.b = s.b[i+1:]
+
 			return true
 		}
 	}
@@ -554,17 +594,8 @@ func (s *argsScanner) next(kv *argsKV) bool {
 	} else {
 		kv.value = bytesutil.DecodeArgAppend(kv.value[:0], s.b[k:])
 	}
-	s.b = s.b[len(s.b):]
-	return true
-}
 
-//nolint:unused
-func peekAllArgBytesToDst(dst [][]byte, h []argsKV, k []byte) [][]byte {
-	for i, n := 0, len(h); i < n; i++ {
-		kv := &h[i]
-		if bytes.Equal(kv.key, k) {
-			dst = append(dst, kv.value)
-		}
-	}
-	return dst
+	s.b = s.b[len(s.b):]
+
+	return true
 }

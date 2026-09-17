@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 var (

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lemon4ksan/mach/core/bytesutil"
+	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 // NewPipeConns returns new bi-directional connection pipe.
@@ -30,6 +30,7 @@ func NewPipeConns() *PipeConns {
 	pc.c2.wCh = ch1
 	pc.c1.pc = pc
 	pc.c2.pc = pc
+
 	return pc
 }
 
@@ -93,6 +94,7 @@ func (pc *PipeConns) Close() error {
 	default:
 		close(pc.stopCh)
 	}
+
 	pc.stopChLock.Unlock()
 
 	return nil
@@ -154,16 +156,20 @@ func (c *pipeConn) WriteString(s string) (int, error) {
 
 func (c *pipeConn) Read(p []byte) (int, error) {
 	mayBlock := true
+
 	nn := 0
 	for len(p) > 0 {
 		n, err := c.read(p, mayBlock)
+
 		nn += n
 		if err != nil {
-			if !mayBlock && err == errWouldBlock {
+			if !mayBlock && errors.Is(err, errWouldBlock) {
 				err = nil
 			}
+
 			return nn, err
 		}
+
 		p = p[n:]
 		mayBlock = false
 	}
@@ -177,6 +183,7 @@ func (c *pipeConn) read(p []byte, mayBlock bool) (int, error) {
 			return 0, err
 		}
 	}
+
 	n := copy(p, c.bb)
 	c.bb = c.bb[n:]
 
@@ -193,9 +200,11 @@ func (c *pipeConn) readNextByteBuffer(mayBlock bool) error {
 		if !mayBlock {
 			return errWouldBlock
 		}
+
 		c.readDeadlineChLock.Lock()
 		readDeadlineCh := c.readDeadlineCh
 		c.readDeadlineChLock.Unlock()
+
 		select {
 		case c.b = <-c.rCh:
 		case <-readDeadlineCh:
@@ -209,6 +218,7 @@ func (c *pipeConn) readNextByteBuffer(mayBlock bool) error {
 			default:
 				return ErrTimeout
 			}
+
 		case <-c.pc.stopCh:
 			// rCh may contain data when stopCh is closed.
 			// Read the data before returning EOF.
@@ -221,6 +231,7 @@ func (c *pipeConn) readNextByteBuffer(mayBlock bool) error {
 	}
 
 	c.bb = c.b.B
+
 	return nil
 }
 
@@ -262,10 +273,12 @@ func (c *pipeConn) SetReadDeadline(deadline time.Time) error {
 	if c.readDeadlineTimer == nil {
 		c.readDeadlineTimer = time.NewTimer(time.Hour)
 	}
+
 	readDeadlineCh := updateTimer(c.readDeadlineTimer, deadline)
 	c.readDeadlineChLock.Lock()
 	c.readDeadlineCh = readDeadlineCh
 	c.readDeadlineChLock.Unlock()
+
 	return nil
 }
 
@@ -273,7 +286,9 @@ func (c *pipeConn) SetWriteDeadline(deadline time.Time) error {
 	if c.writeDeadlineTimer == nil {
 		c.writeDeadlineTimer = time.NewTimer(time.Hour)
 	}
+
 	c.writeDeadlineCh = updateTimer(c.writeDeadlineTimer, deadline)
+
 	return nil
 }
 
@@ -284,14 +299,18 @@ func updateTimer(t *time.Timer, deadline time.Time) <-chan time.Time {
 		default:
 		}
 	}
+
 	if deadline.IsZero() {
 		return nil
 	}
+
 	d := time.Until(deadline)
 	if d <= 0 {
 		return closedDeadlineCh
 	}
+
 	t.Reset(d)
+
 	return t.C
 }
 
