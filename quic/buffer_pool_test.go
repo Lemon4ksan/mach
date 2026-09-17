@@ -57,11 +57,11 @@ func TestBufferPoolParallel(t *testing.T) {
 	)
 
 	done := make(chan struct{}, workers)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			defer func() { done <- struct{}{} }()
 
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				buf := getPacketBuffer()
 				buf.Data = append(buf.Data, []byte("data")...)
 				buf.Release()
@@ -73,7 +73,7 @@ func TestBufferPoolParallel(t *testing.T) {
 		}()
 	}
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		<-done
 	}
 }

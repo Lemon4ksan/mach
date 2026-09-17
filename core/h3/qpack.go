@@ -185,7 +185,7 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *h1.Request, o
 	numOrdered := min(len(orderedKeys), 64)
 	keys := orderedKeys[:numOrdered]
 
-	for i := 0; i < numOrdered; i++ {
+	for i := range numOrdered {
 		key := keys[i]
 		val := req.Header.Peek(key)
 

@@ -1933,7 +1933,7 @@ func (c *HostClient) AcquireConn(reqTimeout time.Duration, connectionClose bool)
 	// 1. Striped connection pool fast path (zero contention across CPU cores)
 	if c.MaxConnWaitTimeout <= 0 {
 		startIdx := atomic.AddUint32(&c.stripeCounter, 1) & 15
-		for j := uint32(0); j < 16; j++ {
+		for j := range uint32(16) {
 			idx := (startIdx + j) & 15
 			stripe := &c.stripes[idx]
 			stripe.Lock()
@@ -2079,7 +2079,7 @@ func (c *HostClient) dialConnFor(w *wantConn) {
 // "keep-alive" state. It does not interrupt any connections currently
 // in use.
 func (c *HostClient) CloseIdleConnections() {
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		stripe := &c.stripes[i]
 		stripe.Lock()
 		scratchStripe := append([]*clientConn{}, stripe.conns...)

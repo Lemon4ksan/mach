@@ -53,7 +53,7 @@ func TestH2_FrameHeader_Adversarial(t *testing.T) {
 
 	// Fuzzing decode
 	var buf [9]byte
-	for i := 0; i < 50000; i++ {
+	for range 50000 {
 		_, _ = rand.Read(buf[:])
 		length, _, _, stream := h2.UnpackFrameHeader(buf[:])
 		assert.Equal(t, true, length <= 0x00ffffff)
@@ -91,7 +91,7 @@ func TestH2_Varint_Adversarial(t *testing.T) {
 
 	// Fuzzing decode with random byte streams
 	fuzzBuf := make([]byte, 32)
-	for i := 0; i < 20000; i++ {
+	for i := range 20000 {
 		_, _ = rand.Read(fuzzBuf)
 		prefix := int((i % 8) + 1)
 		_, _ = h2.ReadInt(prefix, fuzzBuf[:(i%32)+1])
@@ -120,7 +120,7 @@ func TestH2_Huffman_Adversarial(t *testing.T) {
 
 	// Corrupted Huffman byte streams must decode cleanly or partially, never crash
 	garbage := make([]byte, 64)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		_, _ = rand.Read(garbage)
 		_ = h2.HuffmanDecode(nil, garbage[:(i%64)+1])
 	}

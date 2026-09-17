@@ -191,7 +191,7 @@ func (r *Request) parseRequestLine(line []byte) error {
 	var s1, s2 int = -1, -1
 
 	_ = line[len(line)-1] // BCE
-	for i := 0; i < len(line); i++ {
+	for i := range line {
 		if line[i] == ' ' {
 			if s1 == -1 {
 				s1 = i

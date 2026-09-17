@@ -102,7 +102,7 @@ func TestH1_FormatHexUint_Differential(t *testing.T) {
 	}
 
 	// 2. Exhaustive test 0..100000
-	for val := 0; val < 100000; val++ {
+	for val := range 100000 {
 		n := bytesutil.FormatHexUint(&buf, val)
 		expected := strconv.FormatInt(int64(val), 16)
 		if string(buf[:n]) != expected {
@@ -115,7 +115,7 @@ func TestH1_FormatChunkHeader_Adversarial(t *testing.T) {
 	t.Parallel()
 
 	var buf [24]byte
-	for val := 0; val < 10000; val++ {
+	for val := range 10000 {
 		n := h1.FormatChunkHeader(&buf, val)
 		expected := fmt.Sprintf("%x\r\n", val)
 

@@ -116,14 +116,12 @@ func testUnpackLongHeaderPacket(t *testing.T,
 		"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
 	)
 	extHdr := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             packetType,
-			Length:           protocol.ByteCount(3 + len(payload)), // packet number len + payload
-			DestConnectionID: protocol.ParseConnectionID([]byte{0xde, 0xad, 0xbe, 0xef}),
-			Version:          protocol.Version1,
-		},
-		PacketNumber:    2,
-		PacketNumberLen: 3,
+		Type:             packetType,
+		Length:           protocol.ByteCount(3 + len(payload)), // packet number len + payload
+		DestConnectionID: protocol.ParseConnectionID([]byte{0xde, 0xad, 0xbe, 0xef}),
+		Version:          protocol.Version1,
+		PacketNumber:     2,
+		PacketNumberLen:  3,
 	}
 	hdrRaw, err := extHdr.Append(nil, protocol.Version1)
 	require.NoError(t, err)
@@ -255,13 +253,11 @@ func TestUnpackHeaderSampleLongHeader(t *testing.T) {
 	unpacker := newPacketUnpacker(cs, 4)
 
 	extHdr := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeHandshake,
-			DestConnectionID: protocol.ParseConnectionID([]byte{0xde, 0xad, 0xbe, 0xef}),
-			Version:          protocol.Version1,
-		},
-		PacketNumber:    1337,
-		PacketNumberLen: protocol.PacketNumberLen2,
+		Type:             protocol.PacketTypeHandshake,
+		DestConnectionID: protocol.ParseConnectionID([]byte{0xde, 0xad, 0xbe, 0xef}),
+		Version:          protocol.Version1,
+		PacketNumber:     1337,
+		PacketNumberLen:  protocol.PacketNumberLen2,
 	}
 	data, err := extHdr.Append(nil, protocol.Version1)
 	require.NoError(t, err)
@@ -363,14 +359,12 @@ func TestUnpackHeaderDecryption(t *testing.T) {
 	connID := protocol.ParseConnectionID([]byte{0xde, 0xad, 0xbe, 0xef})
 
 	extHdr := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeHandshake,
-			Length:           2, // packet number len
-			DestConnectionID: connID,
-			Version:          protocol.Version1,
-		},
-		PacketNumber:    0x1337,
-		PacketNumberLen: protocol.PacketNumberLen2,
+		Type:             protocol.PacketTypeHandshake,
+		Length:           2, // packet number len
+		DestConnectionID: connID,
+		Version:          protocol.Version1,
+		PacketNumber:     0x1337,
+		PacketNumberLen:  protocol.PacketNumberLen2,
 	}
 	hdrRaw, err := extHdr.Append(nil, protocol.Version1)
 	require.NoError(t, err)

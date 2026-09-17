@@ -4133,7 +4133,7 @@ var huffmanDecodeTable = [4112]huffmanDecodeNode{
 }
 
 func init() {
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		nb := uint32(huffmanCodeLen[i])
 		code := huffmanCodes[i] << (32 - nb)
 		huffmanSymTable[i] = huffmanSym{

@@ -1,8 +1,8 @@
 package wire
 
 import (
-	"testing"
 	"math/rand"
+	"testing"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )
@@ -10,7 +10,7 @@ import (
 func BenchmarkParseStreamFrame_Overlay(b *testing.B) {
 	// Prepare frames
 	var rawFrames [][]byte
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		data := make([]byte, 200+i)
 		rand.Read(data)
 		sf := &StreamFrame{
@@ -19,7 +19,7 @@ func BenchmarkParseStreamFrame_Overlay(b *testing.B) {
 			Data:           data,
 			DataLenPresent: true,
 		}
-		
+
 		buf, _ := sf.Append(nil, protocol.Version1)
 		// We only want the payload bytes (skip frame type byte for parsing)
 		// Frame type is the first byte.
@@ -43,7 +43,7 @@ func BenchmarkParseStreamFrame_Overlay(b *testing.B) {
 func BenchmarkParseStreamFrame_Classic(b *testing.B) {
 	// Prepare frames
 	var rawFrames [][]byte
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		data := make([]byte, 200+i)
 		rand.Read(data)
 		sf := &StreamFrame{
@@ -52,7 +52,7 @@ func BenchmarkParseStreamFrame_Classic(b *testing.B) {
 			Data:           data,
 			DataLenPresent: true,
 		}
-		
+
 		buf, _ := sf.Append(nil, protocol.Version1)
 		rawFrames = append(rawFrames, buf)
 	}

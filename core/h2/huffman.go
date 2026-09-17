@@ -30,7 +30,7 @@ func huffmanEncodeFallback(dst, src []byte) []byte {
 	_ = huffmanCodes[255]
 	_ = src[nSrc-1]
 
-	for i := 0; i < nSrc; i++ {
+	for i := range nSrc {
 		b := src[i]
 		n := huffmanCodeLen[b]
 		c := uint64(huffmanCodes[b])
@@ -91,7 +91,7 @@ func huffmanDecodeFallback(dst, src []byte) []byte {
 	currNode := 0
 	table := flatHuffmanTable
 
-	for i := 0; i < nSrc; i++ {
+	for i := range nSrc {
 		cum = cum<<8 | uint32(src[i])
 		bits += 8
 
@@ -162,7 +162,7 @@ var flatHuffmanTable = func() [][]huffmanTableEntry {
 
 		flat = append(flat, make([]huffmanTableEntry, 256))
 
-		for i := 0; i < 256; i++ {
+		for i := range 256 {
 			sub := n.sub[i]
 			if sub == nil {
 				continue

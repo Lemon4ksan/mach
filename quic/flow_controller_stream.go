@@ -39,16 +39,14 @@ func newStreamFlowController(
 	logger utils.Logger,
 ) *streamFlowController {
 	return &streamFlowController{
-		streamID:   streamID,
-		connection: cfc,
-		sendWindow: initialSendWindow,
-		receiveFlowController: receiveFlowController{
-			rttStats:             rttStats,
-			receiveWindow:        receiveWindow,
-			receiveWindowSize:    receiveWindow,
-			maxReceiveWindowSize: maxReceiveWindow,
-			logger:               logger,
-		},
+		streamID:             streamID,
+		connection:           cfc,
+		sendWindow:           initialSendWindow,
+		rttStats:             rttStats,
+		receiveWindow:        receiveWindow,
+		receiveWindowSize:    receiveWindow,
+		maxReceiveWindowSize: maxReceiveWindow,
+		logger:               logger,
 	}
 }
 

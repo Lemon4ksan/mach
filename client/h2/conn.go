@@ -82,11 +82,11 @@ type Conn struct {
 	windowMu spinlock.SpinLock
 
 	// Hot atomic counters isolated on their own 64-byte cache lines
-	serverWindow             int32
+	serverWindow             atomic.Int32
 	serverStreamWindow       uint32
 	maxWindow                int32
 	currentWindow            int32
-	openStreams              int32
+	openStreams              atomic.Int32
 	pingUnacks               int32
 	consecutiveControlFrames int32
 	nextID                   uint32
@@ -102,7 +102,7 @@ type Conn struct {
 	out          chan *coreh2.FrameHeader
 	outRing      *ringbuf.SPSCRingBuffer[coreh2.FrameHeader]
 	pingInterval time.Duration
-	closed       uint64
+	closed       atomic.Uint64
 	inClosed     bool
 
 	disableAcks bool
@@ -279,7 +279,7 @@ func (c *Conn) CancelStream(ctx *Context) {
 
 	ctx.SetState(streamClosed)
 	c.deleteStream(ctx.StreamID)
-	atomic.AddInt32(&c.openStreams, -1)
+	c.openStreams.Add(-1)
 
 	fr := coreh2.AcquireFrameHeader()
 	fr.SetStream(ctx.StreamID)
@@ -300,7 +300,7 @@ func (c *Conn) CancelStream(ctx *Context) {
 
 // Close gracefully terminates the HTTP/2 connection.
 func (c *Conn) Close() error {
-	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
+	if !c.closed.CompareAndSwap(0, 1) {
 		return io.EOF
 	}
 
@@ -410,12 +410,12 @@ func (c *Conn) CanOpenStream() bool {
 		return false
 	}
 
-	return atomic.LoadInt32(&c.openStreams) < int32(c.serverS.MaxStreams) //nolint:gosec
+	return c.openStreams.Load() < int32(c.serverS.MaxStreams) //nolint:gosec
 }
 
 // Closed reports whether the connection has been closed.
 func (c *Conn) Closed() bool {
-	return atomic.LoadUint64(&c.closed) == 1
+	return c.closed.Load() == 1
 }
 
 // Write enqueues a request context for execution.
@@ -423,7 +423,7 @@ func (c *Conn) Write(r *Context) error {
 	c.inMu.Lock()
 	defer c.inMu.Unlock()
 
-	if c.inClosed || atomic.LoadUint64(&c.closed) == 1 {
+	if c.inClosed || c.closed.Load() == 1 {
 		return coreh2.ErrStreamClosed
 	}
 
@@ -581,7 +581,7 @@ func (c *Conn) recoverWriteLoop(lastErr *error) {
 }
 
 func (c *Conn) finish(r *Context, stream uint32, err error) {
-	atomic.AddInt32(&c.openStreams, -1)
+	c.openStreams.Add(-1)
 
 	select {
 	case r.Err <- err:
@@ -690,8 +690,8 @@ func (c *Conn) writeRequest(ctx *Context) error {
 		initWin = 65535
 	}
 
-	atomic.StoreInt32(&ctx.streamWindow, initWin)
-	atomic.StoreInt32(&ctx.streamRxWindow, 6291456)
+	ctx.streamWindow.Store(initWin)
+	ctx.streamRxWindow.Store(6291456)
 
 	fr := coreh2.AcquireFrameHeader()
 	defer coreh2.ReleaseFrameHeader(fr)
@@ -741,7 +741,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	}
 
 	if err == nil {
-		atomic.AddInt32(&c.openStreams, 1)
+		c.openStreams.Add(1)
 	} else {
 		c.lastErr = err
 		c.deleteStream(id)
@@ -789,8 +789,8 @@ func (c *Conn) writeData(fh *coreh2.FrameHeader, ctx *Context, body []byte) erro
 			return wErr
 		}
 
-		atomic.AddInt32(&c.serverWindow, -int32(chunkSize))
-		atomic.AddInt32(&ctx.streamWindow, -int32(chunkSize))
+		c.serverWindow.Add(-int32(chunkSize))
+		ctx.streamWindow.Add(-int32(chunkSize))
 
 		offset = end
 	}
@@ -834,13 +834,10 @@ func (c *Conn) calculateChunkSize(ctx *Context, remaining int) int {
 		maxFrame = 16384
 	}
 
-	serverWin := atomic.LoadInt32(&c.serverWindow)
-	streamWin := atomic.LoadInt32(&ctx.streamWindow)
+	serverWin := c.serverWindow.Load()
+	streamWin := ctx.streamWindow.Load()
 
-	win := int(serverWin)
-	if int(streamWin) < win {
-		win = int(streamWin)
-	}
+	win := min(int(streamWin), int(serverWin))
 
 	if win <= 0 {
 		return 0
@@ -1009,7 +1006,7 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *core
 
 	numOrdered := min(len(c.orderedKeys), 64)
 
-	for i := 0; i < numOrdered; i++ {
+	for i := range numOrdered {
 		key := c.orderedKeys[i]
 		if isForbiddenH2HeaderStr(key) {
 			continue
@@ -1174,12 +1171,12 @@ func (c *Conn) handleWindowUpdate(fr *coreh2.FrameHeader) error {
 
 func (c *Conn) updateServerWindow(inc int32) error {
 	for {
-		old := atomic.LoadInt32(&c.serverWindow)
+		old := c.serverWindow.Load()
 		if int64(old)+int64(inc) > int64(1<<31-1) {
 			return coreh2.ErrWindowAboveLimits
 		}
 
-		if atomic.CompareAndSwapInt32(&c.serverWindow, old, old+inc) {
+		if c.serverWindow.CompareAndSwap(old, old+inc) {
 			return nil
 		}
 	}
@@ -1193,12 +1190,12 @@ func (c *Conn) updateStreamWindow(streamID uint32, inc int32) error {
 	}
 
 	for {
-		old := atomic.LoadInt32(&reqCtx.streamWindow)
+		old := reqCtx.streamWindow.Load()
 		if int64(old)+int64(inc) > int64(1<<31-1) {
 			return coreh2.ErrWindowAboveLimits
 		}
 
-		if atomic.CompareAndSwapInt32(&reqCtx.streamWindow, old, old+inc) {
+		if reqCtx.streamWindow.CompareAndSwap(old, old+inc) {
 			return nil
 		}
 	}
@@ -1292,11 +1289,11 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 		if data.Len() != 0 {
 			reqCtx.Response.AppendBody(data.Data())
 
-			atomic.AddInt32(&reqCtx.streamRxWindow, -dataLen)
+			reqCtx.streamRxWindow.Add(-dataLen)
 
-			if atomic.LoadInt32(&reqCtx.streamRxWindow) < 3145728 {
-				inc := 6291456 - atomic.LoadInt32(&reqCtx.streamRxWindow)
-				atomic.StoreInt32(&reqCtx.streamRxWindow, 6291456)
+			if reqCtx.streamRxWindow.Load() < 3145728 {
+				inc := 6291456 - reqCtx.streamRxWindow.Load()
+				reqCtx.streamRxWindow.Store(6291456)
 				c.updateWindow(fr.Stream(), int(inc))
 			}
 		}

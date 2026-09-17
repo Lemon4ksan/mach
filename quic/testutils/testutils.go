@@ -66,16 +66,14 @@ func ComposeInitialPacket(
 
 	length := payloadSize + int(pnLength) + sealer.Overhead()
 	hdr := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeInitial,
-			Token:            token,
-			SrcConnectionID:  srcConnID,
-			DestConnectionID: destConnID,
-			Length:           protocol.ByteCount(length),
-			Version:          version,
-		},
-		PacketNumberLen: pnLength,
-		PacketNumber:    0x0,
+		Type:             protocol.PacketTypeInitial,
+		Token:            token,
+		SrcConnectionID:  srcConnID,
+		DestConnectionID: destConnID,
+		Length:           protocol.ByteCount(length),
+		Version:          version,
+		PacketNumberLen:  pnLength,
+		PacketNumber:     0x0,
 	}
 
 	raw := writePacket(hdr, payload)
@@ -107,13 +105,11 @@ func ComposeRetryPacket(
 	version protocol.Version,
 ) []byte {
 	hdr := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeRetry,
-			SrcConnectionID:  srcConnID,
-			DestConnectionID: destConnID,
-			Token:            token,
-			Version:          version,
-		},
+		Type:             protocol.PacketTypeRetry,
+		SrcConnectionID:  srcConnID,
+		DestConnectionID: destConnID,
+		Token:            token,
+		Version:          version,
 	}
 	data := writePacket(hdr, nil)
 

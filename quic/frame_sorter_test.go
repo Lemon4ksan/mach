@@ -44,7 +44,7 @@ func getFrameSorterTestCallback(t *testing.T) (func(), callbackTracker) {
 
 func TestFrameSorterSimpleCases(t *testing.T) {
 	s := acquireFrameSorter()
-	
+
 	_, data, doneCb := s.Pop()
 	require.Nil(t, data)
 	require.Nil(t, doneCb)
@@ -141,7 +141,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++++--------
 	t.Run("case 1", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(5)
@@ -166,7 +166,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx---+++++++--------
 	t.Run("case 2", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(5)
@@ -192,7 +192,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++xxxxx--------
 	t.Run("case 3", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -222,7 +222,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ----xxxx++-----
 	t.Run("case 4", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -243,7 +243,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 4, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 2))
 		f1 := getData(4 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -269,7 +269,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// xxxx+++-----
 	t.Run("case 5", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -289,7 +289,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 5, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 2))
 		f1 := getData(4 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -314,7 +314,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --++xxxx-------
 	t.Run("case 6", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -335,7 +335,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 6, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 2))
 		f1 := getData(4 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -361,7 +361,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++--xxxxx--------
 	t.Run("case 7", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(2)
@@ -392,7 +392,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx---++----xxxxx--
 	t.Run("case 8", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(2)
@@ -424,7 +424,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx--++xxxxx--------
 	t.Run("case 9", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(2)
@@ -455,7 +455,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++=====--------
 	t.Run("case 10", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(5)
@@ -481,7 +481,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 10, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 4))
 		f1 := getData(3 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -512,7 +512,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++=====--------
 	t.Run("case 11", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(5)
@@ -542,7 +542,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++=====--------
 	t.Run("case 11, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 3))
 		f1 := getData(4 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -573,7 +573,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ----+++++++-----
 	t.Run("case 12", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(7)
@@ -597,7 +597,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ----+++++++-----
 	t.Run("case 13", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -625,7 +625,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ----+++====-----
 	t.Run("case 14", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -650,7 +650,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 14, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 3))
 		f1 := getData(3 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -680,7 +680,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ----++++++-----
 	t.Run("case 15", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -708,7 +708,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxxx-----
 	t.Run("case 16", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -732,7 +732,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ----xxx===-----
 	t.Run("case 17", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -761,7 +761,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxxx-----
 	t.Run("case 18", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(4)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(2)
@@ -785,7 +785,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxxxx----
 	t.Run("case 19", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(5)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(2)
@@ -812,7 +812,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// xxxxx------
 	t.Run("case 20", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(10)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -834,7 +834,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxxxx---
 	t.Run("case 21", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(5)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -858,7 +858,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --+++++----
 	t.Run("case 22", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(5)
@@ -882,7 +882,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --++++++++----
 	t.Run("case 23", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -910,7 +910,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --xxx++++++----
 	t.Run("case 24", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -939,7 +939,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --xxx+++++++++###
 	t.Run("case 25", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -973,7 +973,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --+++++++---
 	t.Run("case 26", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(10)
@@ -997,7 +997,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --+xxx====---
 	t.Run("case 27", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -1023,7 +1023,6 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 27, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
 
 		const mult = protocol.MinStreamFrameSize
 
@@ -1056,7 +1055,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// --+xxx====---
 	t.Run("case 28", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -1082,7 +1081,6 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 28, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
 
 		const mult = protocol.MinStreamFrameSize
 
@@ -1115,7 +1113,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx+++++---
 	t.Run("case 29", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -1144,7 +1142,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx===++--
 	t.Run("case 30", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -1170,7 +1168,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 30, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 2))
 		f1 := getData(3 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -1201,7 +1199,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++++++---
 	t.Run("case 31", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -1226,7 +1224,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 31, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 9))
 		f1 := getData(3 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -1256,7 +1254,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---+++++++++---
 	t.Run("case 32", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -1284,7 +1282,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++++++++---
 	t.Run("case 33", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(3)
@@ -1313,7 +1311,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 33, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 11))
 		f1 := getData(3 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -1347,7 +1345,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---xxx++++++###
 	t.Run("case 34", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(5)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(5)
@@ -1381,7 +1379,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 	// ---++++++####---
 	t.Run("case 35", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		f1 := getData(3)
 		cb1, t1 := getFrameSorterTestCallback(t)
 		f2 := getData(4)
@@ -1406,7 +1404,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 	t.Run("case 35, for long frames", func(t *testing.T) {
 		s := acquireFrameSorter()
-		
+
 		mult := protocol.ByteCount(math.Ceil(float64(protocol.MinStreamFrameSize) / 6))
 		f1 := getData(3 * mult)
 		cb1, t1 := getFrameSorterTestCallback(t)
@@ -1433,7 +1431,7 @@ func TestFrameSorterGapHandling(t *testing.T) {
 
 func TestFrameSorterTooManyGaps(t *testing.T) {
 	s := acquireFrameSorter()
-	
+
 	for i := range protocol.MaxStreamFrameSorterGaps {
 		require.NoError(t, s.Push([]byte("foobar"), protocol.ByteCount(i*7), nil))
 	}
@@ -1493,7 +1491,6 @@ func testFrameSorterRandomized(t *testing.T, dataLen protocol.ByteCount, injectD
 	mrand.Shuffle(len(frames), func(i, j int) { frames[i], frames[j] = frames[j], frames[i] })
 
 	s := acquireFrameSorter()
-	
 
 	var callbacks []callbackTracker
 	for _, f := range frames {
@@ -1554,7 +1551,7 @@ func testFrameSorterRandomized(t *testing.T, dataLen protocol.ByteCount, injectD
 
 func TestFrameSorterPeek(t *testing.T) {
 	s := acquireFrameSorter()
-	
+
 	require.NoError(t, s.Peek(1337, []byte{})) // empty peek is a no-op
 	require.ErrorIs(t, s.Peek(0, []byte{0, 1, 2, 3, 4}), errTooLittleData)
 
@@ -1637,7 +1634,7 @@ func FuzzFrameSorter(f *testing.F) {
 		}
 
 		s := acquireFrameSorter()
-		
+
 		received := make([]bool, len(streamData))
 
 		var (
@@ -1773,10 +1770,9 @@ func BenchmarkFrameSorterSequential(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		s := acquireFrameSorter()
-		
 
 		offset := protocol.ByteCount(0)
-		for j := 0; j < 100; j++ {
+		for range 100 {
 			_ = s.Push(data, offset, nil)
 			_, _, _ = s.Pop()
 			offset += 1024
@@ -1793,15 +1789,14 @@ func BenchmarkFrameSorterSequentialBatch(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		s := acquireFrameSorter()
-		
 
 		offset := protocol.ByteCount(0)
-		for j := 0; j < 100; j++ {
+		for range 100 {
 			_ = s.Push(data, offset, nil)
 			offset += 1024
 		}
 
-		for j := 0; j < 100; j++ {
+		for range 100 {
 			_, _, _ = s.Pop()
 		}
 		releaseFrameSorter(s)

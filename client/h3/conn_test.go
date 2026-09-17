@@ -435,7 +435,7 @@ func TestReadResponse_LargeHeaders_Pooled(t *testing.T) {
 
 	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		_ = enc.WriteField(qpack.HeaderField{
 			Name:  "x-custom-large-header-" + string(rune('a'+(i%26))),
 			Value: "some-repeated-value-that-fills-space-0123456789-abcdefghijklmnopqrstuvwxyz",

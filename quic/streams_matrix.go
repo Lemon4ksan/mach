@@ -71,12 +71,12 @@ func (m *streamsMatrix[T]) set(id protocol.StreamID, entry incomingStreamEntry[T
 	}
 
 	chunk := chunks[chunkIdx]
-	
+
 	// If it was nil before, increment count
 	if chunk.entries[idx%streamChunkSize].Load() == nil {
 		m.count++
 	}
-	
+
 	// We copy the entry to heap so we can point to it
 	e := entry
 	chunk.entries[idx%streamChunkSize].Store(&e)
@@ -116,7 +116,7 @@ func (m *streamsMatrix[T]) iterate(f func(incomingStreamEntry[T])) {
 		if chunk == nil {
 			continue
 		}
-		for i := 0; i < streamChunkSize; i++ {
+		for i := range streamChunkSize {
 			entry := chunk.entries[i].Load()
 			if entry != nil {
 				f(*entry)

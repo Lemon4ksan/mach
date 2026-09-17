@@ -110,7 +110,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 
 	// 3. Test High-Concurrency Streams
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()

@@ -43,8 +43,8 @@ type Context struct {
 	Err            chan error
 	Trailers       map[string][]string
 	StreamID       uint32
-	streamWindow   int32
-	streamRxWindow int32
+	streamWindow   atomic.Int32
+	streamRxWindow atomic.Int32
 	state          atomic.Int32
 	headersParsed  bool
 }

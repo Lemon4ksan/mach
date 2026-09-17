@@ -5,8 +5,8 @@
 package h1_test
 
 import (
-	coreheaders "github.com/lemon4ksan/mach/core/headers"
 	"github.com/lemon4ksan/mach/core/bytesutil"
+	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
 	"bufio"
 	"bytes"
@@ -401,7 +401,7 @@ func TestH1_HTTP_Pipelining_Batching(t *testing.T) {
 	// Send 16 pipelined requests in a single TCP write
 	const pipelineCount = 16
 	var batch bytes.Buffer
-	for i := 0; i < pipelineCount; i++ {
+	for i := range pipelineCount {
 		batch.WriteString("GET /pipeline/" + string(rune('A'+i)) + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
 	}
 
@@ -412,7 +412,7 @@ func TestH1_HTTP_Pipelining_Batching(t *testing.T) {
 
 	// Read and parse 16 responses
 	br := bufio.NewReader(conn)
-	for i := 0; i < pipelineCount; i++ {
+	for i := range pipelineCount {
 		resp, err := http.ReadResponse(br, nil)
 		if err != nil {
 			t.Fatalf("failed reading response #%d: %v", i, err)

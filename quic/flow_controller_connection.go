@@ -36,14 +36,12 @@ func newConnectionFlowController(
 	logger utils.Logger,
 ) *connectionFlowController {
 	return &connectionFlowController{
-		receiveFlowController: receiveFlowController{
-			rttStats:             rttStats,
-			receiveWindow:        receiveWindow,
-			receiveWindowSize:    receiveWindow,
-			maxReceiveWindowSize: maxReceiveWindow,
-			allowWindowIncrease:  allowWindowIncrease,
-			logger:               logger,
-		},
+		rttStats:             rttStats,
+		receiveWindow:        receiveWindow,
+		receiveWindowSize:    receiveWindow,
+		maxReceiveWindowSize: maxReceiveWindow,
+		allowWindowIncrease:  allowWindowIncrease,
+		logger:               logger,
 	}
 }
 

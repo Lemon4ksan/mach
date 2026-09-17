@@ -417,7 +417,7 @@ func TestConnectionClientDrop0RTT(t *testing.T) {
 	p := getLongHeaderPacket(t,
 		tc.remoteAddr,
 		&wire.ExtendedHeader{
-			Header:          wire.Header{Type: protocol.PacketType0RTT, Length: 2, Version: protocol.Version1},
+			Type: protocol.PacketType0RTT, Length: 2, Version: protocol.Version1,
 			PacketNumberLen: protocol.PacketNumberLen2,
 		},
 		nil,
@@ -440,14 +440,12 @@ func TestConnectionUnpacking(t *testing.T) {
 
 	// receive a long header packet
 	hdr := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeInitial,
-			DestConnectionID: tc.srcConnID,
-			Version:          protocol.Version1,
-			Length:           1,
-		},
-		PacketNumber:    0x37,
-		PacketNumberLen: protocol.PacketNumberLen1,
+		Type:             protocol.PacketTypeInitial,
+		DestConnectionID: tc.srcConnID,
+		Version:          protocol.Version1,
+		Length:           1,
+		PacketNumber:     0x37,
+		PacketNumberLen:  protocol.PacketNumberLen1,
 	}
 	unpackedHdr := *hdr
 	unpackedHdr.PacketNumber = 0x1337
@@ -503,36 +501,30 @@ func TestConnectionUnpackCoalescedPacket(t *testing.T) {
 		connectionOptUnpacker(unpacker),
 	)
 	hdr1 := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeInitial,
-			DestConnectionID: tc.srcConnID,
-			Version:          protocol.Version1,
-			Length:           1,
-		},
-		PacketNumber:    37,
-		PacketNumberLen: protocol.PacketNumberLen1,
+		Type:             protocol.PacketTypeInitial,
+		DestConnectionID: tc.srcConnID,
+		Version:          protocol.Version1,
+		Length:           1,
+		PacketNumber:     37,
+		PacketNumberLen:  protocol.PacketNumberLen1,
 	}
 	hdr2 := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeHandshake,
-			DestConnectionID: tc.srcConnID,
-			Version:          protocol.Version1,
-			Length:           1,
-		},
-		PacketNumber:    38,
-		PacketNumberLen: protocol.PacketNumberLen1,
+		Type:             protocol.PacketTypeHandshake,
+		DestConnectionID: tc.srcConnID,
+		Version:          protocol.Version1,
+		Length:           1,
+		PacketNumber:     38,
+		PacketNumberLen:  protocol.PacketNumberLen1,
 	}
 	// add a packet with a different source connection ID
 	incorrectSrcConnID := protocol.ParseConnectionID([]byte{0xa, 0xb, 0xc})
 	hdr3 := &wire.ExtendedHeader{
-		Header: wire.Header{
-			Type:             protocol.PacketTypeHandshake,
-			DestConnectionID: incorrectSrcConnID,
-			Version:          protocol.Version1,
-			Length:           1,
-		},
-		PacketNumber:    0x42,
-		PacketNumberLen: protocol.PacketNumberLen1,
+		Type:             protocol.PacketTypeHandshake,
+		DestConnectionID: incorrectSrcConnID,
+		Version:          protocol.Version1,
+		Length:           1,
+		PacketNumber:     0x42,
+		PacketNumberLen:  protocol.PacketNumberLen1,
 	}
 	unpackedHdr1 := *hdr1
 	unpackedHdr1.PacketNumber = 1337
@@ -924,7 +916,7 @@ func testConnectionHandshakeClient(t *testing.T, usePreferredAddress bool) {
 
 	// the state transition is driven by processing of a CRYPTO frame
 	hdr := &wire.ExtendedHeader{
-		Header:          wire.Header{Type: protocol.PacketTypeHandshake, Version: protocol.Version1},
+		Type: protocol.PacketTypeHandshake, Version: protocol.Version1,
 		PacketNumberLen: protocol.PacketNumberLen2,
 	}
 	data, err := (&wire.CryptoFrame{Data: []byte("foobar")}).Append(nil, protocol.Version1)
@@ -1082,7 +1074,7 @@ func TestConnection0RTTTransportParameters(t *testing.T) {
 
 	// the state transition is driven by processing of a CRYPTO frame
 	hdr := &wire.ExtendedHeader{
-		Header:          wire.Header{Type: protocol.PacketTypeHandshake, Version: protocol.Version1},
+		Type: protocol.PacketTypeHandshake, Version: protocol.Version1,
 		PacketNumberLen: protocol.PacketNumberLen2,
 	}
 	data, err := (&wire.CryptoFrame{Data: []byte("foobar")}).Append(nil, protocol.Version1)
@@ -1899,7 +1891,7 @@ func TestConnectionRetryAfterReceivedPacket(t *testing.T) {
 	regular := getPacketWithPacketType(t, tc.srcConnID, protocol.PacketTypeInitial, 200)
 	unpacker.EXPECT().UnpackLongHeader(gomock.Any(), gomock.Any()).Return(
 		&unpackedPacket{
-			hdr:             &wire.ExtendedHeader{Header: wire.Header{Type: protocol.PacketTypeInitial}},
+			hdr:             &wire.ExtendedHeader{Type: protocol.PacketTypeInitial},
 			encryptionLevel: protocol.EncryptionInitial,
 		}, nil,
 	)
@@ -1982,15 +1974,13 @@ func testConnectionConnectionIDChanges(t *testing.T, sendRetry bool) {
 
 		// Send the first packet. The server changes the connection ID to newConnID.
 		hdr1 := wire.ExtendedHeader{
-			Header: wire.Header{
-				SrcConnectionID:  newConnID,
-				DestConnectionID: tc.srcConnID,
-				Type:             protocol.PacketTypeInitial,
-				Length:           200,
-				Version:          protocol.Version1,
-			},
-			PacketNumber:    1,
-			PacketNumberLen: protocol.PacketNumberLen2,
+			SrcConnectionID:  newConnID,
+			DestConnectionID: tc.srcConnID,
+			Type:             protocol.PacketTypeInitial,
+			Length:           200,
+			Version:          protocol.Version1,
+			PacketNumber:     1,
+			PacketNumberLen:  protocol.PacketNumberLen2,
 		}
 		hdr2 := hdr1
 		hdr2.SrcConnectionID = newConnID2
