@@ -11,6 +11,7 @@ import (
 	"iter"
 	"sort"
 
+	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/proto/bytesutil"
@@ -598,4 +599,30 @@ func (s *argsScanner) next(kv *argsKV) bool {
 	s.b = s.b[len(s.b):]
 
 	return true
+}
+
+// Borrow methods moved from borrow.go
+// PeekScoped borrows the query/argument value associated with key into the given borrow scope.
+func (a *Args) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
+	b := a.Peek(key)
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// PeekAllScoped borrows all query/argument values associated with key into a slice of borrowed bytes.
+func (a *Args) PeekAllScoped(s *borrow.Scope, key string) []borrow.Bytes {
+	values := a.PeekMulti(key)
+	if len(values) == 0 {
+		return nil
+	}
+
+	res := make([]borrow.Bytes, len(values))
+	for i, v := range values {
+		res[i] = borrow.NewBytes(v, nil)
+	}
+
+	return res
 }

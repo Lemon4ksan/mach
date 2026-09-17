@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/proto/bytesutil"
@@ -1051,4 +1052,95 @@ func stringContainsCTLByte(s []byte) bool {
 	}
 
 	return false
+}
+
+// Borrow methods moved from borrow.go
+// PathScoped borrows the URI path into the given borrow scope.
+func (u *URI) PathScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.Path()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// QueryScoped borrows the raw URI query string into the given borrow scope.
+func (u *URI) QueryScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.QueryString()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// HostScoped borrows the URI host into the given borrow scope.
+func (u *URI) HostScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.Host()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// SchemeScoped borrows the URI scheme into the given borrow scope.
+func (u *URI) SchemeScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.Scheme()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// UsernameScoped borrows the URI username into the given borrow scope.
+func (u *URI) UsernameScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.Username()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// PasswordScoped borrows the URI password into the given borrow scope.
+func (u *URI) PasswordScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.Password()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// FullURIScoped borrows the full URI into the given borrow scope.
+func (u *URI) FullURIScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.FullURI()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// RequestURIScoped borrows the request URI into the given borrow scope.
+func (u *URI) RequestURIScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.RequestURI()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// HashScoped borrows the URI hash/fragment into the given borrow scope.
+func (u *URI) HashScoped(s *borrow.Scope) borrow.Bytes {
+	b := u.Hash()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
 }

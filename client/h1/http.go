@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
@@ -3190,4 +3191,79 @@ func readCrLf(r *bufio.Reader) error {
 //	c.DoTimeout(&req, &resp, t)
 func (req *Request) SetTimeout(t time.Duration) {
 	req.timeout = t
+}
+
+// Borrow methods moved from borrow.go
+// BodyScoped borrows the request body without memory allocation.
+func (req *Request) BodyScoped(s *borrow.Scope) borrow.Bytes {
+	b := req.Body()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// ReadBodyScoped executes fn with the underlying request body buffer borrowed for the duration of the call.
+func (req *Request) ReadBodyScoped(fn func([]byte) error) error {
+	s := borrow.AcquireScope()
+	defer s.Release()
+
+	b := req.Body()
+
+	return fn(b)
+}
+
+// Borrow methods moved from borrow.go
+// BodyScoped borrows the response body without memory allocation.
+func (resp *Response) BodyScoped(s *borrow.Scope) borrow.Bytes {
+	b := resp.Body()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// ReadBodyScoped executes fn with the underlying response body buffer borrowed for the duration of the call.
+func (resp *Response) ReadBodyScoped(fn func([]byte) error) error {
+	s := borrow.AcquireScope()
+	defer s.Release()
+
+	b := resp.Body()
+
+	return fn(b)
+}
+
+// ReadStreamScoped reads from the response body stream chunk by chunk, passing each borrowed slice to fn.
+func (resp *Response) ReadStreamScoped(s *borrow.Scope, fn func(chunk borrow.Bytes) error) error {
+	r := resp.BodyStream()
+	if r == nil {
+		b := resp.Body()
+		if len(b) > 0 {
+			return fn(borrow.NewBytes(b, nil))
+		}
+
+		return nil
+	}
+
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			if callErr := fn(borrow.NewBytes(buf[:n], nil)); callErr != nil {
+				return callErr
+			}
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return err
+		}
+	}
+
+	return nil
 }

@@ -6,12 +6,12 @@ package h1
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/proto/bytesutil"
@@ -168,7 +168,7 @@ func (c *Cookie) Path() []byte {
 func (c *Cookie) SetPath(path string) {
 	c.bufK = append(c.bufK[:0], path...)
 	c.path = normalizePath(c.path, c.bufK)
-	c.path = removeNewLines(c.path)
+	c.path = bytesutil.RemoveNewLines(c.path)
 	c.path = removeSemicolons(c.path)
 }
 
@@ -176,7 +176,7 @@ func (c *Cookie) SetPath(path string) {
 func (c *Cookie) SetPathBytes(path []byte) {
 	c.bufK = append(c.bufK[:0], path...)
 	c.path = normalizePath(c.path, c.bufK)
-	c.path = removeNewLines(c.path)
+	c.path = bytesutil.RemoveNewLines(c.path)
 	c.path = removeSemicolons(c.path)
 }
 
@@ -190,13 +190,13 @@ func (c *Cookie) Domain() []byte {
 
 // SetDomain sets cookie domain.
 func (c *Cookie) SetDomain(domain string) {
-	c.domain = initHeaderValueString(c.domain, domain)
+	c.domain = bytesutil.InitHeaderValueString(c.domain, domain)
 	c.domain = removeSemicolons(c.domain)
 }
 
 // SetDomainBytes sets cookie domain.
 func (c *Cookie) SetDomainBytes(domain []byte) {
-	c.domain = initHeaderValueBytes(c.domain, domain)
+	c.domain = bytesutil.InitHeaderValueBytes(c.domain, domain)
 	c.domain = removeSemicolons(c.domain)
 }
 
@@ -249,13 +249,13 @@ func (c *Cookie) Value() []byte {
 
 // SetValue sets cookie value.
 func (c *Cookie) SetValue(value string) {
-	c.value = initHeaderValueString(c.value, value)
+	c.value = bytesutil.InitHeaderValueString(c.value, value)
 	c.value = removeSemicolons(c.value)
 }
 
 // SetValueBytes sets cookie value.
 func (c *Cookie) SetValueBytes(value []byte) {
-	c.value = initHeaderValueBytes(c.value, value)
+	c.value = bytesutil.InitHeaderValueBytes(c.value, value)
 	c.value = removeSemicolons(c.value)
 }
 
@@ -269,13 +269,13 @@ func (c *Cookie) Key() []byte {
 
 // SetKey sets cookie name.
 func (c *Cookie) SetKey(key string) {
-	c.key = initHeaderValueString(c.key, key)
+	c.key = bytesutil.InitHeaderValueString(c.key, key)
 	c.key = removeSemicolons(c.key)
 }
 
 // SetKeyBytes sets cookie name.
 func (c *Cookie) SetKeyBytes(key []byte) {
-	c.key = initHeaderValueBytes(c.key, key)
+	c.key = bytesutil.InitHeaderValueBytes(c.key, key)
 	c.key = removeSemicolons(c.key)
 }
 
@@ -420,15 +420,15 @@ func (c *Cookie) ParseBytes(src []byte) error {
 		return ErrInvalidCookieValue
 	}
 
-	c.key = initHeaderValueBytes(c.key, k)
-	c.value = initHeaderValueBytes(c.value, v)
+	c.key = bytesutil.InitHeaderValueBytes(c.key, k)
+	c.value = bytesutil.InitHeaderValueBytes(c.value, v)
 
 	for s.nextRaw(&k, &v) {
 		if len(k) != 0 {
 			// Case insensitive switch on first char
 			switch k[0] | 0x20 {
 			case 'm':
-				if caseInsensitiveCompare(bytesutil.StrCookieMaxAge, k) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieMaxAge, k) {
 					maxAge, err := bytesutil.ParseUint(v)
 					if err != nil {
 						return err
@@ -438,7 +438,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				}
 
 			case 'e': // "expires"
-				if caseInsensitiveCompare(bytesutil.StrCookieExpires, k) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieExpires, k) {
 					exptime, err := parseCookieExpires(v)
 					if err != nil {
 						return err
@@ -448,40 +448,40 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				}
 
 			case 'd': // "domain"
-				if caseInsensitiveCompare(bytesutil.StrCookieDomain, k) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieDomain, k) {
 					if !validCookieValue(v) {
 						return ErrInvalidCookieValue
 					}
 
-					c.domain = initHeaderValueBytes(c.domain, v)
+					c.domain = bytesutil.InitHeaderValueBytes(c.domain, v)
 				}
 
 			case 'p': // "path"
-				if caseInsensitiveCompare(bytesutil.StrCookiePath, k) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookiePath, k) {
 					if !validCookiePathValue(v) {
 						return ErrInvalidCookieValue
 					}
 
-					c.path = initHeaderValueBytes(c.path, v)
+					c.path = bytesutil.InitHeaderValueBytes(c.path, v)
 				}
 
 			case 's': // "samesite"
-				if caseInsensitiveCompare(bytesutil.StrCookieSameSite, k) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieSameSite, k) {
 					if len(v) > 0 {
 						// Case insensitive switch on first char
 						switch v[0] | 0x20 {
 						case 'l': // "lax"
-							if caseInsensitiveCompare(bytesutil.StrCookieSameSiteLax, v) {
+							if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieSameSiteLax, v) {
 								c.sameSite = CookieSameSiteLaxMode
 							}
 
 						case 's': // "strict"
-							if caseInsensitiveCompare(bytesutil.StrCookieSameSiteStrict, v) {
+							if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieSameSiteStrict, v) {
 								c.sameSite = CookieSameSiteStrictMode
 							}
 
 						case 'n': // "none"
-							if caseInsensitiveCompare(bytesutil.StrCookieSameSiteNone, v) {
+							if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieSameSiteNone, v) {
 								c.sameSite = CookieSameSiteNoneMode
 							}
 						}
@@ -492,19 +492,19 @@ func (c *Cookie) ParseBytes(src []byte) error {
 			// Case insensitive switch on first char
 			switch v[0] | 0x20 {
 			case 'h': // "httponly"
-				if caseInsensitiveCompare(bytesutil.StrCookieHTTPOnly, v) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieHTTPOnly, v) {
 					c.httpOnly = true
 				}
 
 			case 's': // "secure"
-				if caseInsensitiveCompare(bytesutil.StrCookieSecure, v) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieSecure, v) {
 					c.secure = true
-				} else if caseInsensitiveCompare(bytesutil.StrCookieSameSite, v) {
+				} else if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookieSameSite, v) {
 					c.sameSite = CookieSameSiteDefaultMode
 				}
 
 			case 'p': // "partitioned"
-				if caseInsensitiveCompare(bytesutil.StrCookiePartitioned, v) {
+				if bytesutil.CaseInsensitiveCompare(bytesutil.StrCookiePartitioned, v) {
 					c.partitioned = true
 				}
 			}
@@ -785,26 +785,53 @@ func parseCookieExpires(src []byte) (time.Time, error) {
 	return time.Parse("Mon, 02-Jan-2006 15:04:05 MST", s)
 }
 
-func caseInsensitiveCompare(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
+// Borrow methods moved from borrow.go
+// KeyScoped borrows the cookie key into the given borrow scope.
+func (c *Cookie) KeyScoped(s *borrow.Scope) borrow.Bytes {
+	b := c.Key()
+	if len(b) == 0 {
+		return borrow.Bytes{}
 	}
 
-	i := 0
-	for ; i+8 <= len(a); i += 8 {
-		va := binary.LittleEndian.Uint64(a[i:])
+	return borrow.NewBytes(b, nil)
+}
 
-		vb := binary.LittleEndian.Uint64(b[i:])
-		if (va | 0x2020202020202020) != (vb | 0x2020202020202020) {
-			return false
-		}
+// ValueScoped borrows the cookie value into the given borrow scope.
+func (c *Cookie) ValueScoped(s *borrow.Scope) borrow.Bytes {
+	b := c.Value()
+	if len(b) == 0 {
+		return borrow.Bytes{}
 	}
 
-	for ; i < len(a); i++ {
-		if a[i]|0x20 != b[i]|0x20 {
-			return false
-		}
+	return borrow.NewBytes(b, nil)
+}
+
+// DomainScoped borrows the cookie domain into the given borrow scope.
+func (c *Cookie) DomainScoped(s *borrow.Scope) borrow.Bytes {
+	b := c.Domain()
+	if len(b) == 0 {
+		return borrow.Bytes{}
 	}
 
-	return true
+	return borrow.NewBytes(b, nil)
+}
+
+// PathScoped borrows the cookie path into the given borrow scope.
+func (c *Cookie) PathScoped(s *borrow.Scope) borrow.Bytes {
+	b := c.Path()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
+}
+
+// CookieScoped borrows the full serialized cookie into the given borrow scope.
+func (c *Cookie) CookieScoped(s *borrow.Scope) borrow.Bytes {
+	b := c.Cookie()
+	if len(b) == 0 {
+		return borrow.Bytes{}
+	}
+
+	return borrow.NewBytes(b, nil)
 }
