@@ -13,7 +13,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )

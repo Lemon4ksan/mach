@@ -10,8 +10,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/testkit/gomock"
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/gomock"
+	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/handshake"
 	"github.com/lemon4ksan/mach/quic/internal/mocks"

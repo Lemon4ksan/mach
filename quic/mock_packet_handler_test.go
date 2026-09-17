@@ -12,7 +12,7 @@ package quic
 import (
 	reflect "reflect"
 
-	gomock "github.com/lemon4ksan/foundation/testkit/gomock"
+	gomock "github.com/lemon4ksan/foundation/testing/gomock"
 	qerr "github.com/lemon4ksan/mach/quic/internal/qerr"
 )
 

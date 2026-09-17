@@ -11,8 +11,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/testkit/gomock"
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/gomock"
+	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/ackhandler"
 	"github.com/lemon4ksan/mach/quic/internal/monotime"

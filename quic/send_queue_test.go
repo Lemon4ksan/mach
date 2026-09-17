@@ -11,7 +11,7 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/lemon4ksan/foundation/testkit/gomock"
+	"github.com/lemon4ksan/foundation/testing/gomock"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 )

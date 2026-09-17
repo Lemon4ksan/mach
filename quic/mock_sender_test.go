@@ -13,7 +13,7 @@ import (
 	net "net"
 	reflect "reflect"
 
-	gomock "github.com/lemon4ksan/foundation/testkit/gomock"
+	gomock "github.com/lemon4ksan/foundation/testing/gomock"
 	protocol "github.com/lemon4ksan/mach/quic/internal/protocol"
 )
 

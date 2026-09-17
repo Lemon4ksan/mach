@@ -13,7 +13,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/require"
 	"golang.org/x/sys/unix"
 )
 

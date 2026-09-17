@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/require"
 )
 
 type nopCloser struct{}

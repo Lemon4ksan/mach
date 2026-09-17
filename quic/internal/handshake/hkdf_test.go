@@ -10,7 +10,7 @@ import (
 	"crypto/tls"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/require"
 )
 
 var tls13CipherSuites = []uint16{

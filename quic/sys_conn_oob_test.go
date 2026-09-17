@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/require"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sys/unix"
 

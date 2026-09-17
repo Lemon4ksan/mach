@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/require"
 )
 
 func TestLogLevelNothing(t *testing.T) {

@@ -20,9 +20,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lemon4ksan/foundation/testkit/assert"
-	"github.com/lemon4ksan/foundation/testkit/gomock"
-	"github.com/lemon4ksan/foundation/testkit/require"
+	"github.com/lemon4ksan/foundation/testing/assert"
+	"github.com/lemon4ksan/foundation/testing/gomock"
+	"github.com/lemon4ksan/foundation/testing/require"
 
 	"github.com/lemon4ksan/mach/quic/internal/ackhandler"
 	"github.com/lemon4ksan/mach/quic/internal/handshake"

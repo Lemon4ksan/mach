@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/lemon4ksan/foundation/testkit/gomock"
+	gomock "github.com/lemon4ksan/foundation/testing/gomock"
 )
 
 // MockPacketConn is a mock of PacketConn interface.
