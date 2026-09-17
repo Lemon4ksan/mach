@@ -279,11 +279,11 @@ func TestTransportParameterSetsDefaultValuesWhenNotSent(t *testing.T) {
 
 func TestTransportParameterErrors(t *testing.T) {
 	tests := []struct {
-		name           string
 		params         *TransportParameters
-		perspective    protocol.Perspective
-		data           []byte
+		name           string
 		expectedErrMsg string
+		data           []byte
+		perspective    protocol.Perspective
 	}{
 		{
 			name: "invalid stateless reset token length",
@@ -781,8 +781,8 @@ func TestTransportParametersValidFor0RTT(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
 		modify func(*TransportParameters)
+		name   string
 		valid  bool
 	}{
 		{
@@ -910,8 +910,8 @@ func TestTransportParametersValidAfter0RTT(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
 		modify func(*TransportParameters)
+		name   string
 		reject bool
 	}{
 		{

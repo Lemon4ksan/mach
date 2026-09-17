@@ -229,9 +229,9 @@ func TestParseStreamFrameSuccess(t *testing.T) {
 
 func TestFrameParserFrames(t *testing.T) {
 	tests := []struct {
+		frame     Frame
 		name      string
 		frameType FrameType
-		frame     Frame
 	}{
 		{
 			name:      "MAX_DATA",
@@ -369,9 +369,9 @@ func TestFrameParserFrames(t *testing.T) {
 
 func TestFrameAllowedAtEncLevel(t *testing.T) {
 	type testCase struct {
+		frame            Frame
 		name             string
 		frameType        FrameType
-		frame            Frame
 		allowedInitial   bool
 		allowedHandshake bool
 		allowedZeroRTT   bool
@@ -893,8 +893,8 @@ func FuzzFrames(f *testing.F) {
 	const version = protocol.Version1
 
 	for _, s := range []struct {
-		encLevel protocol.EncryptionLevel
 		frame    Frame
+		encLevel protocol.EncryptionLevel
 	}{
 		{encLevel: protocol.EncryptionInitial, frame: &PingFrame{}},
 		{encLevel: protocol.EncryptionHandshake, frame: &PingFrame{}},

@@ -276,11 +276,12 @@ func (f *AckFrame) validateAckRanges() bool {
 	}
 
 	// check the consistency for ACK with multiple ACK ranges
-	for i, ackRange := range f.AckRanges {
-		if i == 0 {
-			continue
-		}
-
+	if len(f.AckRanges) == 0 {
+		return true
+	}
+	_ = f.AckRanges[len(f.AckRanges)-1]
+	for i := 1; i < len(f.AckRanges); i++ {
+		ackRange := f.AckRanges[i]
 		lastAckRange := f.AckRanges[i-1]
 		if lastAckRange.Smallest <= ackRange.Smallest {
 			return false
@@ -323,11 +324,7 @@ func (f *AckFrame) Reset() {
 	f.ECT1 = 0
 
 	f.ECNCE = 0
-	for _, r := range f.AckRanges {
-		r.Largest = 0
-		r.Smallest = 0
-	}
-
+	clear(f.AckRanges)
 	f.AckRanges = f.AckRanges[:0]
 }
 

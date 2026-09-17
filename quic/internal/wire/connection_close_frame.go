@@ -13,10 +13,10 @@ import (
 
 // A ConnectionCloseFrame is a CONNECTION_CLOSE frame
 type ConnectionCloseFrame struct {
-	IsApplicationError bool
+	ReasonPhrase       string
 	ErrorCode          uint64
 	FrameType          uint64
-	ReasonPhrase       string
+	IsApplicationError bool
 }
 
 func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*ConnectionCloseFrame, int, error) {
@@ -53,9 +53,9 @@ func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*Co
 		return nil, 0, io.EOF
 	}
 
-	reasonPhrase := make([]byte, reasonPhraseLen)
-	copy(reasonPhrase, b)
-	f.ReasonPhrase = string(reasonPhrase)
+	f.ReasonPhrase = string(b[:reasonPhraseLen])
+	// Advance b by reasonPhraseLen is not strictly necessary here because we are returning, 
+	// but let's just do it cleanly if needed. Actually the next line uses startLen - len(b) + int(reasonPhraseLen)
 
 	return f, startLen - len(b) + int(reasonPhraseLen), nil
 }
