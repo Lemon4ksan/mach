@@ -8,6 +8,8 @@ package quic
 import (
 	"errors"
 
+	"github.com/lemon4ksan/foundation/silicon/pool"
+
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
 	list "github.com/lemon4ksan/mach/quic/internal/utils/linkedlist"
 )
@@ -39,13 +41,31 @@ type frameSorter struct {
 
 var errDuplicateStreamData = errors.New("duplicate stream data")
 
-func newFrameSorter() *frameSorter {
-	s := frameSorter{
+var frameSorterPool = pool.NewPerPStorage(func() *frameSorter {
+	s := &frameSorter{
 		gaps: list.NewCapacity[byteInterval](protocol.MaxStreamFrameSorterGaps + 1),
 	}
 	s.gaps.PushFront(byteInterval{Start: 0, End: protocol.MaxByteCount})
+	return s
+})
 
-	return &s
+func acquireFrameSorter() *frameSorter {
+	s := frameSorterPool.Get()
+	return s
+}
+
+func releaseFrameSorter(s *frameSorter) {
+	// Clean up for GC
+	clear(s.queue)
+	s.readPos = 0
+	s.seqHead = 0
+	s.seqCount = 0
+
+	// Reset gaps list and re-add the initial infinite gap
+	s.gaps.Init()
+	s.gaps.PushFront(byteInterval{Start: 0, End: protocol.MaxByteCount})
+
+	frameSorterPool.Put(s)
 }
 
 func (s *frameSorter) flushSeqToQueue() {

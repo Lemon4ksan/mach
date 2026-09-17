@@ -33,7 +33,7 @@ type baseCryptoStream struct {
 }
 
 func newCryptoStream() *cryptoStream {
-	return &cryptoStream{baseCryptoStream{queue: *newFrameSorter()}}
+	return &cryptoStream{baseCryptoStream{queue: *acquireFrameSorter()}}
 }
 
 func (s *baseCryptoStream) HandleCryptoFrame(f *wire.CryptoFrame) error {
@@ -137,7 +137,7 @@ func newInitialCryptoStream(isClient bool) *initialCryptoStream {
 	}
 
 	s := &initialCryptoStream{
-		baseCryptoStream: baseCryptoStream{queue: *newFrameSorter()},
+		baseCryptoStream: baseCryptoStream{queue: *acquireFrameSorter()},
 		scramble:         scramble,
 	}
 	for i := range len(s.cuts) {

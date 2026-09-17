@@ -5,6 +5,7 @@
 package wire
 
 import (
+	"slices"
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
@@ -19,8 +20,8 @@ var MaxDatagramSize protocol.ByteCount = 16383
 
 // A DatagramFrame is a DATAGRAM frame
 type DatagramFrame struct {
-	DataLenPresent bool
 	Data           []byte
+	DataLenPresent bool
 }
 
 func parseDatagramFrame(b []byte, typ FrameType, _ protocol.Version) (*DatagramFrame, int, error) {
@@ -48,8 +49,7 @@ func parseDatagramFrame(b []byte, typ FrameType, _ protocol.Version) (*DatagramF
 		length = uint64(len(b))
 	}
 
-	f.Data = make([]byte, length)
-	copy(f.Data, b)
+	f.Data = slices.Clone(b[:length])
 
 	return f, startLen - len(b) + int(length), nil
 }

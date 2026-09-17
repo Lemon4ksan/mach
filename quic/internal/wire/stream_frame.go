@@ -14,13 +14,12 @@ import (
 
 // A StreamFrame of QUIC
 type StreamFrame struct {
+	Data           []byte
 	StreamID       protocol.StreamID
 	Offset         protocol.ByteCount
-	Data           []byte
 	Fin            bool
 	DataLenPresent bool
-
-	fromPool bool
+	fromPool       bool
 }
 
 func ParseStreamFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamFrame, int, error) {

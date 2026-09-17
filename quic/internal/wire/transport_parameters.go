@@ -69,35 +69,26 @@ type PreferredAddress struct {
 
 // TransportParameters are parameters sent to the peer during the handshake
 type TransportParameters struct {
-	InitialMaxStreamDataBidiLocal  protocol.ByteCount
-	InitialMaxStreamDataBidiRemote protocol.ByteCount
-	InitialMaxStreamDataUni        protocol.ByteCount
-	InitialMaxData                 protocol.ByteCount
-
-	MaxAckDelay      time.Duration
-	AckDelayExponent uint8
-
-	DisableActiveMigration bool
-
-	MaxUDPPayloadSize protocol.ByteCount
-
-	MaxUniStreamNum  protocol.StreamNum
-	MaxBidiStreamNum protocol.StreamNum
-
-	MaxIdleTimeout time.Duration
-
-	PreferredAddress *PreferredAddress
-
-	OriginalDestinationConnectionID protocol.ConnectionID
+	PreferredAddress                *PreferredAddress
+	MinAckDelay                     *time.Duration
+	StatelessResetToken             *protocol.StatelessResetToken
+	RetrySourceConnectionID         *protocol.ConnectionID
+	MaxIdleTimeout                  time.Duration
+	MaxAckDelay                     time.Duration
+	InitialMaxStreamDataBidiRemote  protocol.ByteCount
+	MaxUDPPayloadSize               protocol.ByteCount
+	MaxUniStreamNum                 protocol.StreamNum
+	MaxBidiStreamNum                protocol.StreamNum
+	InitialMaxStreamDataBidiLocal   protocol.ByteCount
+	MaxDatagramFrameSize            protocol.ByteCount
+	ActiveConnectionIDLimit         uint64
+	InitialMaxStreamDataUni         protocol.ByteCount
+	InitialMaxData                  protocol.ByteCount
 	InitialSourceConnectionID       protocol.ConnectionID
-	RetrySourceConnectionID         *protocol.ConnectionID // use a pointer here to distinguish zero-length connection IDs from missing transport parameters
-
-	StatelessResetToken     *protocol.StatelessResetToken
-	ActiveConnectionIDLimit uint64
-
-	MaxDatagramFrameSize protocol.ByteCount // RFC 9221
-	EnableResetStreamAt  bool               // https://datatracker.ietf.org/doc/draft-ietf-quic-reliable-stream-reset/09/
-	MinAckDelay          *time.Duration
+	OriginalDestinationConnectionID protocol.ConnectionID
+	AckDelayExponent                uint8
+	EnableResetStreamAt             bool
+	DisableActiveMigration          bool
 }
 
 // Unmarshal the transport parameters

@@ -5,6 +5,7 @@
 package wire
 
 import (
+	"slices"
 	"errors"
 	"io"
 
@@ -33,8 +34,7 @@ func parseNewTokenFrame(b []byte, _ protocol.Version) (*NewTokenFrame, int, erro
 		return nil, 0, io.EOF
 	}
 
-	token := make([]byte, int(tokenLen))
-	copy(token, b)
+	token := slices.Clone(b[:tokenLen])
 
 	return &NewTokenFrame{Token: token}, l + int(tokenLen), nil
 }

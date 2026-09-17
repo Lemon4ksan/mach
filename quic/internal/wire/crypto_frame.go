@@ -5,6 +5,7 @@
 package wire
 
 import (
+	"slices"
 	"io"
 
 	"github.com/lemon4ksan/mach/quic/internal/protocol"
@@ -13,8 +14,8 @@ import (
 
 // A CryptoFrame is a CRYPTO frame
 type CryptoFrame struct {
-	Offset protocol.ByteCount
 	Data   []byte
+	Offset protocol.ByteCount
 }
 
 func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
@@ -40,8 +41,8 @@ func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
 	}
 
 	if dataLen != 0 {
-		frame.Data = make([]byte, dataLen)
-		copy(frame.Data, b)
+		
+		frame.Data = slices.Clone(b[:dataLen])
 	}
 
 	return frame, startLen - len(b) + int(dataLen), nil

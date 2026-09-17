@@ -18,14 +18,11 @@ var errUnknownFrameType = errors.New("unknown frame type")
 
 // The FrameParser parses QUIC frames, one by one.
 type FrameParser struct {
+	ackFrame              *AckFrame
 	ackDelayExponent      uint8
 	supportsDatagrams     bool
 	supportsResetStreamAt bool
 	supportsAckFrequency  bool
-
-	// To avoid allocating when parsing, keep a single ACK frame struct.
-	// It is used over and over again.
-	ackFrame *AckFrame
 }
 
 // NewFrameParser creates a new frame parser.

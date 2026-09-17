@@ -5,6 +5,7 @@
 package wire
 
 import (
+	"slices"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -135,18 +136,14 @@ var ErrUnsupportedVersion = errors.New("unsupported version")
 
 // The Header is the version independent part of the header
 type Header struct {
-	typeByte byte
-	Type     protocol.PacketType
-
+	Token            []byte
+	Length           protocol.ByteCount
+	parsedLen        protocol.ByteCount
 	Version          protocol.Version
 	SrcConnectionID  protocol.ConnectionID
 	DestConnectionID protocol.ConnectionID
-
-	Length protocol.ByteCount
-
-	Token []byte
-
-	parsedLen protocol.ByteCount // how many bytes were read while parsing this header
+	typeByte         byte
+	Type             protocol.PacketType
 }
 
 // ParsePacket parses a long header packet.
@@ -272,8 +269,7 @@ func (h *Header) parseLongHeader(b []byte) (int, error) {
 			return startLen - len(b), io.EOF
 		}
 
-		h.Token = make([]byte, tokenLen)
-		copy(h.Token, b[:tokenLen])
+		h.Token = slices.Clone(b[:tokenLen])
 
 		return startLen - len(b) + tokenLen + 16, nil
 	}
@@ -289,8 +285,7 @@ func (h *Header) parseLongHeader(b []byte) (int, error) {
 			return startLen - len(b), io.EOF
 		}
 
-		h.Token = make([]byte, tokenLen)
-		copy(h.Token, b[:tokenLen])
+		h.Token = slices.Clone(b[:tokenLen])
 		b = b[tokenLen:]
 	}
 
