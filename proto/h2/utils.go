@@ -15,7 +15,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/randkit"
 
-	"github.com/lemon4ksan/mach/client/h1"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
 var (

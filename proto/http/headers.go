@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1
+package http
 
 import (
 	fheader "github.com/lemon4ksan/foundation/net/http/header"

@@ -6,7 +6,6 @@ package h3
 
 import (
 	"bytes"
-	"crypto/tls"
 	"io"
 	"testing"
 
@@ -15,8 +14,8 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/mach/client/h1"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/qpack"
 )
 
@@ -366,28 +365,6 @@ func TestSettings_ReservedH2SettingsError(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, coreh3.ErrH3SettingsError)
 	}
-}
-
-func TestClient_ConnectionPoolAndRemoval(t *testing.T) {
-	t.Parallel()
-
-	client := NewClient(&tls.Config{InsecureSkipVerify: true})
-	require.NotNil(t, client)
-
-	// Simulate adding and removing connection
-	mockConn := &ClientConn{
-		qpack:  coreh3.NewQPACKCodec(),
-		closed: make(chan struct{}),
-	}
-
-	client.conns["example.com:443"] = mockConn
-	assert.Len(t, client.conns, 1)
-
-	client.removeConn("example.com:443")
-	assert.Empty(t, client.conns)
-
-	err := client.Close()
-	assert.NoError(t, err)
 }
 
 func TestSendRequest_LargePayload_Pooled(t *testing.T) {

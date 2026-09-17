@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1
+package http
 
 import (
 	"bytes"
@@ -225,11 +225,11 @@ func (u *URI) SetSchemeBytes(scheme []byte) {
 	bytesutil.LowercaseBytes(u.scheme)
 }
 
-func (u *URI) isHTTPS() bool {
+func (u *URI) IsHTTPS() bool {
 	return bytes.Equal(u.scheme, bytesutil.StrHTTPS)
 }
 
-func (u *URI) isHTTP() bool {
+func (u *URI) IsHTTP() bool {
 	return len(u.scheme) == 0 || bytes.Equal(u.scheme, bytesutil.StrHTTP)
 }
 
@@ -296,7 +296,7 @@ func (u *URI) parse(host, uri []byte, isTLS bool) error {
 	}
 
 	if len(host) == 0 || bytes.Contains(uri, bytesutil.StrColonSlashSlash) {
-		scheme, newHost, newURI := splitHostURI(host, uri)
+		scheme, newHost, newURI := SplitHostURI(host, uri)
 		if len(scheme) > 0 && !isValidScheme(scheme) {
 			return fmt.Errorf("invalid scheme %q", scheme)
 		}
@@ -440,7 +440,7 @@ func isAuthorityDelimiter(uri []byte, n int) bool {
 		return false
 	}
 
-	// splitHostURI also accepts the empty scheme in "://host".
+	// SplitHostURI also accepts the empty scheme in "://host".
 	scheme = scheme[:len(scheme)-1]
 
 	return len(scheme) == 0 || isValidScheme(scheme)
@@ -987,7 +987,7 @@ func (u *URI) String() string {
 	return string(u.FullURI())
 }
 
-func splitHostURI(host, uri []byte) ([]byte, []byte, []byte) {
+func SplitHostURI(host, uri []byte) ([]byte, []byte, []byte) {
 	n := bytes.Index(uri, bytesutil.StrSlashSlash)
 	if n < 0 {
 		return bytesutil.StrHTTP, host, uri

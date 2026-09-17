@@ -11,8 +11,8 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/mach/client/h1"
 	"github.com/lemon4ksan/mach/proto/compress"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
 func TestH1Engine_Compression_Gzip(t *testing.T) {

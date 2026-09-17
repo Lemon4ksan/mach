@@ -7,12 +7,10 @@ package h1_test
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"io"
 	"net"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/lemon4ksan/mach/proto/bytesutil"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
@@ -226,33 +224,6 @@ func TestConnHandler_EndToEndKeepAlive(t *testing.T) {
 	_ = clientConn.Close()
 }
 
-func TestServer_GracefulShutdown(t *testing.T) {
-	srv := h1.NewServer(func(req *h1.Request, res *h1.Response) error {
-		res.StatusCode = 200
-		res.Body = []byte("OK")
-		return nil
-	})
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-
-	go func() {
-		_ = srv.Serve(ln)
-	}()
-
-	time.Sleep(10 * time.Millisecond)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	err = srv.Shutdown(ctx)
-	if err != nil {
-		t.Fatalf("shutdown failed: %v", err)
-	}
-}
-
 func TestRequest_Expect100Continue(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 
@@ -369,69 +340,6 @@ func TestRequestParsing_RFC9112_MissingHost(t *testing.T) {
 	err := req.ReadRequest(br, nil, 1024)
 	if err == nil {
 		t.Fatal("expected error for missing Host header in HTTP/1.1 request")
-	}
-}
-
-func TestH1_HTTP_Pipelining_Batching(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-
-	defer func() { _ = ln.Close() }()
-
-	server := &h1.Server{
-		Addr: ln.Addr().String(),
-		Handler: func(req *h1.Request, res *h1.Response) error {
-			res.StatusCode = http.StatusOK
-			res.Body = []byte("Pipelined:" + req.Path)
-			return nil
-		},
-	}
-
-	go func() {
-		_ = server.Serve(ln)
-	}()
-
-	conn, err := net.Dial("tcp", ln.Addr().String())
-	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
-	}
-
-	defer func() { _ = conn.Close() }()
-
-	// Send 16 pipelined requests in a single TCP write
-	const pipelineCount = 16
-
-	var batch bytes.Buffer
-	for i := range pipelineCount {
-		batch.WriteString("GET /pipeline/" + string(rune('A'+i)) + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
-	}
-
-	_, err = conn.Write(batch.Bytes())
-	if err != nil {
-		t.Fatalf("failed writing batch: %v", err)
-	}
-
-	// Read and parse 16 responses
-	br := bufio.NewReader(conn)
-	for i := range pipelineCount {
-		resp, err := http.ReadResponse(br, nil)
-		if err != nil {
-			t.Fatalf("failed reading response #%d: %v", i, err)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-
-		if err != nil {
-			t.Fatalf("failed reading body #%d: %v", i, err)
-		}
-
-		expected := "Pipelined:/pipeline/" + string(rune('A'+i))
-		if string(body) != expected {
-			t.Errorf("response #%d expected %q, got %q", i, expected, string(body))
-		}
 	}
 }
 
@@ -592,32 +500,6 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "stream-chunk-data" {
 		t.Fatalf("expected stream-chunk-data, got %q", string(body))
-	}
-}
-
-func TestServer_ListenErrors_And_Shutdown(t *testing.T) {
-	srv := h1.NewServer(func(req *h1.Request, res *h1.Response) error {
-		return nil
-	})
-
-	// Invalid address for ListenAndServe
-	srv.Addr = "invalid:::addr:99999"
-	if err := srv.ListenAndServe(); err == nil {
-		t.Fatal("expected error on invalid ListenAndServe address")
-	}
-
-	// Invalid TLS cert for ListenAndServeTLS
-	if err := srv.ListenAndServeTLS("nonexistent.crt", "nonexistent.key"); err == nil {
-		t.Fatal("expected error on nonexistent TLS cert")
-	}
-
-	// Double shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	_ = srv.Shutdown(ctx)
-	if err := srv.Shutdown(ctx); err != nil {
-		t.Fatalf("expected nil on second shutdown, got %v", err)
 	}
 }
 

@@ -16,8 +16,8 @@ import (
 	"github.com/lemon4ksan/foundation/codec/compress/flate"
 	"github.com/lemon4ksan/foundation/codec/compress/gzip"
 
-	"github.com/lemon4ksan/mach/client/h1/stackless"
 	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/mach/proto/http/stackless"
 )
 
 // Supported compression levels.

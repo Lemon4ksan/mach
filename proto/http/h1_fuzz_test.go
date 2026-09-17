@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1_test
+package http_test
 
 import (
 	"bufio"
 	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/mach/client/h1"
+	http "github.com/lemon4ksan/mach/proto/http"
 )
 
 func FuzzH1Request(f *testing.F) {
@@ -29,7 +29,7 @@ func FuzzH1Request(f *testing.F) {
 			return
 		}
 
-		var req h1.Request
+		var req http.Request
 
 		br := bufio.NewReader(bytes.NewReader(data))
 		if err := req.Read(br); err == nil {
@@ -54,7 +54,7 @@ func FuzzH1Response(f *testing.F) {
 			return
 		}
 
-		var resp h1.Response
+		var resp http.Response
 
 		br := bufio.NewReader(bytes.NewReader(data))
 		if err := resp.ReadLimitBody(br, 64*1024); err == nil {
@@ -73,7 +73,7 @@ func FuzzH1URI(f *testing.F) {
 	f.Add([]byte("https://invalid host name:port/path"))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		var u h1.URI
+		var u http.URI
 		u.Parse(nil, raw) //nolint:errcheck
 		_ = u.Scheme()
 		_ = u.Host()

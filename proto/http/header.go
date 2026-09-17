@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1
+package http
 
 import (
 	"bufio"
@@ -44,7 +44,7 @@ type header struct {
 	contentLength int
 
 	disableNormalizing    bool
-	secureErrorLogMessage bool
+	SecureErrorLogMessage bool
 	noHTTP11              bool
 	connectionClose       bool
 	noDefaultContentType  bool
@@ -2209,7 +2209,7 @@ func (h *ResponseHeader) tryRead(r *bufio.Reader, n int) error {
 
 		// This is for go 1.6 bug. See https://github.com/golang/go/issues/14121 .
 		if errors.Is(err, bufio.ErrBufferFull) {
-			if h.secureErrorLogMessage {
+			if h.SecureErrorLogMessage {
 				return &ErrSmallBuffer{
 					error: ErrReadingResponseHeaders,
 				}
@@ -2227,7 +2227,7 @@ func (h *ResponseHeader) tryRead(r *bufio.Reader, n int) error {
 
 	headersLen, errParse := h.parse(b)
 	if errParse != nil {
-		return headerError("response", err, errParse, b, h.secureErrorLogMessage)
+		return headerError("response", err, errParse, b, h.SecureErrorLogMessage)
 	}
 
 	mustDiscard(r, headersLen)
@@ -2268,7 +2268,7 @@ func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
 
 		// This is for go 1.6 bug. See https://github.com/golang/go/issues/14121 .
 		if errors.Is(err, bufio.ErrBufferFull) {
-			if h.secureErrorLogMessage {
+			if h.SecureErrorLogMessage {
 				return &ErrSmallBuffer{
 					error: ErrReadingResponseTrailer,
 				}
@@ -2290,7 +2290,7 @@ func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
 			return err
 		}
 
-		return headerError("response", err, errParse, b, h.secureErrorLogMessage)
+		return headerError("response", err, errParse, b, h.SecureErrorLogMessage)
 	}
 
 	mustDiscard(r, headersLen)
@@ -2298,9 +2298,9 @@ func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
 	return nil
 }
 
-func headerError(typ string, err, errParse error, b []byte, secureErrorLogMessage bool) error {
+func headerError(typ string, err, errParse error, b []byte, SecureErrorLogMessage bool) error {
 	if !errors.Is(errParse, ErrNeedMore) {
-		return headerErrorMsg(typ, errParse, b, secureErrorLogMessage)
+		return headerErrorMsg(typ, errParse, b, SecureErrorLogMessage)
 	}
 
 	if err == nil {
@@ -2314,16 +2314,16 @@ func headerError(typ string, err, errParse error, b []byte, secureErrorLogMessag
 	}
 
 	if !errors.Is(err, bufio.ErrBufferFull) {
-		return headerErrorMsg(typ, err, b, secureErrorLogMessage)
+		return headerErrorMsg(typ, err, b, SecureErrorLogMessage)
 	}
 
 	return &ErrSmallBuffer{
-		error: headerErrorMsg(typ, ErrSmallReadBuffer, b, secureErrorLogMessage),
+		error: headerErrorMsg(typ, ErrSmallReadBuffer, b, SecureErrorLogMessage),
 	}
 }
 
-func headerErrorMsg(typ string, err error, b []byte, secureErrorLogMessage bool) error {
-	if secureErrorLogMessage {
+func headerErrorMsg(typ string, err error, b []byte, SecureErrorLogMessage bool) error {
+	if SecureErrorLogMessage {
 		return fmt.Errorf("error when reading %s headers: %w: buffer size=%d", typ, err, len(b))
 	}
 
@@ -2401,11 +2401,11 @@ func (h *RequestHeader) tryRead(r *bufio.Reader, n int) error {
 
 	headersLen, errParse := h.parse(b)
 	if errParse != nil {
-		return headerError("request", err, errParse, b, h.secureErrorLogMessage)
+		return headerError("request", err, errParse, b, h.SecureErrorLogMessage)
 	}
 
 	if errValidate := h.validate(); errValidate != nil {
-		return headerError("request", err, errValidate, b, h.secureErrorLogMessage)
+		return headerError("request", err, errValidate, b, h.SecureErrorLogMessage)
 	}
 
 	mustDiscard(r, headersLen)
@@ -2912,7 +2912,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 	// parse protocol
 	n := bytes.IndexByte(b, ' ')
 	if n < 0 {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, ErrResponseFirstLineMissingSpace
 		}
 
@@ -2936,7 +2936,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 	}
 
 	if len(statusCode) != 3 {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, ErrUnexpectedStatusCodeChar
 		}
 
@@ -2945,7 +2945,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 
 	h.statusCode, n, err = bytesutil.ParseUintBuf(statusCode)
 	if err != nil || n != 3 {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, ErrUnexpectedStatusCodeChar
 		}
 
@@ -2953,7 +2953,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 	}
 
 	if !isHTTPVersion(protoStr) {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, fmt.Errorf("unsupported http version %q", protoStr)
 		}
 
@@ -2996,7 +2996,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 	// parse method
 	n := bytes.IndexByte(b, ' ')
 	if n <= 0 {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, ErrMissingRequestMethod
 		}
 
@@ -3006,7 +3006,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 	h.method = append(h.method[:0], b[:n]...)
 
 	if !isValidMethod(h.method) {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, ErrUnsupportedRequestMethod
 		}
 
@@ -3023,7 +3023,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 	protoStr := b[n+1:]
 
 	if !isHTTPVersion(protoStr) {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, fmt.Errorf("unsupported http version %q", protoStr)
 		}
 
@@ -3031,7 +3031,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 	}
 
 	if n == 0 {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, ErrEmptyRequestURI
 		}
 
@@ -3039,7 +3039,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 	}
 
 	if err := validateRequestURI(h.method, b[:n]); err != nil {
-		if h.secureErrorLogMessage {
+		if h.SecureErrorLogMessage {
 			return 0, fmt.Errorf("invalid request uri %q", b[:n])
 		}
 
@@ -3216,7 +3216,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 				if transferEncodingSeen {
 					h.connectionClose = true
-					if h.secureErrorLogMessage {
+					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
 					}
 
@@ -3227,7 +3227,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 				if !bytesutil.CaseInsensitiveCompare(s.value, bytesutil.StrChunked) {
 					h.connectionClose = true
-					if h.secureErrorLogMessage {
+					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
 					}
 
@@ -3363,7 +3363,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 				if transferEncodingSeen {
 					h.connectionClose = true
-					if h.secureErrorLogMessage {
+					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
 					}
 
@@ -3432,7 +3432,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 				if !isIdentity && !isChunked {
 					h.connectionClose = true
-					if h.secureErrorLogMessage {
+					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
 					}
 
@@ -3779,3 +3779,5 @@ func (h *ResponseHeader) TrailerScoped(s *borrow.Scope, key string) borrow.Bytes
 
 	return borrow.NewBytes(b, nil)
 }
+
+func (h *ResponseHeader) SetDisableNormalizing(disable bool) { h.disableNormalizing = disable }

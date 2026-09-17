@@ -13,8 +13,8 @@ import (
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/client/h1"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/qpack"
 )
 

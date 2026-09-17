@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1
+package http
 
 import (
 	"bufio"
@@ -19,7 +19,7 @@ type bodyStreamHeader interface {
 	ReadTrailer(r *bufio.Reader) error
 }
 
-type requestStream struct {
+type RequestStream struct {
 	header          bodyStreamHeader
 	prefetchedBytes *bytes.Reader
 	reader          *bufio.Reader
@@ -27,7 +27,7 @@ type requestStream struct {
 	chunkLeft       int
 }
 
-func (rs *requestStream) Read(p []byte) (int, error) {
+func (rs *RequestStream) Read(p []byte) (int, error) {
 	var (
 		n   int
 		err error
@@ -107,8 +107,8 @@ func (rs *requestStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func acquireRequestStream(b *bytesutil.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *requestStream {
-	rs := requestStreamPool.Get().(*requestStream) //nolint:forcetypeassert
+func AcquireRequestStream(b *bytesutil.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *RequestStream {
+	rs := RequestStreamPool.Get().(*RequestStream) //nolint:forcetypeassert
 	rs.prefetchedBytes = bytes.NewReader(b.B)
 	rs.reader = r
 	rs.header = h
@@ -116,17 +116,17 @@ func acquireRequestStream(b *bytesutil.ByteBuffer, r *bufio.Reader, h bodyStream
 	return rs
 }
 
-func releaseRequestStream(rs *requestStream) {
+func ReleaseRequestStream(rs *RequestStream) {
 	rs.prefetchedBytes = nil
 	rs.totalBytesRead = 0
 	rs.chunkLeft = 0
 	rs.reader = nil
 	rs.header = nil
-	requestStreamPool.Put(rs)
+	RequestStreamPool.Put(rs)
 }
 
-var requestStreamPool = sync.Pool{
+var RequestStreamPool = sync.Pool{
 	New: func() any {
-		return &requestStream{}
+		return &RequestStream{}
 	},
 }

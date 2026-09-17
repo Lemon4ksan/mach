@@ -16,8 +16,8 @@ import (
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
-	"github.com/lemon4ksan/mach/client/h1"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/quic"
 )
 
@@ -43,8 +43,8 @@ var (
 // ClientConn manages HTTP/3 frame exchanges over a quic.Conn session (RFC 9114 §3, §4, §6 & §7).
 type ClientConn struct {
 	conn             *quic.Conn
-	transport        *quic.Transport
-	underlyingCloser io.Closer
+	Transport        *quic.Transport
+	UnderlyingCloser io.Closer
 	qpack            *coreh3.QPACKCodec
 	settings         coreh3.Settings
 
@@ -78,7 +78,7 @@ func NewClientConn(conn *quic.Conn, settings *coreh3.Settings) (*ClientConn, err
 	return cc, nil
 }
 
-func (cc *ClientConn) isClosed() bool {
+func (cc *ClientConn) IsClosed() bool {
 	if cc == nil {
 		return true
 	}
@@ -479,12 +479,12 @@ func (cc *ClientConn) Close() error {
 			_ = cc.conn.CloseWithError(0x100, "connection closed")
 		}
 
-		if cc.transport != nil {
-			_ = cc.transport.Close()
+		if cc.Transport != nil {
+			_ = cc.Transport.Close()
 		}
 
-		if cc.underlyingCloser != nil {
-			_ = cc.underlyingCloser.Close()
+		if cc.UnderlyingCloser != nil {
+			_ = cc.UnderlyingCloser.Close()
 		}
 	})
 

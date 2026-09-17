@@ -2,63 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1
+package http
 
 import (
-	"bytes"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
 )
-
-func TestH1Engine_ClientDo(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Custom") != "aoni-h1" {
-			http.Error(w, "missing header", http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("X-Resp", "ok")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("hello from h1 server"))
-	}))
-	defer ts.Close()
-
-	c := &Client{
-		Dial: func(addr string) (net.Conn, error) {
-			return net.Dial("tcp", addr)
-		},
-	}
-	req := AcquireRequest()
-	resp := AcquireResponse()
-
-	defer ReleaseRequest(req)
-	defer ReleaseResponse(resp)
-
-	req.SetRequestURI(ts.URL)
-	req.Header.SetMethod("GET")
-	req.Header.Set("X-Custom", "aoni-h1")
-
-	if err := c.Do(req, resp); err != nil {
-		t.Fatalf("c.Do failed: %v", err)
-	}
-
-	if resp.StatusCode() != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode())
-	}
-
-	if string(resp.Header.Peek("X-Resp")) != "ok" {
-		t.Fatalf("expected header ok, got %s", string(resp.Header.Peek("X-Resp")))
-	}
-
-	if !bytes.Equal(resp.Body(), []byte("hello from h1 server")) {
-		t.Fatalf("unexpected body: %s", string(resp.Body()))
-	}
-}
 
 func TestH1Engine_URIAndArgs(t *testing.T) {
 	u := AcquireURI()

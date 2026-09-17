@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1
+package http
 
 import (
 	"bufio"
@@ -68,16 +68,16 @@ type Request struct {
 
 	// Request timeout. Usually set by DoDeadline or DoTimeout
 	// if <= 0, means not set
-	timeout time.Duration
+	Timeout time.Duration
 
-	secureErrorLogMessage bool
+	SecureErrorLogMessage bool
 
 	// Group bool members in order to reduce Request object size.
 	parsedURI      bool
-	parsedPostArgs bool
+	ParsedPostArgs bool
 	uriParseErr    error
 
-	keepBodyBuffer bool
+	KeepBodyBuffer bool
 
 	// Used by Server to indicate the request was received on a HTTPS endpoint.
 	// Client/HostClient shouldn't use this field but should depend on the uri.scheme instead.
@@ -133,8 +133,8 @@ type Response struct {
 	// Use it for writing HEAD responses.
 	SkipBody bool
 
-	keepBodyBuffer        bool
-	secureErrorLogMessage bool
+	KeepBodyBuffer        bool
+	SecureErrorLogMessage bool
 }
 
 // SetHost sets host for the request.
@@ -213,7 +213,7 @@ func (req *Request) SetConnectionClose() {
 // to the entire request lifecycle, including both receiving the response
 // headers and the response body.
 func (req *Request) GetTimeOut() time.Duration {
-	return req.timeout
+	return req.Timeout
 }
 
 // SendFile registers file on the given path to be used as response body
@@ -381,7 +381,7 @@ type closeReader struct {
 	closeFunc func(err error) error
 }
 
-func newCloseReaderWithError(r io.Reader, closeFunc func(err error) error) ReadCloserWithError {
+func NewCloseReaderWithError(r io.Reader, closeFunc func(err error) error) ReadCloserWithError {
 	if r == nil {
 		panic(`BUG: reader is nil`)
 	}
@@ -458,7 +458,7 @@ func (resp *Response) LocalAddr() net.Addr {
 // Use BodyStream to read it incrementally.
 func (resp *Response) Body() []byte {
 	if resp.bodyStream != nil {
-		bodyBuf := resp.bodyBuffer()
+		bodyBuf := resp.BodyBuffer()
 		bodyBuf.Reset()
 		_, err := copyBodyStream(bodyBuf, resp.bodyStream)
 		resp.closeBodyStream(err) //nolint:errcheck
@@ -489,7 +489,7 @@ func (req *Request) bodyBytes() []byte {
 	}
 
 	if req.bodyStream != nil {
-		bodyBuf := req.bodyBuffer()
+		bodyBuf := req.BodyBuffer()
 		bodyBuf.Reset()
 		_, err := copyBodyStream(bodyBuf, req.bodyStream)
 		req.closeBodyStream() //nolint:errcheck
@@ -506,7 +506,7 @@ func (req *Request) bodyBytes() []byte {
 	return req.body.B
 }
 
-func (resp *Response) bodyBuffer() *bytesutil.ByteBuffer {
+func (resp *Response) BodyBuffer() *bytesutil.ByteBuffer {
 	if resp.body == nil {
 		resp.body = responseBodyPool.Get()
 	}
@@ -516,7 +516,7 @@ func (resp *Response) bodyBuffer() *bytesutil.ByteBuffer {
 	return resp.body
 }
 
-func (req *Request) bodyBuffer() *bytesutil.ByteBuffer {
+func (req *Request) BodyBuffer() *bytesutil.ByteBuffer {
 	if req.body == nil {
 		req.body = requestBodyPool.Get()
 	}
@@ -852,13 +852,13 @@ func (resp *Response) BodyWriteTo(w io.Writer) error {
 // It is safe re-using p after the function returns.
 func (resp *Response) AppendBody(p []byte) {
 	resp.closeBodyStream(nil)  //nolint:errcheck
-	resp.bodyBuffer().Write(p) //nolint:errcheck
+	resp.BodyBuffer().Write(p) //nolint:errcheck
 }
 
 // AppendBodyString appends s to response body.
 func (resp *Response) AppendBodyString(s string) {
 	resp.closeBodyStream(nil)        //nolint:errcheck
-	resp.bodyBuffer().WriteString(s) //nolint:errcheck
+	resp.BodyBuffer().WriteString(s) //nolint:errcheck
 }
 
 // SetBody sets response body.
@@ -866,7 +866,7 @@ func (resp *Response) AppendBodyString(s string) {
 // It is safe re-using body argument after the function returns.
 func (resp *Response) SetBody(body []byte) {
 	resp.closeBodyStream(nil) //nolint:errcheck
-	bodyBuf := resp.bodyBuffer()
+	bodyBuf := resp.BodyBuffer()
 	bodyBuf.Reset()
 	bodyBuf.Write(body) //nolint:errcheck
 }
@@ -874,7 +874,7 @@ func (resp *Response) SetBody(body []byte) {
 // SetBodyString sets response body.
 func (resp *Response) SetBodyString(body string) {
 	resp.closeBodyStream(nil) //nolint:errcheck
-	bodyBuf := resp.bodyBuffer()
+	bodyBuf := resp.BodyBuffer()
 	bodyBuf.Reset()
 	bodyBuf.WriteString(body) //nolint:errcheck
 }
@@ -885,7 +885,7 @@ func (resp *Response) ResetBody() {
 	resp.closeBodyStream(nil) //nolint:errcheck
 
 	if resp.body != nil {
-		if resp.keepBodyBuffer {
+		if resp.KeepBodyBuffer {
 			resp.body.Reset()
 		} else {
 			responseBodyPool.Put(resp.body)
@@ -954,7 +954,7 @@ func (req *Request) ReleaseBody(size int) {
 // It is forbidden to use the body passed to SwapBody after
 // the function returns.
 func (resp *Response) SwapBody(body []byte) []byte {
-	bb := resp.bodyBuffer()
+	bb := resp.BodyBuffer()
 
 	if resp.bodyStream != nil {
 		bb.Reset()
@@ -981,7 +981,7 @@ func (resp *Response) SwapBody(body []byte) []byte {
 // It is forbidden to use the body passed to SwapBody after
 // the function returns.
 func (req *Request) SwapBody(body []byte) []byte {
-	bb := req.bodyBuffer()
+	bb := req.BodyBuffer()
 
 	if req.bodyStream != nil {
 		bb.Reset()
@@ -1031,14 +1031,14 @@ func (req *Request) Body() []byte {
 func (req *Request) AppendBody(p []byte) {
 	req.RemoveMultipartFormFiles()
 	req.closeBodyStream()     //nolint:errcheck
-	req.bodyBuffer().Write(p) //nolint:errcheck
+	req.BodyBuffer().Write(p) //nolint:errcheck
 }
 
 // AppendBodyString appends s to request body.
 func (req *Request) AppendBodyString(s string) {
 	req.RemoveMultipartFormFiles()
 	req.closeBodyStream()           //nolint:errcheck
-	req.bodyBuffer().WriteString(s) //nolint:errcheck
+	req.BodyBuffer().WriteString(s) //nolint:errcheck
 }
 
 // SetBody sets request body.
@@ -1047,14 +1047,14 @@ func (req *Request) AppendBodyString(s string) {
 func (req *Request) SetBody(body []byte) {
 	req.RemoveMultipartFormFiles()
 	req.closeBodyStream() //nolint:errcheck
-	req.bodyBuffer().Set(body)
+	req.BodyBuffer().Set(body)
 }
 
 // SetBodyString sets request body.
 func (req *Request) SetBodyString(body string) {
 	req.RemoveMultipartFormFiles()
 	req.closeBodyStream() //nolint:errcheck
-	req.bodyBuffer().SetString(body)
+	req.BodyBuffer().SetString(body)
 }
 
 // ResetBody resets request body.
@@ -1064,7 +1064,7 @@ func (req *Request) ResetBody() {
 	req.closeBodyStream() //nolint:errcheck
 
 	if req.body != nil {
-		if req.keepBodyBuffer {
+		if req.KeepBodyBuffer {
 			req.body.Reset()
 		} else {
 			requestBodyPool.Put(req.body)
@@ -1075,7 +1075,7 @@ func (req *Request) ResetBody() {
 
 // CopyTo copies req contents to dst except of body stream.
 func (req *Request) CopyTo(dst *Request) {
-	req.copyToSkipBody(dst)
+	req.CopyToSkipBody(dst)
 
 	switch {
 	case req.bodyRaw != nil:
@@ -1084,13 +1084,13 @@ func (req *Request) CopyTo(dst *Request) {
 			dst.body.Reset()
 		}
 	case req.body != nil:
-		dst.bodyBuffer().Set(req.body.B)
+		dst.BodyBuffer().Set(req.body.B)
 	case dst.body != nil:
 		dst.body.Reset()
 	}
 }
 
-func (req *Request) copyToSkipBody(dst *Request) {
+func (req *Request) CopyToSkipBody(dst *Request) {
 	dst.Reset()
 	req.Header.CopyTo(&dst.Header)
 
@@ -1099,7 +1099,7 @@ func (req *Request) copyToSkipBody(dst *Request) {
 	dst.uriParseErr = req.uriParseErr
 
 	req.postArgs.CopyTo(&dst.postArgs)
-	dst.parsedPostArgs = req.parsedPostArgs
+	dst.ParsedPostArgs = req.ParsedPostArgs
 	dst.isTLS = req.isTLS
 
 	dst.UseHostHeader = req.UseHostHeader
@@ -1110,7 +1110,7 @@ func (req *Request) copyToSkipBody(dst *Request) {
 
 // CopyTo copies resp contents to dst except of body stream.
 func (resp *Response) CopyTo(dst *Response) {
-	resp.copyToSkipBody(dst)
+	resp.CopyToSkipBody(dst)
 
 	switch {
 	case resp.bodyRaw != nil:
@@ -1119,13 +1119,13 @@ func (resp *Response) CopyTo(dst *Response) {
 			dst.body.Reset()
 		}
 	case resp.body != nil:
-		dst.bodyBuffer().Set(resp.body.B)
+		dst.BodyBuffer().Set(resp.body.B)
 	case dst.body != nil:
 		dst.body.Reset()
 	}
 }
 
-func (resp *Response) copyToSkipBody(dst *Response) {
+func (resp *Response) CopyToSkipBody(dst *Response) {
 	dst.Reset()
 	resp.Header.CopyTo(&dst.Header)
 	dst.SkipBody = resp.SkipBody
@@ -1133,22 +1133,22 @@ func (resp *Response) copyToSkipBody(dst *Response) {
 	dst.laddr = resp.laddr
 }
 
-func swapRequestBody(a, b *Request) {
+func SwapRequestBody(a, b *Request) {
 	a.body, b.body = b.body, a.body
 	a.bodyRaw, b.bodyRaw = b.bodyRaw, a.bodyRaw
 	a.bodyStream, b.bodyStream = b.bodyStream, a.bodyStream
 
-	// This code assumes that if a requestStream was swapped the headers are also swapped or copied.
-	if rs, ok := a.bodyStream.(*requestStream); ok {
+	// This code assumes that if a RequestStream was swapped the headers are also swapped or copied.
+	if rs, ok := a.bodyStream.(*RequestStream); ok {
 		rs.header = &a.Header
 	}
 
-	if rs, ok := b.bodyStream.(*requestStream); ok {
+	if rs, ok := b.bodyStream.(*RequestStream); ok {
 		rs.header = &b.Header
 	}
 }
 
-func swapResponseBody(a, b *Response) {
+func SwapResponseBody(a, b *Response) {
 	a.body, b.body = b.body, a.body
 	a.bodyRaw, b.bodyRaw = b.bodyRaw, a.bodyRaw
 	a.bodyStream, b.bodyStream = b.bodyStream, a.bodyStream
@@ -1156,7 +1156,7 @@ func swapResponseBody(a, b *Response) {
 
 // URI returns request URI.
 func (req *Request) URI() *URI {
-	req.parseURI() //nolint:errcheck
+	req.ParseURI() //nolint:errcheck
 	return &req.uri
 }
 
@@ -1178,7 +1178,7 @@ func (req *Request) SetURI(newURI *URI) {
 	req.uriParseErr = nil
 }
 
-func (req *Request) parseURI() error {
+func (req *Request) ParseURI() error {
 	if req.parsedURI {
 		return req.uriParseErr
 	}
@@ -1196,11 +1196,11 @@ func (req *Request) PostArgs() *Args {
 }
 
 func (req *Request) parsePostArgs() {
-	if req.parsedPostArgs {
+	if req.ParsedPostArgs {
 		return
 	}
 
-	req.parsedPostArgs = true
+	req.ParsedPostArgs = true
 
 	if !bytes.HasPrefix(req.Header.ContentType(), bytesutil.StrPostArgsContentType) {
 		return
@@ -1408,7 +1408,7 @@ func (req *Request) Reset() {
 
 	req.Header.Reset()
 	req.resetSkipHeader()
-	req.timeout = 0
+	req.Timeout = 0
 	req.UseHostHeader = false
 	req.DisableRedirectPathNormalizing = false
 }
@@ -1419,7 +1419,7 @@ func (req *Request) resetSkipHeader() {
 	req.parsedURI = false
 	req.uriParseErr = nil
 	req.postArgs.Reset()
-	req.parsedPostArgs = false
+	req.ParsedPostArgs = false
 	req.isTLS = false
 }
 
@@ -1638,7 +1638,7 @@ func (req *Request) ContinueReadBody(r *bufio.Reader, maxBodySize int, preParseM
 // If maxBodySize > 0 and the body size exceeds maxBodySize,
 // then ErrBodyTooLarge is returned.
 func (req *Request) ReadBody(r *bufio.Reader, contentLength, maxBodySize int) (err error) {
-	bodyBuf := req.bodyBuffer()
+	bodyBuf := req.BodyBuffer()
 	bodyBuf.Reset()
 
 	switch {
@@ -1709,7 +1709,7 @@ func (req *Request) ContinueReadBodyStream(r *bufio.Reader, maxBodySize int, pre
 		return nil
 	}
 
-	bodyBuf := req.bodyBuffer()
+	bodyBuf := req.BodyBuffer()
 	bodyBuf.Reset()
 
 	bodyBuf.B, err = readBodyWithStreaming(r, contentLength, maxBodySize, bodyBuf.B)
@@ -1717,14 +1717,14 @@ func (req *Request) ContinueReadBodyStream(r *bufio.Reader, maxBodySize int, pre
 		if errors.Is(err, ErrBodyTooLarge) {
 			req.Header.SetContentLength(contentLength)
 			req.body = bodyBuf
-			req.bodyStream = acquireRequestStream(bodyBuf, r, &req.Header)
+			req.bodyStream = AcquireRequestStream(bodyBuf, r, &req.Header)
 
 			return nil
 		}
 
 		if errors.Is(err, errChunkedStream) {
 			req.body = bodyBuf
-			req.bodyStream = acquireRequestStream(bodyBuf, r, &req.Header)
+			req.bodyStream = AcquireRequestStream(bodyBuf, r, &req.Header)
 			return nil
 		}
 
@@ -1734,7 +1734,7 @@ func (req *Request) ContinueReadBodyStream(r *bufio.Reader, maxBodySize int, pre
 	}
 
 	req.body = bodyBuf
-	req.bodyStream = acquireRequestStream(bodyBuf, r, &req.Header)
+	req.bodyStream = AcquireRequestStream(bodyBuf, r, &req.Header)
 	req.Header.SetContentLength(contentLength)
 
 	return nil
@@ -1821,7 +1821,7 @@ func (resp *Response) ReadLimitBody(r *bufio.Reader, maxBodySize int) error {
 // If maxBodySize > 0 and the body size exceeds maxBodySize,
 // then ErrBodyTooLarge is returned.
 func (resp *Response) ReadBody(r *bufio.Reader, maxBodySize int) (err error) {
-	bodyBuf := resp.bodyBuffer()
+	bodyBuf := resp.BodyBuffer()
 	bodyBuf.Reset()
 
 	contentLength := resp.Header.ContentLength()
@@ -1829,20 +1829,20 @@ func (resp *Response) ReadBody(r *bufio.Reader, maxBodySize int) (err error) {
 	case contentLength >= 0:
 		bodyBuf.B, err = readBody(r, contentLength, maxBodySize, bodyBuf.B)
 		if errors.Is(err, ErrBodyTooLarge) && resp.StreamBody {
-			resp.bodyStream = acquireRequestStream(bodyBuf, r, &resp.Header)
+			resp.bodyStream = AcquireRequestStream(bodyBuf, r, &resp.Header)
 			err = nil
 		}
 
 	case contentLength == -1:
 		if resp.StreamBody {
-			resp.bodyStream = acquireRequestStream(bodyBuf, r, &resp.Header)
+			resp.bodyStream = AcquireRequestStream(bodyBuf, r, &resp.Header)
 		} else {
 			bodyBuf.B, err = readBodyChunked(r, maxBodySize, bodyBuf.B)
 		}
 
 	default:
 		if resp.StreamBody {
-			resp.bodyStream = acquireRequestStream(bodyBuf, r, &resp.Header)
+			resp.bodyStream = AcquireRequestStream(bodyBuf, r, &resp.Header)
 		} else {
 			bodyBuf.B, err = readBodyIdentity(r, maxBodySize, bodyBuf.B)
 			resp.Header.SetContentLength(len(bodyBuf.B))
@@ -2027,7 +2027,7 @@ func (req *Request) Write(w *bufio.Writer) error {
 	if hasBody {
 		_, err = w.Write(body)
 	} else if len(body) > 0 {
-		if req.secureErrorLogMessage {
+		if req.SecureErrorLogMessage {
 			return errors.New("non-zero body for non-post request")
 		}
 
@@ -2404,8 +2404,8 @@ func (s *compressedBodyStream) closeOriginal(wErr error) error {
 		}
 	}
 
-	if bsr, ok := s.bodyStream.(*requestStream); ok {
-		releaseRequestStream(bsr)
+	if bsr, ok := s.bodyStream.(*RequestStream); ok {
+		ReleaseRequestStream(bsr)
 	}
 
 	return err
@@ -2493,8 +2493,8 @@ func closeBodyStreamReader(bodyStream io.Reader, wErr error) error {
 		}
 	}
 
-	if bsr, ok := bodyStream.(*requestStream); ok {
-		releaseRequestStream(bsr)
+	if bsr, ok := bodyStream.(*RequestStream); ok {
+		ReleaseRequestStream(bsr)
 	}
 
 	return err
@@ -2684,8 +2684,8 @@ func (req *Request) closeBodyStream() error {
 		err = bsc.Close()
 	}
 
-	if rs, ok := req.bodyStream.(*requestStream); ok {
-		releaseRequestStream(rs)
+	if rs, ok := req.bodyStream.(*RequestStream); ok {
+		ReleaseRequestStream(rs)
 	}
 
 	req.bodyStream = nil
@@ -2949,7 +2949,7 @@ var errChunkedStream = errors.New("chunked stream")
 
 func readBodyWithStreaming(r *bufio.Reader, contentLength, maxBodySize int, dst []byte) (b []byte, err error) {
 	if contentLength == -1 {
-		// handled in requestStream.Read()
+		// handled in RequestStream.Read()
 		return b, errChunkedStream
 	}
 
@@ -3190,7 +3190,7 @@ func readCrLf(r *bufio.Reader) error {
 //
 //	c.DoTimeout(&req, &resp, t)
 func (req *Request) SetTimeout(t time.Duration) {
-	req.timeout = t
+	req.Timeout = t
 }
 
 // Borrow methods moved from borrow.go

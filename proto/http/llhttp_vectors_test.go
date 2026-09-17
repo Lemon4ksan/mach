@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package h1_test
+package http_test
 
 import (
 	"bufio"
@@ -13,7 +13,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/testing/assert"
 
-	"github.com/lemon4ksan/mach/client/h1"
+	http "github.com/lemon4ksan/mach/proto/http"
 )
 
 // Official test cases adapted from nodejs/http-parser and nodejs/llhttp
@@ -93,7 +93,7 @@ func TestLLHTTP_Chunked_OfficialVectors(t *testing.T) {
 	for _, tv := range testVectors {
 		t.Run(tv.name, func(t *testing.T) {
 			r := bufio.NewReader(bytes.NewBufferString(tv.rawStream))
-			decoded, err := h1.ReadBodyChunked(r, 0, nil)
+			decoded, err := http.ReadBodyChunked(r, 0, nil)
 
 			if tv.shouldError {
 				assert.Equal(t, true, err != nil && !errors.Is(err, io.EOF))

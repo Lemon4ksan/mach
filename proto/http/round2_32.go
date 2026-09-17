@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build amd64 || arm64 || ppc64 || ppc64le || riscv64 || s390x
+//go:build !amd64 && !arm64 && !ppc64 && !ppc64le && !riscv64 && !s390x
 
-package h1
+package http
+
+import "math"
 
 func roundUpForSliceCap(n int) int {
 	if n <= 0 {
@@ -16,12 +18,17 @@ func roundUpForSliceCap(n int) int {
 		return n
 	}
 
-	x := uint64(n - 1) // #nosec G115
+	x := uint32(n - 1)
 	x |= x >> 1
 	x |= x >> 2
 	x |= x >> 4
 	x |= x >> 8
 	x |= x >> 16
 
-	return int(x + 1) // #nosec G115
+	// Make sure we don't return 0 due to overflow, even on 32 bit systems
+	if x >= uint32(math.MaxInt32) {
+		return math.MaxInt32
+	}
+
+	return int(x + 1)
 }

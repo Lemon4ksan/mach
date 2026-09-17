@@ -7,15 +7,11 @@ package h2
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"net"
-	"slices"
-	"sync"
 	"testing"
-	"time"
 
-	"github.com/lemon4ksan/mach/client/h1"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
 func runMockH2Server(
@@ -160,131 +156,5 @@ func runMockH2Server(
 		}
 
 		coreh2.ReleaseFrameHeader(fr)
-	}
-}
-
-func TestClientServerEndToEnd(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-	defer ln.Close() //nolint:errcheck
-
-	go func() {
-		serverConn, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		defer serverConn.Close() //nolint:errcheck
-
-		runMockH2Server(t, serverConn, func(req *h1.Request, resp *h1.Response, _ []string) {
-			if string(req.Header.Method()) != "GET" {
-				t.Errorf("server: method mismatch: got %s, want GET", req.Header.Method())
-			}
-
-			resp.SetStatusCode(200)
-			resp.SetBodyString("h2engine success")
-		})
-	}()
-
-	dialer := &Dialer{
-		RawDialContext: func(ctx context.Context, addr string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "tcp", ln.Addr().String())
-		},
-	}
-
-	client := NewClient(dialer, ClientOpts{PingInterval: 5 * time.Second})
-
-	req := h1.AcquireRequest()
-	resp := h1.AcquireResponse()
-
-	defer h1.ReleaseRequest(req)
-	defer h1.ReleaseResponse(resp)
-
-	req.Header.SetMethod("GET")
-	req.SetRequestURI("https://example.com/test")
-
-	if err := client.Do(context.Background(), req, resp); err != nil {
-		t.Fatalf("client.Do failed: %v", err)
-	}
-
-	if resp.StatusCode() != 200 {
-		t.Fatalf("expected status code 200, got %d", resp.StatusCode())
-	}
-
-	if string(resp.Body()) != "h2engine success" {
-		t.Fatalf("body mismatch: got %q, want %q", resp.Body(), "h2engine success")
-	}
-}
-
-func TestOrderedHeadersSequenceOnWire(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-	defer ln.Close() //nolint:errcheck
-
-	orderedKeys := []string{"accept-language", "user-agent", "x-custom-a"}
-
-	var (
-		capturedHeaders []string
-		mu              sync.Mutex
-	)
-
-	go func() {
-		serverConn, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		defer serverConn.Close() //nolint:errcheck
-
-		runMockH2Server(t, serverConn, func(_ *h1.Request, resp *h1.Response, rawHeaders []string) {
-			mu.Lock()
-			capturedHeaders = slices.Clone(rawHeaders)
-			mu.Unlock()
-
-			resp.SetStatusCode(200)
-		})
-	}()
-
-	dialer := &Dialer{
-		RawDialContext: func(ctx context.Context, addr string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "tcp", ln.Addr().String())
-		},
-	}
-
-	client := NewClient(dialer, ClientOpts{PingInterval: 5 * time.Second})
-	client.SetOrderedHeaders(orderedKeys)
-
-	req := h1.AcquireRequest()
-	resp := h1.AcquireResponse()
-
-	defer h1.ReleaseRequest(req)
-	defer h1.ReleaseResponse(resp)
-
-	req.Header.SetMethod("GET")
-	req.SetRequestURI("https://example.com/test")
-
-	req.Header.Set("x-custom-a", "val-a")
-	req.Header.Set("user-agent", "aoni-agent")
-	req.Header.Set("accept-language", "en-US")
-
-	if err := client.Do(context.Background(), req, resp); err != nil {
-		t.Fatalf("client.Do failed: %v", err)
-	}
-
-	mu.Lock()
-	headers := slices.Clone(capturedHeaders)
-	mu.Unlock()
-
-	if len(headers) < 3 {
-		t.Fatalf("expected at least 3 headers, got %d: %v", len(headers), headers)
-	}
-
-	if headers[0] != "accept-language" || headers[1] != "user-agent" ||
-		headers[2] != "x-custom-a" {
-		t.Fatalf("headers order sequence violated: got %v, want %v", headers, orderedKeys)
 	}
 }

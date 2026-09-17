@@ -4,7 +4,10 @@
 
 package h3
 
-import coreh3 "github.com/lemon4ksan/mach/proto/h3"
+import (
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	"github.com/lemon4ksan/mach/quic"
+)
 
 type QPACKCodec = coreh3.QPACKCodec
 
@@ -13,3 +16,9 @@ func NewQPACKCodec() *QPACKCodec { return coreh3.NewQPACKCodec() }
 const FrameTypeHeaders = coreh3.FrameTypeHeaders
 
 var ReadFrameHeader = coreh3.ReadFrameHeader
+
+type QUICOption = quic.Option
+type QUICTransport = quic.Transport
+type QUICConnection = quic.Conn
+
+var QUICWithDatagrams = quic.WithDatagrams

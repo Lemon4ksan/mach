@@ -28,8 +28,8 @@ import (
 	"github.com/lemon4ksan/foundation/sync/spinlock"
 	"golang.org/x/sys/cpu"
 
-	"github.com/lemon4ksan/mach/client/h1"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
 // maxConsecutiveControlFrames bounds consecutive control frames to prevent denial of service (RFC 9113 §10.5).
@@ -1555,8 +1555,8 @@ type Dialer struct {
 	Addr           string
 	TLSConfig      *tls.Config
 	PingInterval   time.Duration
-	NetDial        h1.DialFunc
-	RawDial        h1.DialFunc
+	NetDial        func(addr string) (net.Conn, error)
+	RawDial        func(addr string) (net.Conn, error)
 	RawDialContext func(ctx context.Context, addr string) (net.Conn, error)
 }
 
@@ -1634,4 +1634,26 @@ func (d *Dialer) tryDial(ctx context.Context) (net.Conn, error) {
 	}
 
 	return tlsConn, nil
+}
+
+func (c *Conn) Do(ctx context.Context, req *h1.Request, res *h1.Response) error {
+	errCh := make(chan error, 1)
+	reqCtx := &Context{
+		Request:  req,
+		Response: res,
+		Err:      errCh,
+	}
+
+	if err := c.Write(reqCtx); err != nil {
+		return coreh2.ErrGoAwayRetryable
+	}
+
+	select {
+	case <-ctx.Done():
+		c.CancelStream(reqCtx)
+		return ctx.Err()
+
+	case err := <-errCh:
+		return err
+	}
 }
