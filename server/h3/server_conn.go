@@ -264,7 +264,9 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	}
 
 	// Decode QPACK headers (RFC 9114 §4.1.2)
-	method, path, scheme, authority, headers, err := sc.qpack.DecodeRequestHeaders(headerBlock)
+	var parsedHeaders coreheaders.Headers
+	parsedHeaders.Reset()
+	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(headerBlock, &parsedHeaders)
 	if err != nil {
 		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
 		return
@@ -276,7 +278,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 		Path:       path,
 		Scheme:     scheme,
 		Authority:  authority,
-		Headers:    headers,
+		Headers:    parsedHeaders,
 		Body:       bodyBuf.Bytes(),
 		RemoteAddr: sc.quicConn.RemoteAddr().String(),
 		Ctx:        context.Background(),

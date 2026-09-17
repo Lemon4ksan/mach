@@ -324,15 +324,17 @@ func (q *QPACKCodec) DecodeResponseTrailers(headerBlock []byte) (map[string][]st
 
 func (q *QPACKCodec) DecodeRequestHeaders(
 	headerBlock []byte,
-) (method, path, scheme, authority string, headers coreheaders.Headers, err error) {
-	headers = coreheaders.NewWithCapacity(16)
+	reqHeaders *coreheaders.Headers,
+) (method, path, scheme, authority string, err error) {
+	reqHeaders.Reset()
 
 	var (
 		hasSeenRegularHeader bool
 		malformed            bool
 	)
 
-	decodeErr := q.decoder.DecodeFields(headerBlock, &headerBlock, func(hf qpack.HeaderField) bool {
+	arena := reqHeaders.GetRawBuf()
+	decodeErr := q.decoder.DecodeFields(headerBlock, &arena, func(hf qpack.HeaderField) bool {
 		k := hf.Name
 		v := hf.Value
 
@@ -386,7 +388,7 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 
 			case ":protocol":
 				// RFC 9220: Extended CONNECT for WebSockets
-				headers.Set(":protocol", v)
+				reqHeaders.Set(":protocol", v)
 			default:
 				malformed = true
 				return false
@@ -406,26 +408,26 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 				}
 			}
 
-			headers.Add(k, v)
+			reqHeaders.Add(k, v)
 		}
 
 		return true
 	})
 	if decodeErr != nil {
-		return "", "", "", "", coreheaders.Headers{}, ErrQPACKDecompressFailed
+		return "", "", "", "", ErrQPACKDecompressFailed
 	}
 
 	if malformed {
-		return "", "", "", "", coreheaders.Headers{}, ErrMalformedHeader
+		return "", "", "", "", ErrMalformedHeader
 	}
 
 	if method == "" || (method != "CONNECT" && (scheme == "" || path == "")) {
-		return "", "", "", "", coreheaders.Headers{}, ErrMissingMethodOrPath
+		return "", "", "", "", ErrMissingMethodOrPath
 	}
 
-	headers.SetRawBuf(headerBlock)
+	reqHeaders.SetRawBuf(arena)
 
-	return method, path, scheme, authority, headers, nil
+	return method, path, scheme, authority, nil
 }
 
 func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers coreheaders.Headers, bodyLen int) []byte {

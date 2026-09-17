@@ -58,7 +58,7 @@ func (h *Headers) GetRawBuf() []byte {
 }
 
 func (h *Headers) Reset() {
-	h.buf = nil
+	h.buf = h.buf[:0]
 	h.count = idxReservedCount
 	for i := range maxHeaders {
 		h.packed[i] = 0
