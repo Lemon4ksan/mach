@@ -9,8 +9,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	coreheaders "github.com/lemon4ksan/mach/core/headers"
 
@@ -24,16 +24,14 @@ type PooledEncoder struct {
 	enc *qpack.Encoder
 }
 
-var encoderPool = sync.Pool{
-	New: func() any {
-		buf := new(bytes.Buffer)
+var encoderPool = generic.NewPool(func() *PooledEncoder {
+	buf := new(bytes.Buffer)
 
-		return &PooledEncoder{
-			buf: buf,
-			enc: qpack.NewEncoder(buf),
-		}
-	},
-}
+	return &PooledEncoder{
+		buf: buf,
+		enc: qpack.NewEncoder(buf),
+	}
+})
 
 // QPACKCodec manages zero-allocation QPACK header serialization and deserialization (RFC 9204 Â§2, Â§3 & Â§4).
 type QPACKCodec struct {
@@ -49,7 +47,7 @@ func NewQPACKCodec() *QPACKCodec {
 
 // AcquireEncoder obtains a pooled QPACK encoder for zero-allocation encoding.
 func (q *QPACKCodec) AcquireEncoder() *PooledEncoder {
-	p := encoderPool.Get().(*PooledEncoder)
+	p := encoderPool.Get()
 	p.buf.Reset()
 	p.enc.Reset(p.buf)
 
@@ -185,9 +183,10 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *h1.Request, o
 	var visitedBits uint64
 
 	numOrdered := min(len(orderedKeys), 64)
+	keys := orderedKeys[:numOrdered]
 
 	for i := 0; i < numOrdered; i++ {
-		key := orderedKeys[i]
+		key := keys[i]
 		val := req.Header.Peek(key)
 
 		if isForbiddenH3HeaderStr(key, val) {
@@ -211,7 +210,7 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *h1.Request, o
 		skip := false
 
 		for i := range numOrdered {
-			if (visitedBits&(1<<i)) != 0 && bytesconv.EqualFoldASCII(kStr, orderedKeys[i]) {
+			if (visitedBits&(1<<i)) != 0 && bytesconv.EqualFoldASCII(kStr, keys[i]) {
 				skip = true
 				break
 			}
@@ -228,6 +227,7 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *h1.Request, o
 
 		if len(k) <= len(stackKeyBuf) {
 			keyBuf := stackKeyBuf[:len(k)]
+			_ = keyBuf[len(k)-1]
 			for i := range k {
 				keyBuf[i] = bytesconv.LowercaseByte(k[i])
 			}
@@ -429,7 +429,7 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 }
 
 func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers coreheaders.Headers, bodyLen int) []byte {
-	pe := encoderPool.Get().(*PooledEncoder)
+	pe := encoderPool.Get()
 	defer encoderPool.Put(pe)
 
 	pe.buf.Reset()

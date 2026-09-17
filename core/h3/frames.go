@@ -72,12 +72,12 @@ const (
 
 // Settings encapsulates HTTP/3 connection parameters negotiated during control stream setup (RFC 9114 §7.2.4).
 type Settings struct {
+	Other               map[uint64]uint64
 	MaxFieldSectionSize int64
 	QpackMaxTableCap    uint64
 	QpackBlockedStreams uint64
 	EnableDatagrams     bool
 	EnableConnect       bool
-	Other               map[uint64]uint64
 }
 
 // Encode serializes Settings into a binary H3 SETTINGS frame payload.
