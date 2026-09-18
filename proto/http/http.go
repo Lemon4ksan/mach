@@ -22,13 +22,13 @@ import (
 )
 
 var (
-	requestBodyPoolSizeLimit  int64 = -1
-	responseBodyPoolSizeLimit int64 = -1
+	requestBodyPoolSizeLimit  atomic.Int64
+	responseBodyPoolSizeLimit atomic.Int64
 )
 
 func SetBodySizePoolLimit(reqBodyLimit, respBodyLimit int) {
-	atomic.StoreInt64(&requestBodyPoolSizeLimit, int64(reqBodyLimit))
-	atomic.StoreInt64(&responseBodyPoolSizeLimit, int64(respBodyLimit))
+	requestBodyPoolSizeLimit.Store(int64(reqBodyLimit))
+	responseBodyPoolSizeLimit.Store(int64(respBodyLimit))
 } // SetBodySizePoolLimit set the max body size for bodies to be returned to the pool.
 // If the body size is larger it will be released instead of put back into the pool for reuse.
 
@@ -804,4 +804,9 @@ func readCrLf(r *bufio.Reader) error {
 		}
 	}
 	return nil
+}
+
+func init() {
+	requestBodyPoolSizeLimit.Store(-1)
+	responseBodyPoolSizeLimit.Store(-1)
 }

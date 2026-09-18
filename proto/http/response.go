@@ -12,7 +12,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/codec/compress"
@@ -434,7 +433,7 @@ func (resp *Response) CopyToSkipBody(dst *Response) {
 }
 
 func (resp *Response) Reset() {
-	if bodyPoolSizeLimit := int(atomic.LoadInt64(&responseBodyPoolSizeLimit)); bodyPoolSizeLimit >= 0 && resp.body != nil {
+	if bodyPoolSizeLimit := int(responseBodyPoolSizeLimit.Load()); bodyPoolSizeLimit >= 0 && resp.body != nil {
 		resp.ReleaseBody(bodyPoolSizeLimit)
 	}
 	resp.resetSkipHeader()

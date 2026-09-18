@@ -10,7 +10,7 @@ package quic
 import (
 	"encoding/binary"
 	"errors"
-	"log"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -207,7 +207,7 @@ func (c *oobConn) ReadPacket() (receivedPacket, error) {
 					p.info.ifIndex = ifIndex
 				} else {
 					invalidCmsgOnceV4.Do(func() {
-						log.Printf("Received invalid IPv4 packet info control message: %+x. "+
+						slog.Warn("Received invalid IPv4 packet info control message: %+x. "+
 							"This should never occur, please open a new issue and include details about the architecture.", body)
 					})
 				}
@@ -234,7 +234,7 @@ func (c *oobConn) ReadPacket() (receivedPacket, error) {
 					p.info.ifIndex = binary.NativeEndian.Uint32(body[16:])
 				} else {
 					invalidCmsgOnceV6.Do(func() {
-						log.Printf("Received invalid IPv6 packet info control message: %+x. "+
+						slog.Warn("Received invalid IPv6 packet info control message: %+x. "+
 							"This should never occur, please open a new issue and include details about the architecture.", body)
 					})
 				}

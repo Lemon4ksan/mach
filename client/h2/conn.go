@@ -89,7 +89,7 @@ type Conn struct {
 	openStreams              atomic.Int32
 	pingUnacks               int32
 	consecutiveControlFrames int32
-	nextID                   uint32
+	nextID                   atomic.Uint32
 
 	_ cpu.CacheLinePad
 
@@ -116,7 +116,7 @@ func NewConn(c net.Conn, opts ConnOpts) *Conn {
 		bw:            bufio.NewWriterSize(c, 16384),
 		enc:           coreh2.AcquireHPACK(),
 		dec:           coreh2.AcquireHPACK(),
-		nextID:        1,
+		
 		maxWindow:     15663105,
 		currentWindow: 15663105,
 		in:            make(chan *Context, 128),
@@ -128,6 +128,7 @@ func NewConn(c net.Conn, opts ConnOpts) *Conn {
 		onRTT:         opts.OnRTT,
 		onPushPromise: opts.OnPushPromise,
 	}
+	nc.nextID.Store(1)
 
 	nc.windowCond = sync.NewCond(&nc.windowMu)
 	nc.current.Reset()
@@ -406,7 +407,7 @@ func (c *Conn) sendSettingsAck() {
 
 // CanOpenStream reports whether the client can open new concurrent streams.
 func (c *Conn) CanOpenStream() bool {
-	if atomic.LoadUint32(&c.nextID) >= (1<<31 - 1) {
+	if c.nextID.Load() >= (1<<31 - 1) {
 		return false
 	}
 
@@ -671,7 +672,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	}
 
 	// RFC 9113 §5.1.1: Streams initiated by a client MUST use odd-numbered stream identifiers (1, 3, 5, ...).
-	id := atomic.AddUint32(&c.nextID, 2) - 2
+	id := c.nextID.Add(2) - 2
 	if id >= (1<<31 - 1) {
 		// RFC 9113 §5.1.1: Stream identifiers must be 31-bit unsigned integers.
 		// When reaching 2^31-1, stream identifiers cannot be reused and connection must close.

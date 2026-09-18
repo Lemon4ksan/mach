@@ -5,6 +5,8 @@
 package headers
 
 import (
+	"iter"
+
 	"encoding/binary"
 	"math/bits"
 
@@ -373,17 +375,22 @@ func (h *Headers) Del(key string) {
 	h.dynamic = h.dynamic[:n]
 }
 
-// VisitAll invokes the f callback for each header without allocating a slice
-func (h *Headers) VisitAll(f func(key, value string)) {
-	for i := 0; i < h.count; i++ {
-		p := h.packed[i]
-		if p != 0 {
-			f(h.getKey(p), h.getVal(p))
+// All returns an iterator over all headers.
+func (h *Headers) All() iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		for i := 0; i < h.count; i++ {
+			p := h.packed[i]
+			if p != 0 {
+				if !yield(h.getKey(p), h.getVal(p)) {
+					return
+				}
+			}
 		}
-	}
-
-	for i := 0; i < len(h.dynamic); i++ {
-		f(h.dynamic[i].Key, h.dynamic[i].Value)
+		for i := 0; i < len(h.dynamic); i++ {
+			if !yield(h.dynamic[i].Key, h.dynamic[i].Value) {
+				return
+			}
+		}
 	}
 }
 
@@ -439,9 +446,9 @@ func (h *Headers) AddFromHTTP(src map[string][]string) {
 // Entries returns all headers as a slice. Allocates!
 func (h *Headers) Entries() []HeaderEntry {
 	entries := make([]HeaderEntry, 0, h.count+len(h.dynamic))
-	h.VisitAll(func(k, v string) {
+	for k, v := range h.All() {
 		entries = append(entries, HeaderEntry{Key: k, Value: v})
-	})
+	}
 
 	return entries
 }

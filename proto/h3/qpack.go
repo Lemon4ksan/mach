@@ -453,18 +453,18 @@ func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers coreheaders.H
 		})
 	}
 
-	headers.VisitAll(func(k, v string) {
+	for k, v := range headers.All() {
 		kLower := strings.ToLower(k)
 
 		if isForbiddenH3Header([]byte(kLower), []byte(v)) {
-			return // skip in VisitAll
+			continue // skip in VisitAll
 		}
 
 		_ = pe.enc.WriteField(qpack.HeaderField{
 			Name:  kLower,
 			Value: v,
 		})
-	})
+	}
 
 	result := make([]byte, pe.buf.Len())
 	copy(result, pe.buf.Bytes())

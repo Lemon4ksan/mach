@@ -12,7 +12,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net"
-	"sync/atomic"
 	"time"
 
 	"github.com/lemon4ksan/foundation/borrow"
@@ -582,7 +581,7 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 // is processed.
 
 func (req *Request) Reset() {
-	if bodyPoolSizeLimit := int(atomic.LoadInt64(&requestBodyPoolSizeLimit)); bodyPoolSizeLimit >= 0 && req.body != nil {
+	if bodyPoolSizeLimit := int(requestBodyPoolSizeLimit.Load()); bodyPoolSizeLimit >= 0 && req.body != nil {
 		req.ReleaseBody(bodyPoolSizeLimit)
 	}
 	req.Header.Reset()

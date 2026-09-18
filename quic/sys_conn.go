@@ -7,7 +7,7 @@ package quic
 
 import (
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -66,7 +66,7 @@ func wrapConn(pc net.PacketConn) (rawConn, error) {
 					return
 				}
 
-				log.Printf(
+				slog.Warn(
 					"%s. See https://github.com/lemon4ksan/sein/internal/quic/wiki/UDP-Buffer-Sizes for details.",
 					err,
 				)
@@ -81,7 +81,7 @@ func wrapConn(pc net.PacketConn) (rawConn, error) {
 					return
 				}
 
-				log.Printf(
+				slog.Warn(
 					"%s. See https://github.com/lemon4ksan/sein/internal/quic/wiki/UDP-Buffer-Sizes for details.",
 					err,
 				)
