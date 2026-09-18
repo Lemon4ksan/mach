@@ -20,7 +20,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 
-	coreheaders "github.com/lemon4ksan/mach/proto/headers"
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 )
 
 var (

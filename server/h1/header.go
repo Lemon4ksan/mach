@@ -4,7 +4,7 @@
 
 package h1
 
-import coreheaders "github.com/lemon4ksan/mach/proto/headers"
+import coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 
 type (
 	Headers     = coreheaders.Headers

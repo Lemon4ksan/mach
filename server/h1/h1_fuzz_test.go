@@ -10,7 +10,7 @@ import (
 	"io"
 	"testing"
 
-	coreheaders "github.com/lemon4ksan/mach/proto/headers"
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 

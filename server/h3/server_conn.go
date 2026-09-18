@@ -15,8 +15,8 @@ import (
 	"github.com/lemon4ksan/foundation/encoding/varint"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
-	coreheaders "github.com/lemon4ksan/mach/proto/headers"
-	"github.com/lemon4ksan/mach/quic"
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/quic"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H3 stream request.

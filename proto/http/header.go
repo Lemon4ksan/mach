@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
-	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
 const (

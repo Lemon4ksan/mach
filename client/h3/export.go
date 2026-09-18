@@ -6,7 +6,7 @@ package h3
 
 import (
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
-	"github.com/lemon4ksan/mach/quic"
+	"github.com/lemon4ksan/foundation/net/quic"
 )
 
 type QPACKCodec = coreh3.QPACKCodec

@@ -15,7 +15,7 @@ import (
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-	coreheaders "github.com/lemon4ksan/mach/proto/headers"
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 

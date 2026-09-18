@@ -14,7 +14,7 @@ import (
 	"github.com/lemon4ksan/foundation/net/http/header"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-	coreheaders "github.com/lemon4ksan/mach/proto/headers"
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire.
