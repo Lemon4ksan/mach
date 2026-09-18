@@ -25,7 +25,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/foundation/net/qpack"
 	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/mach/server/h3"
 )

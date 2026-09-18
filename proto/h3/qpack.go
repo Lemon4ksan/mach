@@ -15,7 +15,7 @@ import (
 
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	h1 "github.com/lemon4ksan/mach/proto/http"
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/foundation/net/qpack"
 )
 
 // PooledEncoder encapsulates a pooled buffer and QPACK encoder for zero-allocation serialization.

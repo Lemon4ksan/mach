@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/foundation/net/qpack"
 )
 
 // FuzzQPACKDecode tests QPACK decoder robustness against arbitrary input bytes.

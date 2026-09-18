@@ -16,7 +16,7 @@ import (
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/foundation/net/qpack"
 )
 
 func TestSendRequest_HeadersAndBody(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	h1 "github.com/lemon4ksan/mach/proto/http"
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/foundation/net/qpack"
 )
 
 func TestQPACKEncodeRequestHeaders(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/foundation/net/qpack"
 )
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
