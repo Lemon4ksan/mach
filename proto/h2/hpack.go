@@ -5,6 +5,8 @@
 package h2
 
 import (
+	"errors"
+
 	"bytes"
 	"fmt"
 
@@ -167,6 +169,7 @@ type HPACK struct {
 	dynamic             []*HeaderField
 	maxTableSize        uint32
 	dynamicSize         uint32
+	MaxCapacity         uint32
 }
 
 // AcquireHPACK retrieves an initialized HPACK context from memory pools.
@@ -432,8 +435,11 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 			// RFC 7541 §6.3: Dynamic Table Size Update ('001' 3-bit prefix)
 			var n uint64
 
-			b, n = readInt(5, b)
-			hp.maxTableSize = uint32(n) //nolint:gosec
+						b, n = readInt(5, b)
+			if uint32(n) > hp.MaxCapacity {
+				return b, errors.New("hpack: dynamic table size update exceeds maximum capacity")
+			}
+			hp.maxTableSize = uint32(n)
 			hp.shrink()
 		}
 	}
