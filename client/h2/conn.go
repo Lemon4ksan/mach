@@ -5,6 +5,8 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"bufio"
 	"bytes"
 	"context"
@@ -68,8 +70,8 @@ type Conn struct {
 	c             net.Conn
 	br            *bufio.Reader
 	bw            *bufio.Writer
-	enc           *coreh2.HPACK
-	dec           *coreh2.HPACK
+	enc           *hpack.HPACK
+	dec           *hpack.HPACK
 	onDisconnect  func(ctx context.Context, c *Conn)
 	onRTT         func(time.Duration)
 	onPushPromise func(pushReq *h1.Request, pushResp *h1.Response)
@@ -114,8 +116,8 @@ func NewConn(c net.Conn, opts ConnOpts) *Conn {
 		c:             c,
 		br:            bufio.NewReaderSize(c, 16384),
 		bw:            bufio.NewWriterSize(c, 16384),
-		enc:           coreh2.AcquireHPACK(),
-		dec:           coreh2.AcquireHPACK(),
+		enc:           hpack.AcquireHPACK(),
+		dec:           hpack.AcquireHPACK(),
 		
 		maxWindow:     15663105,
 		currentWindow: 15663105,
@@ -884,8 +886,8 @@ func isForbiddenH2HeaderStr(key string) bool {
 var defaultPseudoOrder = [4]string{":method", ":authority", ":scheme", ":path"}
 
 func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
-	hf := coreh2.AcquireHeaderField()
-	defer coreh2.ReleaseHeaderField(hf)
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	enc := c.enc
 
@@ -941,7 +943,7 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 			hf.SetBytes(coreh2.StringPath, path)
 		}
 
-		enc.AppendHeaderField(h, hf, true)
+		h.AppendHeaderField(enc, hf, true)
 	}
 
 	if len(c.orderedKeys) > 0 {
@@ -950,7 +952,7 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 		ua := req.Header.UserAgent()
 		if len(ua) > 0 {
 			hf.SetBytes(coreh2.StringUserAgent, ua)
-			enc.AppendHeaderField(h, hf, true)
+			h.AppendHeaderField(enc, hf, true)
 		}
 
 		for k, v := range req.Header.All() {
@@ -959,7 +961,7 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 			}
 
 			hf.SetBytes(coreh2.ToLowerCopy(k), v)
-			enc.AppendHeaderField(h, hf, false)
+			h.AppendHeaderField(enc, hf, false)
 		}
 	}
 }
@@ -1002,7 +1004,7 @@ func peekHeaderCaseInsensitive(req *h1.Request, key string) []byte {
 	return nil
 }
 
-func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *coreh2.HeaderField) {
+func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *hpack.HeaderField) {
 	var visitedBits uint64
 
 	numOrdered := min(len(c.orderedKeys), 64)
@@ -1026,7 +1028,7 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *core
 		if len(val) > 0 {
 			hf.SetKey(key)
 			hf.SetValueBytes(val)
-			c.enc.AppendHeaderField(h, hf, false)
+			h.AppendHeaderField(c.enc, hf, false)
 
 			visitedBits |= (1 << i)
 		}
@@ -1053,7 +1055,7 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *core
 
 		hf.SetKeyBytes(bytesconv.AppendToLower(nil, k))
 		hf.SetValueBytes(v)
-		c.enc.AppendHeaderField(h, hf, false)
+		h.AppendHeaderField(c.enc, hf, false)
 	}
 }
 
@@ -1367,8 +1369,8 @@ func (c *Conn) handlePushPromise(pp *coreh2.PushPromise) error {
 }
 
 func (c *Conn) decodePushHeaders(headerBlock []byte, pushReq *h1.Request) error {
-	hf := coreh2.AcquireHeaderField()
-	defer coreh2.ReleaseHeaderField(hf)
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	b := headerBlock
 	for len(b) > 0 {
@@ -1427,8 +1429,8 @@ func (c *Conn) resetStream(streamID uint32, code coreh2.ErrorCode) {
 }
 
 func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
-	hf := coreh2.AcquireHeaderField()
-	defer coreh2.ReleaseHeaderField(hf)
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	var (
 		totalSize uint32
@@ -1487,8 +1489,8 @@ func (c *Conn) updateWindow(streamID uint32, size int) {
 const defaultMaxHeaderListSize = 10 * 1024 * 1024
 
 func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
-	hf := coreh2.AcquireHeaderField()
-	defer coreh2.ReleaseHeaderField(hf)
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	var (
 		err        error

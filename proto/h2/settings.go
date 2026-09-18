@@ -7,7 +7,7 @@ package h2
 var _ Frame = &Settings{}
 
 const (
-	// DefaultHeaderTableSize specifies the initial HPACK dynamic table size of 4,096 octets (RFC 9113 §4.3.1 & §6.5.2).
+	// DefaultHeaderTableSize specifies the initial hpack.HPACK dynamic table size of 4,096 octets (RFC 9113 §4.3.1 & §6.5.2).
 	DefaultHeaderTableSize uint32 = 4096
 
 	// defaultConcurrentStreams specifies the recommended initial concurrency limit of >= 100 streams (RFC 9113 §6.5.2).
@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	// HeaderTableSize allows the sender to inform the peer of the maximum HPACK table size (RFC 9113 §6.5.2: SETTINGS_HEADER_TABLE_SIZE, 0x1).
+	// HeaderTableSize allows the sender to inform the peer of the maximum hpack.HPACK table size (RFC 9113 §6.5.2: SETTINGS_HEADER_TABLE_SIZE, 0x1).
 	HeaderTableSize uint16 = 0x1
 
 	// EnablePush enables or disables HTTP/2 server push (RFC 9113 §6.5.2 & §8.4: SETTINGS_ENABLE_PUSH, 0x2).

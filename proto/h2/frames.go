@@ -5,6 +5,7 @@
 package h2
 
 import (
+
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -138,7 +139,7 @@ func (ga *GoAway) Serialize(fr *FrameHeader) {
 	fr.payload = append(fr.payload, ga.data...)
 }
 
-// Headers carries HPACK-compressed HTTP metadata and optionally opens/terminates streams (RFC 9113 §6.2).
+// Headers carries hpack.HPACK-compressed HTTP metadata and optionally opens/terminates streams (RFC 9113 §6.2).
 type Headers struct {
 	hasPadding bool
 	stream     uint32
@@ -174,9 +175,7 @@ func (h *Headers) Reset() {
 	h.rawHeaders = h.rawHeaders[:0]
 }
 
-func (h *Headers) AppendHeaderField(hp *HPACK, hf *HeaderField, store bool) {
-	h.rawHeaders = hp.AppendHeader(h.rawHeaders, hf, store)
-}
+
 
 func (h *Headers) Deserialize(frh *FrameHeader) error {
 	flags := frh.Flags()

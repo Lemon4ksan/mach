@@ -5,6 +5,7 @@
 package h2
 
 import (
+
 	"errors"
 	"fmt"
 	"strconv"
@@ -41,7 +42,7 @@ const (
 	// StreamCanceled indicates the stream is no longer needed (RFC 9113 §7: CANCEL, 0x8).
 	StreamCanceled ErrorCode = 0x8
 
-	// CompressionError indicates failure to maintain the HPACK field section compression context (RFC 9113 §7 & §4.3: COMPRESSION_ERROR, 0x9).
+	// CompressionError indicates failure to maintain the hpack.HPACK field section compression context (RFC 9113 §7 & §4.3: COMPRESSION_ERROR, 0x9).
 	CompressionError ErrorCode = 0x9
 
 	// ConnectionError indicates an error on a CONNECT tunnel stream (RFC 9113 §7 & §8.5: CONNECT_ERROR, 0xa).
@@ -64,7 +65,7 @@ var (
 	ErrUnexpectedSize     = errors.New("h2engine: unexpected header size")
 	ErrWriterClosed       = errors.New("h2engine: stream writer closed")
 	ErrWrongPreface       = errors.New("h2engine: invalid connection preface (RFC 9113 §3.4)")
-	ErrMalformedString    = errors.New("h2engine: malformed HPACK string data (RFC 9113 §4.3)")
+	ErrMalformedString    = errors.New("h2engine: malformed hpack.HPACK string data (RFC 9113 §4.3)")
 	ErrGoAwayRetryable    = errors.New("h2engine: stream affected by GOAWAY frame (RFC 9113 §6.8 & §8.7)")
 	ErrControlFrameFlood  = NewGoAwayError(EnhanceYourCalm, "too many consecutive control frames (RFC 9113 §10.5)")
 	ErrUnknownFrameType   = NewError(ProtocolError, "unknown frame type")

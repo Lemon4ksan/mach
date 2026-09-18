@@ -5,6 +5,8 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"bufio"
 	"io"
 	"sync"
@@ -286,4 +288,8 @@ func (f *FrameHeader) checkLen() error {
 	}
 
 	return nil
+}
+
+func (h *Headers) AppendHeaderField(hp *hpack.HPACK, hf *hpack.HeaderField, store bool) {
+	h.SetHeaders(hp.AppendHeader(h.Headers(), hf, store))
 }

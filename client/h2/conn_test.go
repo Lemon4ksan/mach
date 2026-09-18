@@ -5,6 +5,8 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"bufio"
 	"bytes"
 	"net"
@@ -58,11 +60,11 @@ func runMockH2Server(
 
 	coreh2.ReleaseFrameHeader(ackFrame)
 
-	dec := coreh2.AcquireHPACK()
-	enc := coreh2.AcquireHPACK()
+	dec := hpack.AcquireHPACK()
+	enc := hpack.AcquireHPACK()
 
-	defer coreh2.ReleaseHPACK(dec)
-	defer coreh2.ReleaseHPACK(enc)
+	defer hpack.ReleaseHPACK(dec)
+	defer hpack.ReleaseHPACK(enc)
 
 	for {
 		fr, err := coreh2.ReadFrameFrom(br)
@@ -78,7 +80,7 @@ func runMockH2Server(
 			req := &h1.Request{}
 			resp := &h1.Response{}
 
-			hf := coreh2.AcquireHeaderField()
+			hf := hpack.AcquireHeaderField()
 			b := hFrame.Headers()
 
 			var rawHeaders []string
@@ -108,7 +110,7 @@ func runMockH2Server(
 				hf.Reset()
 			}
 
-			coreh2.ReleaseHeaderField(hf)
+			hpack.ReleaseHeaderField(hf)
 			coreh2.ReleaseFrameHeader(fr)
 
 			handler(req, resp, rawHeaders)

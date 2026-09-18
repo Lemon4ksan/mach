@@ -5,6 +5,8 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"bufio"
 	"bytes"
 	"errors"
@@ -170,10 +172,10 @@ func ToLowerCopy(b []byte) []byte {
 	return out
 }
 
-// FasthttpResponseHeaders serializes response status and headers from a h1.Response into HPACK-encoded header fields.
-func FasthttpResponseHeaders(dst *Headers, hp *HPACK, res *h1.Response) {
-	hf := AcquireHeaderField()
-	defer ReleaseHeaderField(hf)
+// FasthttpResponseHeaders serializes response status and headers from a h1.Response into hpack.HPACK-encoded header fields.
+func FasthttpResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	hf.SetKeyBytes(StringStatus)
 	hf.SetValue(strconv.Itoa(res.Header.StatusCode()))
@@ -194,10 +196,10 @@ func FasthttpResponseHeaders(dst *Headers, hp *HPACK, res *h1.Response) {
 	}
 }
 
-// SerializeResponseHeaders serializes response status and headers into HPACK-encoded header fields.
-func SerializeResponseHeaders(dst *Headers, hp *HPACK, statusCode int, headers http.Header, bodyLen int) {
-	hf := AcquireHeaderField()
-	defer ReleaseHeaderField(hf)
+// SerializeResponseHeaders serializes response status and headers into hpack.HPACK-encoded header fields.
+func SerializeResponseHeaders(dst *Headers, hp *hpack.HPACK, statusCode int, headers http.Header, bodyLen int) {
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	hf.SetKeyBytes(StringStatus)
 	hf.SetValue(strconv.Itoa(statusCode))

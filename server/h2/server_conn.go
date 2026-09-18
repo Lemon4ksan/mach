@@ -5,6 +5,9 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
+
 	"bufio"
 	"bytes"
 	"context"
@@ -64,8 +67,8 @@ type ServerConn struct {
 	br        *bufio.Reader
 	bw        *bufio.Writer
 	handler   ServerHandlerFunc
-	hpackDec  *coreh2.HPACK
-	hpackEnc  *coreh2.HPACK
+	hpackDec  *hpack.HPACK
+	hpackEnc  *hpack.HPACK
 	encMu     sync.Mutex
 	writeMu   sync.Mutex
 	streamsMu sync.RWMutex
@@ -79,8 +82,8 @@ type ServerConn struct {
 
 var serverConnStorage = pool.NewPerPStorage(func() *ServerConn {
 	return &ServerConn{
-		hpackDec:         coreh2.AcquireHPACK(),
-		hpackEnc:         coreh2.AcquireHPACK(),
+		hpackDec:         hpack.AcquireHPACK(),
+		hpackEnc:         hpack.AcquireHPACK(),
 		streams:          make(map[uint32]*serverStream, 64),
 		peerMaxFrameSize: coreh2.DefaultMaxLen,
 		peerInitialWin:   65535,
@@ -337,8 +340,8 @@ func (sc *ServerConn) handleContinuation(fr *coreh2.FrameHeader) error {
 func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 	rawBlock := st.headerBlock.Bytes()
 
-	hf := coreh2.AcquireHeaderField()
-	defer coreh2.ReleaseHeaderField(hf)
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
 
 	var hasSeenRegularHeader bool
 	for len(rawBlock) > 0 {

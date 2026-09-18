@@ -5,6 +5,8 @@
 package h2_test
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"crypto/rand"
 	"testing"
 
@@ -72,8 +74,8 @@ func TestH2_Varint_Adversarial(t *testing.T) {
 
 	for _, n := range prefixes {
 		for _, val := range values {
-			encoded := h2.AppendInt(nil, n, val)
-			rem, decoded := h2.ReadInt(int(n), encoded)
+			encoded := hpack.AppendInt(nil, n, val)
+			rem, decoded := hpack.ReadInt(int(n), encoded)
 			assert.Equal(t, 0, len(rem))
 			assert.Equal(t, val, decoded)
 		}
@@ -84,7 +86,7 @@ func TestH2_Varint_Adversarial(t *testing.T) {
 		var b [1]byte
 
 		b[0] = (1 << n) - 1
-		rem, decoded := h2.ReadInt(int(n), b[:])
+		rem, decoded := hpack.ReadInt(int(n), b[:])
 		assert.Equal(t, 0, len(rem))
 		assert.Equal(t, uint64(b[0]), decoded)
 	}
@@ -94,7 +96,7 @@ func TestH2_Varint_Adversarial(t *testing.T) {
 	for i := range 20000 {
 		_, _ = rand.Read(fuzzBuf)
 		prefix := int((i % 8) + 1)
-		_, _ = h2.ReadInt(prefix, fuzzBuf[:(i%32)+1])
+		_, _ = hpack.ReadInt(prefix, fuzzBuf[:(i%32)+1])
 	}
 }
 
@@ -113,8 +115,8 @@ func TestH2_Huffman_Adversarial(t *testing.T) {
 	}
 
 	for _, s := range testStrings {
-		encoded := h2.HuffmanEncode(nil, []byte(s))
-		decoded := h2.HuffmanDecode(nil, encoded)
+		encoded := hpack.HuffmanEncode(nil, []byte(s))
+		decoded := hpack.HuffmanDecode(nil, encoded)
 		assert.Equal(t, s, string(decoded))
 	}
 
@@ -122,6 +124,6 @@ func TestH2_Huffman_Adversarial(t *testing.T) {
 	garbage := make([]byte, 64)
 	for i := range 10000 {
 		_, _ = rand.Read(garbage)
-		_ = h2.HuffmanDecode(nil, garbage[:(i%64)+1])
+		_ = hpack.HuffmanDecode(nil, garbage[:(i%64)+1])
 	}
 }

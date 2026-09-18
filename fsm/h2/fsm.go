@@ -5,7 +5,8 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/mach/proto/h2"
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 )
 
 // Event is yielded by the state machine.
@@ -38,8 +39,8 @@ type WriteEvent struct {
 // It manages the protocol state, HPACK decoding, and multiplexing without allocating
 // goroutines or blocking on sockets.
 type StateMachine struct {
-	dec *h2.HPACK
-	enc *h2.HPACK
+	dec *hpack.HPACK
+	enc *hpack.HPACK
 
 	// internal matrices and queues for events
 	events []Event
@@ -48,8 +49,8 @@ type StateMachine struct {
 // NewStateMachine initializes a zero-allocation Sans-IO H2 FSM.
 func NewStateMachine() *StateMachine {
 	return &StateMachine{
-		dec: h2.AcquireHPACK(),
-		enc: h2.AcquireHPACK(),
+		dec: hpack.AcquireHPACK(),
+		enc: hpack.AcquireHPACK(),
 	}
 }
 

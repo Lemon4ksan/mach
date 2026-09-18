@@ -5,12 +5,14 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"bufio"
 	"bytes"
 	"testing"
 )
 
-// FuzzHPACKDecode tests HPACK decoder robustness against arbitrary byte inputs.
+// FuzzHPACKDecode tests hpack.HPACK decoder robustness against arbitrary byte inputs.
 func FuzzHPACKDecode(f *testing.F) {
 	seeds := [][]byte{
 		{
@@ -44,11 +46,11 @@ func FuzzHPACKDecode(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		dec := AcquireHPACK()
-		defer ReleaseHPACK(dec)
+		dec := hpack.AcquireHPACK()
+		defer hpack.ReleaseHPACK(dec)
 
-		hf := AcquireHeaderField()
-		defer ReleaseHeaderField(hf)
+		hf := hpack.AcquireHeaderField()
+		defer hpack.ReleaseHeaderField(hf)
 
 		remaining := data
 		for len(remaining) > 0 {

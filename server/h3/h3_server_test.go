@@ -5,6 +5,7 @@
 package h3_test
 
 import (
+
 	"bytes"
 	"context"
 	"crypto/ecdsa"

@@ -109,7 +109,7 @@ func (h HeadersFrame) IsEndHeaders() bool {
 	return Frame(h).Flags()&0x4 != 0
 }
 
-// HeaderBlockFragment returns the HPACK-encoded header data.
+// HeaderBlockFragment returns the hpack.HPACK-encoded header data.
 func (h HeadersFrame) HeaderBlockFragment() []byte {
 	// For simplicity in this overlay, we omit Priority and Padding logic,
 	// assuming a clean fast-path. In a full implementation, BCE offsets

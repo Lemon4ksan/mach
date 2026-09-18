@@ -5,15 +5,17 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/net/hpack"
+
 	"bufio"
 
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
-type HPACK = coreh2.HPACK
+type HPACK = hpack.HPACK
 
-func AcquireHPACK() *HPACK   { return coreh2.AcquireHPACK() }
-func ReleaseHPACK(hp *HPACK) { coreh2.ReleaseHPACK(hp) }
+func AcquireHPACK() *HPACK   { return hpack.AcquireHPACK() }
+func ReleaseHPACK(hp *HPACK) { hpack.ReleaseHPACK(hp) }
 
 type (
 	FrameType = coreh2.FrameType
@@ -23,10 +25,10 @@ type (
 func AcquireFrame(t FrameType) Frame { return coreh2.AcquireFrame(t) }
 func ReleaseFrame(f Frame)           { coreh2.ReleaseFrame(f) }
 
-type HeaderField = coreh2.HeaderField
+type HeaderField = hpack.HeaderField
 
-func AcquireHeaderField() *HeaderField   { return coreh2.AcquireHeaderField() }
-func ReleaseHeaderField(hf *HeaderField) { coreh2.ReleaseHeaderField(hf) }
+func AcquireHeaderField() *HeaderField   { return hpack.AcquireHeaderField() }
+func ReleaseHeaderField(hf *HeaderField) { hpack.ReleaseHeaderField(hf) }
 
 const FrameHeaders = coreh2.FrameHeaders
 
