@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+
 	"github.com/lemon4ksan/foundation/net/http/header"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
@@ -19,7 +21,7 @@ import (
 type Response struct {
 	StatusCode   int
 	Headers      coreheaders.Headers
-	Cookies      []*http.Cookie
+	Cookies      []*zerocopy.Cookie
 	Body         []byte
 	StreamWriter func(w io.Writer) error
 }
@@ -35,7 +37,7 @@ func (res *Response) Reset() {
 
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to the writer.
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
-func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive, flush bool) error {
+func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
 	status := res.StatusCode
 	if status == 0 {
 		status = http.StatusOK
@@ -123,7 +125,7 @@ func (res *Response) WriteTo(bw *bytesutil.ByteBuffer, keepAlive, flush bool) er
 }
 
 //go:noinline
-func (res *Response) writeStreamBody(bw *bytesutil.ByteBuffer) error {
+func (res *Response) writeStreamBody(bw *bytesconv.ByteBuffer) error {
 	cw := NewChunkedWriter(bw)
 	err := res.StreamWriter(cw)
 	closeErr := cw.Close()

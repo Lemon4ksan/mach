@@ -7,12 +7,9 @@ package headers
 import (
 	"encoding/binary"
 	"math/bits"
-	"slices"
 
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-
-	"github.com/lemon4ksan/mach/proto/bytesutil"
 )
 
 const (
@@ -396,7 +393,7 @@ var (
 )
 
 // WriteTo writes headers directly into bufio.Writer without closures (0 allocs)
-func (h *Headers) WriteTo(bw *bytesutil.ByteBuffer) {
+func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
 	for i := 0; i < h.count; i++ {
 		p := h.packed[i]
 		if p != 0 {
@@ -429,47 +426,6 @@ func (h *Headers) IsKeepAlive(proto string) bool {
 	isKeepAlive := !bytesconv.EqualFoldASCII(connHeader, header.ValueClose)
 
 	return isKeepAlive
-}
-
-// Deprecated: used for legacy 1-by-1 string parsing
-func (h *Headers) ParseHeaderLine(line []byte) bool {
-	// legacy check for colon
-	colonFound := slices.Contains(line, ':')
-	if !colonFound {
-		return false
-	}
-
-	// empty key check "   : val"
-	firstColon := -1
-	for i, b := range line {
-		if b == ':' {
-			firstColon = i
-			break
-		}
-	}
-
-	keyStr := line[:firstColon]
-
-	isEmpty := true
-	for _, b := range keyStr {
-		if b != ' ' && b != '\t' {
-			isEmpty = false
-			break
-		}
-	}
-
-	if isEmpty {
-		return false
-	}
-
-	h.buf = append(h.buf, line...)
-	if len(line) > 0 && line[len(line)-1] != '\n' {
-		h.buf = append(h.buf, '\n') // ensure SWAR triggers
-	}
-
-	h.ParseHeaderBlockSWAR(h.buf)
-
-	return true
 }
 
 func (h *Headers) AddFromHTTP(src map[string][]string) {

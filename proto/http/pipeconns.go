@@ -11,15 +11,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // NewPipeConns returns new bi-directional connection pipe.
 //
 // PipeConns is NOT safe for concurrent use by multiple goroutines!
 func NewPipeConns() *PipeConns {
-	ch1 := make(chan *bytesutil.ByteBuffer, 4)
-	ch2 := make(chan *bytesutil.ByteBuffer, 4)
+	ch1 := make(chan *bytesconv.ByteBuffer, 4)
+	ch2 := make(chan *bytesconv.ByteBuffer, 4)
 
 	pc := &PipeConns{
 		stopCh: make(chan struct{}),
@@ -103,10 +103,10 @@ func (pc *PipeConns) Close() error {
 type pipeConn struct {
 	localAddr  net.Addr
 	remoteAddr net.Addr
-	b          *bytesutil.ByteBuffer
+	b          *bytesconv.ByteBuffer
 
-	rCh chan *bytesutil.ByteBuffer
-	wCh chan *bytesutil.ByteBuffer
+	rCh chan *bytesconv.ByteBuffer
+	wCh chan *bytesconv.ByteBuffer
 	pc  *PipeConns
 
 	readDeadlineTimer  *time.Timer
@@ -123,12 +123,12 @@ type pipeConn struct {
 }
 
 func (c *pipeConn) Write(p []byte) (int, error) {
-	b := bytesutil.AcquireByteBuffer()
+	b := bytesconv.AcquireByteBuffer()
 	b.B = append(b.B[:0], p...)
 
 	select {
 	case <-c.pc.stopCh:
-		bytesutil.ReleaseByteBuffer(b)
+		bytesconv.ReleaseByteBuffer(b)
 		return 0, ErrConnectionClosed
 	default:
 	}
@@ -142,7 +142,7 @@ func (c *pipeConn) Write(p []byte) (int, error) {
 			c.writeDeadlineCh = closedDeadlineCh
 			return 0, ErrTimeout
 		case <-c.pc.stopCh:
-			bytesutil.ReleaseByteBuffer(b)
+			bytesconv.ReleaseByteBuffer(b)
 			return 0, ErrConnectionClosed
 		}
 	}
@@ -151,7 +151,7 @@ func (c *pipeConn) Write(p []byte) (int, error) {
 }
 
 func (c *pipeConn) WriteString(s string) (int, error) {
-	return c.Write(bytesutil.S2B(s))
+	return c.Write(bytesconv.S2B(s))
 }
 
 func (c *pipeConn) Read(p []byte) (int, error) {
@@ -191,7 +191,7 @@ func (c *pipeConn) read(p []byte, mayBlock bool) (int, error) {
 }
 
 func (c *pipeConn) readNextByteBuffer(mayBlock bool) error {
-	bytesutil.ReleaseByteBuffer(c.b)
+	bytesconv.ReleaseByteBuffer(c.b)
 	c.b = nil
 
 	select {

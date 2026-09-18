@@ -7,7 +7,7 @@ package http
 import (
 	"bufio"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 )
 
 // ParseHexUint parses a hex-encoded uint from src.
@@ -24,7 +24,7 @@ func ReadBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 // FormatChunkHeader writes the hex chunk header with \r\n trailer into buf.
 // Returns the number of bytes written.
 func FormatChunkHeader(buf *[24]byte, val int) int {
-	n := bytesutil.FormatHexUint((*[16]byte)(buf[:16]), val)
+	n := zerocopy.FormatHexUint((*[16]byte)(buf[:16]), val)
 	buf[n] = '\r'
 	buf[n+1] = '\n'
 
@@ -33,31 +33,31 @@ func FormatChunkHeader(buf *[24]byte, val int) int {
 
 func parseHexUintFallback(src []byte) (int, int, error) {
 	if len(src) == 0 {
-		return 0, 0, bytesutil.ErrEmptyHexNum
+		return 0, 0, zerocopy.ErrEmptyHexNum
 	}
 
 	var n, i int
 	for i = 0; i < len(src); i++ {
 		c := src[i]
 
-		k := int(bytesutil.Hex2intTable[c])
+		k := int(zerocopy.Hex2intTable[c])
 		if k == 16 {
 			if i == 0 {
-				return 0, 0, bytesutil.ErrEmptyHexNum
+				return 0, 0, zerocopy.ErrEmptyHexNum
 			}
 
 			return n, i, nil
 		}
 
 		if i >= 16 {
-			return n, i, bytesutil.ErrTooLargeHexNum
+			return n, i, zerocopy.ErrTooLargeHexNum
 		}
 
 		n = (n << 4) | k
 	}
 
 	if i == 0 {
-		return 0, 0, bytesutil.ErrEmptyHexNum
+		return 0, 0, zerocopy.ErrEmptyHexNum
 	}
 
 	return n, i, nil

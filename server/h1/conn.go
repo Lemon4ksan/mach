@@ -16,7 +16,7 @@ import (
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
@@ -24,8 +24,8 @@ var (
 	readerStorage = pool.NewPerPStorage(func() *bufio.Reader {
 		return bufio.NewReaderSize(nil, 4096)
 	})
-	writerStorage = pool.NewPerPStorage(func() *bytesutil.ByteBuffer {
-		return bytesutil.AcquireByteBuffer()
+	writerStorage = pool.NewPerPStorage(func() *bytesconv.ByteBuffer {
+		return bytesconv.AcquireByteBuffer()
 	})
 	reqStorage = pool.NewPerPStorage(func() *Request {
 		return &Request{
@@ -67,7 +67,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			_ = conn.Close()
 
 			readerStorage.Put(br)
-			bytesutil.ReleaseByteBuffer(bw)
+			bytesconv.ReleaseByteBuffer(bw)
 		}
 	}()
 

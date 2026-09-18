@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"testing"
 
-	http "github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/mach/proto/http"
 )
 
 func FuzzH1Request(f *testing.F) {
@@ -62,23 +62,5 @@ func FuzzH1Response(f *testing.F) {
 			_ = resp.Header.ContentType()
 			_ = resp.Body()
 		}
-	})
-}
-
-func FuzzH1URI(f *testing.F) {
-	f.Add([]byte("https://user:pass@example.com:8443/path/to/resource?query=1&b=2#section"))
-	f.Add([]byte("http://[::1]:8080/"))
-	f.Add([]byte("/relative/path?arg=val"))
-	f.Add([]byte(""))
-	f.Add([]byte("https://invalid host name:port/path"))
-
-	f.Fuzz(func(t *testing.T, raw []byte) {
-		var u http.URI
-		u.Parse(nil, raw) //nolint:errcheck
-		_ = u.Scheme()
-		_ = u.Host()
-		_ = u.Path()
-		_ = u.QueryString()
-		_ = u.String()
 	})
 }

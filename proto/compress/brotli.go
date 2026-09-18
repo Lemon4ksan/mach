@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/codec/compress/brotli"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // Supported compression levels.
@@ -106,7 +106,7 @@ func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 		return 0, err
 	}
 
-	n, err := bytesutil.CopyZeroAllocWithLimit(w, zr, maxBodySize)
+	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
 	releaseBrotliReader(zr)
 
 	nn := int(n)

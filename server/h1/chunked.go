@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 var (
@@ -172,11 +172,11 @@ func ReadAllChunked(r *bufio.Reader, maxBodySize int64) ([]byte, error) {
 
 // ChunkedWriter writes data using HTTP/1.1 chunked transfer encoding.
 type ChunkedWriter struct {
-	w *bytesutil.ByteBuffer
+	w *bytesconv.ByteBuffer
 }
 
 // NewChunkedWriter creates a new ChunkedWriter wrapping w.
-func NewChunkedWriter(w *bytesutil.ByteBuffer) *ChunkedWriter {
+func NewChunkedWriter(w *bytesconv.ByteBuffer) *ChunkedWriter {
 	return &ChunkedWriter{w: w}
 }
 

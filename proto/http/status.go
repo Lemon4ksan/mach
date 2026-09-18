@@ -7,7 +7,8 @@ package http
 import (
 	"strconv"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 const (
@@ -128,7 +129,7 @@ var (
 		StatusLengthRequired:               "Length Required",
 		StatusPreconditionFailed:           "Precondition Failed",
 		StatusRequestEntityTooLarge:        "Request Entity Too Large",
-		StatusRequestURITooLong:            "Request URI Too Long",
+		StatusRequestURITooLong:            "Request zerocopy.URI Too Long",
 		StatusUnsupportedMediaType:         "Unsupported Media Type",
 		StatusRequestedRangeNotSatisfiable: "Requested Range Not Satisfiable",
 		StatusExpectationFailed:            "Expectation Failed",
@@ -172,10 +173,10 @@ func StatusMessage(statusCode int) string {
 
 func formatStatusLine(dst, protocol []byte, statusCode int, statusText []byte) []byte {
 	if len(statusText) == 0 {
-		statusText = bytesutil.S2B(StatusMessage(statusCode))
+		statusText = bytesconv.S2B(StatusMessage(statusCode))
 	}
 
-	need := len(protocol) + 1 + statusCodeLen(statusCode) + 1 + len(statusText) + len(bytesutil.StrCRLF)
+	need := len(protocol) + 1 + statusCodeLen(statusCode) + 1 + len(statusText) + len(zerocopy.StrCRLF)
 	if cap(dst)-len(dst) < need {
 		ndst := make([]byte, len(dst), len(dst)+need)
 		copy(ndst, dst)
@@ -188,7 +189,7 @@ func formatStatusLine(dst, protocol []byte, statusCode int, statusText []byte) [
 	dst = append(dst, ' ')
 	dst = append(dst, statusText...)
 
-	return append(dst, bytesutil.StrCRLF...)
+	return append(dst, zerocopy.StrCRLF...)
 }
 
 func statusCodeLen(statusCode int) int {

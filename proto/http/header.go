@@ -19,7 +19,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
@@ -30,7 +30,7 @@ const (
 
 type header struct {
 	h       coreheaders.Headers
-	cookies []argsKV
+	cookies []zerocopy.ArgsKV
 
 	bufK               []byte
 	bufV               []byte
@@ -60,7 +60,7 @@ type header struct {
 type ResponseHeader struct {
 	header
 
-	noCopy bytesutil.NoCopy
+	noCopy zerocopy.NoCopy
 
 	statusMessage   []byte
 	contentEncoding []byte
@@ -81,7 +81,7 @@ type ResponseHeader struct {
 type RequestHeader struct {
 	header
 
-	noCopy bytesutil.NoCopy
+	noCopy zerocopy.NoCopy
 
 	method     []byte
 	requestURI []byte
@@ -100,16 +100,16 @@ type RequestHeader struct {
 // header.
 func (h *ResponseHeader) SetContentRange(startPos, endPos, contentLength int) {
 	b := h.bufV[:0]
-	b = append(b, bytesutil.StrBytes...)
+	b = append(b, zerocopy.StrBytes...)
 	b = append(b, ' ')
-	b = bytesutil.AppendUint(b, startPos)
+	b = zerocopy.AppendUint(b, startPos)
 	b = append(b, '-')
-	b = bytesutil.AppendUint(b, endPos)
+	b = zerocopy.AppendUint(b, endPos)
 	b = append(b, '/')
-	b = bytesutil.AppendUint(b, contentLength)
+	b = zerocopy.AppendUint(b, contentLength)
 	h.bufV = b
 
-	h.setNonSpecial(bytesutil.StrContentRange, h.bufV)
+	h.setNonSpecial(zerocopy.StrContentRange, h.bufV)
 }
 
 // SetByteRange sets 'Range: bytes=startPos-endPos' header.
@@ -118,23 +118,23 @@ func (h *ResponseHeader) SetContentRange(startPos, endPos, contentLength int) {
 //   - If endPos is negative, then 'bytes=startPos-' value is set.
 func (h *RequestHeader) SetByteRange(startPos, endPos int) {
 	b := h.bufV[:0]
-	b = append(b, bytesutil.StrBytes...)
+	b = append(b, zerocopy.StrBytes...)
 
 	b = append(b, '=')
 	if startPos >= 0 {
-		b = bytesutil.AppendUint(b, startPos)
+		b = zerocopy.AppendUint(b, startPos)
 	} else {
 		endPos = -startPos
 	}
 
 	b = append(b, '-')
 	if endPos >= 0 {
-		b = bytesutil.AppendUint(b, endPos)
+		b = zerocopy.AppendUint(b, endPos)
 	}
 
 	h.bufV = b
 
-	h.setNonSpecial(bytesutil.StrRange, h.bufV)
+	h.setNonSpecial(zerocopy.StrRange, h.bufV)
 }
 
 // StatusCode returns response status code.
@@ -158,18 +158,18 @@ func (h *ResponseHeader) StatusMessage() []byte {
 
 // SetStatusMessage sets response status message bytes.
 func (h *ResponseHeader) SetStatusMessage(statusMessage []byte) {
-	h.statusMessage = bytesutil.InitHeaderValueBytes(h.statusMessage, statusMessage)
+	h.statusMessage = zerocopy.InitHeaderValueBytes(h.statusMessage, statusMessage)
 }
 
 // SetProtocol sets response protocol bytes.
 func (h *ResponseHeader) SetProtocol(protocol []byte) {
-	h.protocol = bytesutil.InitHeaderValueBytes(h.protocol, protocol)
+	h.protocol = zerocopy.InitHeaderValueBytes(h.protocol, protocol)
 }
 
 // SetLastModified sets 'Last-Modified' header to the given value.
 func (h *ResponseHeader) SetLastModified(t time.Time) {
-	h.bufV = bytesutil.AppendHTTPDate(h.bufV[:0], t)
-	h.setNonSpecial(bytesutil.StrLastModified, h.bufV)
+	h.bufV = zerocopy.AppendHTTPDate(h.bufV[:0], t)
+	h.setNonSpecial(zerocopy.StrLastModified, h.bufV)
 }
 
 // ConnectionClose returns true if 'Connection: close' header is set.
@@ -192,17 +192,17 @@ func (h *header) ResetConnectionClose() {
 
 // ConnectionUpgrade returns true if 'Connection: Upgrade' header is set.
 func (h *ResponseHeader) ConnectionUpgrade() bool {
-	return hasHeaderValue(h.Peek(HeaderConnection), bytesutil.StrUpgrade)
+	return hasHeaderValue(h.Peek(HeaderConnection), zerocopy.StrUpgrade)
 }
 
 // ConnectionUpgrade returns true if 'Connection: Upgrade' header is set.
 func (h *RequestHeader) ConnectionUpgrade() bool {
-	return hasHeaderValue(h.Peek(HeaderConnection), bytesutil.StrUpgrade)
+	return hasHeaderValue(h.Peek(HeaderConnection), zerocopy.StrUpgrade)
 }
 
 // PeekCookie is able to returns cookie by a given key from response.
 func (h *ResponseHeader) PeekCookie(key string) []byte {
-	return peekArgStr(h.cookies, key)
+	return zerocopy.PeekArgStr(h.cookies, key)
 }
 
 // ContentLength returns Content-Length header value.
@@ -224,12 +224,12 @@ func (h *RequestHeader) ContentLength() int {
 		// Parse framing headers from raw headers when special headers are disabled.
 		// Transfer-Encoding takes precedence over Content-Length, matching
 		// the normal parser path.
-		te := peekArgBytesHeaders(&h.h, bytesutil.StrTransferEncoding)
-		if bytesutil.CaseInsensitiveCompare(te, bytesutil.StrChunked) {
+		te := peekArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding)
+		if zerocopy.CaseInsensitiveCompare(te, zerocopy.StrChunked) {
 			return -1 // chunked
 		}
 
-		v := peekArgBytesHeaders(&h.h, bytesutil.StrContentLength)
+		v := peekArgBytesHeaders(&h.h, zerocopy.StrContentLength)
 		if len(v) == 0 {
 			return -2 // identity
 		}
@@ -257,12 +257,12 @@ func (h *ResponseHeader) SetContentLength(contentLength int) {
 
 	h.contentLength = contentLength
 	if contentLength >= 0 {
-		h.contentLengthBytes = bytesutil.AppendUint(h.contentLengthBytes[:0], contentLength)
+		h.contentLengthBytes = zerocopy.AppendUint(h.contentLengthBytes[:0], contentLength)
 		h.h.Del(HeaderTransferEncoding)
 		return
 	} else if contentLength == -1 {
 		h.contentLengthBytes = h.contentLengthBytes[:0]
-		setArgBytesHeaders(&h.h, bytesutil.StrTransferEncoding, bytesutil.StrChunked, argsHasValue)
+		setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked, zerocopy.ArgsHasValue)
 		return
 	}
 
@@ -289,30 +289,30 @@ func (h *ResponseHeader) mustSkipContentLength() bool {
 func (h *RequestHeader) SetContentLength(contentLength int) {
 	h.contentLength = contentLength
 	if contentLength >= 0 {
-		h.contentLengthBytes = bytesutil.AppendUint(h.contentLengthBytes[:0], contentLength)
+		h.contentLengthBytes = zerocopy.AppendUint(h.contentLengthBytes[:0], contentLength)
 		h.h.Del(HeaderTransferEncoding)
 	} else {
 		h.contentLengthBytes = h.contentLengthBytes[:0]
-		setArgBytesHeaders(&h.h, bytesutil.StrTransferEncoding, bytesutil.StrChunked, argsHasValue)
+		setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked, zerocopy.ArgsHasValue)
 	}
 }
 
 func (h *ResponseHeader) isCompressibleContentType() bool {
 	contentType := h.ContentType()
 
-	return bytes.HasPrefix(contentType, bytesutil.StrTextSlash) ||
-		bytes.HasPrefix(contentType, bytesutil.StrApplicationSlash) ||
-		bytes.HasPrefix(contentType, bytesutil.StrImageSVG) ||
-		bytes.HasPrefix(contentType, bytesutil.StrImageIcon) ||
-		bytes.HasPrefix(contentType, bytesutil.StrFontSlash) ||
-		bytes.HasPrefix(contentType, bytesutil.StrMultipartSlash)
+	return bytes.HasPrefix(contentType, zerocopy.StrTextSlash) ||
+		bytes.HasPrefix(contentType, zerocopy.StrApplicationSlash) ||
+		bytes.HasPrefix(contentType, zerocopy.StrImageSVG) ||
+		bytes.HasPrefix(contentType, zerocopy.StrImageIcon) ||
+		bytes.HasPrefix(contentType, zerocopy.StrFontSlash) ||
+		bytes.HasPrefix(contentType, zerocopy.StrMultipartSlash)
 }
 
 // ContentType returns Content-Type header value.
 func (h *ResponseHeader) ContentType() []byte {
 	contentType := h.contentType
 	if !h.noDefaultContentType && len(h.contentType) == 0 {
-		contentType = bytesutil.DefaultContentType
+		contentType = zerocopy.DefaultContentType
 	}
 
 	return contentType
@@ -320,12 +320,12 @@ func (h *ResponseHeader) ContentType() []byte {
 
 // SetContentType sets Content-Type header value.
 func (h *header) SetContentType(contentType string) {
-	h.contentType = bytesutil.InitHeaderValueString(h.contentType, contentType)
+	h.contentType = zerocopy.InitHeaderValueString(h.contentType, contentType)
 }
 
 // SetContentTypeBytes sets Content-Type header value.
 func (h *header) SetContentTypeBytes(contentType []byte) {
-	h.contentType = bytesutil.InitHeaderValueBytes(h.contentType, contentType)
+	h.contentType = zerocopy.InitHeaderValueBytes(h.contentType, contentType)
 }
 
 // ContentEncoding returns Content-Encoding header value.
@@ -335,17 +335,17 @@ func (h *ResponseHeader) ContentEncoding() []byte {
 
 // SetContentEncoding sets Content-Encoding header value.
 func (h *ResponseHeader) SetContentEncoding(contentEncoding string) {
-	h.contentEncoding = bytesutil.InitHeaderValueString(h.contentEncoding, contentEncoding)
+	h.contentEncoding = zerocopy.InitHeaderValueString(h.contentEncoding, contentEncoding)
 }
 
 // SetContentEncodingBytes sets Content-Encoding header value.
 func (h *ResponseHeader) SetContentEncodingBytes(contentEncoding []byte) {
-	h.contentEncoding = bytesutil.InitHeaderValueBytes(h.contentEncoding, contentEncoding)
+	h.contentEncoding = zerocopy.InitHeaderValueBytes(h.contentEncoding, contentEncoding)
 }
 
 // addVaryBytes add value to the 'Vary' header if it's not included.
 func (h *ResponseHeader) addVaryBytes(value []byte) {
-	v := h.peek(bytesutil.StrVary)
+	v := h.peek(zerocopy.StrVary)
 	if len(v) == 0 {
 		// 'Vary' is not set
 		h.SetBytesV(HeaderVary, value)
@@ -362,12 +362,12 @@ func (h *ResponseHeader) Server() []byte {
 
 // SetServer sets Server header value.
 func (h *ResponseHeader) SetServer(server string) {
-	h.server = bytesutil.InitHeaderValueString(h.server, server)
+	h.server = zerocopy.InitHeaderValueString(h.server, server)
 }
 
 // SetServerBytes sets Server header value.
 func (h *ResponseHeader) SetServerBytes(server []byte) {
-	h.server = bytesutil.InitHeaderValueBytes(h.server, server)
+	h.server = zerocopy.InitHeaderValueBytes(h.server, server)
 }
 
 // ContentType returns Content-Type header value.
@@ -381,18 +381,18 @@ func (h *RequestHeader) ContentType() []byte {
 
 // ContentEncoding returns Content-Encoding header value.
 func (h *RequestHeader) ContentEncoding() []byte {
-	return peekArgBytesHeaders(&h.h, bytesutil.StrContentEncoding)
+	return peekArgBytesHeaders(&h.h, zerocopy.StrContentEncoding)
 }
 
 // SetContentEncoding sets Content-Encoding header value.
 func (h *RequestHeader) SetContentEncoding(contentEncoding string) {
-	h.SetBytesK(bytesutil.StrContentEncoding, contentEncoding)
+	h.SetBytesK(zerocopy.StrContentEncoding, contentEncoding)
 }
 
 // SetContentEncodingBytes sets Content-Encoding header value.
 func (h *RequestHeader) SetContentEncodingBytes(contentEncoding []byte) {
-	h.bufV = bytesutil.InitHeaderValueBytes(h.bufV, contentEncoding)
-	h.setNonSpecial(bytesutil.StrContentEncoding, h.bufV)
+	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, contentEncoding)
+	h.setNonSpecial(zerocopy.StrContentEncoding, h.bufV)
 }
 
 // SetMultipartFormBoundary sets the following Content-Type:
@@ -400,9 +400,9 @@ func (h *RequestHeader) SetContentEncodingBytes(contentEncoding []byte) {
 // where ... is substituted by the given boundary.
 func (h *RequestHeader) SetMultipartFormBoundary(boundary string) {
 	b := h.bufV[:0]
-	b = append(b, bytesutil.StrMultipartFormData...)
+	b = append(b, zerocopy.StrMultipartFormData...)
 	b = append(b, ';', ' ')
-	b = append(b, bytesutil.StrBoundary...)
+	b = append(b, zerocopy.StrBoundary...)
 	b = append(b, '=')
 	b = append(b, boundary...)
 	h.bufV = b
@@ -415,9 +415,9 @@ func (h *RequestHeader) SetMultipartFormBoundary(boundary string) {
 // where ... is substituted by the given boundary.
 func (h *RequestHeader) SetMultipartFormBoundaryBytes(boundary []byte) {
 	b := h.bufV[:0]
-	b = append(b, bytesutil.StrMultipartFormData...)
+	b = append(b, zerocopy.StrMultipartFormData...)
 	b = append(b, ';', ' ')
-	b = append(b, bytesutil.StrBoundary...)
+	b = append(b, zerocopy.StrBoundary...)
 	b = append(b, '=')
 	b = append(b, boundary...)
 	h.bufV = b
@@ -443,7 +443,7 @@ func (h *RequestHeader) SetMultipartFormBoundaryBytes(boundary []byte) {
 //
 // Return ErrBadTrailer if contain any forbidden trailers.
 func (h *header) SetTrailer(trailer string) error {
-	return h.SetTrailerBytes(bytesutil.S2B(trailer))
+	return h.SetTrailerBytes(bytesconv.S2B(trailer))
 }
 
 // SetTrailerBytes sets Trailer header value for chunked response
@@ -486,7 +486,7 @@ func (h *header) SetTrailerBytes(trailer []byte) error {
 //
 // Return ErrBadTrailer if contain any forbidden trailers.
 func (h *header) AddTrailer(trailer string) error {
-	return h.AddTrailerBytes(bytesutil.S2B(trailer))
+	return h.AddTrailerBytes(bytesconv.S2B(trailer))
 }
 
 var (
@@ -540,7 +540,7 @@ func (h *header) AddTrailerBytes(trailer []byte) (err error) {
 		}
 
 		h.bufK = append(h.bufK[:0], key...)
-		bytesutil.NormalizeHeaderKeyValidated(h.bufK, h.disableNormalizing)
+		zerocopy.NormalizeHeaderKeyValidated(h.bufK, h.disableNormalizing)
 
 		if cap(h.trailer) > len(h.trailer) {
 			h.trailer = h.trailer[:len(h.trailer)+1]
@@ -561,7 +561,7 @@ func isValidTrailerKey(key []byte) bool {
 	}
 
 	for _, c := range key {
-		if !bytesutil.ValidHeaderFieldByte(c) {
+		if !zerocopy.ValidHeaderFieldByte(c) {
 			return false
 		}
 	}
@@ -575,7 +575,7 @@ func isValidTrailerKey(key []byte) bool {
 // validHeaderValueByte returns true if c valid header value byte
 // as defined by RFC 7230.
 func validHeaderValueByte(c byte) bool {
-	return bytesutil.ValidHeaderValueByteTable[c] == 1
+	return zerocopy.ValidHeaderValueByteTable[c] == 1
 }
 
 // isValidHeaderKey returns whether a is a valid header key, and whether a
@@ -595,7 +595,7 @@ func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 			continue
 		}
 
-		if !bytesutil.ValidHeaderFieldByte(c) {
+		if !zerocopy.ValidHeaderFieldByte(c) {
 			return false, false
 		}
 
@@ -632,12 +632,12 @@ func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 		}
 
 		n := 0
-		if len(b) == 0 || !bytesutil.ValidHeaderFieldByte(b[n]) {
+		if len(b) == 0 || !zerocopy.ValidHeaderFieldByte(b[n]) {
 			return
 		}
 
 		n++
-		for n < len(b) && bytesutil.ValidHeaderFieldByte(b[n]) {
+		for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
 			n++
 		}
 
@@ -649,11 +649,11 @@ func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 		n++
 
 		switch {
-		case bytesutil.ValidHeaderFieldByte(b[n]):
+		case zerocopy.ValidHeaderFieldByte(b[n]):
 			m := n
 
 			n++
-			for n < len(b) && bytesutil.ValidHeaderFieldByte(b[n]) {
+			for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
 				n++
 			}
 
@@ -698,11 +698,11 @@ func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 // from 'multipart/form-data; boundary=...' Content-Type.
 func (h *RequestHeader) MultipartFormBoundary() []byte {
 	b := h.ContentType()
-	if !bytes.HasPrefix(b, bytesutil.StrMultipartFormData) {
+	if !bytes.HasPrefix(b, zerocopy.StrMultipartFormData) {
 		return nil
 	}
 
-	b = b[len(bytesutil.StrMultipartFormData):]
+	b = b[len(zerocopy.StrMultipartFormData):]
 	if len(b) == 0 || b[0] != ';' {
 		return nil
 	}
@@ -715,7 +715,7 @@ func (h *RequestHeader) MultipartFormBoundary() []byte {
 		}
 
 		b = b[n:]
-		if !bytes.HasPrefix(b, bytesutil.StrBoundary) {
+		if !bytes.HasPrefix(b, zerocopy.StrBoundary) {
 			if n = bytes.IndexByte(b, ';'); n < 0 {
 				return nil
 			}
@@ -723,7 +723,7 @@ func (h *RequestHeader) MultipartFormBoundary() []byte {
 			continue
 		}
 
-		b = b[len(bytesutil.StrBoundary):]
+		b = b[len(zerocopy.StrBoundary):]
 		if len(b) == 0 || b[0] != '=' {
 			return nil
 		}
@@ -754,12 +754,12 @@ func (h *RequestHeader) Host() []byte {
 
 // SetHost sets Host header value.
 func (h *RequestHeader) SetHost(host string) {
-	h.host = bytesutil.InitHeaderValueString(h.host, host)
+	h.host = zerocopy.InitHeaderValueString(h.host, host)
 }
 
 // SetHostBytes sets Host header value.
 func (h *RequestHeader) SetHostBytes(host []byte) {
-	h.host = bytesutil.InitHeaderValueBytes(h.host, host)
+	h.host = zerocopy.InitHeaderValueBytes(h.host, host)
 }
 
 // UserAgent returns User-Agent header value.
@@ -773,28 +773,28 @@ func (h *RequestHeader) UserAgent() []byte {
 
 // SetUserAgent sets User-Agent header value.
 func (h *RequestHeader) SetUserAgent(userAgent string) {
-	h.userAgent = bytesutil.InitHeaderValueString(h.userAgent, userAgent)
+	h.userAgent = zerocopy.InitHeaderValueString(h.userAgent, userAgent)
 }
 
 // SetUserAgentBytes sets User-Agent header value.
 func (h *RequestHeader) SetUserAgentBytes(userAgent []byte) {
-	h.userAgent = bytesutil.InitHeaderValueBytes(h.userAgent, userAgent)
+	h.userAgent = zerocopy.InitHeaderValueBytes(h.userAgent, userAgent)
 }
 
 // Referer returns Referer header value.
 func (h *RequestHeader) Referer() []byte {
-	return peekArgBytesHeaders(&h.h, bytesutil.StrReferer)
+	return peekArgBytesHeaders(&h.h, zerocopy.StrReferer)
 }
 
 // SetReferer sets Referer header value.
 func (h *RequestHeader) SetReferer(referer string) {
-	h.SetBytesK(bytesutil.StrReferer, referer)
+	h.SetBytesK(zerocopy.StrReferer, referer)
 }
 
 // SetRefererBytes sets Referer header value.
 func (h *RequestHeader) SetRefererBytes(referer []byte) {
-	h.bufV = bytesutil.InitHeaderValueBytes(h.bufV, referer)
-	h.setNonSpecial(bytesutil.StrReferer, h.bufV)
+	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, referer)
+	h.setNonSpecial(zerocopy.StrReferer, h.bufV)
 }
 
 // Method returns HTTP request method.
@@ -808,18 +808,18 @@ func (h *RequestHeader) Method() []byte {
 
 // SetMethod sets HTTP request method.
 func (h *RequestHeader) SetMethod(method string) {
-	h.method = bytesutil.InitHeaderValueString(h.method, method)
+	h.method = zerocopy.InitHeaderValueString(h.method, method)
 }
 
 // SetMethodBytes sets HTTP request method.
 func (h *RequestHeader) SetMethodBytes(method []byte) {
-	h.method = bytesutil.InitHeaderValueBytes(h.method, method)
+	h.method = zerocopy.InitHeaderValueBytes(h.method, method)
 }
 
 // Protocol returns HTTP protocol.
 func (h *header) Protocol() []byte {
 	if len(h.protocol) == 0 {
-		return bytesutil.StrHTTP11
+		return zerocopy.StrHTTP11
 	}
 
 	return h.protocol
@@ -827,21 +827,21 @@ func (h *header) Protocol() []byte {
 
 // SetProtocol sets HTTP request protocol.
 func (h *RequestHeader) SetProtocol(protocol string) {
-	h.protocol = bytesutil.InitHeaderValueString(h.protocol, protocol)
-	h.noHTTP11 = !bytes.Equal(h.protocol, bytesutil.StrHTTP11)
+	h.protocol = zerocopy.InitHeaderValueString(h.protocol, protocol)
+	h.noHTTP11 = !bytes.Equal(h.protocol, zerocopy.StrHTTP11)
 }
 
 // SetProtocolBytes sets HTTP request protocol.
 func (h *RequestHeader) SetProtocolBytes(protocol []byte) {
-	h.protocol = bytesutil.InitHeaderValueBytes(h.protocol, protocol)
-	h.noHTTP11 = !bytes.Equal(h.protocol, bytesutil.StrHTTP11)
+	h.protocol = zerocopy.InitHeaderValueBytes(h.protocol, protocol)
+	h.noHTTP11 = !bytes.Equal(h.protocol, zerocopy.StrHTTP11)
 }
 
 // RequestURI returns RequestURI from the first HTTP request line.
 func (h *RequestHeader) RequestURI() []byte {
 	requestURI := h.requestURI
 	if len(requestURI) == 0 {
-		requestURI = bytesutil.StrSlash
+		requestURI = zerocopy.StrSlash
 	}
 
 	return requestURI
@@ -849,16 +849,16 @@ func (h *RequestHeader) RequestURI() []byte {
 
 // SetRequestURI sets RequestURI for the first HTTP request line.
 // RequestURI must be properly encoded.
-// Use URI.RequestURI for constructing proper RequestURI if unsure.
+// Use zerocopy.URI.RequestURI for constructing proper RequestURI if unsure.
 func (h *RequestHeader) SetRequestURI(requestURI string) {
-	h.requestURI = bytesutil.InitHeaderValueString(h.requestURI, requestURI)
+	h.requestURI = zerocopy.InitHeaderValueString(h.requestURI, requestURI)
 }
 
 // SetRequestURIBytes sets RequestURI for the first HTTP request line.
 // RequestURI must be properly encoded.
-// Use URI.RequestURI for constructing proper RequestURI if unsure.
+// Use zerocopy.URI.RequestURI for constructing proper RequestURI if unsure.
 func (h *RequestHeader) SetRequestURIBytes(requestURI []byte) {
-	h.requestURI = bytesutil.InitHeaderValueBytes(h.requestURI, requestURI)
+	h.requestURI = zerocopy.InitHeaderValueBytes(h.requestURI, requestURI)
 }
 
 // IsGet returns true if request method is GET.
@@ -921,7 +921,7 @@ func (h *RequestHeader) HasAcceptEncoding(acceptEncoding string) bool {
 // HasAcceptEncodingBytes returns true if the header contains
 // the given Accept-Encoding value.
 func (h *RequestHeader) HasAcceptEncodingBytes(acceptEncoding []byte) bool {
-	ae := h.peek(bytesutil.StrAcceptEncoding)
+	ae := h.peek(zerocopy.StrAcceptEncoding)
 
 	n := bytes.Index(ae, acceptEncoding)
 	if n < 0 {
@@ -1098,7 +1098,7 @@ func (h *header) copyTo(dst *header) {
 	dst.protocol = append(dst.protocol, h.protocol...)
 	dst.contentType = append(dst.contentType, h.contentType...)
 	dst.trailer = copyTrailer(dst.trailer, h.trailer)
-	dst.cookies = copyArgs(dst.cookies, h.cookies)
+	dst.cookies = zerocopy.CopyArgs(dst.cookies, h.cookies)
 	copyHeaders(&dst.h, &h.h)
 }
 
@@ -1139,31 +1139,31 @@ func (h *RequestHeader) CopyTo(dst *RequestHeader) {
 // behavior and can cause panics.
 func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
-		if len(h.contentLengthBytes) > 0 && !yield(bytesutil.StrContentLength, h.contentLengthBytes) {
+		if len(h.contentLengthBytes) > 0 && !yield(zerocopy.StrContentLength, h.contentLengthBytes) {
 			return
 		}
 
-		if contentType := h.ContentType(); len(contentType) > 0 && !yield(bytesutil.StrContentType, contentType) {
+		if contentType := h.ContentType(); len(contentType) > 0 && !yield(zerocopy.StrContentType, contentType) {
 			return
 		}
 
 		if contentEncoding := h.ContentEncoding(); len(contentEncoding) > 0 &&
-			!yield(bytesutil.StrContentEncoding, contentEncoding) {
+			!yield(zerocopy.StrContentEncoding, contentEncoding) {
 			return
 		}
 
-		if server := h.Server(); len(server) > 0 && !yield(bytesutil.StrServer, server) {
+		if server := h.Server(); len(server) > 0 && !yield(zerocopy.StrServer, server) {
 			return
 		}
 
 		for i := range h.cookies {
-			if !yield(bytesutil.StrSetCookie, h.cookies[i].value) {
+			if !yield(zerocopy.StrSetCookie, h.cookies[i].Value) {
 				return
 			}
 		}
 
 		if len(h.trailer) > 0 &&
-			!yield(bytesutil.StrTrailer, appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace)) {
+			!yield(zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)) {
 			return
 		}
 
@@ -1173,7 +1173,7 @@ func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 			}
 		}
 
-		if h.ConnectionClose() && !yield(bytesutil.StrConnection, bytesutil.StrClose) {
+		if h.ConnectionClose() && !yield(zerocopy.StrConnection, zerocopy.StrClose) {
 			return
 		}
 	}
@@ -1194,9 +1194,9 @@ func (h *header) Trailers() iter.Seq[[]byte] {
 
 // Cookies returns an iterator over key-value paired response cookie in h.
 //
-// Cookie name is passed in key and the whole Set-Cookie header value
+// zerocopy.Cookie name is passed in key and the whole Set-zerocopy.Cookie header value
 // is passed in value for each iteration. Value may be parsed with
-// Cookie.ParseBytes().
+// zerocopy.Cookie.ParseBytes().
 //
 // The key and value may invalid outside the iteration loop.
 // Copy key and/or value contents for each iteration if you need retaining
@@ -1207,7 +1207,7 @@ func (h *header) Trailers() iter.Seq[[]byte] {
 func (h *ResponseHeader) Cookies() iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
 		for i := range h.cookies {
-			if !yield(h.cookies[i].key, h.cookies[i].value) {
+			if !yield(h.cookies[i].Key, h.cookies[i].Value) {
 				break
 			}
 		}
@@ -1227,7 +1227,7 @@ func (h *RequestHeader) Cookies() iter.Seq2[[]byte, []byte] {
 		h.collectCookies()
 
 		for i := range h.cookies {
-			if !yield(h.cookies[i].key, h.cookies[i].value) {
+			if !yield(h.cookies[i].Key, h.cookies[i].Value) {
 				break
 			}
 		}
@@ -1246,32 +1246,32 @@ func (h *RequestHeader) Cookies() iter.Seq2[[]byte, []byte] {
 // behavior and can cause panics.
 func (h *RequestHeader) All() iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
-		if host := h.Host(); len(host) > 0 && !yield(bytesutil.StrHost, host) {
+		if host := h.Host(); len(host) > 0 && !yield(zerocopy.StrHost, host) {
 			return
 		}
 
-		if len(h.contentLengthBytes) > 0 && !yield(bytesutil.StrContentLength, h.contentLengthBytes) {
+		if len(h.contentLengthBytes) > 0 && !yield(zerocopy.StrContentLength, h.contentLengthBytes) {
 			return
 		}
 
-		if contentType := h.ContentType(); len(contentType) > 0 && !yield(bytesutil.StrContentType, contentType) {
+		if contentType := h.ContentType(); len(contentType) > 0 && !yield(zerocopy.StrContentType, contentType) {
 			return
 		}
 
-		if userAgent := h.UserAgent(); len(userAgent) > 0 && !yield(bytesutil.StrUserAgent, userAgent) {
+		if userAgent := h.UserAgent(); len(userAgent) > 0 && !yield(zerocopy.StrUserAgent, userAgent) {
 			return
 		}
 
 		if len(h.trailer) > 0 &&
-			!yield(bytesutil.StrTrailer, appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace)) {
+			!yield(zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)) {
 			return
 		}
 
 		h.collectCookies()
 
 		if len(h.cookies) > 0 {
-			h.bufV = appendRequestCookieBytes(h.bufV[:0], h.cookies)
-			if !yield(bytesutil.StrCookie, h.bufV) {
+			h.bufV = zerocopy.AppendRequestCookieBytes(h.bufV[:0], h.cookies)
+			if !yield(zerocopy.StrCookie, h.bufV) {
 				return
 			}
 		}
@@ -1282,7 +1282,7 @@ func (h *RequestHeader) All() iter.Seq2[[]byte, []byte] {
 			}
 		}
 
-		if h.ConnectionClose() && !yield(bytesutil.StrConnection, bytesutil.StrClose) {
+		if h.ConnectionClose() && !yield(zerocopy.StrConnection, zerocopy.StrClose) {
 			return
 		}
 	}
@@ -1309,7 +1309,7 @@ func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
 		s.blockEnd = len(h.rawHeaders)
 		for s.next() {
 			s.key = trimTrailingSpace(s.key)
-			bytesutil.NormalizeHeaderKey(s.key, h.disableNormalizing)
+			zerocopy.NormalizeHeaderKey(s.key, h.disableNormalizing)
 
 			if len(s.key) > 0 {
 				if !yield(s.key, s.value) {
@@ -1322,14 +1322,14 @@ func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
 
 // Del deletes header with the given key.
 func (h *ResponseHeader) Del(key string) {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	h.del(h.bufK)
 }
 
 // DelBytes deletes header with the given key.
 func (h *ResponseHeader) DelBytes(key []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	bytesutil.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.del(h.bufK)
 }
 
@@ -1357,14 +1357,14 @@ func (h *ResponseHeader) del(key []byte) {
 
 // Del deletes header with the given key.
 func (h *RequestHeader) Del(key string) {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	h.del(h.bufK)
 }
 
 // DelBytes deletes header with the given key.
 func (h *RequestHeader) DelBytes(key []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	bytesutil.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.del(h.bufK)
 }
 
@@ -1399,10 +1399,10 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 	switch key[0] | 0x20 {
 	case 'c':
 		switch {
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrContentType, key):
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentType, key):
 			h.SetContentTypeBytes(value)
 			return true
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrContentLength, key):
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentLength, key):
 			if contentLength, err := parseContentLength(value); err == nil {
 				h.contentLength = contentLength
 				h.contentLengthBytes = append(h.contentLengthBytes[:0], value...)
@@ -1410,11 +1410,11 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 
 			return true
 
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrContentEncoding, key):
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentEncoding, key):
 			h.SetContentEncodingBytes(value)
 			return true
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrConnection, key):
-			if bytes.Equal(bytesutil.StrClose, value) {
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
+			if bytes.Equal(zerocopy.StrClose, value) {
 				h.SetConnectionClose()
 			} else {
 				h.ResetConnectionClose()
@@ -1425,30 +1425,30 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 		}
 
 	case 's':
-		if bytesutil.CaseInsensitiveCompare(bytesutil.StrServer, key) {
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrServer, key) {
 			h.SetServerBytes(value)
 			return true
-		} else if bytesutil.CaseInsensitiveCompare(bytesutil.StrSetCookie, key) {
-			var kv *argsKV
+		} else if zerocopy.CaseInsensitiveCompare(zerocopy.StrSetCookie, key) {
+			var kv *zerocopy.ArgsKV
 
-			h.cookies, kv = allocArg(h.cookies)
-			kv.key = getCookieKey(kv.key, value)
-			kv.value = append(kv.value[:0], value...)
+			h.cookies, kv = zerocopy.AllocArg(h.cookies)
+			kv.Key = zerocopy.GetCookieKey(kv.Key, value)
+			kv.Value = append(kv.Value[:0], value...)
 
 			return true
 		}
 
 	case 't':
-		if bytesutil.CaseInsensitiveCompare(bytesutil.StrTransferEncoding, key) {
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrTransferEncoding, key) {
 			// Transfer-Encoding is managed automatically.
 			return true
-		} else if bytesutil.CaseInsensitiveCompare(bytesutil.StrTrailer, key) {
+		} else if zerocopy.CaseInsensitiveCompare(zerocopy.StrTrailer, key) {
 			_ = h.SetTrailerBytes(value)
 			return true
 		}
 
 	case 'd':
-		if bytesutil.CaseInsensitiveCompare(bytesutil.StrDate, key) {
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrDate, key) {
 			// Date is managed automatically.
 			return true
 		}
@@ -1459,7 +1459,7 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 
 // setNonSpecial directly put into map i.e. not a basic header.
 func (h *header) setNonSpecial(key, value []byte) {
-	setArgBytesHeaders(&h.h, key, value, argsHasValue)
+	setArgBytesHeaders(&h.h, key, value, zerocopy.ArgsHasValue)
 }
 
 // setSpecialHeader handles special headers and return true when a header is processed.
@@ -1471,10 +1471,10 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 	switch key[0] | 0x20 {
 	case 'c':
 		switch {
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrContentType, key):
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentType, key):
 			h.SetContentTypeBytes(value)
 			return true
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrContentLength, key):
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentLength, key):
 			if contentLength, err := parseContentLength(value); err == nil {
 				h.contentLength = contentLength
 				h.contentLengthBytes = append(h.contentLengthBytes[:0], value...)
@@ -1482,8 +1482,8 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 
 			return true
 
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrConnection, key):
-			if bytes.Equal(bytesutil.StrClose, value) {
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
+			if bytes.Equal(zerocopy.StrClose, value) {
 				h.SetConnectionClose()
 			} else {
 				h.ResetConnectionClose()
@@ -1492,28 +1492,28 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 
 			return true
 
-		case bytesutil.CaseInsensitiveCompare(bytesutil.StrCookie, key):
+		case zerocopy.CaseInsensitiveCompare(zerocopy.StrCookie, key):
 			h.collectCookies()
-			h.cookies = parseRequestCookies(h.cookies, value)
+			h.cookies = zerocopy.ParseRequestCookies(h.cookies, value)
 			return true
 		}
 
 	case 't':
-		if bytesutil.CaseInsensitiveCompare(bytesutil.StrTransferEncoding, key) {
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrTransferEncoding, key) {
 			// Transfer-Encoding is managed automatically.
 			return true
-		} else if bytesutil.CaseInsensitiveCompare(bytesutil.StrTrailer, key) {
+		} else if zerocopy.CaseInsensitiveCompare(zerocopy.StrTrailer, key) {
 			_ = h.SetTrailerBytes(value)
 			return true
 		}
 
 	case 'h':
-		if bytesutil.CaseInsensitiveCompare(bytesutil.StrHost, key) {
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrHost, key) {
 			h.SetHostBytes(value)
 			return true
 		}
 	case 'u':
-		if bytesutil.CaseInsensitiveCompare(bytesutil.StrUserAgent, key) {
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrUserAgent, key) {
 			h.SetUserAgentBytes(value)
 			return true
 		}
@@ -1522,74 +1522,74 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 	return false
 }
 
-// Add adds the given 'key: value' header.
+// Add adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use Set for setting a single header for the given key.
 //
 // the Content-Type, Content-Length, Connection, Server, Transfer-Encoding
 // and Date headers can only be set once and will overwrite the previous value,
-// while Set-Cookie will not clear previous cookies.
+// while Set-zerocopy.Cookie will not clear previous cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked response body.
 func (h *ResponseHeader) Add(key, value string) {
-	h.AddBytesKV(bytesutil.S2B(key), bytesutil.S2B(value))
+	h.AddBytesKV(bytesconv.S2B(key), bytesconv.S2B(value))
 }
 
-// AddBytesK adds the given 'key: value' header.
+// AddBytesK adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use SetBytesK for setting a single header for the given key.
 //
 // the Content-Type, Content-Length, Connection, Server, Transfer-Encoding
 // and Date headers can only be set once and will overwrite the previous value,
-// while Set-Cookie will not clear previous cookies.
+// while Set-zerocopy.Cookie will not clear previous cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked response body.
 func (h *ResponseHeader) AddBytesK(key []byte, value string) {
-	h.AddBytesKV(key, bytesutil.S2B(value))
+	h.AddBytesKV(key, bytesconv.S2B(value))
 }
 
-// AddBytesV adds the given 'key: value' header.
+// AddBytesV adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use SetBytesV for setting a single header for the given key.
 //
 // the Content-Type, Content-Length, Connection, Server, Transfer-Encoding
 // and Date headers can only be set once and will overwrite the previous value,
-// while Set-Cookie will not clear previous cookies.
+// while Set-zerocopy.Cookie will not clear previous cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked response body.
 func (h *ResponseHeader) AddBytesV(key string, value []byte) {
-	h.AddBytesKV(bytesutil.S2B(key), value)
+	h.AddBytesKV(bytesconv.S2B(key), value)
 }
 
-// AddBytesKV adds the given 'key: value' header.
+// AddBytesKV adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use SetBytesKV for setting a single header for the given key.
 //
 // the Content-Type, Content-Length, Connection, Server, Transfer-Encoding
 // and Date headers can only be set once and will overwrite the previous value,
-// while the Set-Cookie header will not clear previous cookies.
+// while the Set-zerocopy.Cookie header will not clear previous cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked response body.
 func (h *ResponseHeader) AddBytesKV(key, value []byte) {
-	h.bufK, h.bufV = bytesutil.InitHeaderKV(h.bufK, h.bufV, bytesutil.B2S(key), bytesutil.B2S(value), h.disableNormalizing)
+	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, bytesconv.B2S(key), bytesconv.B2S(value), h.disableNormalizing)
 	if h.setSpecialHeader(h.bufK, h.bufV) {
 		return
 	}
 
-	appendArgBytesHeaders(&h.h, h.bufK, h.bufV, argsHasValue)
+	appendArgBytesHeaders(&h.h, h.bufK, h.bufV, zerocopy.ArgsHasValue)
 }
 
-// Set sets the given 'key: value' header.
+// Set sets the given 'Key: value' header.
 //
-// Please note that the Set-Cookie header will not clear previous cookies,
+// Please note that the Set-zerocopy.Cookie header will not clear previous cookies,
 // use SetCookie instead to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1597,13 +1597,13 @@ func (h *ResponseHeader) AddBytesKV(key, value []byte) {
 //
 // Use Add for setting multiple header values under the same key.
 func (h *ResponseHeader) Set(key, value string) {
-	h.bufK, h.bufV = bytesutil.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
 	h.SetCanonical(h.bufK, h.bufV)
 }
 
-// SetBytesK sets the given 'key: value' header.
+// SetBytesK sets the given 'Key: value' header.
 //
-// Please note that the Set-Cookie header will not clear previous cookies,
+// Please note that the Set-zerocopy.Cookie header will not clear previous cookies,
 // use SetCookie instead to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1615,9 +1615,9 @@ func (h *ResponseHeader) SetBytesK(key []byte, value string) {
 	h.SetBytesKV(key, h.bufV)
 }
 
-// SetBytesV sets the given 'key: value' header.
+// SetBytesV sets the given 'Key: value' header.
 //
-// Please note that the Set-Cookie header will not clear previous cookies,
+// Please note that the Set-zerocopy.Cookie header will not clear previous cookies,
 // use SetCookie instead to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1625,13 +1625,13 @@ func (h *ResponseHeader) SetBytesK(key []byte, value string) {
 //
 // Use AddBytesV for setting multiple header values under the same key.
 func (h *ResponseHeader) SetBytesV(key string, value []byte) {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
-// SetBytesKV sets the given 'key: value' header.
+// SetBytesKV sets the given 'Key: value' header.
 //
-// Please note that the Set-Cookie header will not clear previous cookies,
+// Please note that the Set-zerocopy.Cookie header will not clear previous cookies,
 // use SetCookie instead to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1640,20 +1640,20 @@ func (h *ResponseHeader) SetBytesV(key string, value []byte) {
 // Use AddBytesKV for setting multiple header values under the same key.
 func (h *ResponseHeader) SetBytesKV(key, value []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	bytesutil.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
-// SetCanonical sets the given 'key: value' header assuming that
+// SetCanonical sets the given 'Key: value' header assuming that
 // key is in canonical form.
 //
-// Please note that the Set-Cookie header will not clear previous cookies,
+// Please note that the Set-zerocopy.Cookie header will not clear previous cookies,
 // use SetCookie instead to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
 // it will be sent after the chunked response body.
 func (h *ResponseHeader) SetCanonical(key, value []byte) {
-	h.bufV = bytesutil.InitHeaderValueBytes(h.bufV, value)
+	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, value)
 	if h.setSpecialHeader(key, h.bufV) {
 		return
 	}
@@ -1664,68 +1664,68 @@ func (h *ResponseHeader) SetCanonical(key, value []byte) {
 // SetCookie sets the given response cookie.
 //
 // It is safe re-using the cookie after the function returns.
-func (h *ResponseHeader) SetCookie(cookie *Cookie) {
-	h.bufK = bytesutil.InitHeaderValueBytes(h.bufK, cookie.Key())
-	h.bufV = bytesutil.InitHeaderValueBytes(h.bufV, cookie.Cookie())
-	h.cookies = setArgBytes(h.cookies, h.bufK, h.bufV, argsHasValue)
+func (h *ResponseHeader) SetCookie(cookie *zerocopy.Cookie) {
+	h.bufK = zerocopy.InitHeaderValueBytes(h.bufK, cookie.Key())
+	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, cookie.Cookie())
+	h.cookies = zerocopy.SetArgBytes(h.cookies, h.bufK, h.bufV, zerocopy.ArgsHasValue)
 }
 
-// SetCookie sets 'key: value' cookies.
+// SetCookie sets 'Key: value' cookies.
 func (h *RequestHeader) SetCookie(key, value string) {
 	h.collectCookies()
-	h.bufK = bytesutil.InitHeaderValueString(h.bufK, key)
-	h.bufV = bytesutil.InitHeaderValueString(h.bufV, value)
-	h.cookies = setArgBytes(h.cookies, h.bufK, h.bufV, argsHasValue)
+	h.bufK = zerocopy.InitHeaderValueString(h.bufK, key)
+	h.bufV = zerocopy.InitHeaderValueString(h.bufV, value)
+	h.cookies = zerocopy.SetArgBytes(h.cookies, h.bufK, h.bufV, zerocopy.ArgsHasValue)
 }
 
-// SetCookieBytesK sets 'key: value' cookies.
+// SetCookieBytesK sets 'Key: value' cookies.
 func (h *RequestHeader) SetCookieBytesK(key []byte, value string) {
-	h.SetCookie(bytesutil.B2S(key), value)
+	h.SetCookie(bytesconv.B2S(key), value)
 }
 
-// SetCookieBytesKV sets 'key: value' cookies.
+// SetCookieBytesKV sets 'Key: value' cookies.
 func (h *RequestHeader) SetCookieBytesKV(key, value []byte) {
-	h.SetCookie(bytesutil.B2S(key), bytesutil.B2S(value))
+	h.SetCookie(bytesconv.B2S(key), bytesconv.B2S(value))
 }
 
 // DelClientCookie instructs the client to remove the given cookie.
 // This doesn't work for a cookie with specific domain or path,
 // you should delete it manually like:
 //
-//	c := AcquireCookie()
+//	c := zerocopy.AcquireCookie()
 //	c.SetKey(key)
 //	c.SetDomain("example.com")
 //	c.SetPath("/path")
-//	c.SetExpire(CookieExpireDelete)
+//	c.SetExpire(zerocopy.CookieExpireDelete)
 //	h.SetCookie(c)
-//	ReleaseCookie(c)
+//	zerocopy.ReleaseCookie(c)
 //
 // Use DelCookie if you want just removing the cookie from response header.
 func (h *ResponseHeader) DelClientCookie(key string) {
 	h.DelCookie(key)
 
-	c := AcquireCookie()
+	c := zerocopy.AcquireCookie()
 	c.SetKey(key)
-	c.SetExpire(CookieExpireDelete)
+	c.SetExpire(zerocopy.CookieExpireDelete)
 	h.SetCookie(c)
-	ReleaseCookie(c)
+	zerocopy.ReleaseCookie(c)
 }
 
 // DelClientCookieBytes instructs the client to remove the given cookie.
 // This doesn't work for a cookie with specific domain or path,
 // you should delete it manually like:
 //
-//	c := AcquireCookie()
+//	c := zerocopy.AcquireCookie()
 //	c.SetKey(key)
 //	c.SetDomain("example.com")
 //	c.SetPath("/path")
-//	c.SetExpire(CookieExpireDelete)
+//	c.SetExpire(zerocopy.CookieExpireDelete)
 //	h.SetCookie(c)
-//	ReleaseCookie(c)
+//	zerocopy.ReleaseCookie(c)
 //
 // Use DelCookieBytes if you want just removing the cookie from response header.
 func (h *ResponseHeader) DelClientCookieBytes(key []byte) {
-	h.DelClientCookie(bytesutil.B2S(key))
+	h.DelClientCookie(bytesconv.B2S(key))
 }
 
 // DelCookie removes cookie under the given key from response header.
@@ -1733,7 +1733,7 @@ func (h *ResponseHeader) DelClientCookieBytes(key []byte) {
 // Note that DelCookie doesn't remove the cookie from the client.
 // Use DelClientCookie instead.
 func (h *ResponseHeader) DelCookie(key string) {
-	h.cookies = delAllArgs(h.cookies, key)
+	h.cookies = zerocopy.DelAllArgs(h.cookies, key)
 }
 
 // DelCookieBytes removes cookie under the given key from response header.
@@ -1741,18 +1741,18 @@ func (h *ResponseHeader) DelCookie(key string) {
 // Note that DelCookieBytes doesn't remove the cookie from the client.
 // Use DelClientCookieBytes instead.
 func (h *ResponseHeader) DelCookieBytes(key []byte) {
-	h.DelCookie(bytesutil.B2S(key))
+	h.DelCookie(bytesconv.B2S(key))
 }
 
 // DelCookie removes cookie under the given key.
 func (h *RequestHeader) DelCookie(key string) {
 	h.collectCookies()
-	h.cookies = delAllArgs(h.cookies, key)
+	h.cookies = zerocopy.DelAllArgs(h.cookies, key)
 }
 
 // DelCookieBytes removes cookie under the given key.
 func (h *RequestHeader) DelCookieBytes(key []byte) {
-	h.DelCookie(bytesutil.B2S(key))
+	h.DelCookie(bytesconv.B2S(key))
 }
 
 // DelAllCookies removes all the cookies from response headers.
@@ -1766,7 +1766,7 @@ func (h *RequestHeader) DelAllCookies() {
 	h.cookies = h.cookies[:0]
 }
 
-// Add adds the given 'key: value' header.
+// Add adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use Set for setting a single header for the given key.
@@ -1774,10 +1774,10 @@ func (h *RequestHeader) DelAllCookies() {
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked request body.
 func (h *RequestHeader) Add(key, value string) {
-	h.AddBytesKV(bytesutil.S2B(key), bytesutil.S2B(value))
+	h.AddBytesKV(bytesconv.S2B(key), bytesconv.S2B(value))
 }
 
-// AddBytesK adds the given 'key: value' header.
+// AddBytesK adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use SetBytesK for setting a single header for the given key.
@@ -1785,10 +1785,10 @@ func (h *RequestHeader) Add(key, value string) {
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked request body.
 func (h *RequestHeader) AddBytesK(key []byte, value string) {
-	h.AddBytesKV(key, bytesutil.S2B(value))
+	h.AddBytesKV(key, bytesconv.S2B(value))
 }
 
-// AddBytesV adds the given 'key: value' header.
+// AddBytesV adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use SetBytesV for setting a single header for the given key.
@@ -1796,32 +1796,32 @@ func (h *RequestHeader) AddBytesK(key []byte, value string) {
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked request body.
 func (h *RequestHeader) AddBytesV(key string, value []byte) {
-	h.AddBytesKV(bytesutil.S2B(key), value)
+	h.AddBytesKV(bytesconv.S2B(key), value)
 }
 
-// AddBytesKV adds the given 'key: value' header.
+// AddBytesKV adds the given 'Key: value' header.
 //
 // Multiple headers with the same key may be added with this function.
 // Use SetBytesKV for setting a single header for the given key.
 //
 // the Content-Type, Content-Length, Connection, Transfer-Encoding,
 // Host and User-Agent headers can only be set once and will overwrite
-// the previous value, while the Cookie header will not clear previous cookies.
+// the previous value, while the zerocopy.Cookie header will not clear previous cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see AddTrailer for more details),
 // it will be sent after the chunked request body.
 func (h *RequestHeader) AddBytesKV(key, value []byte) {
-	h.bufK, h.bufV = bytesutil.InitHeaderKV(h.bufK, h.bufV, bytesutil.B2S(key), bytesutil.B2S(value), h.disableNormalizing)
+	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, bytesconv.B2S(key), bytesconv.B2S(value), h.disableNormalizing)
 	if h.setSpecialHeader(h.bufK, h.bufV) {
 		return
 	}
 
-	appendArgBytesHeaders(&h.h, h.bufK, h.bufV, argsHasValue)
+	appendArgBytesHeaders(&h.h, h.bufK, h.bufV, zerocopy.ArgsHasValue)
 }
 
-// Set sets the given 'key: value' header.
+// Set sets the given 'Key: value' header.
 //
-// Please note that the Cookie header will not clear previous cookies,
+// Please note that the zerocopy.Cookie header will not clear previous cookies,
 // delete cookies before calling in order to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1829,13 +1829,13 @@ func (h *RequestHeader) AddBytesKV(key, value []byte) {
 //
 // Use Add for setting multiple header values under the same key.
 func (h *RequestHeader) Set(key, value string) {
-	h.bufK, h.bufV = bytesutil.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
 	h.SetCanonical(h.bufK, h.bufV)
 }
 
-// SetBytesK sets the given 'key: value' header.
+// SetBytesK sets the given 'Key: value' header.
 //
-// Please note that the Cookie header will not clear previous cookies,
+// Please note that the zerocopy.Cookie header will not clear previous cookies,
 // delete cookies before calling in order to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1847,9 +1847,9 @@ func (h *RequestHeader) SetBytesK(key []byte, value string) {
 	h.SetBytesKV(key, h.bufV)
 }
 
-// SetBytesV sets the given 'key: value' header.
+// SetBytesV sets the given 'Key: value' header.
 //
-// Please note that the Cookie header will not clear previous cookies,
+// Please note that the zerocopy.Cookie header will not clear previous cookies,
 // delete cookies before calling in order to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1857,13 +1857,13 @@ func (h *RequestHeader) SetBytesK(key []byte, value string) {
 //
 // Use AddBytesV for setting multiple header values under the same key.
 func (h *RequestHeader) SetBytesV(key string, value []byte) {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
-// SetBytesKV sets the given 'key: value' header.
+// SetBytesKV sets the given 'Key: value' header.
 //
-// Please note that the Cookie header will not clear previous cookies,
+// Please note that the zerocopy.Cookie header will not clear previous cookies,
 // delete cookies before calling in order to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
@@ -1872,20 +1872,20 @@ func (h *RequestHeader) SetBytesV(key string, value []byte) {
 // Use AddBytesKV for setting multiple header values under the same key.
 func (h *RequestHeader) SetBytesKV(key, value []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	bytesutil.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
-// SetCanonical sets the given 'key: value' header assuming that
+// SetCanonical sets the given 'Key: value' header assuming that
 // key is in canonical form.
 //
-// Please note that the Cookie header will not clear previous cookies,
+// Please note that the zerocopy.Cookie header will not clear previous cookies,
 // delete cookies before calling in order to reset cookies.
 //
 // If the header is set as a Trailer (forbidden trailers will not be set, see SetTrailer for more details),
 // it will be sent after the chunked request body.
 func (h *RequestHeader) SetCanonical(key, value []byte) {
-	h.bufV = bytesutil.InitHeaderValueBytes(h.bufV, value)
+	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, value)
 	if h.setSpecialHeader(key, h.bufV) {
 		return
 	}
@@ -1899,7 +1899,7 @@ func (h *RequestHeader) SetCanonical(key, value []byte) {
 // either though ReleaseResponse or your request handler returning.
 // Do not store references to the returned value. Make copies instead.
 func (h *ResponseHeader) Peek(key string) []byte {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -1910,7 +1910,7 @@ func (h *ResponseHeader) Peek(key string) []byte {
 // Do not store references to returned value. Make copies instead.
 func (h *ResponseHeader) PeekBytes(key []byte) []byte {
 	h.bufK = append(h.bufK[:0], key...)
-	bytesutil.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -1930,7 +1930,7 @@ func (h *ResponseHeader) PeekCanonical(key []byte) []byte {
 // either though ReleaseRequest or your request handler returning.
 // Do not store references to returned value. Make copies instead.
 func (h *RequestHeader) Peek(key string) []byte {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -1941,7 +1941,7 @@ func (h *RequestHeader) Peek(key string) []byte {
 // Do not store references to returned value. Make copies instead.
 func (h *RequestHeader) PeekBytes(key []byte) []byte {
 	h.bufK = append(h.bufK[:0], key...)
-	bytesutil.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -1965,16 +1965,16 @@ func (h *ResponseHeader) peek(key []byte) []byte {
 		return h.Server()
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			return bytesutil.StrClose
+			return zerocopy.StrClose
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
 	case HeaderContentLength:
 		return h.contentLengthBytes
 	case HeaderSetCookie:
-		return appendResponseCookieBytes(nil, h.cookies)
+		return zerocopy.AppendResponseCookieBytes(nil, h.cookies)
 	case HeaderTrailer:
-		return appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace)
+		return appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)
 	default:
 		return peekArgBytesHeaders(&h.h, key)
 	}
@@ -1990,7 +1990,7 @@ func (h *RequestHeader) peek(key []byte) []byte {
 		return h.UserAgent()
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			return bytesutil.StrClose
+			return zerocopy.StrClose
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
@@ -1998,12 +1998,12 @@ func (h *RequestHeader) peek(key []byte) []byte {
 		return h.contentLengthBytes
 	case HeaderCookie:
 		if h.cookiesCollected {
-			return appendRequestCookieBytes(nil, h.cookies)
+			return zerocopy.AppendRequestCookieBytes(nil, h.cookies)
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
 	case HeaderTrailer:
-		return appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace)
+		return appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)
 	default:
 		return peekArgBytesHeaders(&h.h, key)
 	}
@@ -2016,7 +2016,7 @@ func (h *RequestHeader) peek(key []byte) []byte {
 // Any future calls to the Peek* will modify the returned value.
 // Do not store references to returned value. Make copies instead.
 func (h *RequestHeader) PeekAll(key string) [][]byte {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peekAll(h.bufK)
 }
 
@@ -2037,7 +2037,7 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 		}
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			h.mulHeader = append(h.mulHeader, bytesutil.StrClose)
+			h.mulHeader = append(h.mulHeader, zerocopy.StrClose)
 		} else {
 			h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 		}
@@ -2046,13 +2046,13 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
 	case HeaderCookie:
 		if h.cookiesCollected {
-			h.mulHeader = append(h.mulHeader, appendRequestCookieBytes(nil, h.cookies))
+			h.mulHeader = append(h.mulHeader, zerocopy.AppendRequestCookieBytes(nil, h.cookies))
 		} else {
 			h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 		}
 
 	case HeaderTrailer:
-		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace))
+		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
 	default:
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 	}
@@ -2067,7 +2067,7 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 // Any future calls to the Peek* will modify the returned value.
 // Do not store references to returned value. Make copies instead.
 func (h *ResponseHeader) PeekAll(key string) [][]byte {
-	h.bufK = bytesutil.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peekAll(h.bufK)
 }
 
@@ -2088,7 +2088,7 @@ func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 		}
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			h.mulHeader = append(h.mulHeader, bytesutil.StrClose)
+			h.mulHeader = append(h.mulHeader, zerocopy.StrClose)
 		} else {
 			h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 		}
@@ -2096,9 +2096,9 @@ func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 	case HeaderContentLength:
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
 	case HeaderSetCookie:
-		h.mulHeader = append(h.mulHeader, appendResponseCookieBytes(nil, h.cookies))
+		h.mulHeader = append(h.mulHeader, zerocopy.AppendResponseCookieBytes(nil, h.cookies))
 	case HeaderTrailer:
-		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace))
+		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
 	default:
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 	}
@@ -2146,23 +2146,23 @@ func (h *header) PeekTrailerKeys() [][]byte {
 	return h.trailer
 }
 
-// Cookie returns cookie for the given key.
+// zerocopy.Cookie returns cookie for the given key.
 func (h *RequestHeader) Cookie(key string) []byte {
 	h.collectCookies()
-	return peekArgStr(h.cookies, key)
+	return zerocopy.PeekArgStr(h.cookies, key)
 }
 
 // CookieBytes returns cookie for the given key.
 func (h *RequestHeader) CookieBytes(key []byte) []byte {
 	h.collectCookies()
-	return peekArgBytes(h.cookies, key)
+	return zerocopy.PeekArgBytes(h.cookies, key)
 }
 
-// Cookie fills cookie for the given cookie.Key.
+// zerocopy.Cookie fills cookie for the given cookie.Key.
 //
 // Returns false if cookie with the given cookie.Key is missing.
-func (h *ResponseHeader) Cookie(cookie *Cookie) bool {
-	v := peekArgBytes(h.cookies, cookie.Key())
+func (h *ResponseHeader) Cookie(cookie *zerocopy.Cookie) bool {
+	v := zerocopy.PeekArgBytes(h.cookies, cookie.Key())
 	if v == nil {
 		return false
 	}
@@ -2467,7 +2467,7 @@ var (
 )
 
 func refreshServerDate() {
-	b := bytesutil.AppendHTTPDate(nil, time.Now())
+	b := zerocopy.AppendHTTPDate(nil, time.Now())
 	serverDate.Store(&b)
 }
 
@@ -2517,7 +2517,7 @@ func (h *ResponseHeader) TrailerHeader() []byte {
 		h.bufV = appendHeaderLine(h.bufV, t, value)
 	}
 
-	h.bufV = append(h.bufV, bytesutil.StrCRLF...)
+	h.bufV = append(h.bufV, zerocopy.StrCRLF...)
 
 	return h.bufV
 }
@@ -2545,13 +2545,13 @@ func (h *ResponseHeader) AppendBytes(dst []byte) []byte {
 
 	server := h.Server()
 	if len(server) != 0 {
-		dst = appendHeaderLine(dst, bytesutil.StrServer, server)
+		dst = appendHeaderLine(dst, zerocopy.StrServer, server)
 	}
 
 	if !h.noDefaultDate {
 		serverDateOnce.Do(updateServerDate)
 
-		dst = appendHeaderLine(dst, bytesutil.StrDate, *serverDate.Load())
+		dst = appendHeaderLine(dst, zerocopy.StrDate, *serverDate.Load())
 	}
 
 	// Append Content-Type only for non-zero responses
@@ -2560,53 +2560,53 @@ func (h *ResponseHeader) AppendBytes(dst []byte) []byte {
 	if h.ContentLength() != 0 || len(h.contentType) > 0 {
 		contentType := h.ContentType()
 		if len(contentType) > 0 {
-			dst = appendHeaderLine(dst, bytesutil.StrContentType, contentType)
+			dst = appendHeaderLine(dst, zerocopy.StrContentType, contentType)
 		}
 	}
 
 	contentEncoding := h.ContentEncoding()
 	if len(contentEncoding) > 0 {
-		dst = appendHeaderLine(dst, bytesutil.StrContentEncoding, contentEncoding)
+		dst = appendHeaderLine(dst, zerocopy.StrContentEncoding, contentEncoding)
 	}
 
 	if len(h.contentLengthBytes) > 0 {
-		dst = appendHeaderLine(dst, bytesutil.StrContentLength, h.contentLengthBytes)
+		dst = appendHeaderLine(dst, zerocopy.StrContentLength, h.contentLengthBytes)
 	}
 
 	for _, _e := range h.h.Entries() {
-		kv := &argsKV{key: bytesconv.S2B(_e.Key), value: bytesconv.S2B(_e.Value)}
+		kv := &zerocopy.ArgsKV{Key: bytesconv.S2B(_e.Key), Value: bytesconv.S2B(_e.Value)}
 
 		// Exclude trailer from header
 		exclude := false
 		for _, t := range h.trailer {
-			if bytes.Equal(kv.key, t) {
+			if bytes.Equal(kv.Key, t) {
 				exclude = true
 				break
 			}
 		}
 
-		if !exclude && (h.noDefaultDate || !bytes.Equal(kv.key, bytesutil.StrDate)) {
-			dst = appendHeaderLine(dst, kv.key, kv.value)
+		if !exclude && (h.noDefaultDate || !bytes.Equal(kv.Key, zerocopy.StrDate)) {
+			dst = appendHeaderLine(dst, kv.Key, kv.Value)
 		}
 	}
 
 	if len(h.trailer) > 0 {
-		dst = appendHeaderLine(dst, bytesutil.StrTrailer, appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace))
+		dst = appendHeaderLine(dst, zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
 	}
 
 	n := len(h.cookies)
 	if n > 0 {
 		for i := range n {
 			kv := &h.cookies[i]
-			dst = appendHeaderLine(dst, bytesutil.StrSetCookie, kv.value)
+			dst = appendHeaderLine(dst, zerocopy.StrSetCookie, kv.Value)
 		}
 	}
 
 	if h.ConnectionClose() {
-		dst = appendHeaderLine(dst, bytesutil.StrConnection, bytesutil.StrClose)
+		dst = appendHeaderLine(dst, zerocopy.StrConnection, zerocopy.StrClose)
 	}
 
-	return append(dst, bytesutil.StrCRLF...)
+	return append(dst, zerocopy.StrCRLF...)
 }
 
 // Write writes request header to w.
@@ -2655,7 +2655,7 @@ func (h *RequestHeader) TrailerHeader() []byte {
 		h.bufV = appendHeaderLine(h.bufV, t, value)
 	}
 
-	h.bufV = append(h.bufV, bytesutil.StrCRLF...)
+	h.bufV = append(h.bufV, zerocopy.StrCRLF...)
 
 	return h.bufV
 }
@@ -2687,74 +2687,74 @@ func (h *RequestHeader) AppendBytes(dst []byte) []byte {
 	dst = append(dst, h.RequestURI()...)
 	dst = append(dst, ' ')
 	dst = append(dst, h.Protocol()...)
-	dst = append(dst, bytesutil.StrCRLF...)
+	dst = append(dst, zerocopy.StrCRLF...)
 
 	userAgent := h.UserAgent()
 	if len(userAgent) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, bytesutil.StrUserAgent, userAgent)
+		dst = appendHeaderLine(dst, zerocopy.StrUserAgent, userAgent)
 	}
 
 	host := h.Host()
 	if len(host) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, bytesutil.StrHost, host)
+		dst = appendHeaderLine(dst, zerocopy.StrHost, host)
 	}
 
 	contentType := h.ContentType()
 	if !h.noDefaultContentType && len(contentType) == 0 && h.ContentLength() > 0 {
-		contentType = bytesutil.StrDefaultContentType
+		contentType = zerocopy.StrDefaultContentType
 	}
 
 	if len(contentType) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, bytesutil.StrContentType, contentType)
+		dst = appendHeaderLine(dst, zerocopy.StrContentType, contentType)
 	}
 
 	if len(h.contentLengthBytes) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, bytesutil.StrContentLength, h.contentLengthBytes)
+		dst = appendHeaderLine(dst, zerocopy.StrContentLength, h.contentLengthBytes)
 	}
 
 	for _, _e := range h.h.Entries() {
-		kv := &argsKV{key: bytesconv.S2B(_e.Key), value: bytesconv.S2B(_e.Value)}
+		kv := &zerocopy.ArgsKV{Key: bytesconv.S2B(_e.Key), Value: bytesconv.S2B(_e.Value)}
 		// Exclude trailer from header
 		exclude := false
 		for _, t := range h.trailer {
-			if bytes.Equal(kv.key, t) {
+			if bytes.Equal(kv.Key, t) {
 				exclude = true
 				break
 			}
 		}
 
 		if !exclude {
-			dst = appendHeaderLine(dst, kv.key, kv.value)
+			dst = appendHeaderLine(dst, kv.Key, kv.Value)
 		}
 	}
 
 	if len(h.trailer) > 0 {
-		dst = appendHeaderLine(dst, bytesutil.StrTrailer, appendTrailerBytes(nil, h.trailer, bytesutil.StrCommaSpace))
+		dst = appendHeaderLine(dst, zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
 	}
 
 	// there is no need in h.collectCookies() here, since if cookies aren't collected yet,
 	// they all are located in h.h.
 	n := len(h.cookies)
 	if n > 0 && !h.disableSpecialHeader {
-		dst = append(dst, bytesutil.StrCookie...)
-		dst = append(dst, bytesutil.StrColonSpace...)
-		dst = appendRequestCookieBytes(dst, h.cookies)
-		dst = append(dst, bytesutil.StrCRLF...)
+		dst = append(dst, zerocopy.StrCookie...)
+		dst = append(dst, zerocopy.StrColonSpace...)
+		dst = zerocopy.AppendRequestCookieBytes(dst, h.cookies)
+		dst = append(dst, zerocopy.StrCRLF...)
 	}
 
 	if h.ConnectionClose() && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, bytesutil.StrConnection, bytesutil.StrClose)
+		dst = appendHeaderLine(dst, zerocopy.StrConnection, zerocopy.StrClose)
 	}
 
-	return append(dst, bytesutil.StrCRLF...)
+	return append(dst, zerocopy.StrCRLF...)
 }
 
 func appendHeaderLine(dst, key, value []byte) []byte {
 	dst = append(dst, key...)
-	dst = append(dst, bytesutil.StrColonSpace...)
+	dst = append(dst, zerocopy.StrColonSpace...)
 	dst = append(dst, value...)
 
-	return append(dst, bytesutil.StrCRLF...)
+	return append(dst, zerocopy.StrCRLF...)
 }
 
 func (h *ResponseHeader) parse(buf []byte) (int, error) {
@@ -2797,7 +2797,7 @@ func (h *RequestHeader) parse(buf []byte) (int, error) {
 }
 
 //nolint:unused
-func parseTrailer(src []byte, dest []argsKV, disableNormalizing bool) ([]argsKV, int, error) {
+func parseTrailer(src []byte, dest []zerocopy.ArgsKV, disableNormalizing bool) ([]zerocopy.ArgsKV, int, error) {
 	var s headerScanner
 
 	s.b = src
@@ -2823,8 +2823,8 @@ func parseTrailer(src []byte, dest []argsKV, disableNormalizing bool) ([]argsKV,
 				return dest, 0, fmt.Errorf("invalid trailer value %q", s.value)
 			}
 		}
-		bytesutil.NormalizeHeaderKeyValidated(s.key, disable)
-		dest = appendArgBytes(dest, s.key, s.value, argsHasValue)
+		zerocopy.NormalizeHeaderKeyValidated(s.key, disable)
+		dest = zerocopy.AppendArgBytes(dest, s.key, s.value, zerocopy.ArgsHasValue)
 	}
 
 	if s.err != nil {
@@ -2841,56 +2841,56 @@ func isBadTrailer(key []byte) bool {
 
 	switch key[0] | 0x20 {
 	case 'a':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrAuthorization)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrAuthorization)
 	case 'c':
 		// Security fix: Changed > to >= to properly block Content-Type header in trailers
-		if len(key) >= len(HeaderContentType) && bytesutil.CaseInsensitiveCompare(key[:8], bytesutil.StrContentType[:8]) {
+		if len(key) >= len(HeaderContentType) && zerocopy.CaseInsensitiveCompare(key[:8], zerocopy.StrContentType[:8]) {
 			// skip compare prefix 'Content-'
-			return bytesutil.CaseInsensitiveCompare(key[8:], bytesutil.StrContentEncoding[8:]) || bytesutil.CaseInsensitiveCompare(key[8:], bytesutil.StrContentLength[8:]) || bytesutil.CaseInsensitiveCompare(key[8:], bytesutil.StrContentType[8:]) || bytesutil.CaseInsensitiveCompare(key[8:], bytesutil.StrContentRange[8:])
+			return zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentEncoding[8:]) || zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentLength[8:]) || zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentType[8:]) || zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentRange[8:])
 		}
 
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrConnection) || bytesutil.
-			// Security: Block Cookie header in trailers to prevent session hijacking
-			CaseInsensitiveCompare(key, bytesutil.StrCookie)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrConnection) || zerocopy.
+			// Security: Block zerocopy.Cookie header in trailers to prevent session hijacking
+			CaseInsensitiveCompare(key, zerocopy.StrCookie)
 
 	case 'e':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrExpect)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrExpect)
 	case 'h':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrHost)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrHost)
 	case 'k':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrKeepAlive)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrKeepAlive)
 	case 'l':
 		// Security: Block Location header in trailers to prevent redirect attacks
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrLocation)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrLocation)
 	case 'm':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrMaxForwards)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrMaxForwards)
 	case 'p':
-		if len(key) >= len(HeaderProxyConnection) && bytesutil.CaseInsensitiveCompare(key[:6], bytesutil.StrProxyConnection[:6]) {
+		if len(key) >= len(HeaderProxyConnection) && zerocopy.CaseInsensitiveCompare(key[:6], zerocopy.StrProxyConnection[:6]) {
 			// skip compare prefix 'Proxy-'
-			return bytesutil.CaseInsensitiveCompare(key[6:], bytesutil.StrProxyConnection[6:]) || bytesutil.CaseInsensitiveCompare(key[6:], bytesutil.StrProxyAuthenticate[6:]) || bytesutil.CaseInsensitiveCompare(key[6:], bytesutil.StrProxyAuthorization[6:])
+			return zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyConnection[6:]) || zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthenticate[6:]) || zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthorization[6:])
 		}
 
 	case 'r':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrRange)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrRange)
 	case 's':
-		// Security: Block Set-Cookie header in trailers
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrSetCookie)
+		// Security: Block Set-zerocopy.Cookie header in trailers
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrSetCookie)
 	case 't':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrTE) || bytesutil.CaseInsensitiveCompare(key, bytesutil.StrTrailer) || bytesutil.CaseInsensitiveCompare(key, bytesutil.StrTransferEncoding)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTE) || zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTrailer) || zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTransferEncoding)
 	case 'w':
-		return bytesutil.CaseInsensitiveCompare(key, bytesutil.StrWWWAuthenticate)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrWWWAuthenticate)
 	case 'x':
 		// Security: Block X-Forwarded-* and X-Real-IP headers to prevent IP spoofing
-		return (len(key) >= 11 && bytesutil.CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) ||
-			(len(key) >= 9 && bytesutil.CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
+		return (len(key) >= 11 && zerocopy.CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) ||
+			(len(key) >= 9 && zerocopy.CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
 	}
 
 	return false
 }
 
 func isHTTPVersion(proto []byte) bool {
-	return len(proto) == len(bytesutil.StrHTTP11) &&
-		bytes.HasPrefix(proto, bytesutil.StrHTTP11[:5]) &&
+	return len(proto) == len(zerocopy.StrHTTP11) &&
+		bytes.HasPrefix(proto, zerocopy.StrHTTP11[:5]) &&
 		proto[6] == '.' &&
 		proto[5] >= '0' && proto[5] <= '9' &&
 		proto[7] >= '0' && proto[7] <= '9'
@@ -2943,7 +2943,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("invalid response status code %q: response %q", statusCode, buf)
 	}
 
-	h.statusCode, n, err = bytesutil.ParseUintBuf(statusCode)
+	h.statusCode, n, err = zerocopy.ParseUintBuf(statusCode)
 	if err != nil || n != 3 {
 		if h.SecureErrorLogMessage {
 			return 0, ErrUnexpectedStatusCodeChar
@@ -2960,7 +2960,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("unsupported http version %q in %q", protoStr, buf)
 	}
 
-	h.noHTTP11 = !bytes.Equal(protoStr, bytesutil.StrHTTP11)
+	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
 
 	h.protocol = append(h.protocol[:0], protoStr...)
 	if len(statusMessage) > 0 {
@@ -2972,7 +2972,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 
 func isValidMethod(method []byte) bool {
 	for _, ch := range method {
-		if bytesutil.ValidMethodValueByteTable[ch] == 0 {
+		if zerocopy.ValidMethodValueByteTable[ch] == 0 {
 			return false
 		}
 	}
@@ -3046,7 +3046,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("invalid request uri %q in %q: %w", b[:n], buf, err)
 	}
 
-	h.noHTTP11 = !bytes.Equal(protoStr, bytesutil.StrHTTP11)
+	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
 	h.protocol = append(h.protocol[:0], protoStr...)
 	h.requestURI = append(h.requestURI[:0], b[:n]...)
 
@@ -3054,8 +3054,8 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 }
 
 func validateRequestURI(method, requestURI []byte) error {
-	if stringContainsCTLByte(requestURI) {
-		return ErrorInvalidURI
+	if zerocopy.StringContainsCTLByte(requestURI) {
+		return zerocopy.ErrorInvalidURI
 	}
 
 	if len(requestURI) == 1 && requestURI[0] == '*' {
@@ -3066,20 +3066,20 @@ func validateRequestURI(method, requestURI []byte) error {
 		return nil
 	}
 
-	if before, _, ok := bytes.Cut(requestURI, bytesutil.StrColonSlashSlash); ok {
-		if !isValidScheme(before) {
-			return ErrorInvalidURI
+	if before, _, ok := bytes.Cut(requestURI, zerocopy.StrColonSlashSlash); ok {
+		if !zerocopy.IsValidScheme(before) {
+			return zerocopy.ErrorInvalidURI
 		}
 
 		return nil
 	}
 
 	// net/http treats CONNECT request-targets without a leading slash as authority-form.
-	if bytes.Equal(method, bytesutil.StrConnect) {
+	if bytes.Equal(method, zerocopy.StrConnect) {
 		return nil
 	}
 
-	return ErrorInvalidURI
+	return zerocopy.ErrorInvalidURI
 }
 
 func readRawHeaders(dst, buf []byte) ([]byte, int, error) {
@@ -3114,7 +3114,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 	s.b = buf
 
-	var kv *argsKV
+	var kv *zerocopy.ArgsKV
 
 	transferEncodingSeen := false
 	contentLengthSeen := false
@@ -3137,7 +3137,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			h.connectionClose = true
 			disableNormalizing = true
 		}
-		bytesutil.NormalizeHeaderKeyValidated(s.key, disableNormalizing)
+		zerocopy.NormalizeHeaderKeyValidated(s.key, disableNormalizing)
 
 		for _, ch := range s.value {
 			if !validHeaderValueByte(ch) {
@@ -3148,17 +3148,17 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 		switch s.key[0] | 0x20 {
 		case 'c':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrContentType) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentType) {
 				h.contentType = append(h.contentType[:0], s.value...)
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrContentEncoding) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentEncoding) {
 				h.contentEncoding = append(h.contentEncoding[:0], s.value...)
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrContentLength) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentLength) {
 				if contentLengthSeen {
 					h.connectionClose = true
 					return 0, ErrDuplicateContentLength
@@ -3183,33 +3183,33 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrConnection) {
-				if bytes.Equal(s.value, bytesutil.StrClose) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
+				if bytes.Equal(s.value, zerocopy.StrClose) {
 					h.connectionClose = true
 				} else {
 					h.connectionClose = false
-					appendArgBytesHeaders(&h.h, s.key, s.value, argsHasValue)
+					appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
 				}
 
 				continue
 			}
 
 		case 's':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrServer) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrServer) {
 				h.server = append(h.server[:0], s.value...)
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrSetCookie) {
-				h.cookies, kv = allocArg(h.cookies)
-				kv.key = getCookieKey(kv.key, s.value)
-				kv.value = append(kv.value[:0], s.value...)
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrSetCookie) {
+				h.cookies, kv = zerocopy.AllocArg(h.cookies)
+				kv.Key = zerocopy.GetCookieKey(kv.Key, s.value)
+				kv.Value = append(kv.Value[:0], s.value...)
 
 				continue
 			}
 
 		case 't':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrTransferEncoding) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTransferEncoding) {
 				if h.noHTTP11 {
 					continue
 				}
@@ -3225,7 +3225,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 				transferEncodingSeen = true
 
-				if !bytesutil.CaseInsensitiveCompare(s.value, bytesutil.StrChunked) {
+				if !zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked) {
 					h.connectionClose = true
 					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
@@ -3235,12 +3235,12 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				}
 
 				h.contentLength = -1
-				setArgBytesHeaders(&h.h, bytesutil.StrTransferEncoding, bytesutil.StrChunked, argsHasValue)
+				setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked, zerocopy.ArgsHasValue)
 
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrTrailer) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTrailer) {
 				err := h.SetTrailerBytes(s.value)
 				if err != nil {
 					h.connectionClose = true
@@ -3251,7 +3251,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			}
 		}
 
-		appendArgBytesHeaders(&h.h, s.key, s.value, argsHasValue)
+		appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
 	}
 
 	if s.err != nil {
@@ -3279,8 +3279,8 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 	if h.noHTTP11 && !h.connectionClose {
 		// close connection for non-http/1.1 response unless 'Connection: keep-alive' is set.
-		v := peekArgBytesHeaders(&h.h, bytesutil.StrConnection)
-		h.connectionClose = !hasHeaderValue(v, bytesutil.StrKeepAlive)
+		v := peekArgBytesHeaders(&h.h, zerocopy.StrConnection)
+		h.connectionClose = !hasHeaderValue(v, zerocopy.StrKeepAlive)
 	}
 
 	return s.r, nil
@@ -3311,7 +3311,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			h.connectionClose = true
 			return 0, fmt.Errorf("invalid header key %q", s.key)
 		}
-		bytesutil.
+		zerocopy.
 
 			// Key bytes were already validated by the scanner.
 			NormalizeHeaderKeyValidated(s.key, h.disableNormalizing || s.keyHasSpace)
@@ -3329,7 +3329,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 		contentLength := 0
 		switch s.key[0] | 0x20 {
 		case 'c':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrContentLength) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentLength) {
 				isContentLength = true
 
 				if contentLengthSeen {
@@ -3350,7 +3350,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			}
 
 		case 't':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrTransferEncoding) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTransferEncoding) {
 				isTransferEncoding = true
 				// RFC 9112 section 6.1 requires an HTTP/1.0 message carrying
 				// Transfer-Encoding to be treated as having faulty framing,
@@ -3375,13 +3375,13 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 		}
 
 		if h.disableSpecialHeader {
-			appendArgBytesHeaders(&h.h, s.key, s.value, argsHasValue)
+			appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
 			continue
 		}
 
 		switch s.key[0] | 0x20 {
 		case 'h':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrHost) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrHost) {
 				if hostSeen {
 					h.connectionClose = true
 					return 0, errors.New("too many host headers")
@@ -3395,12 +3395,12 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			}
 
 		case 'u':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrUserAgent) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrUserAgent) {
 				h.userAgent = append(h.userAgent[:0], s.value...)
 				continue
 			}
 		case 'c':
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrContentType) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentType) {
 				h.contentType = append(h.contentType[:0], s.value...)
 				continue
 			}
@@ -3414,12 +3414,12 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrConnection) {
-				if bytes.Equal(s.value, bytesutil.StrClose) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
+				if bytes.Equal(s.value, zerocopy.StrClose) {
 					h.connectionClose = true
 				} else {
 					h.connectionClose = false
-					appendArgBytesHeaders(&h.h, s.key, s.value, argsHasValue)
+					appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
 				}
 
 				continue
@@ -3427,8 +3427,8 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 		case 't':
 			if isTransferEncoding {
-				isIdentity := bytesutil.CaseInsensitiveCompare(s.value, bytesutil.StrIdentity)
-				isChunked := bytesutil.CaseInsensitiveCompare(s.value, bytesutil.StrChunked)
+				isIdentity := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrIdentity)
+				isChunked := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked)
 
 				if !isIdentity && !isChunked {
 					h.connectionClose = true
@@ -3441,13 +3441,13 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 				if isChunked {
 					h.contentLength = -1
-					setArgBytesHeaders(&h.h, bytesutil.StrTransferEncoding, bytesutil.StrChunked, argsHasValue)
+					setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked, zerocopy.ArgsHasValue)
 				}
 
 				continue
 			}
 
-			if bytesutil.CaseInsensitiveCompare(s.key, bytesutil.StrTrailer) {
+			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTrailer) {
 				err := h.SetTrailerBytes(s.value)
 				if err != nil {
 					h.connectionClose = true
@@ -3458,7 +3458,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			}
 		}
 
-		appendArgBytesHeaders(&h.h, s.key, s.value, argsHasValue)
+		appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
 	}
 
 	if s.err != nil {
@@ -3477,8 +3477,8 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 	if h.noHTTP11 && !h.connectionClose {
 		// close connection for non-http/1.1 request unless 'Connection: keep-alive' is set.
-		v := peekArgBytesHeaders(&h.h, bytesutil.StrConnection)
-		h.connectionClose = !hasHeaderValue(v, bytesutil.StrKeepAlive)
+		v := peekArgBytesHeaders(&h.h, zerocopy.StrConnection)
+		h.connectionClose = !hasHeaderValue(v, zerocopy.StrKeepAlive)
 	}
 
 	return s.r, nil
@@ -3490,8 +3490,8 @@ func (h *RequestHeader) collectCookies() {
 	}
 
 	for _, e := range h.h.Entries() {
-		if bytesutil.CaseInsensitiveCompare(bytesconv.S2B(e.Key), bytesutil.StrCookie) {
-			h.cookies = parseRequestCookies(h.cookies, bytesconv.S2B(e.Value))
+		if zerocopy.CaseInsensitiveCompare(bytesconv.S2B(e.Key), zerocopy.StrCookie) {
+			h.cookies = zerocopy.ParseRequestCookies(h.cookies, bytesconv.S2B(e.Value))
 		}
 	}
 
@@ -3500,7 +3500,7 @@ func (h *RequestHeader) collectCookies() {
 }
 
 func parseContentLength(b []byte) (int, error) {
-	v, n, err := bytesutil.ParseUintBuf(b)
+	v, n, err := zerocopy.ParseUintBuf(b)
 	if err != nil {
 		return -1, fmt.Errorf("cannot parse content-length: %w", err)
 	}
@@ -3553,7 +3553,7 @@ func hasHeaderValue(s, value []byte) bool {
 
 	vs.b = s
 	for vs.next() {
-		if bytesutil.CaseInsensitiveCompare(vs.value, value) {
+		if zerocopy.CaseInsensitiveCompare(vs.value, value) {
 			return true
 		}
 	}
@@ -3601,7 +3601,7 @@ func nextLine(b []byte) ([]byte, []byte, error) {
 //   - foo-bar-baz -> Foo-Bar-Baz
 func AppendNormalizedHeaderKey(dst []byte, key string) []byte {
 	dst = append(dst, key...)
-	bytesutil.NormalizeHeaderKey(dst[len(dst)-len(key):], false)
+	zerocopy.NormalizeHeaderKey(dst[len(dst)-len(key):], false)
 	return dst
 }
 
@@ -3616,7 +3616,7 @@ func AppendNormalizedHeaderKey(dst []byte, key string) []byte {
 //   - HOST -> Host
 //   - foo-bar-baz -> Foo-Bar-Baz
 func AppendNormalizedHeaderKeyBytes(dst, key []byte) []byte {
-	return AppendNormalizedHeaderKey(dst, bytesutil.B2S(key))
+	return AppendNormalizedHeaderKey(dst, bytesconv.B2S(key))
 }
 
 func appendTrailerBytes(dst []byte, trailer [][]byte, sep []byte) []byte {
@@ -3740,7 +3740,7 @@ func (h *ResponseHeader) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
 
 // CookieScoped borrows the cookie value associated with key into the given borrow scope.
 func (h *ResponseHeader) CookieScoped(s *borrow.Scope, key string) borrow.Bytes {
-	var c Cookie
+	var c zerocopy.Cookie
 	c.SetKey(key)
 
 	if !h.Cookie(&c) {

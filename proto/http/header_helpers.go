@@ -70,7 +70,12 @@ func parseTrailerHeaders(src []byte, dest *coreheaders.Headers, disableNormalizi
 			break
 		}
 
-		dest.ParseHeaderLine(line)
+		idxColon := bytes.IndexByte(line, ':')
+		if idxColon > 0 {
+			k := line[:idxColon]
+			v := bytes.TrimSpace(line[idxColon+1:])
+			dest.Add(string(k), string(v))
+		}
 	}
 
 	return n, err

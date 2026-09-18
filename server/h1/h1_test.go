@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 	"github.com/lemon4ksan/mach/server/h1"
 )
@@ -115,7 +117,7 @@ func TestResponseSerialization(t *testing.T) {
 
 	res.StatusCode = 201
 	res.Headers.Set("Content-Type", "application/json")
-	res.Cookies = append(res.Cookies, &http.Cookie{
+	res.Cookies = append(res.Cookies, &zerocopy.Cookie{
 		Name:  "token",
 		Value: "secret123",
 		Path:  "/",
@@ -124,7 +126,7 @@ func TestResponseSerialization(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
+	bw := &bytesconv.ByteBuffer{B: make([]byte, 0, 1024)}
 	bw.ResetWriter(&buf)
 
 	err := res.WriteTo(bw, true, true)
@@ -350,7 +352,7 @@ func stringsReader(s string) io.Reader {
 func TestChunkedWriter_And_FormatHex(t *testing.T) {
 	var buf bytes.Buffer
 
-	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
+	bw := &bytesconv.ByteBuffer{B: make([]byte, 0, 1024)}
 	bw.ResetWriter(&buf)
 	cw := h1.NewChunkedWriter(bw)
 
@@ -482,7 +484,7 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	bw := &bytesutil.ByteBuffer{B: make([]byte, 0, 1024)}
+	bw := &bytesconv.ByteBuffer{B: make([]byte, 0, 1024)}
 	bw.ResetWriter(&buf)
 
 	err := res.WriteTo(bw, true, true)

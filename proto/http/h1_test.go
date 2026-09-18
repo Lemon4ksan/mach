@@ -9,11 +9,12 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 )
 
 func TestH1Engine_URIAndArgs(t *testing.T) {
-	u := AcquireURI()
-	defer ReleaseURI(u)
+	u := zerocopy.AcquireURI()
+	defer zerocopy.ReleaseURI(u)
 
 	u.Parse(nil, []byte("https://example.com:8080/path/test?foo=bar&baz=123")) //nolint:errcheck
 
@@ -160,7 +161,7 @@ func BenchmarkCookie_Scoped(b *testing.B) {
 	scope := borrow.AcquireScope()
 	defer scope.Release()
 
-	var c Cookie
+	var c zerocopy.Cookie
 	c.SetKey("session_id")
 	c.SetValue("xyz_987654321_secure_token")
 	c.SetDomain("api.aoni.dev")
@@ -182,7 +183,7 @@ func BenchmarkCookie_Scoped(b *testing.B) {
 }
 
 func BenchmarkCookie_LegacyAlloc(b *testing.B) {
-	var c Cookie
+	var c zerocopy.Cookie
 	c.SetKey("session_id")
 	c.SetValue("xyz_987654321_secure_token")
 	c.SetDomain("api.aoni.dev")
@@ -207,8 +208,8 @@ func BenchmarkURI_Scoped(b *testing.B) {
 	scope := borrow.AcquireScope()
 	defer scope.Release()
 
-	u := AcquireURI()
-	defer ReleaseURI(u)
+	u := zerocopy.AcquireURI()
+	defer zerocopy.ReleaseURI(u)
 
 	u.Parse(
 		nil,
@@ -234,8 +235,8 @@ func BenchmarkURI_Scoped(b *testing.B) {
 }
 
 func BenchmarkURI_LegacyAlloc(b *testing.B) {
-	u := AcquireURI()
-	defer ReleaseURI(u)
+	u := zerocopy.AcquireURI()
+	defer zerocopy.ReleaseURI(u)
 
 	u.Parse(
 		nil,

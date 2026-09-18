@@ -9,7 +9,7 @@ import (
 	"context"
 	"net"
 
-	http "github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/mach/proto/http"
 )
 
 type ClientConn struct {

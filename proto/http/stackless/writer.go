@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // Writer is an interface stackless writer must conform to.
@@ -74,7 +74,7 @@ func (w *writer) Write(p []byte) (int, error) {
 }
 
 func (w *writer) WriteString(s string) (int, error) {
-	w.p = bytesutil.S2B(s)
+	w.p = bytesconv.S2B(s)
 	err := w.do(opWrite)
 	w.p = nil
 

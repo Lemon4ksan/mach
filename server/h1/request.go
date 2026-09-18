@@ -20,7 +20,6 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
 	coreheaders "github.com/lemon4ksan/mach/proto/headers"
 )
 
@@ -91,7 +90,7 @@ func (r *Request) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 //   - RFC 9112 §3.2 (Request Target & Host Header Enforcement)
 //   - RFC 9112 §6.3 (Message Body Length & Request Smuggling Protection)
 //   - RFC 9931 §4 & §8 (Security Considerations for Optimistic Transitions)
-func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBodySize int64) error {
+func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBodySize int64) error {
 	// 1. Fast SIMD Path: Check if complete header block (\r\n\r\n) is already in read buffer
 	if br.Buffered() < 4 {
 		_, _ = br.Peek(4)
@@ -224,7 +223,7 @@ func (r *Request) parseRequestLine(line []byte) error {
 	return nil
 }
 
-func (r *Request) finishRequestRead(br *bufio.Reader, bw *bytesutil.ByteBuffer, maxBodySize int64) error {
+func (r *Request) finishRequestRead(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBodySize int64) error {
 	r.Host = r.Headers.Get(header.Host)
 
 	// RFC 9112 §3.2: HTTP/1.1 requests MUST include a valid Host header
@@ -246,7 +245,7 @@ func (r *Request) finishRequestRead(br *bufio.Reader, bw *bytesutil.ByteBuffer, 
 //go:noinline
 func (r *Request) finishRequestBodyRead(
 	br *bufio.Reader,
-	bw *bytesutil.ByteBuffer,
+	bw *bytesconv.ByteBuffer,
 	maxBodySize int64,
 	hasTE, hasCL bool,
 ) error {

@@ -23,7 +23,8 @@ import (
 	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	machcompress "github.com/lemon4ksan/mach/proto/compress"
 )
 
@@ -46,20 +47,20 @@ func SetBodySizePoolLimit(reqBodyLimit, respBodyLimit int) {
 //
 // Request instance MUST NOT be used from concurrently running goroutines.
 type Request struct {
-	noCopy bytesutil.NoCopy
+	noCopy zerocopy.NoCopy
 
 	bodyStream io.Reader
 	w          requestBodyWriter
-	body       *bytesutil.ByteBuffer
+	body       *bytesconv.ByteBuffer
 
 	multipartForm         *multipart.Form
 	multipartFormBoundary string
 
-	postArgs Args
+	postArgs zerocopy.Args
 
 	bodyRaw []byte
 
-	uri URI
+	uri zerocopy.URI
 
 	// Request header.
 	//
@@ -100,7 +101,7 @@ type Request struct {
 //
 // Response instance MUST NOT be used from concurrently running goroutines.
 type Response struct {
-	noCopy bytesutil.NoCopy
+	noCopy zerocopy.NoCopy
 
 	bodyStream io.Reader
 
@@ -109,7 +110,7 @@ type Response struct {
 	// Local TCPAddr from concurrently net.Conn.
 	laddr net.Addr
 	w     responseBodyWriter
-	body  *bytesutil.ByteBuffer
+	body  *bytesconv.ByteBuffer
 
 	bodyRaw []byte
 
@@ -166,7 +167,7 @@ func (req *Request) SetRequestURIBytes(requestURI []byte) {
 	req.uriParseErr = nil
 }
 
-// RequestURI returns request's URI.
+// RequestURI returns request's zerocopy.URI.
 func (req *Request) RequestURI() []byte {
 	if req.parsedURI {
 		requestURI := req.uri.RequestURI()
@@ -506,7 +507,7 @@ func (req *Request) bodyBytes() []byte {
 	return req.body.B
 }
 
-func (resp *Response) BodyBuffer() *bytesutil.ByteBuffer {
+func (resp *Response) BodyBuffer() *bytesconv.ByteBuffer {
 	if resp.body == nil {
 		resp.body = responseBodyPool.Get()
 	}
@@ -516,7 +517,7 @@ func (resp *Response) BodyBuffer() *bytesutil.ByteBuffer {
 	return resp.body
 }
 
-func (req *Request) BodyBuffer() *bytesutil.ByteBuffer {
+func (req *Request) BodyBuffer() *bytesconv.ByteBuffer {
 	if req.body == nil {
 		req.body = requestBodyPool.Get()
 	}
@@ -527,8 +528,8 @@ func (req *Request) BodyBuffer() *bytesutil.ByteBuffer {
 }
 
 var (
-	responseBodyPool bytesutil.ByteBufferPool
-	requestBodyPool  bytesutil.ByteBufferPool
+	responseBodyPool bytesconv.ByteBufferPool
+	requestBodyPool  bytesconv.ByteBufferPool
 )
 
 // BodyGunzip returns un-gzipped body data.
@@ -570,7 +571,7 @@ func gunzipData(p []byte, maxBodySize int) ([]byte, error) {
 		return compress.Gunzip(p, nil)
 	}
 
-	var bb bytesutil.ByteBuffer
+	var bb bytesconv.ByteBuffer
 
 	_, err := machcompress.WriteGunzipLimit(&bb, p, maxBodySize)
 	if err != nil {
@@ -619,7 +620,7 @@ func unBrotliData(p []byte, maxBodySize int) ([]byte, error) {
 		return compress.Unbrotli(p, nil)
 	}
 
-	var bb bytesutil.ByteBuffer
+	var bb bytesconv.ByteBuffer
 
 	_, err := machcompress.WriteUnbrotliLimit(&bb, p, maxBodySize)
 	if err != nil {
@@ -696,7 +697,7 @@ func unzstdData(p []byte, maxBodySize int) ([]byte, error) {
 		return compress.Unzstd(p, nil)
 	}
 
-	var bb bytesutil.ByteBuffer
+	var bb bytesconv.ByteBuffer
 
 	_, err := machcompress.WriteUnzstdLimit(&bb, p, maxBodySize)
 	if err != nil {
@@ -711,7 +712,7 @@ func inflateData(p []byte, maxBodySize int) ([]byte, error) {
 		return compress.Inflate(p, nil)
 	}
 
-	var bb bytesutil.ByteBuffer
+	var bb bytesconv.ByteBuffer
 
 	_, err := machcompress.WriteInflateLimit(&bb, p, maxBodySize)
 	if err != nil {
@@ -1154,17 +1155,17 @@ func SwapResponseBody(a, b *Response) {
 	a.bodyStream, b.bodyStream = b.bodyStream, a.bodyStream
 }
 
-// URI returns request URI.
-func (req *Request) URI() *URI {
+// zerocopy.URI returns request zerocopy.URI.
+func (req *Request) URI() *zerocopy.URI {
 	req.ParseURI() //nolint:errcheck
 	return &req.uri
 }
 
-// SetURI initializes request URI.
-// Use this method if a single URI may be reused across multiple requests.
-// Otherwise, you can just use SetRequestURI() and it will be parsed as new URI.
-// The URI is copied and can be safely modified later.
-func (req *Request) SetURI(newURI *URI) {
+// SetURI initializes request zerocopy.URI.
+// Use this method if a single zerocopy.URI may be reused across multiple requests.
+// Otherwise, you can just use SetRequestURI() and it will be parsed as new zerocopy.URI.
+// The zerocopy.URI is copied and can be safely modified later.
+func (req *Request) SetURI(newURI *zerocopy.URI) {
 	if newURI != nil {
 		newURI.CopyTo(&req.uri)
 		req.parsedURI = true
@@ -1184,13 +1185,13 @@ func (req *Request) ParseURI() error {
 	}
 
 	req.parsedURI = true
-	req.uriParseErr = req.uri.parse(req.Header.Host(), req.Header.RequestURI(), req.isTLS)
+	req.uriParseErr = req.uri.ParseInternal(req.Header.Host(), req.Header.RequestURI(), req.isTLS)
 
 	return req.uriParseErr
 }
 
 // PostArgs returns POST arguments.
-func (req *Request) PostArgs() *Args {
+func (req *Request) PostArgs() *zerocopy.Args {
 	req.parsePostArgs()
 	return &req.postArgs
 }
@@ -1202,7 +1203,7 @@ func (req *Request) parsePostArgs() {
 
 	req.ParsedPostArgs = true
 
-	if !bytes.HasPrefix(req.Header.ContentType(), bytesutil.StrPostArgsContentType) {
+	if !bytes.HasPrefix(req.Header.ContentType(), zerocopy.StrPostArgsContentType) {
 		return
 	}
 
@@ -1249,14 +1250,14 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 
 	var err error
 
-	ce := req.Header.peek(bytesutil.StrContentEncoding)
+	ce := req.Header.peek(zerocopy.StrContentEncoding)
 
 	if req.bodyStream != nil {
 		bodyStream := req.bodyStream
 
 		var lr *io.LimitedReader
 
-		if bytes.Equal(ce, bytesutil.StrGzip) {
+		if bytes.Equal(ce, zerocopy.StrGzip) {
 			if bodyStream, err = gzip.NewReader(bodyStream); err != nil {
 				return nil, fmt.Errorf("cannot gunzip request body: %w", err)
 			}
@@ -1289,7 +1290,7 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 		}
 	} else {
 		body := req.bodyBytes()
-		if bytes.Equal(ce, bytesutil.StrGzip) {
+		if bytes.Equal(ce, zerocopy.StrGzip) {
 			if body, err = gunzipData(body, maxBodySize); err != nil {
 				return nil, fmt.Errorf("cannot gunzip request body: %w", err)
 			}
@@ -1316,7 +1317,7 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 }
 
 func marshalMultipartForm(f *multipart.Form, boundary string) ([]byte, error) {
-	var buf bytesutil.ByteBuffer
+	var buf bytesconv.ByteBuffer
 	if err := WriteMultipartForm(&buf, f, boundary); err != nil {
 		return nil, err
 	}
@@ -1562,7 +1563,7 @@ func (req *Request) readBodyStream(r *bufio.Reader, maxBodySize int, getOnly, pr
 //     with ContinueReadBody.
 //   - Or close the connection.
 func (req *Request) MayContinue() bool {
-	return bytes.Equal(req.Header.peek(bytesutil.StrExpect), bytesutil.Str100Continue)
+	return bytes.Equal(req.Header.peek(zerocopy.StrExpect), zerocopy.Str100Continue)
 }
 
 // ContinueReadBody reads request body if request header contains
@@ -1586,7 +1587,7 @@ func (req *Request) ContinueReadBody(r *bufio.Reader, maxBodySize int, preParseM
 			// This way we limit memory usage for large file uploads, since their contents
 			// is streamed into temporary files if file size exceeds defaultMaxInMemoryFileSize.
 			req.multipartFormBoundary = string(req.Header.MultipartFormBoundary())
-			if req.multipartFormBoundary != "" && len(req.Header.peek(bytesutil.StrContentEncoding)) == 0 {
+			if req.multipartFormBoundary != "" && len(req.Header.peek(zerocopy.StrContentEncoding)) == 0 {
 				req.multipartForm, err = readMultipartForm(
 					r,
 					req.multipartFormBoundary,
@@ -1678,8 +1679,8 @@ func (req *Request) ContinueReadBodyStream(r *bufio.Reader, maxBodySize int, pre
 			// Pre-read multipart form data of known length.
 			// This way we limit memory usage for large file uploads, since their contents
 			// is streamed into temporary files if file size exceeds defaultMaxInMemoryFileSize.
-			req.multipartFormBoundary = bytesutil.B2S(req.Header.MultipartFormBoundary())
-			if req.multipartFormBoundary != "" && len(req.Header.peek(bytesutil.StrContentEncoding)) == 0 {
+			req.multipartFormBoundary = bytesconv.B2S(req.Header.MultipartFormBoundary())
+			if req.multipartFormBoundary != "" && len(req.Header.peek(zerocopy.StrContentEncoding)) == 0 {
 				req.multipartForm, err = readMultipartForm(
 					r,
 					req.multipartFormBoundary,
@@ -1902,7 +1903,7 @@ func (w *statsWriter) Write(p []byte) (int, error) {
 }
 
 func (w *statsWriter) WriteString(s string) (int, error) {
-	n, err := w.w.Write(bytesutil.S2B(s))
+	n, err := w.w.Write(bytesconv.S2B(s))
 	w.bytesWritten += int64(n)
 	return n, err
 }
@@ -1970,12 +1971,12 @@ func (req *Request) Write(w *bufio.Writer) error {
 
 		req.Header.SetRequestURIBytes(uri.RequestURI())
 
-		if len(uri.username) > 0 {
+		if len(uri.Username()) > 0 {
 			// RequestHeader.SetBytesKV only uses RequestHeader.bufKV.key
 			// So we are free to use RequestHeader.bufKV.value as a scratch pad for
 			// the base64 encoding.
-			nl := len(uri.username) + len(uri.password) + 1
-			nb := nl + len(bytesutil.StrBasicSpace)
+			nl := len(uri.Username()) + len(uri.Password()) + 1
+			nb := nl + len(zerocopy.StrBasicSpace)
 
 			tl := nb + base64.StdEncoding.EncodedLen(nl)
 			if tl > cap(req.Header.bufV) {
@@ -1983,12 +1984,12 @@ func (req *Request) Write(w *bufio.Writer) error {
 			}
 
 			buf := req.Header.bufV[:0]
-			buf = append(buf, uri.username...)
-			buf = append(buf, bytesutil.StrColon...)
-			buf = append(buf, uri.password...)
-			buf = append(buf, bytesutil.StrBasicSpace...)
+			buf = append(buf, uri.Username()...)
+			buf = append(buf, zerocopy.StrColon...)
+			buf = append(buf, uri.Password()...)
+			buf = append(buf, zerocopy.StrBasicSpace...)
 			base64.StdEncoding.Encode(buf[nb:tl], buf[:nl])
-			req.Header.SetBytesKV(bytesutil.StrAuthorization, buf[nl:tl])
+			req.Header.SetBytesKV(zerocopy.StrAuthorization, buf[nl:tl])
 		}
 	}
 
@@ -2207,8 +2208,8 @@ func (resp *Response) brotliBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(bytesutil.StrBr)
-	resp.Header.addVaryBytes(bytesutil.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(zerocopy.StrBr)
+	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
 }
 
 func (resp *Response) gzipBody(level int) {
@@ -2253,8 +2254,8 @@ func (resp *Response) gzipBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(bytesutil.StrGzip)
-	resp.Header.addVaryBytes(bytesutil.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(zerocopy.StrGzip)
+	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
 }
 
 func (resp *Response) deflateBody(level int) {
@@ -2299,8 +2300,8 @@ func (resp *Response) deflateBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(bytesutil.StrDeflate)
-	resp.Header.addVaryBytes(bytesutil.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(zerocopy.StrDeflate)
+	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
 }
 
 //nolint:unused
@@ -2339,8 +2340,8 @@ func (resp *Response) zstdBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(bytesutil.StrZstd)
-	resp.Header.addVaryBytes(bytesutil.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(zerocopy.StrZstd)
+	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
 }
 
 type compressedBodyStream struct {
@@ -2531,7 +2532,7 @@ func (w *flushWriter) Write(p []byte) (int, error) {
 }
 
 func (w *flushWriter) WriteString(s string) (int, error) {
-	return w.Write(bytesutil.S2B(s))
+	return w.Write(bytesconv.S2B(s))
 }
 
 // Write writes response to w.
@@ -2723,8 +2724,8 @@ func (resp *Response) String() string {
 }
 
 func getHTTPString(hw httpWriter) string {
-	w := bytesutil.AcquireByteBuffer()
-	defer bytesutil.ReleaseByteBuffer(w)
+	w := bytesconv.AcquireByteBuffer()
+	defer bytesconv.ReleaseByteBuffer(w)
 
 	bw := bufio.NewWriter(w)
 	if err := hw.Write(bw); err != nil {
@@ -2783,7 +2784,7 @@ func (cw *chunkedBodyWriter) Write(p []byte) (int, error) {
 }
 
 func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
-	// Frame WriteTo output directly, skipping bytesutil.CopyBufPool, for bodies whose
+	// Frame WriteTo output directly, skipping zerocopy.CopyBufPool, for bodies whose
 	// WriteTo is known to match reading.
 	var wt io.WriterTo
 	switch v := r.(type) {
@@ -2810,7 +2811,7 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 		return writeChunk(w, nil)
 	}
 
-	vbuf := bytesutil.CopyBufPool.Get()
+	vbuf := zerocopy.CopyBufPool.Get()
 	buf := vbuf.([]byte) //nolint:forcetypeassert
 
 	var (
@@ -2840,7 +2841,7 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 		}
 	}
 
-	bytesutil.CopyBufPool.Put(vbuf)
+	zerocopy.CopyBufPool.Put(vbuf)
 
 	return err
 }
@@ -2888,11 +2889,11 @@ func copyBodyStream(w io.Writer, r io.Reader) (int64, error) {
 			return bwt.WriteTo(w)
 		}
 
-		vbuf := bytesutil.CopyBufPool.Get()
+		vbuf := zerocopy.CopyBufPool.Get()
 		buf := vbuf.([]byte) //nolint:forcetypeassert
-		n, err := bytesutil.CopyBuffer(w, r, buf)
+		n, err := zerocopy.CopyBuffer(w, r, buf)
 
-		bytesutil.CopyBufPool.Put(vbuf)
+		zerocopy.CopyBufPool.Put(vbuf)
 
 		return n, err
 	}
@@ -2901,16 +2902,16 @@ func copyBodyStream(w io.Writer, r io.Reader) (int64, error) {
 }
 
 func copyZeroAlloc(w io.Writer, r io.Reader) (int64, error) {
-	return bytesutil.CopyZeroAlloc(w, r)
+	return bytesconv.CopyZeroAlloc(w, r)
 }
 
 func writeChunk(w *bufio.Writer, b []byte) error {
 	n := len(b)
-	if err := bytesutil.WriteHexInt(w, n); err != nil {
+	if err := zerocopy.WriteHexInt(w, n); err != nil {
 		return err
 	}
 
-	if _, err := w.Write(bytesutil.StrCRLF); err != nil {
+	if _, err := w.Write(zerocopy.StrCRLF); err != nil {
 		return err
 	}
 
@@ -2920,7 +2921,7 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 
 	// If is end chunk, write CRLF after writing trailer
 	if n > 0 {
-		if _, err := w.Write(bytesutil.StrCRLF); err != nil {
+		if _, err := w.Write(zerocopy.StrCRLF); err != nil {
 			return err
 		}
 	}
@@ -2930,11 +2931,11 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 
 // ErrBodyTooLarge is returned if either request or response body exceeds
 // the given limit.
-var ErrBodyTooLarge = bytesutil.ErrBodyTooLarge
+var ErrBodyTooLarge = zerocopy.ErrBodyTooLarge
 
 //nolint:unused
 func copyZeroAllocWithLimit(w io.Writer, r io.Reader, maxBodySize int) (int64, error) {
-	return bytesutil.CopyZeroAllocWithLimit(w, r, maxBodySize)
+	return bytesconv.CopyZeroAllocWithLimit(w, r, maxBodySize)
 }
 
 func readBody(r *bufio.Reader, contentLength, maxBodySize int, dst []byte) ([]byte, error) {
@@ -3076,23 +3077,23 @@ func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 			return dst, ErrBodyTooLarge
 		}
 
-		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(bytesutil.StrCRLF))
+		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(zerocopy.StrCRLF))
 		if err != nil {
 			return dst, err
 		}
 
-		if !bytes.Equal(dst[len(dst)-len(bytesutil.StrCRLF):], bytesutil.StrCRLF) {
+		if !bytes.Equal(dst[len(dst)-len(zerocopy.StrCRLF):], zerocopy.StrCRLF) {
 			return dst, ErrBrokenChunk{
 				error: errors.New("cannot find crlf at the end of chunk"),
 			}
 		}
 
-		dst = dst[:len(dst)-len(bytesutil.StrCRLF)]
+		dst = dst[:len(dst)-len(zerocopy.StrCRLF)]
 	}
 }
 
 func parseChunkSize(r *bufio.Reader) (int, error) {
-	n, err := bytesutil.ReadHexInt(r)
+	n, err := zerocopy.ReadHexInt(r)
 	if err != nil {
 		return -1, err
 	}

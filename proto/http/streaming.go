@@ -11,7 +11,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 type bodyStreamHeader interface {
@@ -107,7 +107,7 @@ func (rs *RequestStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func AcquireRequestStream(b *bytesutil.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *RequestStream {
+func AcquireRequestStream(b *bytesconv.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *RequestStream {
 	rs := RequestStreamPool.Get().(*RequestStream) //nolint:forcetypeassert
 	rs.prefetchedBytes = bytes.NewReader(b.B)
 	rs.reader = r

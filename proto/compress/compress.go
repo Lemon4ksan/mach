@@ -16,7 +16,7 @@ import (
 	"github.com/lemon4ksan/foundation/codec/compress/flate"
 	"github.com/lemon4ksan/foundation/codec/compress/gzip"
 
-	"github.com/lemon4ksan/mach/proto/bytesutil"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/mach/proto/http/stackless"
 )
 
@@ -169,7 +169,7 @@ func WriteGzipLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
 		*bytes.Buffer,
-		*bytesutil.ByteBuffer:
+		*bytesconv.ByteBuffer:
 		// These writers don't block, so we can just use stacklessWriteGzip
 		ctx := &compressCtx{
 			w:     w,
@@ -235,7 +235,7 @@ func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 		return 0, err
 	}
 
-	n, err := bytesutil.CopyZeroAllocWithLimit(w, zr, maxBodySize)
+	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
 	releaseGzipReader(zr)
 
 	nn := int(n)
@@ -281,7 +281,7 @@ func WriteDeflateLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
 		*bytes.Buffer,
-		*bytesutil.ByteBuffer:
+		*bytesconv.ByteBuffer:
 		// These writers don't block, so we can just use stacklessWriteDeflate
 		ctx := &compressCtx{
 			w:     w,
@@ -353,7 +353,7 @@ func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 		return 0, err
 	}
 
-	n, err := bytesutil.CopyZeroAllocWithLimit(w, zr, maxBodySize)
+	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
 	releaseFlateReader(zr)
 
 	nn := int(n)
@@ -493,13 +493,13 @@ func isFileCompressible(f fs.File, minCompressRatio float64) bool {
 	// Try compressing the first 4kb of the file
 	// and see if it can be compressed by more than
 	// the given minCompressRatio.
-	b := bytesutil.AcquireByteBuffer()
+	b := bytesconv.AcquireByteBuffer()
 	zw := AcquireStacklessGzipWriter(b, CompressDefaultCompression)
 	lr := &io.LimitedReader{
 		R: f,
 		N: 4096,
 	}
-	_, err := bytesutil.CopyZeroAlloc(zw, lr)
+	_, err := bytesconv.CopyZeroAlloc(zw, lr)
 	ReleaseStacklessGzipWriter(zw, CompressDefaultCompression)
 
 	seeker, ok := f.(io.Seeker)
@@ -515,7 +515,7 @@ func isFileCompressible(f fs.File, minCompressRatio float64) bool {
 
 	n := 4096 - lr.N
 	zn := len(b.B)
-	bytesutil.ReleaseByteBuffer(b)
+	bytesconv.ReleaseByteBuffer(b)
 
 	return float64(zn) < float64(n)*minCompressRatio
 }
