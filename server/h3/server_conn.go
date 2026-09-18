@@ -51,6 +51,8 @@ type ServerConn struct {
 	closeErr     error
 	controlOut   *quic.SendStream
 	hasControlIn atomic.Bool
+	hasQPACKEncoder atomic.Bool
+	hasQPACKDecoder atomic.Bool
 }
 
 // NewServerConn creates a new HTTP/3 server connection wrapping a QUIC connection.
@@ -168,8 +170,17 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 			return
 		}
 
-	case coreh3.StreamTypeQPACKEncoder, coreh3.StreamTypeQPACKDecoder:
-		// Drain QPACK unidirectional streams
+	case coreh3.StreamTypeQPACKEncoder:
+		if sc.hasQPACKEncoder.Swap(true) {
+			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK encoder stream")
+			return
+		}
+		_, _ = io.Copy(io.Discard, stream)
+	case coreh3.StreamTypeQPACKDecoder:
+		if sc.hasQPACKDecoder.Swap(true) {
+			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK decoder stream")
+			return
+		}
 		_, _ = io.Copy(io.Discard, stream)
 	default:
 		// RFC 9114 §6.2: Unknown unidirectional stream types MUST either be discarded or cancelled

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
@@ -50,6 +51,9 @@ type ClientConn struct {
 
 	closeOnce sync.Once
 	closed    chan struct{}
+	hasControlIn atomic.Bool
+	hasQPACKEncoder atomic.Bool
+	hasQPACKDecoder atomic.Bool
 }
 
 // NewClientConn initializes an HTTP/3 client connection and opens control streams (RFC 9114 §3.2 & §6.2.1).
@@ -132,9 +136,23 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 
 	switch streamType {
 	case coreh3.StreamTypeControl:
+		if cc.hasControlIn.Swap(true) {
+			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate control stream")
+			return
+		}
 		cc.handleControlStream(r)
-	case coreh3.StreamTypeQPACKEncoder, coreh3.StreamTypeQPACKDecoder:
-		// QPACK dynamic table uni-streams
+	case coreh3.StreamTypeQPACKEncoder:
+		if cc.hasQPACKEncoder.Swap(true) {
+			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK encoder stream")
+			return
+		}
+		_, _ = io.Copy(io.Discard, str)
+	case coreh3.StreamTypeQPACKDecoder:
+		if cc.hasQPACKDecoder.Swap(true) {
+			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK decoder stream")
+			return
+		}
+		_, _ = io.Copy(io.Discard, str)
 	default:
 		// Unknown unidirectional stream: RFC 9114 §6.2
 	}

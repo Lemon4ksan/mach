@@ -158,8 +158,14 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		case SettingQpackBlockedStreams:
 			st.QpackBlockedStreams = val
 		case SettingH3Datagram:
+			if val != 0 && val != 1 {
+				return nil, ErrH3SettingsError
+			}
 			st.EnableDatagrams = (val == 1)
 		case SettingEnableConnectProtocol:
+			if val != 0 && val != 1 {
+				return nil, ErrH3SettingsError
+			}
 			st.EnableConnect = (val == 1)
 		default:
 			st.Other[id] = val
