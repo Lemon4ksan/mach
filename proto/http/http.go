@@ -722,6 +722,8 @@ func appendBodyFixedSize(r *bufio.Reader, dst []byte, n int) ([]byte, error) {
 
 type ErrBrokenChunk struct{ error } // ErrBrokenChunk is returned when server receives a broken chunked body (Transfer-Encoding: chunked).
 
+// readBodyChunked parses a chunked transfer coding body (RFC 9112 Section 7.1).
+// It repeatedly reads chunk sizes and data until the terminating 0-size chunk is found.
 func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, error) {
 	if len(dst) > 0 {
 		panic("BUG: expected zero-length buffer")
@@ -748,6 +750,7 @@ func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 	}
 }
 
+// parseChunkSize decodes the chunk size hex value and skips optional chunk extensions (RFC 9112 Section 7.1.1).
 func parseChunkSize(r *bufio.Reader) (int, error) {
 	n, err := zerocopy.ReadHexInt(r)
 	if err != nil {

@@ -394,7 +394,7 @@ func (h *header) ReadTrailer(r *bufio.Reader) error {
 		}
 		n = r.Buffered() + 1
 	}
-} // ReadTrailer reads response trailer header from r.
+} // ReadTrailer reads the trailing header fields (trailers) after a chunked body (RFC 9112 Section 7.1.2).
 //
 // io.EOF is returned if r is closed before reading the first byte.
 
@@ -497,7 +497,19 @@ func refreshServerDate() {
 func appendHeaderLine(dst, key, value []byte) []byte {
 	dst = append(dst, key...)
 	dst = append(dst, zerocopy.StrColonSpace...)
-	dst = append(dst, value...)
+	
+	if bytes.IndexByte(value, '\n') < 0 && bytes.IndexByte(value, '\r') < 0 {
+		dst = append(dst, value...)
+	} else {
+		for _, c := range value {
+			if c == '\n' || c == '\r' {
+				dst = append(dst, ' ')
+			} else {
+				dst = append(dst, c)
+			}
+		}
+	}
+	
 	return append(dst, zerocopy.StrCRLF...)
 }
 
