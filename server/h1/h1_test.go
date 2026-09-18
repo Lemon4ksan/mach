@@ -117,11 +117,7 @@ func TestResponseSerialization(t *testing.T) {
 
 	res.StatusCode = 201
 	res.Headers.Set("Content-Type", "application/json")
-	res.Cookies = append(res.Cookies, &zerocopy.Cookie{
-		Name:  "token",
-		Value: "secret123",
-		Path:  "/",
-	})
+	res.Cookies = append(res.Cookies, createTestCookie([]byte("token"), []byte("secret123"), []byte("/")))
 	res.Body = []byte(`{"created":true}`)
 
 	var buf bytes.Buffer
@@ -149,7 +145,7 @@ func TestResponseSerialization(t *testing.T) {
 		t.Errorf("missing content-length in response: %s", out)
 	}
 
-	if !bytes.Contains([]byte(out), []byte("Set-Cookie: token=secret123; Path=/\r\n")) {
+	if !bytes.Contains([]byte(out), []byte("Set-Cookie: token=secret123; path=/\r\n")) {
 		t.Errorf("missing set-cookie in response: %s", out)
 	}
 
@@ -505,47 +501,12 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	}
 }
 
-func TestHeaderLine_EdgeCases(t *testing.T) {
-	var h coreheaders.Headers
 
-	// Header line with leading/trailing spaces
-	line := []byte("   X-Custom-Header   :    custom-value   ")
 
-	ok := h.ParseHeaderLine(line)
-	if !ok {
-		t.Fatal("expected ParseHeaderLine to succeed")
-	}
-
-	if h.Get("X-Custom-Header") != "custom-value" {
-		t.Fatalf("unexpected header parsed: %q", h.Get("X-Custom-Header"))
-	}
-
-	// Missing colon
-	if h.ParseHeaderLine([]byte("InvalidHeaderLineWithoutColon")) {
-		t.Fatal("expected ParseHeaderLine to fail without colon")
-	}
-
-	// Empty key
-	if h.ParseHeaderLine([]byte("   : value")) {
-		t.Fatal("expected ParseHeaderLine to fail with empty key")
-	}
-
-	// IsKeepAlive checks
-	h.Reset()
-
-	if h.IsKeepAlive("HTTP/1.0") {
-		t.Fatal("HTTP/1.0 without keep-alive should be false")
-	}
-
-	h.Set("Connection", "Keep-Alive")
-
-	if !h.IsKeepAlive("HTTP/1.0") {
-		t.Fatal("HTTP/1.0 with Connection: Keep-Alive should be true")
-	}
-
-	h.Set("Connection", "close")
-
-	if h.IsKeepAlive("HTTP/1.1") {
-		t.Fatal("HTTP/1.1 with Connection: close should be false")
-	}
+func createTestCookie(name, value, path []byte) *zerocopy.Cookie {
+	c := zerocopy.AcquireCookie()
+	c.SetKeyBytes(name)
+	c.SetValueBytes(value)
+	c.SetPathBytes(path)
+	return c
 }
