@@ -205,29 +205,16 @@ func validHeaderValueByte(c byte) bool {
 } // validHeaderValueByte returns true if c valid header value byte
 // as defined by RFC 7230.
 
-func isValidHeaderKey(a []byte) ( // isValidHeaderKey returns whether a is a valid header key, and whether a
-	// contains a space before its last non-space byte. Such a space survives
-	// trailing-whitespace trimming, and a key carrying it is accepted but must
-	// not be canonicalized. See https://go.dev/issue/34540 and
-	// https://github.com/valyala/fasthttp/issues/1917.
-	valid, innerSpace bool) {
+func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 	if len(a) == 0 {
 		return false, false
 	}
-	seenSpace := false
 	for _, c := range a {
-		if c == ' ' {
-			seenSpace = true
-			continue
-		}
 		if !zerocopy.ValidHeaderFieldByte(c) {
 			return false, false
 		}
-		if seenSpace {
-			innerSpace = true
-		}
 	}
-	return true, innerSpace
+	return true, false
 }
 
 func VisitHeaderParams(b []byte, // VisitHeaderParams calls f for each parameter in the given header bytes.

@@ -49,7 +49,7 @@ func parseHexUintFallback(src []byte) (int, int, error) {
 			return n, i, nil
 		}
 
-		if i >= 16 {
+		if i >= 15 {
 			return n, i, zerocopy.ErrTooLargeHexNum
 		}
 
