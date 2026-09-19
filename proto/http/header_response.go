@@ -52,7 +52,7 @@ func (h *ResponseHeader) SetContentRange(startPos, endPos, contentLength int) {
 // StatusCode returns response status code.
 func (h *ResponseHeader) StatusCode() int {
 	if h.statusCode == 0 {
-		return status.StatusOK
+		return status.OK
 	}
 	return h.statusCode
 }
@@ -126,10 +126,10 @@ func (h *ResponseHeader) SetContentLength(contentLength int) {
 
 func (h *ResponseHeader) mustSkipContentLength() bool {
 	statusCode := h.StatusCode()
-	if statusCode < 100 || statusCode == status.StatusOK {
+	if statusCode < 100 || statusCode == status.OK {
 		return false
 	}
-	return statusCode == status.StatusNotModified || statusCode == status.StatusNoContent || statusCode < 200
+	return statusCode == status.NotModified || statusCode == status.NoContent || statusCode < 200
 }
 
 func (h *ResponseHeader) isCompressibleContentType() bool {
@@ -826,9 +826,9 @@ func (h *ResponseHeader) String() string {
 func (h *ResponseHeader) appendStatusLine(dst []byte) []byte {
 	statusCode := h.StatusCode()
 	if statusCode < 0 {
-		statusCode = status.StatusOK
+		statusCode = status.OK
 	}
-	return status.FormatStatusLine(dst, h.Protocol(), statusCode, h.StatusMessage())
+	return status.FormatLine(dst, h.Protocol(), statusCode, h.StatusMessage())
 }
 
 // AppendBytes appends response header representation to dst and returns

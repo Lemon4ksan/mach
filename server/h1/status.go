@@ -33,7 +33,7 @@ var (
 func init() {
 	// Pre-compile all HTTP status line byte slices (100 to 599)
 	for code := 100; code < 600; code++ {
-		text := status.StatusMessage(code)
+		text := status.Message(code)
 		if text != "" {
 			statusLines[code] = []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", code, text))
 		}

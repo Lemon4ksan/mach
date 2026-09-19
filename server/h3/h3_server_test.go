@@ -85,14 +85,14 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	handler := func(req *h3.ServerRequest, res *h3.ServerResponse) error {
 		switch req.Path {
 		case "/hello":
-			res.StatusCode = status.StatusOK
+			res.StatusCode = status.OK
 			res.Headers.Set("Content-Type", "text/plain")
 			res.Body = []byte("Hello HTTP/3 QUIC World!")
 
 			return nil
 
 		case "/echo":
-			res.StatusCode = status.StatusOK
+			res.StatusCode = status.OK
 			res.Headers.Set("Content-Type", "application/octet-stream")
 
 			res.Body = append([]byte("H3 Echo: "), req.Body...)
@@ -100,7 +100,7 @@ func TestH3Server_EndToEnd(t *testing.T) {
 			return nil
 
 		default:
-			res.StatusCode = status.StatusNotFound
+			res.StatusCode = status.NotFound
 			res.Body = []byte("404 Not Found")
 			return nil
 		}

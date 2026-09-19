@@ -106,6 +106,7 @@ func TestFramesSerializationRoundtrip(t *testing.T) {
 				enablePush: false,
 				MaxStreams: 250,
 				windowSize: 1048576,
+				frameSize:  16384,
 			},
 		},
 		{
@@ -142,7 +143,11 @@ func TestFramesSerializationRoundtrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fhOut := AcquireFrameHeader()
-			fhOut.SetStream(1)
+			streamID := uint32(1)
+			if tc.frame.Type() == FrameSettings || tc.frame.Type() == FramePing || tc.frame.Type() == FrameGoAway {
+				streamID = 0
+			}
+			fhOut.SetStream(streamID)
 			fhOut.SetBody(tc.frame)
 
 			var buf bytes.Buffer

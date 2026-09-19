@@ -33,14 +33,14 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	handler := func(req *h2.ServerRequest, res *h2.ServerResponse) error {
 		switch req.Path {
 		case "/hello":
-			res.StatusCode = status.StatusOK
+			res.StatusCode = status.OK
 			res.Headers.Set("Content-Type", "text/plain")
 			res.Body = []byte("Hello HTTP/2 World!")
 
 			return nil
 
 		case "/echo":
-			res.StatusCode = status.StatusOK
+			res.StatusCode = status.OK
 			res.Headers.Set("Content-Type", "application/octet-stream")
 
 			res.Body = append([]byte("Echo: "), req.Body...)
@@ -48,7 +48,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 			return nil
 
 		default:
-			res.StatusCode = status.StatusNotFound
+			res.StatusCode = status.NotFound
 			res.Body = []byte("404 Not Found")
 			return nil
 		}
@@ -89,7 +89,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	// 1. Test GET /hello
 	resp, err := client.Get("http://" + addr + "/hello")
 	require.NoError(t, err)
-	assert.Equal(t, status.StatusOK, resp.StatusCode)
+	assert.Equal(t, status.OK, resp.StatusCode)
 	assert.Equal(t, "HTTP/2.0", resp.Proto)
 
 	body, err := io.ReadAll(resp.Body)
@@ -102,7 +102,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	postData := "Multiplexed Stream Payload 2026"
 	respPost, err := client.Post("http://"+addr+"/echo", "text/plain", strings.NewReader(postData))
 	require.NoError(t, err)
-	assert.Equal(t, status.StatusOK, respPost.StatusCode)
+	assert.Equal(t, status.OK, respPost.StatusCode)
 
 	postBody, err := io.ReadAll(respPost.Body)
 	_ = respPost.Body.Close()

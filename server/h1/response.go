@@ -28,7 +28,7 @@ type Response struct {
 
 // Reset clears the response for recycling.
 func (res *Response) Reset() {
-	res.StatusCode = status.StatusOK
+	res.StatusCode = status.OK
 	res.Headers.Reset()
 	res.Cookies = res.Cookies[:0]
 	res.Body = res.Body[:0]
@@ -40,14 +40,14 @@ func (res *Response) Reset() {
 func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
 	code := res.StatusCode
 	if code == 0 {
-		code = status.StatusOK
+		code = status.OK
 	}
 
 	// 1. Fast Status Line (from pre-compiled static table)
 	if code >= 100 && code < len(statusLines) && statusLines[code] != nil {
 		_, _ = bw.Write(statusLines[code])
 	} else {
-		statusText := status.StatusMessage(code)
+		statusText := status.Message(code)
 		if statusText == "" {
 			statusText = "Unknown"
 		}
@@ -83,7 +83,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 		if res.Headers.Get(header.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
-	} else if code != status.StatusNoContent && code != status.StatusNotModified {
+	} else if code != status.NoContent && code != status.NotModified {
 		if res.Headers.Get(header.ContentLength) == "" && res.Headers.Get(header.TransferEncoding) == "" {
 			var clBuf [24]byte
 
@@ -113,7 +113,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 		return res.writeStreamBody(bw)
 	}
 
-	if len(res.Body) > 0 && code != status.StatusNoContent && code != status.StatusNotModified {
+	if len(res.Body) > 0 && code != status.NoContent && code != status.NotModified {
 		_, _ = bw.Write(res.Body)
 	}
 

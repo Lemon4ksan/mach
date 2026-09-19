@@ -504,7 +504,7 @@ func (resp *Response) ReadLimitBody(r *bufio.Reader, maxBodySize int) error {
 		return err
 	}
 	for n := 0; ; n++ {
-		if resp.Header.statusCode < 100 || resp.Header.statusCode > 199 || resp.Header.statusCode == status.StatusSwitchingProtocols {
+		if resp.Header.statusCode < 100 || resp.Header.statusCode > 199 || resp.Header.statusCode == status.SwitchingProtocols {
 			break
 		}
 		if n >= maxInterimResponses {

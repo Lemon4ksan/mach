@@ -473,7 +473,7 @@ func TestRequest_ClientIP_And_EarlyHints_Hijack(t *testing.T) {
 
 func TestResponse_StreamingWriteTo(t *testing.T) {
 	res := &h1.Response{
-		StatusCode: status.StatusOK,
+		StatusCode: status.OK,
 		StreamWriter: func(w io.Writer) error {
 			_, err := w.Write([]byte("stream-chunk-data"))
 			return err

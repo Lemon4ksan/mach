@@ -493,7 +493,7 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 	}
 
 	res := &ServerResponse{
-		StatusCode: status.StatusOK,
+		StatusCode: status.OK,
 		Headers:    make(http.Header),
 	}
 

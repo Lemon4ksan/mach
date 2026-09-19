@@ -27,7 +27,7 @@ func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		_ = codec.EncodeResponseHeaders(status.StatusOK, headers, 128)
+		_ = codec.EncodeResponseHeaders(status.OK, headers, 128)
 	}
 }
 
