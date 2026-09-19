@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/clock"
 	"github.com/lemon4ksan/foundation/silicon/ringbuf"
 	"github.com/lemon4ksan/foundation/silicon/sysnet"
 	"github.com/lemon4ksan/foundation/sync/spinlock"
@@ -1127,11 +1129,12 @@ func (c *Conn) handlePingAck(ping *coreh2.Ping) {
 		c.pingUnacks--
 	}
 
-	if c.onDisconnect != nil && ping.DataAsTime().IsZero() {
+	pingTime := time.Unix(0, int64(binary.BigEndian.Uint64(ping.Data()[:])))
+	if c.onDisconnect != nil && pingTime.IsZero() {
 		return
 	}
 
-	rtt := time.Since(ping.DataAsTime())
+	rtt := time.Since(pingTime)
 	if rtt > 0 && rtt < 10*time.Second && c.onDisconnect != nil {
 		if c.windowCond != nil {
 			c.recordRTT(rtt)
@@ -1218,7 +1221,7 @@ func (c *Conn) writePing() error {
 	defer coreh2.ReleaseFrameHeader(fr)
 
 	ping := coreh2.AcquireFrame(coreh2.FramePing).(*coreh2.Ping)
-	ping.SetCurrentTime()
+	binary.BigEndian.PutUint64(ping.Data()[:], uint64(clock.CoarseNowNano()))
 	fr.SetBody(ping)
 
 	c.writeMu.Lock()

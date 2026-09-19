@@ -5,6 +5,7 @@
 package compress
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
@@ -30,51 +31,16 @@ func releaseBrotliReader(zr *brotli.Reader) {
 	compress.ReleaseBrotliReader(zr)
 }
 
-// AppendBrotliBytesLevel appends brotlied src to dst using valid RFC 7932 uncompressed meta-blocks.
-func AppendBrotliBytesLevel(dst, src []byte, _ int) []byte {
-	n := len(src)
-	if n == 0 {
-		return append(dst, 0x06)
-	}
+// AppendBrotliBytesLevel appends brotlied src to dst.
+func AppendBrotliBytesLevel(dst, src []byte, level int) []byte {
+	var buf bytes.Buffer
+	buf.Write(dst)
 
-	l := uint32(n - 1)
+	w := brotli.NewWriterLevel(&buf, level)
+	_, _ = w.Write(src)
+	_ = w.Close()
 
-	switch {
-	case n <= 65536:
-		// WBITS=24 (0x0F), ISLAST=0, MNIBBLES=00, MLEN (16 bits), ISUNCOMPRESSED=1
-		b0 := byte(0x0F | ((l & 1) << 7))
-		b1 := byte(l >> 1)
-		b2 := byte((l >> 9) | 0x80)
-
-		dst = append(dst, b0, b1, b2)
-		dst = append(dst, src...)
-
-		return append(dst, 0x03)
-
-	case n <= 1048576:
-		// WBITS=24 (0x0F), ISLAST=0, MNIBBLES=01 (0x20), MLEN (20 bits), ISUNCOMPRESSED=1 (0x08)
-		b0 := byte(0x2F | ((l & 1) << 7))
-		b1 := byte(l >> 1)
-		b2 := byte(l >> 9)
-		b3 := byte((l >> 17) | 0x08)
-
-		dst = append(dst, b0, b1, b2, b3)
-		dst = append(dst, src...)
-
-		return append(dst, 0x03)
-
-	default:
-		// WBITS=24 (0x0F), ISLAST=0, MNIBBLES=10 (0x40), MLEN (24 bits), ISUNCOMPRESSED=1 (0x80)
-		b0 := byte(0x4F | ((l & 1) << 7))
-		b1 := byte(l >> 1)
-		b2 := byte(l >> 9)
-		b3 := byte((l >> 17) | 0x80)
-
-		dst = append(dst, b0, b1, b2, b3)
-		dst = append(dst, src...)
-
-		return append(dst, 0x03)
-	}
+	return buf.Bytes()
 }
 
 // WriteBrotliLevel writes p to w.

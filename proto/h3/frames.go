@@ -35,6 +35,12 @@ const (
 
 	// FrameTypeMaxPushID controls the maximum server push ID allowed by client (RFC 9114 §7.2.7: 0x0d).
 	FrameTypeMaxPushID uint64 = 0x0D
+
+	// FrameTypeWebTransportStream establishes a WebTransport stream (WebTransport over HTTP/3 §4.1: 0x41).
+	FrameTypeWebTransportStream uint64 = 0x41
+
+	// FrameTypeCapsule encapsulates datagrams in HTTP/3 (RFC 9297: 0x1758).
+	FrameTypeCapsule uint64 = 0x1758
 )
 
 // HTTP/3 Unidirectional Stream Types (RFC 9114 §6.2 & §11.2.4 Table 5).
@@ -50,6 +56,9 @@ const (
 
 	// StreamTypeQPACKDecoder establishes the QPACK decoder unidirectional stream (RFC 9204 §4.2: 0x03).
 	StreamTypeQPACKDecoder uint64 = 0x03
+
+	// StreamTypeWebTransport establishes a WebTransport unidirectional stream (WebTransport over HTTP/3 §4.2: 0x54).
+	StreamTypeWebTransport uint64 = 0x54
 )
 
 // HTTP/3 SETTINGS Parameters (RFC 9114 §7.2.4.1 & §11.2.2 Table 3).

@@ -5,12 +5,7 @@
 package h2
 
 import (
-
-	"encoding/binary"
 	"fmt"
-	"time"
-
-	"github.com/lemon4ksan/foundation/silicon/clock"
 )
 
 // Continuation carries extended header block fragments across HTTP/2 frame boundaries (RFC 9113 §6.10).
@@ -147,6 +142,7 @@ type Headers struct {
 	endStream  bool
 	endHeaders bool
 	priority   bool
+	exclusive  bool
 	rawHeaders []byte
 }
 
@@ -162,6 +158,8 @@ func (h *Headers) Stream() uint32            { return h.stream }
 func (h *Headers) SetStream(stream uint32)   { h.stream = stream }
 func (h *Headers) Weight() byte              { return h.weight }
 func (h *Headers) SetWeight(w byte)          { h.weight = w }
+func (h *Headers) Exclusive() bool           { return h.exclusive }
+func (h *Headers) SetExclusive(v bool)       { h.exclusive = v }
 func (h *Headers) Padding() bool             { return h.hasPadding }
 func (h *Headers) SetPadding(v bool)         { h.hasPadding = v }
 
@@ -172,6 +170,7 @@ func (h *Headers) Reset() {
 	h.endStream = false
 	h.endHeaders = false
 	h.priority = false
+	h.exclusive = false
 	h.rawHeaders = h.rawHeaders[:0]
 }
 
@@ -196,6 +195,7 @@ func (h *Headers) Deserialize(frh *FrameHeader) error {
 		}
 
 		h.priority = true
+		h.exclusive = (payload[0] & 0x80) != 0
 		h.stream = bytesToUint32(payload) & (1<<31 - 1)
 		h.weight = payload[4]
 		payload = payload[5:]
@@ -220,9 +220,13 @@ func (h *Headers) Serialize(frh *FrameHeader) {
 	if h.priority {
 		frh.SetFlags(frh.Flags().Add(FlagPriority))
 
+		oldLen := len(h.rawHeaders)
 		h.rawHeaders = append(h.rawHeaders, 0, 0, 0, 0, 0)
-		copy(h.rawHeaders[5:], h.rawHeaders)
-		uint32ToBytes(h.rawHeaders[0:4], frh.stream)
+		copy(h.rawHeaders[5:], h.rawHeaders[:oldLen])
+		uint32ToBytes(h.rawHeaders[0:4], h.stream)
+		if h.exclusive {
+			h.rawHeaders[0] |= 0x80
+		}
 		h.rawHeaders[4] = h.weight
 	}
 
@@ -249,14 +253,6 @@ func (p *Ping) Data() []byte                { return p.data[:] }
 func (p *Ping) SetData(b []byte)            { copy(p.data[:], b) }
 func (p *Ping) Write(b []byte) (int, error) { copy(p.data[:], b); return len(b), nil }
 
-func (p *Ping) SetCurrentTime() {
-	binary.BigEndian.PutUint64(p.data[:], uint64(clock.CoarseNowNano()))
-}
-
-func (p *Ping) DataAsTime() time.Time {
-	return time.Unix(0, int64(binary.BigEndian.Uint64(p.data[:])))
-}
-
 func (p *Ping) Deserialize(frh *FrameHeader) error {
 	p.ack = frh.Flags().Has(FlagAck)
 	if len(frh.payload) != 8 {
@@ -278,22 +274,26 @@ func (p *Ping) Serialize(fr *FrameHeader) {
 
 // Priority specifies stream dependencies and weighting parameters (RFC 9113 §6.3, deprecated per §5.3.2).
 type Priority struct {
-	stream uint32
-	weight byte
+	exclusive bool
+	stream    uint32
+	weight    byte
 }
 
 func (pry *Priority) Type() FrameType         { return FramePriority }
-func (pry *Priority) Reset()                  { pry.stream = 0; pry.weight = 0 }
+func (pry *Priority) Reset()                  { pry.exclusive = false; pry.stream = 0; pry.weight = 0 }
 func (pry *Priority) Stream() uint32          { return pry.stream }
 func (pry *Priority) SetStream(stream uint32) { pry.stream = stream & (1<<31 - 1) }
 func (pry *Priority) Weight() byte            { return pry.weight }
 func (pry *Priority) SetWeight(w byte)        { pry.weight = w }
+func (pry *Priority) Exclusive() bool         { return pry.exclusive }
+func (pry *Priority) SetExclusive(v bool)     { pry.exclusive = v }
 
 func (pry *Priority) Deserialize(fr *FrameHeader) error {
 	if len(fr.payload) != 5 {
 		return ErrMissingBytes
 	}
 
+	pry.exclusive = (fr.payload[0] & 0x80) != 0
 	pry.stream = bytesToUint32(fr.payload) & (1<<31 - 1)
 	pry.weight = fr.payload[4]
 
@@ -302,6 +302,9 @@ func (pry *Priority) Deserialize(fr *FrameHeader) error {
 
 func (pry *Priority) Serialize(fr *FrameHeader) {
 	fr.payload = appendUint32Bytes(fr.payload[:0], pry.stream)
+	if pry.exclusive {
+		fr.payload[0] |= 0x80
+	}
 	fr.payload = append(fr.payload, pry.weight)
 }
 
