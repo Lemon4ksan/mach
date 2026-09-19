@@ -519,6 +519,7 @@ func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
 		s.blockEnd = len(h.rawHeaders)
 		for s.next() {
 			s.key = trimTrailingSpace(s.key)
+			s.value = trimTrailingSpace(s.value)
 			zerocopy.NormalizeHeaderKey(s.key, h.disableNormalizing)
 			if len(s.key) > 0 {
 				if !yield(s.key, s.value) {
@@ -581,7 +582,7 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 			}
 			return true
 		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
-			if bytes.Equal(zerocopy.StrClose, value) {
+			if hasHeaderValue(value, zerocopy.StrClose) {
 				h.SetConnectionClose()
 			} else {
 				h.ResetConnectionClose()
@@ -1141,32 +1142,37 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("unsupported http request method %q in %q", h.method, buf)
 	}
 	b = b[n+1:]
-	n = bytes.IndexByte(b, ' ')
+	// Skip leading spaces for the URI (if any)
+	for len(b) > 0 && b[0] == ' ' {
+		b = b[1:]
+	}
+	n = bytes.LastIndexByte(b, ' ')
 	if n < 0 {
 		return 0, fmt.Errorf("cannot find whitespace in the first line of request %q", buf)
 	}
 	protoStr := b[n+1:]
 	if !isHTTPVersion(protoStr) {
-		if h.SecureErrorLogMessage {
-			return 0, fmt.Errorf("unsupported http version %q", protoStr)
-		}
-		return 0, fmt.Errorf("unsupported http version %q in %q", protoStr, buf)
+		return 0, fmt.Errorf("unsupported HTTP version %q", protoStr)
 	}
-	if n == 0 {
+	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
+
+	// The URI might have trailing spaces if the client sent multiple spaces before HTTP/x.x
+	uriStr := trimTrailingSpace(b[:n])
+	if len(uriStr) == 0 {
 		if h.SecureErrorLogMessage {
 			return 0, ErrEmptyRequestURI
 		}
 		return 0, fmt.Errorf("request uri cannot be empty in %q", buf)
 	}
-	if err := validateRequestURI(h.method, b[:n]); err != nil {
+	if err := validateRequestURI(h.method, uriStr); err != nil {
 		if h.SecureErrorLogMessage {
-			return 0, fmt.Errorf("invalid request uri %q", b[:n])
+			return 0, fmt.Errorf("invalid request uri %q", uriStr)
 		}
-		return 0, fmt.Errorf("invalid request uri %q in %q: %w", b[:n], buf, err)
+		return 0, fmt.Errorf("invalid request uri %q in %q: %w", uriStr, buf, err)
 	}
 	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
 	h.protocol = append(h.protocol[:0], protoStr...)
-	h.requestURI = append(h.requestURI[:0], b[:n]...)
+	h.requestURI = append(h.requestURI[:0], uriStr...)
 	return len(buf) - len(bNext), nil
 }
 
@@ -1181,6 +1187,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 	for s.next() {
 		key := s.key
 		s.key = trimTrailingSpace(s.key)
+		s.value = trimTrailingSpace(s.value)
 		if len(s.key) != len(key) {
 			h.connectionClose = true
 			return 0, fmt.Errorf("invalid header key %q", key)
@@ -1204,8 +1211,13 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentLength) {
 				isContentLength = true
 				if contentLengthSeen {
-					h.connectionClose = true
-					return 0, ErrDuplicateContentLength
+					parsed, err := parseContentLength(s.value)
+					if err != nil || parsed != h.contentLength {
+						h.connectionClose = true
+						return 0, ErrDuplicateContentLength
+					}
+					isContentLength = false // Do not process again
+					continue
 				}
 				contentLengthSeen = true
 				var err error
@@ -1266,7 +1278,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 				continue
 			}
 			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
-				if bytes.Equal(s.value, zerocopy.StrClose) {
+				if hasHeaderValue(s.value, zerocopy.StrClose) {
 					h.connectionClose = true
 				} else {
 					h.connectionClose = false
@@ -1277,7 +1289,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 		case 't':
 			if isTransferEncoding {
 				isIdentity := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrIdentity)
-				isChunked := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked)
+				isChunked := hasHeaderValue(s.value, zerocopy.StrChunked)
 				if !isIdentity && !isChunked {
 					h.connectionClose = true
 					if h.SecureErrorLogMessage {

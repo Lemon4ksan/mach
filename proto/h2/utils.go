@@ -9,7 +9,6 @@ import (
 
 	"bufio"
 	"bytes"
-	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -131,7 +130,7 @@ func cutPadding(payload []byte, length int) ([]byte, error) {
 
 	pad := int(payload[0])
 	if len(payload) < length-pad-1 || length-pad < 1 {
-		return nil, errors.New("h2engine: padding out of range")
+		return nil, NewGoAwayError(ProtocolError, "padding out of range (RFC 9113 §6.1)")
 	}
 
 	return payload[1 : length-pad], nil

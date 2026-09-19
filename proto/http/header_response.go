@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/borrow"
+	"github.com/lemon4ksan/foundation/net/http/altsvc"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
@@ -173,6 +174,15 @@ func (h *ResponseHeader) addVaryBytes(value []byte) {
 // Server returns Server header value.
 func (h *ResponseHeader) Server() []byte {
 	return h.server
+}
+
+// AltSvc returns parsed Alt-Svc services using foundation/net/http/altsvc.
+func (h *ResponseHeader) AltSvc() []altsvc.Service {
+	altSvcHeader := h.peek([]byte("Alt-Svc"))
+	if len(altSvcHeader) == 0 {
+		return nil
+	}
+	return altsvc.Parse(bytesconv.B2S(altSvcHeader))
 }
 
 // SetServer sets Server header value.
@@ -347,7 +357,7 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 			h.SetContentEncodingBytes(value)
 			return true
 		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
-			if bytes.Equal(zerocopy.StrClose, value) {
+			if hasHeaderValue(value, zerocopy.StrClose) {
 				h.SetConnectionClose()
 			} else {
 				h.ResetConnectionClose()
@@ -953,6 +963,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 	contentLengthSeen := false
 	for s.next() {
 		s.key = trimTrailingSpace(s.key)
+		s.value = trimTrailingSpace(s.value)
 		if len(s.key) == 0 {
 			h.connectionClose = true
 			return 0, fmt.Errorf("invalid header key %q", s.key)
@@ -981,8 +992,12 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			}
 			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentLength) {
 				if contentLengthSeen {
-					h.connectionClose = true
-					return 0, ErrDuplicateContentLength
+					parsed, err := parseContentLength(s.value)
+					if err != nil || parsed != h.contentLength {
+						h.connectionClose = true
+						return 0, ErrDuplicateContentLength
+					}
+					continue
 				}
 				contentLengthSeen = true
 				var err error
@@ -999,7 +1014,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
-				if bytes.Equal(s.value, zerocopy.StrClose) {
+				if hasHeaderValue(s.value, zerocopy.StrClose) {
 					h.connectionClose = true
 				} else {
 					h.connectionClose = false
@@ -1031,7 +1046,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 					return 0, errors.New("too many transfer-encoding headers")
 				}
 				transferEncodingSeen = true
-				if !zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked) {
+				if !hasHeaderValue(s.value, zerocopy.StrChunked) {
 					h.connectionClose = true
 					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
@@ -1065,6 +1080,9 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 		h.contentLengthBytes = h.contentLengthBytes[:0]
 	}
 	if h.contentLength == -2 && !h.ConnectionUpgrade() && !h.mustSkipContentLength() {
+		h.connectionClose = true
+	}
+	if h.mustSkipContentLength() && (h.contentLength > 0 || h.contentLength == -1) {
 		h.connectionClose = true
 	}
 	if h.noHTTP11 && !h.connectionClose {

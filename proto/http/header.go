@@ -531,6 +531,7 @@ func parseTrailer(src []byte, //nolint:unused
 	s.b = src
 	for s.next() {
 		s.key = trimTrailingSpace(s.key)
+		s.value = trimTrailingSpace(s.value)
 		if len(s.key) == 0 {
 			continue
 		}

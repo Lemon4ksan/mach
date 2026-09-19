@@ -5,7 +5,6 @@
 package h3
 
 import (
-
 	"bytes"
 	"io"
 	"strconv"
@@ -14,9 +13,9 @@ import (
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
-	h1 "github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/qpack"
+	"github.com/lemon4ksan/mach/proto/http"
 )
 
 // PooledEncoder encapsulates a pooled buffer and QPACK encoder for zero-allocation serialization.
@@ -73,7 +72,7 @@ func (q *QPACKCodec) WriteDecoderTable(_ []byte) error {
 // EncodeRequestHeadersPooled encodes request headers into the pooled encoder's buffer with 0 heap allocations.
 func (q *QPACKCodec) EncodeRequestHeadersPooled(
 	p *PooledEncoder,
-	req *h1.Request,
+	req *http.Request,
 	orderedKeys []string,
 ) ([]byte, error) {
 	enc := p.enc
@@ -118,7 +117,7 @@ func (q *QPACKCodec) EncodeRequestHeadersPooled(
 
 // EncodeRequestHeaders encodes a fasthttp request header into a QPACK block (RFC 9204 Â§4.5),
 // strictly maintaining the specified orderedKeys sequence for RFC 9220 Extended CONNECT.
-func (q *QPACKCodec) EncodeRequestHeaders(w io.Writer, req *h1.Request, orderedKeys []string) error {
+func (q *QPACKCodec) EncodeRequestHeaders(w io.Writer, req *http.Request, orderedKeys []string) error {
 	p := q.AcquireEncoder()
 	defer q.ReleaseEncoder(p)
 
@@ -180,7 +179,7 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 	return false
 }
 
-func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *h1.Request, orderedKeys []string) {
+func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *http.Request, orderedKeys []string) {
 	var visitedBits uint64
 
 	numOrdered := min(len(orderedKeys), 64)
@@ -248,7 +247,7 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *h1.Request, o
 
 // DecodeResponseHeaders parses a QPACK header block directly into fasthttp ResponseHeader (RFC 9204 Â§2.2 & Â§4.5),
 // returning the parsed status code and ignoring 1xx informational frames (RFC 9114 Â§4.1).
-func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *h1.ResponseHeader) (int, error) {
+func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *http.ResponseHeader) (int, error) {
 	var (
 		hasStatus  bool
 		statusCode int
@@ -257,6 +256,11 @@ func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *h1.ResponseH
 
 	err := q.decoder.DecodeFields(headerBlock, nil, func(hf qpack.HeaderField) bool {
 		if hf.Name == ":status" {
+			if hasStatus {
+				parseErr = ErrMalformedHeader
+				return false
+			}
+
 			code, err := strconv.Atoi(hf.Value)
 			if err != nil {
 				parseErr = err
@@ -326,7 +330,7 @@ func (q *QPACKCodec) DecodeResponseTrailers(headerBlock []byte) (map[string][]st
 
 func (q *QPACKCodec) DecodeRequestHeaders(
 	headerBlock []byte,
-	reqHeaders *coreheaders.Headers,
+	reqHeaders *headkit.Headers,
 ) (method, path, scheme, authority string, err error) {
 	reqHeaders.Reset()
 
@@ -399,13 +403,13 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 		} else {
 			hasSeenRegularHeader = true
 
-			// RFC 9114 Â§4.1.2 & Â§4.1: Prohibited hop-by-hop headers in HTTP/3
+			// RFC 9114 §4.1.2 & §4.1: Prohibited hop-by-hop headers in HTTP/3
 			switch k {
 			case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
 				malformed = true
 				return false
 			case "te":
-				if v != "trailers" {
+				if !bytesconv.EqualFoldASCII(v, "trailers") {
 					malformed = true
 					return false
 				}
@@ -424,7 +428,22 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 		return "", "", "", "", ErrMalformedHeader
 	}
 
-	if method == "" || (method != "CONNECT" && (scheme == "" || path == "")) {
+	if method == "" {
+		return "", "", "", "", ErrMissingMethodOrPath
+	}
+
+	if method == "CONNECT" {
+		isExtended := reqHeaders.Get(":protocol") != ""
+		if isExtended {
+			if scheme == "" || path == "" {
+				return "", "", "", "", ErrMissingMethodOrPath
+			}
+		} else {
+			if scheme != "" || path != "" {
+				return "", "", "", "", ErrMissingMethodOrPath
+			}
+		}
+	} else if scheme == "" || path == "" {
 		return "", "", "", "", ErrMissingMethodOrPath
 	}
 
@@ -433,7 +452,7 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 	return method, path, scheme, authority, nil
 }
 
-func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers coreheaders.Headers, bodyLen int) []byte {
+func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers headkit.Headers, bodyLen int) []byte {
 	pe := encoderPool.Get()
 	defer encoderPool.Put(pe)
 

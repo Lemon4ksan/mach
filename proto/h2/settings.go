@@ -182,9 +182,6 @@ func (st *Settings) Encode() {
 }
 
 func (st *Settings) appendSetting(key uint16, val uint32) {
-	if val == 0 && key != EnablePush && key != EnableConnectProtocol {
-		return
-	}
 
 	st.rawSettings = append(st.rawSettings,
 		byte(key>>8), byte(key),

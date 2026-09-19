@@ -38,9 +38,6 @@ const (
 
 	// FrameTypeWebTransportStream establishes a WebTransport stream (WebTransport over HTTP/3 §4.1: 0x41).
 	FrameTypeWebTransportStream uint64 = 0x41
-
-	// FrameTypeCapsule encapsulates datagrams in HTTP/3 (RFC 9297: 0x1758).
-	FrameTypeCapsule uint64 = 0x1758
 )
 
 // HTTP/3 Unidirectional Stream Types (RFC 9114 §6.2 & §11.2.4 Table 5).
@@ -140,6 +137,8 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		Other: make(map[uint64]uint64),
 	}
 
+	seen := make(map[uint64]bool)
+
 	for {
 		id, err := varint.Read(qr)
 		if errors.Is(err, io.EOF) {
@@ -149,6 +148,11 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		if seen[id] {
+			return nil, ErrH3SettingsError
+		}
+		seen[id] = true
 
 		val, err := varint.Read(qr)
 		if err != nil {
@@ -167,10 +171,10 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		case SettingQpackBlockedStreams:
 			st.QpackBlockedStreams = val
 		case SettingH3Datagram:
-			if val != 0 && val != 1 {
+			if val != 1 {
 				return nil, ErrH3SettingsError
 			}
-			st.EnableDatagrams = (val == 1)
+			st.EnableDatagrams = true
 		case SettingEnableConnectProtocol:
 			if val != 0 && val != 1 {
 				return nil, ErrH3SettingsError

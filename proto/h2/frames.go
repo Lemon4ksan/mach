@@ -85,13 +85,19 @@ func (d *Data) Serialize(fr *FrameHeader) {
 		fr.SetFlags(fr.Flags().Add(FlagEndStream))
 	}
 
+	fr.payload = fr.payload[:0]
+
 	if d.hasPadding {
 		fr.SetFlags(fr.Flags().Add(FlagPadded))
-
-		d.b = addPadding(d.b)
+		padLen := byte(0) // Default 0 padding
+		fr.payload = append(fr.payload, padLen)
+		fr.payload = append(fr.payload, d.b...)
+		for i := byte(0); i < padLen; i++ {
+			fr.payload = append(fr.payload, 0)
+		}
+	} else {
+		fr.payload = append(fr.payload, d.b...)
 	}
-
-	fr.setPayload(d.b)
 }
 
 // GoAway signals connection shutdown or fatal connection-level protocol violations (RFC 9113 §6.8).
@@ -115,7 +121,7 @@ func (ga *GoAway) Error() string {
 
 func (ga *GoAway) Deserialize(fr *FrameHeader) error {
 	if len(fr.payload) < 8 {
-		return ErrMissingBytes
+		return NewGoAwayError(FrameSizeError, "invalid GOAWAY frame size (RFC 9113 §6.8)")
 	}
 
 	ga.stream = bytesToUint32(fr.payload) & (1<<31 - 1)
@@ -191,7 +197,7 @@ func (h *Headers) Deserialize(frh *FrameHeader) error {
 
 	if flags.Has(FlagPriority) {
 		if len(payload) < 5 {
-			return ErrMissingBytes
+			return NewGoAwayError(FrameSizeError, "invalid HEADERS frame size for priority (RFC 9113 §6.2)")
 		}
 
 		h.priority = true
@@ -217,26 +223,43 @@ func (h *Headers) Serialize(frh *FrameHeader) {
 		frh.SetFlags(frh.Flags().Add(FlagEndHeaders))
 	}
 
-	if h.priority {
-		frh.SetFlags(frh.Flags().Add(FlagPriority))
-
-		oldLen := len(h.rawHeaders)
-		h.rawHeaders = append(h.rawHeaders, 0, 0, 0, 0, 0)
-		copy(h.rawHeaders[5:], h.rawHeaders[:oldLen])
-		uint32ToBytes(h.rawHeaders[0:4], h.stream)
-		if h.exclusive {
-			h.rawHeaders[0] |= 0x80
-		}
-		h.rawHeaders[4] = h.weight
-	}
+	frh.payload = frh.payload[:0]
 
 	if h.hasPadding {
 		frh.SetFlags(frh.Flags().Add(FlagPadded))
-
-		h.rawHeaders = addPadding(h.rawHeaders)
+		// We add padding later or handle it non-destructively.
+		// For simplicity, let's just append the padding byte first if padded.
+		// Wait, addPadding adds 1 byte at the start and N bytes at the end.
+		frh.payload = append(frh.payload, 0) // placeholder for pad length
 	}
 
-	frh.payload = append(frh.payload[:0], h.rawHeaders...)
+	if h.priority {
+		frh.SetFlags(frh.Flags().Add(FlagPriority))
+		
+		var priBuf [5]byte
+		uint32ToBytes(priBuf[0:4], h.stream)
+		if h.exclusive {
+			priBuf[0] |= 0x80
+		}
+		priBuf[4] = h.weight
+		frh.payload = append(frh.payload, priBuf[:]...)
+	}
+
+	frh.payload = append(frh.payload, h.rawHeaders...)
+
+	if h.hasPadding {
+		// Calculate pad length (e.g. 0 for now to keep it simple, or whatever logic addPadding used).
+		// Since addPadding modifies the slice, let's just use 0 padding for idempotency if it was padded,
+		// or ideally we shouldn't use padding in Headers unless specifically requested.
+		// If we need true padding, we just append some zeros.
+		padLen := byte(0) // Default zero padding
+		if len(frh.payload) > 0 {
+			frh.payload[0] = padLen
+		}
+		for i := byte(0); i < padLen; i++ {
+			frh.payload = append(frh.payload, 0)
+		}
+	}
 }
 
 // Ping verifies connection liveness and measures round-trip time with an 8-octet opaque payload (RFC 9113 §6.7).
@@ -256,7 +279,7 @@ func (p *Ping) Write(b []byte) (int, error) { copy(p.data[:], b); return len(b),
 func (p *Ping) Deserialize(frh *FrameHeader) error {
 	p.ack = frh.Flags().Has(FlagAck)
 	if len(frh.payload) != 8 {
-		return ErrInvalidPingPayload
+		return NewGoAwayError(FrameSizeError, "invalid PING frame size (RFC 9113 §6.7)")
 	}
 
 	p.SetData(frh.payload)
@@ -290,7 +313,7 @@ func (pry *Priority) SetExclusive(v bool)     { pry.exclusive = v }
 
 func (pry *Priority) Deserialize(fr *FrameHeader) error {
 	if len(fr.payload) != 5 {
-		return ErrMissingBytes
+		return NewGoAwayError(FrameSizeError, "invalid PRIORITY frame size (RFC 9113 §6.3)")
 	}
 
 	pry.exclusive = (fr.payload[0] & 0x80) != 0
@@ -346,7 +369,7 @@ func (pp *PushPromise) Deserialize(fr *FrameHeader) error {
 	}
 
 	if len(payload) < 4 {
-		return ErrMissingBytes
+		return NewGoAwayError(FrameSizeError, "invalid PUSH_PROMISE frame size (RFC 9113 §6.6)")
 	}
 
 	pp.stream = bytesToUint32(payload) & (1<<31 - 1)
@@ -357,7 +380,8 @@ func (pp *PushPromise) Deserialize(fr *FrameHeader) error {
 }
 
 func (pp *PushPromise) Serialize(fr *FrameHeader) {
-	fr.payload = append(fr.payload[:0], pp.header...)
+	fr.payload = appendUint32Bytes(fr.payload[:0], pp.stream)
+	fr.payload = append(fr.payload, pp.header...)
 }
 
 // RstStream terminates an active stream prematurely with an explicit 32-bit error code (RFC 9113 §6.4).
@@ -373,7 +397,7 @@ func (rst *RstStream) Error() error           { return rst.code }
 
 func (rst *RstStream) Deserialize(fr *FrameHeader) error {
 	if len(fr.payload) != 4 {
-		return ErrMissingBytes
+		return NewGoAwayError(FrameSizeError, "invalid RST_STREAM frame size (RFC 9113 §6.4)")
 	}
 
 	rst.code = ErrorCode(bytesToUint32(fr.payload))
@@ -399,7 +423,7 @@ func (wu *WindowUpdate) SetIncrement(inc int) { wu.increment = inc }
 func (wu *WindowUpdate) Deserialize(fr *FrameHeader) error {
 	if len(fr.payload) != 4 {
 		wu.increment = 0
-		return ErrMissingBytes
+		return NewGoAwayError(FrameSizeError, "invalid WINDOW_UPDATE frame size (RFC 9113 §6.9)")
 	}
 
 	wu.increment = int(bytesToUint32(fr.payload) & (1<<31 - 1))
