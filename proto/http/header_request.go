@@ -1,4 +1,3 @@
-
 package http
 
 import (
@@ -1289,7 +1288,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 		case 't':
 			if isTransferEncoding {
 				isIdentity := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrIdentity)
-				isChunked := hasHeaderValue(s.value, zerocopy.StrChunked)
+				isChunked := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked)
 				if !isIdentity && !isChunked {
 					h.connectionClose = true
 					if h.SecureErrorLogMessage {

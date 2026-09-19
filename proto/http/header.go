@@ -3,7 +3,6 @@
 package http
 
 import (
-
 	"bufio"
 	"bytes"
 	"errors"
@@ -509,7 +508,7 @@ func refreshServerDate() {
 func appendHeaderLine(dst, key, value []byte) []byte {
 	dst = append(dst, key...)
 	dst = append(dst, zerocopy.StrColonSpace...)
-	
+
 	if bytes.IndexByte(value, '\n') < 0 && bytes.IndexByte(value, '\r') < 0 {
 		dst = append(dst, value...)
 	} else {
@@ -521,7 +520,7 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 			}
 		}
 	}
-	
+
 	return append(dst, zerocopy.StrCRLF...)
 }
 
@@ -608,6 +607,9 @@ func isValidMethod(method []byte) bool {
 
 func validateRequestURI(method, requestURI []byte) error {
 	if zerocopy.StringContainsCTLByte(requestURI) {
+		return zerocopy.ErrorInvalidURI
+	}
+	if bytes.IndexByte(requestURI, ' ') >= 0 {
 		return zerocopy.ErrorInvalidURI
 	}
 	if len(requestURI) == 1 && requestURI[0] == '*' {

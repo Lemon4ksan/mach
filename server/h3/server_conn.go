@@ -14,9 +14,9 @@ import (
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
 
-	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/quic"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H3 stream request.
@@ -44,13 +44,13 @@ type ServerResponse struct {
 
 // ServerConn manages an active HTTP/3 server connection over an underlying QUIC connection (RFC 9114).
 type ServerConn struct {
-	quicConn     *quic.Conn
-	handler      ServerHandlerFunc
-	qpack        *coreh3.QPACKCodec
-	isClosed     atomic.Bool
-	closeErr     error
-	controlOut   *quic.SendStream
-	hasControlIn atomic.Bool
+	quicConn        *quic.Conn
+	handler         ServerHandlerFunc
+	qpack           *coreh3.QPACKCodec
+	isClosed        atomic.Bool
+	closeErr        error
+	controlOut      *quic.SendStream
+	hasControlIn    atomic.Bool
 	hasQPACKEncoder atomic.Bool
 	hasQPACKDecoder atomic.Bool
 }

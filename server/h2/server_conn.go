@@ -6,7 +6,7 @@ package h2
 
 import (
 	"github.com/lemon4ksan/foundation/net/hpack"
-
+	"github.com/lemon4ksan/foundation/net/http/status"
 
 	"bufio"
 	"bytes"
@@ -493,7 +493,7 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 	}
 
 	res := &ServerResponse{
-		StatusCode: http.StatusOK,
+		StatusCode: status.StatusOK,
 		Headers:    make(http.Header),
 	}
 

@@ -6,10 +6,11 @@ package h1
 
 import (
 	"fmt"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/lemon4ksan/foundation/net/http/status"
 
 	"github.com/lemon4ksan/foundation/timekit"
 )
@@ -32,7 +33,7 @@ var (
 func init() {
 	// Pre-compile all HTTP status line byte slices (100 to 599)
 	for code := 100; code < 600; code++ {
-		text := http.StatusText(code)
+		text := status.StatusMessage(code)
 		if text != "" {
 			statusLines[code] = []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", code, text))
 		}

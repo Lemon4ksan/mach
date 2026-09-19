@@ -1,4 +1,3 @@
-
 package http
 
 import (
@@ -765,7 +764,6 @@ func parseChunkSize(r *bufio.Reader) (int, error) {
 		return -1, err
 	}
 	inExt := false
-	afterSizeOWS := false
 	for {
 		c, err := r.ReadByte()
 		if err != nil {
@@ -785,12 +783,8 @@ func parseChunkSize(r *bufio.Reader) (int, error) {
 		}
 		switch c {
 		case ' ', '\t':
-			afterSizeOWS = true
 			continue
 		case ';':
-			if afterSizeOWS {
-				return -1, ErrBrokenChunk{error: fmt.Errorf("invalid character %q after chunk size", c)}
-			}
 			inExt = true
 			continue
 		default:

@@ -1,7 +1,7 @@
-
 package http
 
 import (
+	"github.com/lemon4ksan/foundation/net/http/status"
 	machcompress "github.com/lemon4ksan/mach/proto/compress"
 
 	"bufio"
@@ -504,7 +504,7 @@ func (resp *Response) ReadLimitBody(r *bufio.Reader, maxBodySize int) error {
 		return err
 	}
 	for n := 0; ; n++ {
-		if resp.Header.statusCode < 100 || resp.Header.statusCode > 199 || resp.Header.statusCode == StatusSwitchingProtocols {
+		if resp.Header.statusCode < 100 || resp.Header.statusCode > 199 || resp.Header.statusCode == status.StatusSwitchingProtocols {
 			break
 		}
 		if n >= maxInterimResponses {

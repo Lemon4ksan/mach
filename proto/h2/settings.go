@@ -190,6 +190,9 @@ func (st *Settings) appendSetting(key uint16, val uint32) {
 }
 
 func (st *Settings) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() != 0 {
+		return NewGoAwayError(ProtocolError, "SETTINGS frame must be on stream 0")
+	}
 	// RFC 9113 §6.5: A SETTINGS frame with length other than a multiple of 6 octets MUST be treated as FRAME_SIZE_ERROR.
 	if len(fr.payload)%6 != 0 {
 		return NewGoAwayError(FrameSizeError, "wrong payload for settings (RFC 9113 §6.5)")

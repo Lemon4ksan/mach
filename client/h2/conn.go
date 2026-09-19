@@ -5,6 +5,7 @@
 package h2
 
 import (
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/net/hpack"
 
 	"bufio"
@@ -115,12 +116,12 @@ type Conn struct {
 // NewConn instantiates a new Conn wrapping socket c.
 func NewConn(c net.Conn, opts ConnOpts) *Conn {
 	nc := &Conn{
-		c:             c,
-		br:            bufio.NewReaderSize(c, 16384),
-		bw:            bufio.NewWriterSize(c, 16384),
-		enc:           hpack.AcquireHPACK(),
-		dec:           hpack.AcquireHPACK(),
-		
+		c:   c,
+		br:  bufio.NewReaderSize(c, 16384),
+		bw:  bufio.NewWriterSize(c, 16384),
+		enc: hpack.AcquireHPACK(),
+		dec: hpack.AcquireHPACK(),
+
 		maxWindow:     15663105,
 		currentWindow: 15663105,
 		in:            make(chan *Context, 128),
@@ -921,12 +922,9 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 
 	pseudoOrder := defaultPseudoOrder[:]
 	if len(c.orderedKeys) > 0 {
-		var customPseudo []string
-		for _, k := range c.orderedKeys {
-			if len(k) > 0 && k[0] == ':' {
-				customPseudo = append(customPseudo, k)
-			}
-		}
+		customPseudo := generic.Filter(c.orderedKeys, func(k string) bool {
+			return len(k) > 0 && k[0] == ':'
+		})
 
 		if len(customPseudo) == 4 {
 			pseudoOrder = customPseudo

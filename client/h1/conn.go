@@ -45,6 +45,7 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 
 	select {
 	case <-ctx.Done():
+		cc.Close()
 		return ctx.Err()
 	case err := <-errCh:
 		return err

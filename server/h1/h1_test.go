@@ -12,10 +12,12 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/net/http/status"
+
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -471,7 +473,7 @@ func TestRequest_ClientIP_And_EarlyHints_Hijack(t *testing.T) {
 
 func TestResponse_StreamingWriteTo(t *testing.T) {
 	res := &h1.Response{
-		StatusCode: http.StatusOK,
+		StatusCode: status.StatusOK,
 		StreamWriter: func(w io.Writer) error {
 			_, err := w.Write([]byte("stream-chunk-data"))
 			return err
@@ -500,8 +502,6 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 		t.Fatalf("expected stream-chunk-data, got %q", string(body))
 	}
 }
-
-
 
 func createTestCookie(name, value, path []byte) *zerocopy.Cookie {
 	c := zerocopy.AcquireCookie()

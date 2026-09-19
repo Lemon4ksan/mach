@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lemon4ksan/foundation/net/http/status"
+
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 	"golang.org/x/net/http2"
@@ -31,14 +33,14 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	handler := func(req *h2.ServerRequest, res *h2.ServerResponse) error {
 		switch req.Path {
 		case "/hello":
-			res.StatusCode = http.StatusOK
+			res.StatusCode = status.StatusOK
 			res.Headers.Set("Content-Type", "text/plain")
 			res.Body = []byte("Hello HTTP/2 World!")
 
 			return nil
 
 		case "/echo":
-			res.StatusCode = http.StatusOK
+			res.StatusCode = status.StatusOK
 			res.Headers.Set("Content-Type", "application/octet-stream")
 
 			res.Body = append([]byte("Echo: "), req.Body...)
@@ -46,7 +48,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 			return nil
 
 		default:
-			res.StatusCode = http.StatusNotFound
+			res.StatusCode = status.StatusNotFound
 			res.Body = []byte("404 Not Found")
 			return nil
 		}
@@ -87,7 +89,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	// 1. Test GET /hello
 	resp, err := client.Get("http://" + addr + "/hello")
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, status.StatusOK, resp.StatusCode)
 	assert.Equal(t, "HTTP/2.0", resp.Proto)
 
 	body, err := io.ReadAll(resp.Body)
@@ -100,7 +102,7 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	postData := "Multiplexed Stream Payload 2026"
 	respPost, err := client.Post("http://"+addr+"/echo", "text/plain", strings.NewReader(postData))
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, respPost.StatusCode)
+	assert.Equal(t, status.StatusOK, respPost.StatusCode)
 
 	postBody, err := io.ReadAll(respPost.Body)
 	_ = respPost.Body.Close()

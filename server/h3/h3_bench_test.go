@@ -5,16 +5,16 @@
 package h3_test
 
 import (
+	"github.com/lemon4ksan/foundation/net/http/status"
 
 	"bytes"
-	"net/http"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
 
-	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/qpack"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
@@ -27,7 +27,7 @@ func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		_ = codec.EncodeResponseHeaders(http.StatusOK, headers, 128)
+		_ = codec.EncodeResponseHeaders(status.StatusOK, headers, 128)
 	}
 }
 

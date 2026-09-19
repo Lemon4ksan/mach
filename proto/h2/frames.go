@@ -29,6 +29,9 @@ func (c *Continuation) AppendHeader(b []byte)       { c.rawHeaders = append(c.ra
 func (c *Continuation) Write(b []byte) (int, error) { c.AppendHeader(b); return len(b), nil }
 
 func (c *Continuation) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() == 0 {
+		return NewGoAwayError(ProtocolError, "CONTINUATION frame must be on a specific stream, not 0")
+	}
 	c.endHeaders = fr.Flags().Has(FlagEndHeaders)
 	c.SetHeader(fr.payload)
 
@@ -63,6 +66,9 @@ func (d *Data) Len() int                    { return len(d.b) }
 func (d *Data) Write(b []byte) (int, error) { d.Append(b); return len(b), nil }
 
 func (d *Data) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() == 0 {
+		return NewGoAwayError(ProtocolError, "DATA frame must be on a specific stream, not 0")
+	}
 	payload := fr.payload
 
 	if fr.Flags().Has(FlagPadded) {
@@ -120,6 +126,9 @@ func (ga *GoAway) Error() string {
 }
 
 func (ga *GoAway) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() != 0 {
+		return NewGoAwayError(ProtocolError, "GOAWAY frame must be on stream 0")
+	}
 	if len(fr.payload) < 8 {
 		return NewGoAwayError(FrameSizeError, "invalid GOAWAY frame size (RFC 9113 §6.8)")
 	}
@@ -183,6 +192,9 @@ func (h *Headers) Reset() {
 
 
 func (h *Headers) Deserialize(frh *FrameHeader) error {
+	if frh.Stream() == 0 {
+		return NewGoAwayError(ProtocolError, "HEADERS frame must be on a specific stream, not 0")
+	}
 	flags := frh.Flags()
 	payload := frh.payload
 
@@ -203,6 +215,9 @@ func (h *Headers) Deserialize(frh *FrameHeader) error {
 		h.priority = true
 		h.exclusive = (payload[0] & 0x80) != 0
 		h.stream = bytesToUint32(payload) & (1<<31 - 1)
+		if h.stream == frh.Stream() {
+			return NewGoAwayError(ProtocolError, "stream cannot depend on itself (RFC 9113 §5.3.1)")
+		}
 		h.weight = payload[4]
 		payload = payload[5:]
 	}
@@ -277,6 +292,9 @@ func (p *Ping) SetData(b []byte)            { copy(p.data[:], b) }
 func (p *Ping) Write(b []byte) (int, error) { copy(p.data[:], b); return len(b), nil }
 
 func (p *Ping) Deserialize(frh *FrameHeader) error {
+	if frh.Stream() != 0 {
+		return NewGoAwayError(ProtocolError, "PING frame must be on stream 0")
+	}
 	p.ack = frh.Flags().Has(FlagAck)
 	if len(frh.payload) != 8 {
 		return NewGoAwayError(FrameSizeError, "invalid PING frame size (RFC 9113 §6.7)")
@@ -312,12 +330,18 @@ func (pry *Priority) Exclusive() bool         { return pry.exclusive }
 func (pry *Priority) SetExclusive(v bool)     { pry.exclusive = v }
 
 func (pry *Priority) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() == 0 {
+		return NewGoAwayError(ProtocolError, "PRIORITY frame must be on a specific stream, not 0")
+	}
 	if len(fr.payload) != 5 {
 		return NewGoAwayError(FrameSizeError, "invalid PRIORITY frame size (RFC 9113 §6.3)")
 	}
 
 	pry.exclusive = (fr.payload[0] & 0x80) != 0
 	pry.stream = bytesToUint32(fr.payload) & (1<<31 - 1)
+	if pry.stream == fr.Stream() {
+		return NewGoAwayError(ProtocolError, "stream cannot depend on itself (RFC 9113 §5.3.1)")
+	}
 	pry.weight = fr.payload[4]
 
 	return nil
@@ -357,6 +381,9 @@ func (pp *PushPromise) Write(b []byte) (int, error) {
 }
 
 func (pp *PushPromise) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() == 0 {
+		return NewGoAwayError(ProtocolError, "PUSH_PROMISE frame must be on a specific stream, not 0")
+	}
 	payload := fr.payload
 
 	if fr.Flags().Has(FlagPadded) {
@@ -396,6 +423,9 @@ func (rst *RstStream) Reset()                 { rst.code = 0 }
 func (rst *RstStream) Error() error           { return rst.code }
 
 func (rst *RstStream) Deserialize(fr *FrameHeader) error {
+	if fr.Stream() == 0 {
+		return NewGoAwayError(ProtocolError, "RST_STREAM frame must be on a specific stream, not 0")
+	}
 	if len(fr.payload) != 4 {
 		return NewGoAwayError(FrameSizeError, "invalid RST_STREAM frame size (RFC 9113 §6.4)")
 	}
@@ -429,7 +459,10 @@ func (wu *WindowUpdate) Deserialize(fr *FrameHeader) error {
 	wu.increment = int(bytesToUint32(fr.payload) & (1<<31 - 1))
 	if wu.increment == 0 {
 		// RFC 9113 §6.9: Flow-control window increment of 0 MUST be treated as a stream or connection error.
-		return ErrInvalidWindowIncrement
+		if fr.Stream() == 0 {
+			return NewGoAwayError(ProtocolError, "window increment of zero on connection")
+		}
+		return NewResetStreamError(ProtocolError, "window increment of zero on stream")
 	}
 
 	return nil

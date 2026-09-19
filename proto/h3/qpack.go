@@ -66,7 +66,8 @@ func (q *QPACKCodec) ReleaseEncoder(p *PooledEncoder) {
 // Note: Currently quic-go/qpack operates on static tables (RFC 9204 Appendix A) and does not expose
 // dynamic table instructions, so incoming bytes are safely consumed.
 func (q *QPACKCodec) WriteDecoderTable(_ []byte) error {
-	return nil
+	// We don't support dynamic tables (capacity 0). Receiving instructions is an error.
+	return ErrQPACKDecompressFailed
 }
 
 // EncodeRequestHeadersPooled encodes request headers into the pooled encoder's buffer with 0 heap allocations.
@@ -268,7 +269,11 @@ func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *http.Respons
 			}
 
 			statusCode = code
-			if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
+			if statusCode == 101 {
+				parseErr = ErrMalformedHeader
+				return false
+			}
+			if statusCode < 100 || statusCode >= 200 {
 				res.SetStatusCode(statusCode)
 			}
 
@@ -347,7 +352,14 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 
 		// RFC 9114 §4.1.2: All field names MUST be lowercase ASCII
 		for i := 0; i < len(k); i++ {
-			if k[i] >= 'A' && k[i] <= 'Z' {
+			c := k[i]
+			if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
+				malformed = true
+				return false
+			}
+		}
+		for i := 0; i < len(v); i++ {
+			if v[i] == 0 {
 				malformed = true
 				return false
 			}
@@ -413,6 +425,11 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 					malformed = true
 					return false
 				}
+			case "host":
+				if authority != "" && v != authority {
+					malformed = true
+					return false
+				}
 			}
 
 			reqHeaders.Add(k, v)
@@ -435,15 +452,15 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 	if method == "CONNECT" {
 		isExtended := reqHeaders.Get(":protocol") != ""
 		if isExtended {
-			if scheme == "" || path == "" {
+			if scheme == "" || path == "" || authority == "" {
 				return "", "", "", "", ErrMissingMethodOrPath
 			}
 		} else {
-			if scheme != "" || path != "" {
-				return "", "", "", "", ErrMissingMethodOrPath
+			if scheme != "" || path != "" || authority == "" {
+				return "", "", "", "", ErrMalformedHeader
 			}
 		}
-	} else if scheme == "" || path == "" {
+	} else if path == "" || scheme == "" {
 		return "", "", "", "", ErrMissingMethodOrPath
 	}
 

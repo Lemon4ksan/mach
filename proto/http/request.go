@@ -1,4 +1,3 @@
-
 package http
 
 import (
@@ -647,9 +646,9 @@ func (req *Request) RemoveMultipartFormFiles() {
 //
 // If MayContinue returns true, the caller must:
 //
-//   - Either send StatusExpectationFailed response if request headers don't
+//   - Either send status.StatusExpectationFailed response if request headers don't
 //     satisfy the caller.
-//   - Or send StatusContinue response before reading request body
+//   - Or send status.StatusContinue response before reading request body
 //     with ContinueReadBody.
 //   - Or close the connection.
 //
@@ -671,9 +670,9 @@ func (req *Request) Read(r *bufio.Reader) error {
 //
 // If MayContinue returns true, the caller must:
 //
-//   - Either send StatusExpectationFailed response if request headers don't
+//   - Either send status.StatusExpectationFailed response if request headers don't
 //     satisfy the caller.
-//   - Or send StatusContinue response before reading request body
+//   - Or send status.StatusContinue response before reading request body
 //     with ContinueReadBody.
 //   - Or close the connection.
 //
@@ -701,9 +700,9 @@ func (req *Request) readLimitBody(r *bufio.Reader, maxBodySize int, getOnly, pre
 //
 // The caller must do one of the following actions if MayContinue returns true:
 //
-//   - Either send StatusExpectationFailed response if request headers don't
+//   - Either send status.StatusExpectationFailed response if request headers don't
 //     satisfy the caller.
-//   - Or send StatusContinue response before reading request body
+//   - Or send status.StatusContinue response before reading request body
 //     with ContinueReadBody.
 //   - Or close the connection.
 func (req *Request) MayContinue() bool {
@@ -713,7 +712,7 @@ func (req *Request) MayContinue() bool {
 // ContinueReadBody reads request body if request header contains
 // 'Expect: 100-continue'.
 //
-// The caller must send StatusContinue response before calling this method.
+// The caller must send status.StatusContinue response before calling this method.
 //
 // If maxBodySize > 0 and the body size exceeds maxBodySize,
 // then ErrBodyTooLarge is returned.
@@ -785,7 +784,7 @@ func (req *Request) ReadBody(r *bufio.Reader, contentLength, maxBodySize int) (e
 // ContinueReadBodyStream reads request body if request header contains
 // 'Expect: 100-continue'.
 //
-// The caller must send StatusContinue response before calling this method.
+// The caller must send status.StatusContinue response before calling this method.
 //
 // If maxBodySize > 0 and the body size exceeds maxBodySize,
 // then ErrBodyTooLarge is returned.

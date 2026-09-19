@@ -1,4 +1,3 @@
-
 package http
 
 import (
@@ -12,6 +11,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/net/http/altsvc"
+	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
@@ -52,7 +52,7 @@ func (h *ResponseHeader) SetContentRange(startPos, endPos, contentLength int) {
 // StatusCode returns response status code.
 func (h *ResponseHeader) StatusCode() int {
 	if h.statusCode == 0 {
-		return StatusOK
+		return status.StatusOK
 	}
 	return h.statusCode
 }
@@ -126,10 +126,10 @@ func (h *ResponseHeader) SetContentLength(contentLength int) {
 
 func (h *ResponseHeader) mustSkipContentLength() bool {
 	statusCode := h.StatusCode()
-	if statusCode < 100 || statusCode == StatusOK {
+	if statusCode < 100 || statusCode == status.StatusOK {
 		return false
 	}
-	return statusCode == StatusNotModified || statusCode == StatusNoContent || statusCode < 200
+	return statusCode == status.StatusNotModified || statusCode == status.StatusNoContent || statusCode < 200
 }
 
 func (h *ResponseHeader) isCompressibleContentType() bool {
@@ -826,9 +826,9 @@ func (h *ResponseHeader) String() string {
 func (h *ResponseHeader) appendStatusLine(dst []byte) []byte {
 	statusCode := h.StatusCode()
 	if statusCode < 0 {
-		statusCode = StatusOK
+		statusCode = status.StatusOK
 	}
-	return formatStatusLine(dst, h.Protocol(), statusCode, h.StatusMessage())
+	return status.FormatStatusLine(dst, h.Protocol(), statusCode, h.StatusMessage())
 }
 
 // AppendBytes appends response header representation to dst and returns
@@ -1046,7 +1046,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 					return 0, errors.New("too many transfer-encoding headers")
 				}
 				transferEncodingSeen = true
-				if !hasHeaderValue(s.value, zerocopy.StrChunked) {
+				if !zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked) {
 					h.connectionClose = true
 					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding

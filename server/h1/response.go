@@ -6,15 +6,15 @@ package h1
 
 import (
 	"io"
-	"net/http"
 	"strconv"
 
+	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 
 	"github.com/lemon4ksan/foundation/net/http/header"
 
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire.
@@ -28,7 +28,7 @@ type Response struct {
 
 // Reset clears the response for recycling.
 func (res *Response) Reset() {
-	res.StatusCode = http.StatusOK
+	res.StatusCode = status.StatusOK
 	res.Headers.Reset()
 	res.Cookies = res.Cookies[:0]
 	res.Body = res.Body[:0]
@@ -38,16 +38,16 @@ func (res *Response) Reset() {
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to the writer.
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
 func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
-	status := res.StatusCode
-	if status == 0 {
-		status = http.StatusOK
+	code := res.StatusCode
+	if code == 0 {
+		code = status.StatusOK
 	}
 
 	// 1. Fast Status Line (from pre-compiled static table)
-	if status >= 100 && status < len(statusLines) && statusLines[status] != nil {
-		_, _ = bw.Write(statusLines[status])
+	if code >= 100 && code < len(statusLines) && statusLines[code] != nil {
+		_, _ = bw.Write(statusLines[code])
 	} else {
-		statusText := http.StatusText(status)
+		statusText := status.StatusMessage(code)
 		if statusText == "" {
 			statusText = "Unknown"
 		}
@@ -55,7 +55,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 		var stBuf [16]byte
 
 		_, _ = bw.WriteString("HTTP/1.1 ")
-		_, _ = bw.Write(strconv.AppendInt(stBuf[:0], int64(status), 10))
+		_, _ = bw.Write(strconv.AppendInt(stBuf[:0], int64(code), 10))
 		_ = bw.WriteByte(' ')
 		_, _ = bw.WriteString(statusText)
 		_, _ = bw.Write(hdrCRLF)
@@ -83,7 +83,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 		if res.Headers.Get(header.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
-	} else if status != http.StatusNoContent && status != http.StatusNotModified {
+	} else if code != status.StatusNoContent && code != status.StatusNotModified {
 		if res.Headers.Get(header.ContentLength) == "" && res.Headers.Get(header.TransferEncoding) == "" {
 			var clBuf [24]byte
 
@@ -113,7 +113,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 		return res.writeStreamBody(bw)
 	}
 
-	if len(res.Body) > 0 && status != http.StatusNoContent && status != http.StatusNotModified {
+	if len(res.Body) > 0 && code != status.StatusNoContent && code != status.StatusNotModified {
 		_, _ = bw.Write(res.Body)
 	}
 

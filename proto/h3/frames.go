@@ -134,7 +134,8 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 	qr := varint.NewReader(lr)
 
 	st := &Settings{
-		Other: make(map[uint64]uint64),
+		MaxFieldSectionSize: -1,
+		Other:               make(map[uint64]uint64),
 	}
 
 	seen := make(map[uint64]bool)

@@ -5,6 +5,7 @@
 package h3_test
 
 import (
+	"github.com/lemon4ksan/foundation/net/http/status"
 
 	"bytes"
 	"context"
@@ -17,7 +18,6 @@ import (
 	"encoding/pem"
 	"io"
 	"math/big"
-	"net/http"
 	"testing"
 	"time"
 
@@ -25,9 +25,9 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/foundation/net/qpack"
 	"github.com/lemon4ksan/foundation/net/quic"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/server/h3"
 )
 
@@ -85,14 +85,14 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	handler := func(req *h3.ServerRequest, res *h3.ServerResponse) error {
 		switch req.Path {
 		case "/hello":
-			res.StatusCode = http.StatusOK
+			res.StatusCode = status.StatusOK
 			res.Headers.Set("Content-Type", "text/plain")
 			res.Body = []byte("Hello HTTP/3 QUIC World!")
 
 			return nil
 
 		case "/echo":
-			res.StatusCode = http.StatusOK
+			res.StatusCode = status.StatusOK
 			res.Headers.Set("Content-Type", "application/octet-stream")
 
 			res.Body = append([]byte("H3 Echo: "), req.Body...)
@@ -100,7 +100,7 @@ func TestH3Server_EndToEnd(t *testing.T) {
 			return nil
 
 		default:
-			res.StatusCode = http.StatusNotFound
+			res.StatusCode = status.StatusNotFound
 			res.Body = []byte("404 Not Found")
 			return nil
 		}

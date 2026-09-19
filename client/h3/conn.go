@@ -17,9 +17,9 @@ import (
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
+	"github.com/lemon4ksan/foundation/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
-	"github.com/lemon4ksan/foundation/net/quic"
 )
 
 const errCodeH3RequestCancelled = quic.StreamErrorCode(coreh3.ErrCodeH3RequestCancelled)
@@ -49,9 +49,9 @@ type ClientConn struct {
 	qpack            *coreh3.QPACKCodec
 	settings         coreh3.Settings
 
-	closeOnce sync.Once
-	closed    chan struct{}
-	hasControlIn atomic.Bool
+	closeOnce       sync.Once
+	closed          chan struct{}
+	hasControlIn    atomic.Bool
 	hasQPACKEncoder atomic.Bool
 	hasQPACKDecoder atomic.Bool
 }
