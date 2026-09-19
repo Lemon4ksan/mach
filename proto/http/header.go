@@ -43,33 +43,35 @@ type header struct {
 	noDefaultContentType  bool
 }
 
+// ConnectionClose returns true if 'Connection: close' header is set.
 func (h *header) ConnectionClose() bool {
 	return h.connectionClose
-} // ConnectionClose returns true if 'Connection: close' header is set.
+}
 
+// SetConnectionClose sets 'Connection: close' header.
 func (h *header) SetConnectionClose() {
 	h.connectionClose = true
-} // SetConnectionClose sets 'Connection: close' header.
+}
 
+// ResetConnectionClose clears 'Connection: close' header if it exists.
 func (h *header) ResetConnectionClose() {
 	if h.connectionClose {
 		h.connectionClose = false
 		h.h.Del(HeaderConnection)
 	}
-} // ResetConnectionClose clears 'Connection: close' header if it exists.
+}
 
+// SetContentType sets Content-Type header value.
 func (h *header) SetContentType(contentType string) {
 	h.contentType = zerocopy.InitHeaderValueString(h.contentType, contentType)
-} // SetContentType sets Content-Type header value.
+}
 
-func (h *header) SetContentTypeBytes(contentType []byte) { // SetContentTypeBytes sets Content-Type header value.
-
+// SetContentTypeBytes sets Content-Type header value.
+func (h *header) SetContentTypeBytes(contentType []byte) {
 	h.contentType = zerocopy.InitHeaderValueBytes(h.contentType, contentType)
 }
 
-func (h *header) SetTrailer(trailer string) error {
-	return h.SetTrailerBytes(bytesconv.S2B(trailer))
-} // SetTrailer sets header Trailer value for chunked response
+// SetTrailer sets header Trailer value for chunked response
 // to indicate which headers will be sent after the body.
 //
 // Use Set to set the trailer header later.
@@ -86,32 +88,33 @@ func (h *header) SetTrailer(trailer string) error {
 // 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
 //
 // Return ErrBadTrailer if contain any forbidden trailers.
+func (h *header) SetTrailer(trailer string) error {
+	return h.SetTrailerBytes(bytesconv.S2B(trailer))
+}
 
-func (h *header) SetTrailerBytes(trailer []byte) error { // SetTrailerBytes sets Trailer header value for chunked response
-	// to indicate which headers will be sent after the body.
-	//
-	// Use Set to set the trailer header later.
-	//
-	// Trailers are only supported with chunked transfer.
-	// Trailers allow the sender to include additional headers at the end of chunked messages.
-	//
-	// The following trailers are forbidden:
-	// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
-	// 2. routing (e.g., Host),
-	// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
-	// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
-	// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
-	// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
-	//
-	// Return ErrBadTrailer if contain any forbidden trailers.
-
+// SetTrailerBytes sets Trailer header value for chunked response
+// to indicate which headers will be sent after the body.
+//
+// Use Set to set the trailer header later.
+//
+// Trailers are only supported with chunked transfer.
+// Trailers allow the sender to include additional headers at the end of chunked messages.
+//
+// The following trailers are forbidden:
+// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
+// 2. routing (e.g., Host),
+// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
+// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
+// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
+// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
+//
+// Return ErrBadTrailer if contain any forbidden trailers.
+func (h *header) SetTrailerBytes(trailer []byte) error {
 	h.trailer = h.trailer[:0]
 	return h.AddTrailerBytes(trailer)
 }
 
-func (h *header) AddTrailer(trailer string) error {
-	return h.AddTrailerBytes(bytesconv.S2B(trailer))
-} // AddTrailer add Trailer header value for chunked response
+// AddTrailer add Trailer header value for chunked response
 // to indicate which headers will be sent after the body.
 //
 // Use Set to set the trailer header later.
@@ -128,6 +131,9 @@ func (h *header) AddTrailer(trailer string) error {
 // 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
 //
 // Return ErrBadTrailer if contain any forbidden trailers.
+func (h *header) AddTrailer(trailer string) error {
+	return h.AddTrailerBytes(bytesconv.S2B(trailer))
+}
 
 var (
 	ErrBadTrailer                    = errors.New("mach: contain forbidden trailer")
@@ -146,24 +152,24 @@ var (
 	ErrSmallReadBuffer               = errors.New("mach: small read buffer. increase readbuffersize")
 )
 
-func (h *header) AddTrailerBytes(trailer []byte) ( // AddTrailerBytes add Trailer header value for chunked response
-	// to indicate which headers will be sent after the body.
-	//
-	// Use Set to set the trailer header later.
-	//
-	// Trailers are only supported with chunked transfer.
-	// Trailers allow the sender to include additional headers at the end of chunked messages.
-	//
-	// The following trailers are forbidden:
-	// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
-	// 2. routing (e.g., Host),
-	// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
-	// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
-	// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
-	// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
-	//
-	// Return ErrBadTrailer if contain any forbidden trailers.
-	err error) {
+// AddTrailerBytes add Trailer header value for chunked response
+// to indicate which headers will be sent after the body.
+//
+// Use Set to set the trailer header later.
+//
+// Trailers are only supported with chunked transfer.
+// Trailers allow the sender to include additional headers at the end of chunked messages.
+//
+// The following trailers are forbidden:
+// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
+// 2. routing (e.g., Host),
+// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
+// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
+// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
+// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
+//
+// Return ErrBadTrailer if contain any forbidden trailers.
+func (h *header) AddTrailerBytes(trailer []byte) (err error) {
 	for i := -1; i+1 < len(trailer); {
 		trailer = trailer[i+1:]
 		i = bytes.IndexByte(trailer, ',')
@@ -201,10 +207,11 @@ func isValidTrailerKey(key []byte) bool {
 	return true
 }
 
+// validHeaderValueByte returns true if c valid header value byte
+// as defined by RFC 7230.
 func validHeaderValueByte(c byte) bool {
 	return zerocopy.ValidHeaderValueByteTable[c] == 1
-} // validHeaderValueByte returns true if c valid header value byte
-// as defined by RFC 7230.
+}
 
 func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 	if len(a) == 0 {
@@ -218,15 +225,15 @@ func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 	return true, false
 }
 
-func VisitHeaderParams(b []byte, // VisitHeaderParams calls f for each parameter in the given header bytes.
-	// It stops processing when f returns false or an invalid parameter is found.
-	// Parameter values may be quoted, in which case \ is treated as an escape
-	// character, and the value is unquoted before being passed to value.
-	// See: https://www.rfc-editor.org/rfc/rfc9110#section-5.6.6
-	//
-	// f must not retain references to key and/or value after returning.
-	// Copy key and/or value contents before returning if you need retaining them.
-	f func(key, value []byte) bool) {
+// VisitHeaderParams calls f for each parameter in the given header bytes.
+// It stops processing when f returns false or an invalid parameter is found.
+// Parameter values may be quoted, in which case \ is treated as an escape
+// character, and the value is unquoted before being passed to value.
+// See: https://www.rfc-editor.org/rfc/rfc9110#section-5.6.6
+//
+// f must not retain references to key and/or value after returning.
+// Copy key and/or value contents before returning if you need retaining them.
+func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 	for len(b) > 0 {
 		idxSemi := 0
 		for idxSemi < len(b) && b[idxSemi] != ';' {
@@ -288,23 +295,20 @@ func VisitHeaderParams(b []byte, // VisitHeaderParams calls f for each parameter
 	}
 }
 
-func (h *header) Protocol() []byte { // Protocol returns HTTP protocol.
-
+// Protocol returns HTTP protocol.
+func (h *header) Protocol() []byte {
 	if len(h.protocol) == 0 {
 		return zerocopy.StrHTTP11
 	}
 	return h.protocol
 }
 
+// IsHTTP11 returns true if the header is HTTP/1.1.
 func (h *header) IsHTTP11() bool {
 	return !h.noHTTP11
-} // IsHTTP11 returns true if the header is HTTP/1.1.
+}
 
-func (h *header) DisableNormalizing() bool {
-	orig := h.disableNormalizing
-	h.disableNormalizing = true
-	return orig
-} // DisableNormalizing disables header names' normalization.
+// DisableNormalizing disables header names' normalization.
 //
 // By default all the header names are normalized by uppercasing
 // the first letter and all the first letters following dashes,
@@ -317,12 +321,13 @@ func (h *header) DisableNormalizing() bool {
 //
 // Disable header names' normalization only if know what are you doing.
 // The previous setting is returned.
-
-func (h *header) EnableNormalizing() bool {
+func (h *header) DisableNormalizing() bool {
 	orig := h.disableNormalizing
-	h.disableNormalizing = false
+	h.disableNormalizing = true
 	return orig
-} // EnableNormalizing enables header names' normalization.
+}
+
+// EnableNormalizing enables header names' normalization.
 //
 // Header names are normalized by uppercasing the first letter and
 // all the first letters following dashes, while lowercasing all
@@ -335,10 +340,16 @@ func (h *header) EnableNormalizing() bool {
 //
 // This is enabled by default unless disabled using DisableNormalizing().
 // The previous setting is returned.
+func (h *header) EnableNormalizing() bool {
+	orig := h.disableNormalizing
+	h.disableNormalizing = false
+	return orig
+}
 
+// SetNoDefaultContentType allows you to control if a default Content-Type header will be set (false) or not (true).
 func (h *header) SetNoDefaultContentType(noDefaultContentType bool) {
 	h.noDefaultContentType = noDefaultContentType
-} // SetNoDefaultContentType allows you to control if a default Content-Type header will be set (false) or not (true).
+}
 
 func (h *header) copyTo(dst *header) {
 	dst.disableNormalizing = h.disableNormalizing
@@ -354,10 +365,10 @@ func (h *header) copyTo(dst *header) {
 	copyHeaders(&dst.h, &h.h)
 }
 
-func (h *header) Trailers() iter.Seq[[]byte] { // Trailers returns an iterator over trailers in h.
-	//
-	// The value of trailer may invalid outside the iteration loop.
-
+// Trailers returns an iterator over trailers in h.
+//
+// The value of trailer may invalid outside the iteration loop.
+func (h *header) Trailers() iter.Seq[[]byte] {
 	return func(yield func([]byte) bool) {
 		for i := range h.trailer {
 			if !yield(h.trailer[i]) {
@@ -367,21 +378,24 @@ func (h *header) Trailers() iter.Seq[[]byte] { // Trailers returns an iterator o
 	}
 }
 
-func (h *header) setNonSpecial(key, value []byte) { // setNonSpecial directly put into map i.e. not a basic header.
-
+// setNonSpecial directly put into map i.e. not a basic header.
+func (h *header) setNonSpecial(key, value []byte) {
 	setArgBytesHeaders(&h.h, key, value, zerocopy.ArgsHasValue)
 }
 
-func (h *header) PeekTrailerKeys() [][]byte { // PeekTrailerKeys return all trailer keys.
-	//
-	// The returned value is valid until the request is released,
-	// either though ReleaseResponse or your request handler returning.
-	// Any future calls to the Peek* will modify the returned value.
-	// Do not store references to returned value. Make copies instead.
-
+// PeekTrailerKeys return all trailer keys.
+//
+// The returned value is valid until the request is released,
+// either though ReleaseResponse or your request handler returning.
+// Any future calls to the Peek* will modify the returned value.
+// Do not store references to returned value. Make copies instead.
+func (h *header) PeekTrailerKeys() [][]byte {
 	return h.trailer
 }
 
+// ReadTrailer reads the trailing header fields (trailers) after a chunked body (RFC 9112 Section 7.1.2).
+//
+// io.EOF is returned if r is closed before reading the first byte.
 func (h *header) ReadTrailer(r *bufio.Reader) error {
 	n := 1
 	for {
@@ -394,9 +408,7 @@ func (h *header) ReadTrailer(r *bufio.Reader) error {
 		}
 		n = r.Buffered() + 1
 	}
-} // ReadTrailer reads the trailing header fields (trailers) after a chunked body (RFC 9112 Section 7.1.2).
-//
-// io.EOF is returned if r is closed before reading the first byte.
+}
 
 func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
 	b, err := r.Peek(n)
@@ -698,33 +710,33 @@ func nextLine(b []byte) ([]byte, []byte, error) {
 	return b[:n], b[nNext+1:], nil
 }
 
-func AppendNormalizedHeaderKey(dst []byte, // AppendNormalizedHeaderKey appends normalized header key (name) to dst
-	// and returns the resulting dst.
-	//
-	// Normalized header key starts with uppercase letter. The first letters
-	// after dashes are also uppercased. All the other letters are lowercased.
-	// Examples:
-	//
-	//   - coNTENT-TYPe -> Content-Type
-	//   - HOST -> Host
-	//   - foo-bar-baz -> Foo-Bar-Baz
-	key string) []byte {
+// AppendNormalizedHeaderKey appends normalized header key (name) to dst
+// and returns the resulting dst.
+//
+// Normalized header key starts with uppercase letter. The first letters
+// after dashes are also uppercased. All the other letters are lowercased.
+// Examples:
+//
+//   - coNTENT-TYPe -> Content-Type
+//   - HOST -> Host
+//   - foo-bar-baz -> Foo-Bar-Baz
+func AppendNormalizedHeaderKey(dst []byte, key string) []byte {
 	dst = append(dst, key...)
 	zerocopy.NormalizeHeaderKey(dst[len(dst)-len(key):], false)
 	return dst
 }
 
-func AppendNormalizedHeaderKeyBytes(dst, key []byte) []byte { // AppendNormalizedHeaderKeyBytes appends normalized header key (name) to dst
-	// and returns the resulting dst.
-	//
-	// Normalized header key starts with uppercase letter. The first letters
-	// after dashes are also uppercased. All the other letters are lowercased.
-	// Examples:
-	//
-	//   - coNTENT-TYPe -> Content-Type
-	//   - HOST -> Host
-	//   - foo-bar-baz -> Foo-Bar-Baz
-
+// AppendNormalizedHeaderKeyBytes appends normalized header key (name) to dst
+// and returns the resulting dst.
+//
+// Normalized header key starts with uppercase letter. The first letters
+// after dashes are also uppercased. All the other letters are lowercased.
+// Examples:
+//
+//   - coNTENT-TYPe -> Content-Type
+//   - HOST -> Host
+//   - foo-bar-baz -> Foo-Bar-Baz
+func AppendNormalizedHeaderKeyBytes(dst, key []byte) []byte {
 	return AppendNormalizedHeaderKey(dst, bytesconv.B2S(key))
 }
 
@@ -756,14 +768,16 @@ func copyTrailer(dst, src [][]byte) [][]byte {
 	return dst
 }
 
-type ErrNothingRead struct{ error } // ErrNothingRead is returned when a keep-alive connection is closed,
+// ErrNothingRead is returned when a keep-alive connection is closed,
 // either because the remote closed it or because of a read timeout.
+type ErrNothingRead struct{ error }
 
-type ErrSmallBuffer struct{ error } // ErrSmallBuffer is returned when the provided buffer size is too small
+// ErrSmallBuffer is returned when the provided buffer size is too small
 // for reading request and/or response headers.
 //
 // ReadBufferSize value from Server or clients should reduce the number
 // of such errors.
+type ErrSmallBuffer struct{ error }
 
 func mustPeekBuffered(r *bufio.Reader) []byte {
 	buf, err := r.Peek(r.Buffered())

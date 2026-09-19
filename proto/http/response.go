@@ -1,4 +1,3 @@
-// Code automatically split by refactoring script
 
 package http
 
@@ -19,6 +18,12 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
+// Response represents HTTP response.
+//
+// It is forbidden copying Response instances. Create new instances
+// and use CopyTo instead.
+//
+// Response instance MUST NOT be used from concurrently running goroutines.
 type Response struct {
 	noCopy     zerocopy.NoCopy
 	bodyStream io.Reader
@@ -26,45 +31,53 @@ type Response struct {
 	laddr      net.Addr
 	w          responseBodyWriter
 	body       *bytesconv.ByteBuffer
-	bodyRaw    []byte // Response represents HTTP response.
-	//
-	// It is forbidden copying Response instances. Create new instances
-	// and use CopyTo instead.
-	//
-	// Response instance MUST NOT be used from concurrently running goroutines.
-	// Local TCPAddr from concurrently net.Conn.
+	bodyRaw    []byte
 
-	Header                ResponseHeader
-	ImmediateHeaderFlush  bool
-	StreamBody            bool
+	// Header is the response header.
+	//
+	// Copying Header by value is forbidden. Use pointer to Header instead.
+	Header ResponseHeader
+
+	ImmediateHeaderFlush bool
+	StreamBody           bool
+
+	// SkipBody skips reading body if set to true.
+	// Use it for reading HEAD responses.
 	SkipBody              bool
 	KeepBodyBuffer        bool
 	SecureErrorLogMessage bool
-} // Response header.
-//
-// Copying Header by value is forbidden. Use pointer to Header instead.
-// Response.Read() skips reading body if set to true.
-// Use it for reading HEAD responses.
-//
-// Response.Write() skips writing body if set to true.
-// Use it for writing HEAD responses.
 
+	// OnInterimResponse is an optional callback that is fired when the client receives
+	// an interim 1xx response (such as 103 Early Hints or 100 Continue) before the final response.
+	// The provided ResponseHeader is valid only during the callback.
+	OnInterimResponse func(statusCode int, header *ResponseHeader)
+}
+
+// StatusCode returns response status code.
 func (resp *Response) StatusCode() int {
 	return resp.Header.StatusCode()
-} // StatusCode returns response status code.
+}
 
+// SetStatusCode sets response status code.
 func (resp *Response) SetStatusCode(statusCode int) {
 	resp.Header.SetStatusCode(statusCode)
-} // SetStatusCode sets response status code.
+}
 
+// ConnectionClose returns true if 'Connection: close' header is set.
 func (resp *Response) ConnectionClose() bool {
 	return resp.Header.ConnectionClose()
-} // ConnectionClose returns true if 'Connection: close' header is set.
+}
 
+// SetConnectionClose sets 'Connection: close' header.
 func (resp *Response) SetConnectionClose() {
 	resp.Header.SetConnectionClose()
-} // SetConnectionClose sets 'Connection: close' header.
+}
 
+// SendFile registers file on the given path to be used as response body
+// when Write is called.
+//
+// Note that SendFile doesn't set Content-Type, so set it yourself
+// with Header.SetContentType.
 func (resp *Response) SendFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -83,17 +96,9 @@ func (resp *Response) SendFile(path string) error {
 	resp.Header.SetLastModified(fileInfo.ModTime())
 	resp.SetBodyStream(f, size)
 	return nil
-} // SendFile registers file on the given path to be used as response body
-// when Write is called.
-//
-// Note that SendFile doesn't set Content-Type, so set it yourself
-// with Header.SetContentType.
+}
 
-func (resp *Response) SetBodyStream(bodyStream io.Reader, bodySize int) {
-	resp.ResetBody()
-	resp.bodyStream = bodyStream
-	resp.Header.SetContentLength(bodySize)
-} // SetBodyStream sets response body stream and, optionally body size.
+// SetBodyStream sets response body stream and, optionally body size.
 //
 // If bodySize is >= 0, then the bodyStream must provide exactly bodySize bytes
 // before returning io.EOF.
@@ -111,15 +116,18 @@ func (resp *Response) SetBodyStream(bodyStream io.Reader, bodySize int) {
 // if it implements io.Closer.
 //
 // See also SetBodyStreamWriter.
+func (resp *Response) SetBodyStream(bodyStream io.Reader, bodySize int) {
+	resp.ResetBody()
+	resp.bodyStream = bodyStream
+	resp.Header.SetContentLength(bodySize)
+}
 
+// IsBodyStream returns true if body is set via SetBodyStream*.
 func (resp *Response) IsBodyStream() bool {
 	return resp.bodyStream != nil
-} // IsBodyStream returns true if body is set via SetBodyStream*.
+}
 
-func (resp *Response) SetBodyStreamWriter(sw StreamWriter) {
-	sr := NewStreamReader(sw)
-	resp.SetBodyStream(sr, -1)
-} // SetBodyStreamWriter registers the given sw for populating response body.
+// SetBodyStreamWriter registers the given sw for populating response body.
 //
 // This function may be used in the following cases:
 //
@@ -129,21 +137,27 @@ func (resp *Response) SetBodyStreamWriter(sw StreamWriter) {
 //     (aka `http server push` or `chunked transfer-encoding`).
 //
 // See also SetBodyStream.
+func (resp *Response) SetBodyStreamWriter(sw StreamWriter) {
+	sr := NewStreamReader(sw)
+	resp.SetBodyStream(sr, -1)
+}
 
-func (resp *Response) BodyWriter() io.Writer {
-	resp.w.r = resp
-	return &resp.w
-} // BodyWriter returns writer for populating response body.
+// BodyWriter returns writer for populating response body.
 //
 // If used inside RequestHandler, the returned writer must not be used
 // after returning from RequestHandler. Use RequestCtx.Write
 // or SetBodyStreamWriter in this case.
+func (resp *Response) BodyWriter() io.Writer {
+	resp.w.r = resp
+	return &resp.w
+}
 
-func (resp *Response) BodyStream() io.Reader {
-	return resp.bodyStream
-} // BodyStream returns io.Reader.
+// BodyStream returns io.Reader.
 //
 // You must CloseBodyStream or ReleaseResponse after you use it.
+func (resp *Response) BodyStream() io.Reader {
+	return resp.bodyStream
+}
 
 func (resp *Response) CloseBodyStream() error {
 	return resp.closeBodyStream(nil)
@@ -154,24 +168,27 @@ func (resp *Response) ParseNetConn(conn net.Conn) {
 	resp.laddr = conn.LocalAddr()
 }
 
+// RemoteAddr returns the remote network address. The Addr returned is shared
+// by all invocations of RemoteAddr, so do not modify it.
 func (resp *Response) RemoteAddr() net.Addr {
 	return resp.raddr
-} // RemoteAddr returns the remote network address. The Addr returned is shared
-// by all invocations of RemoteAddr, so do not modify it.
+}
 
+// LocalAddr returns the local network address. The Addr returned is shared
+// by all invocations of LocalAddr, so do not modify it.
 func (resp *Response) LocalAddr() net.Addr {
 	return resp.laddr
-} // LocalAddr returns the local network address. The Addr returned is shared
-// by all invocations of LocalAddr, so do not modify it.
+}
 
-func (resp *Response) Body() []byte { // Body returns response body.
-	//
-	// The returned value is valid until the response is released,
-	// either though ReleaseResponse or your request handler returning.
-	// Do not store references to returned value. Make copies instead.
-	//
-	// If the body is backed by a stream, Body reads the entire stream into memory.
-	// Use BodyStream to read it incrementally.
+// Body returns response body.
+//
+// The returned value is valid until the response is released,
+// either though ReleaseResponse or your request handler returning.
+// Do not store references to returned value. Make copies instead.
+//
+// If the body is backed by a stream, Body reads the entire stream into memory.
+// Use BodyStream to read it incrementally.
+func (resp *Response) Body() []byte {
 
 	if resp.bodyStream != nil {
 		bodyBuf := resp.BodyBuffer()
@@ -203,54 +220,54 @@ func (resp *Response) BodyBuffer() *bytesconv.ByteBuffer {
 	return resp.body
 }
 
-func (resp *Response) BodyGunzip() ([]byte, // BodyGunzip returns un-gzipped body data.
-	//
-	// This method may be used if the response header contains
-	// 'Content-Encoding: gzip' for reading un-gzipped body.
-	// Use Body for reading gzipped response body.
-	error) {
+// BodyGunzip returns un-gzipped body data.
+//
+// This method may be used if the response header contains
+// 'Content-Encoding: gzip' for reading un-gzipped body.
+// Use Body for reading gzipped response body.
+func (resp *Response) BodyGunzip() ([]byte, error) {
 	return resp.BodyGunzipWithLimit(0)
 }
 
-func (resp *Response) BodyGunzipWithLimit(maxBodySize int) ([]byte, // BodyGunzipWithLimit returns un-gzipped body data and limits the size
-	// of uncompressed body data to maxBodySize bytes.
-	//
-	// If maxBodySize <= 0, then no limit is applied.
-	error) {
+// BodyGunzipWithLimit returns un-gzipped body data and limits the size
+// of uncompressed body data to maxBodySize bytes.
+//
+// If maxBodySize <= 0, then no limit is applied.
+func (resp *Response) BodyGunzipWithLimit(maxBodySize int) ([]byte, error) {
 	return gunzipData(resp.Body(), maxBodySize)
 }
 
-func (resp *Response) BodyUnbrotli() ([]byte, // BodyUnbrotli returns un-brotlied body data.
-	//
-	// This method may be used if the response header contains
-	// 'Content-Encoding: br' for reading un-brotlied body.
-	// Use Body for reading brotlied response body.
-	error) {
+// BodyUnbrotli returns un-brotlied body data.
+//
+// This method may be used if the response header contains
+// 'Content-Encoding: br' for reading un-brotlied body.
+// Use Body for reading brotlied response body.
+func (resp *Response) BodyUnbrotli() ([]byte, error) {
 	return resp.BodyUnbrotliWithLimit(0)
 }
 
-func (resp *Response) BodyUnbrotliWithLimit(maxBodySize int) ([]byte, // BodyUnbrotliWithLimit returns un-brotlied body data and limits the size
-	// of uncompressed body data to maxBodySize bytes.
-	//
-	// If maxBodySize <= 0, then no limit is applied.
-	error) {
+// BodyUnbrotliWithLimit returns un-brotlied body data and limits the size
+// of uncompressed body data to maxBodySize bytes.
+//
+// If maxBodySize <= 0, then no limit is applied.
+func (resp *Response) BodyUnbrotliWithLimit(maxBodySize int) ([]byte, error) {
 	return unBrotliData(resp.Body(), maxBodySize)
 }
 
-func (resp *Response) BodyInflate() ([]byte, // BodyInflate returns inflated body data.
-	//
-	// This method may be used if the response header contains
-	// 'Content-Encoding: deflate' for reading inflated response body.
-	// Use Body for reading deflated response body.
-	error) {
+// BodyInflate returns inflated body data.
+//
+// This method may be used if the response header contains
+// 'Content-Encoding: deflate' for reading inflated response body.
+// Use Body for reading deflated response body.
+func (resp *Response) BodyInflate() ([]byte, error) {
 	return resp.BodyInflateWithLimit(0)
 }
 
-func (resp *Response) BodyInflateWithLimit(maxBodySize int) ([]byte, // BodyInflateWithLimit returns inflated body data and limits the size
-	// of uncompressed body data to maxBodySize bytes.
-	//
-	// If maxBodySize <= 0, then no limit is applied.
-	error) {
+// BodyInflateWithLimit returns inflated body data and limits the size
+// of uncompressed body data to maxBodySize bytes.
+//
+// If maxBodySize <= 0, then no limit is applied.
+func (resp *Response) BodyInflateWithLimit(maxBodySize int) ([]byte, error) {
 	return inflateData(resp.Body(), maxBodySize)
 }
 
@@ -258,29 +275,29 @@ func (resp *Response) BodyUnzstd() ([]byte, error) {
 	return resp.BodyUnzstdWithLimit(0)
 }
 
-func (resp *Response) BodyUnzstdWithLimit(maxBodySize int) ([]byte, // BodyUnzstdWithLimit returns un-zstd body data and limits the size
-	// of uncompressed body data to maxBodySize bytes.
-	//
-	// If maxBodySize <= 0, then no limit is applied.
-	error) {
+// BodyUnzstdWithLimit returns un-zstd body data and limits the size
+// of uncompressed body data to maxBodySize bytes.
+//
+// If maxBodySize <= 0, then no limit is applied.
+func (resp *Response) BodyUnzstdWithLimit(maxBodySize int) ([]byte, error) {
 	return unzstdData(resp.Body(), maxBodySize)
 }
 
-func (resp *Response) BodyUncompressed() ([]byte, // BodyUncompressed returns body data and if needed decompresses it from gzip,
-	// deflate, brotli or zstd.
-	//
-	// This method may be used if the response header contains
-	// 'Content-Encoding' for reading uncompressed response body.
-	// Use Body for reading the raw response body.
-	error) {
+// BodyUncompressed returns body data and if needed decompresses it from gzip,
+// deflate, brotli or zstd.
+//
+// This method may be used if the response header contains
+// 'Content-Encoding' for reading uncompressed response body.
+// Use Body for reading the raw response body.
+func (resp *Response) BodyUncompressed() ([]byte, error) {
 	return resp.BodyUncompressedWithLimit(0)
 }
 
-func (resp *Response) BodyUncompressedWithLimit(maxBodySize int) ([]byte, // BodyUncompressedWithLimit returns body data and if needed decompresses it from gzip,
-	// deflate, brotli or zstd. The size of uncompressed data is limited to maxBodySize bytes.
-	//
-	// If maxBodySize <= 0, then no limit is applied.
-	error) {
+// BodyUncompressedWithLimit returns body data and if needed decompresses it from gzip,
+// deflate, brotli or zstd. The size of uncompressed data is limited to maxBodySize bytes.
+//
+// If maxBodySize <= 0, then no limit is applied.
+func (resp *Response) BodyUncompressedWithLimit(maxBodySize int) ([]byte, error) {
 	enc := string(resp.Header.ContentEncoding())
 	if enc == "" {
 		return resp.Body(), nil
@@ -309,6 +326,7 @@ func (resp *Response) BodyUncompressedWithLimit(maxBodySize int) ([]byte, // Bod
 	}
 }
 
+// BodyWriteTo writes response body to w.
 func (resp *Response) BodyWriteTo(w io.Writer) error {
 	if resp.bodyStream != nil {
 		_, err := copyBodyStream(w, resp.bodyStream)
@@ -317,38 +335,41 @@ func (resp *Response) BodyWriteTo(w io.Writer) error {
 	}
 	_, err := w.Write(resp.bodyBytes())
 	return err
-} // BodyWriteTo writes response body to w.
+}
 
-func (resp *Response) AppendBody(p []byte) { // AppendBody appends p to response body.
-	//
-	// It is safe re-using p after the function returns.
-
+// AppendBody appends p to response body.
+//
+// It is safe re-using p after the function returns.
+func (resp *Response) AppendBody(p []byte) {
 	resp.closeBodyStream(nil)
 	resp.BodyBuffer().Write(p)
 }
 
+// AppendBodyString appends s to response body.
 func (resp *Response) AppendBodyString(s string) {
 	resp.closeBodyStream(nil)
 	resp.BodyBuffer().WriteString(s)
-} // AppendBodyString appends s to response body.
+}
 
-func (resp *Response) SetBody(body []byte) { // SetBody sets response body.
-	//
-	// It is safe re-using body argument after the function returns.
-
+// SetBody sets response body.
+//
+// It is safe re-using body argument after the function returns.
+func (resp *Response) SetBody(body []byte) {
 	resp.closeBodyStream(nil)
 	bodyBuf := resp.BodyBuffer()
 	bodyBuf.Reset()
 	bodyBuf.Write(body)
 }
 
+// SetBodyString sets response body.
 func (resp *Response) SetBodyString(body string) {
 	resp.closeBodyStream(nil)
 	bodyBuf := resp.BodyBuffer()
 	bodyBuf.Reset()
 	bodyBuf.WriteString(body)
-} // SetBodyString sets response body.
+}
 
+// ResetBody resets response body.
 func (resp *Response) ResetBody() {
 	resp.bodyRaw = nil
 	resp.closeBodyStream(nil)
@@ -360,16 +381,23 @@ func (resp *Response) ResetBody() {
 			resp.body = nil
 		}
 	}
-} // ResetBody resets response body.
+}
 
-func (resp *Response) SetBodyRaw(body []byte) { // SetBodyRaw sets response body, but without copying it.
-	//
-	// From this point onward the body argument must not be changed.
-
+// SetBodyRaw sets response body, but without copying it.
+//
+// From this point onward the body argument must not be changed.
+func (resp *Response) SetBodyRaw(body []byte) {
 	resp.ResetBody()
 	resp.bodyRaw = body
 }
 
+// ReleaseBody retires the response body if it is greater than "size" bytes.
+//
+// This permits GC to reclaim the large buffer.  If used, must be before
+// ReleaseResponse.
+//
+// Use this method only if you really understand how it works.
+// The majority of workloads don't need this method.
 func (resp *Response) ReleaseBody(size int) {
 	resp.bodyRaw = nil
 	if resp.body == nil {
@@ -379,20 +407,14 @@ func (resp *Response) ReleaseBody(size int) {
 		resp.closeBodyStream(nil)
 		resp.body = nil
 	}
-} // ReleaseBody retires the response body if it is greater than "size" bytes.
-//
-// This permits GC to reclaim the large buffer.  If used, must be before
-// ReleaseResponse.
-//
-// Use this method only if you really understand how it works.
-// The majority of workloads don't need this method.
+}
 
-func (resp *Response) SwapBody(body []byte) []byte { // SwapBody swaps response body with the given body and returns
-	// the previous response body.
-	//
-	// It is forbidden to use the body passed to SwapBody after
-	// the function returns.
-
+// SwapBody swaps response body with the given body and returns
+// the previous response body.
+//
+// It is forbidden to use the body passed to SwapBody after
+// the function returns.
+func (resp *Response) SwapBody(body []byte) []byte {
 	bb := resp.BodyBuffer()
 	if resp.bodyStream != nil {
 		bb.Reset()
@@ -409,6 +431,7 @@ func (resp *Response) SwapBody(body []byte) []byte { // SwapBody swaps response 
 	return oldBody
 }
 
+// CopyTo copies resp contents to dst except of body stream.
 func (resp *Response) CopyTo(dst *Response) {
 	resp.CopyToSkipBody(dst)
 	switch {
@@ -422,7 +445,7 @@ func (resp *Response) CopyTo(dst *Response) {
 	case dst.body != nil:
 		dst.body.Reset()
 	}
-} // CopyTo copies resp contents to dst except of body stream.
+}
 
 func (resp *Response) CopyToSkipBody(dst *Response) {
 	dst.Reset()
@@ -432,6 +455,7 @@ func (resp *Response) CopyToSkipBody(dst *Response) {
 	dst.laddr = resp.laddr
 }
 
+// Reset clears response contents.
 func (resp *Response) Reset() {
 	if bodyPoolSizeLimit := int(responseBodyPoolSizeLimit.Load()); bodyPoolSizeLimit >= 0 && resp.body != nil {
 		resp.ReleaseBody(bodyPoolSizeLimit)
@@ -443,47 +467,51 @@ func (resp *Response) Reset() {
 	resp.laddr = nil
 	resp.ImmediateHeaderFlush = false
 	resp.StreamBody = false
-} // Reset clears response contents.
+}
 
 func (resp *Response) resetSkipHeader() {
 	resp.ResetBody()
 }
 
-func (resp *Response) Read(r *bufio.Reader) error {
-	return resp.ReadLimitBody(r, 0)
-} // Read reads response (including body) from the given r.
+// Read reads response (including body) from the given r.
 //
 // Read does not limit the response body size. Use ReadLimitBody with a positive
 // maxBodySize when reading responses from untrusted sources.
 //
 // io.EOF is returned if r is closed before reading the first header byte.
+func (resp *Response) Read(r *bufio.Reader) error {
+	return resp.ReadLimitBody(r, 0)
+}
 
+// ReadLimitBody reads response headers from the given r,
+// then reads the body using the ReadBody function and limiting the body size.
+//
+// Informational responses other than "101 Switching Protocols" are consumed
+// before the final response is read.
+//
+// If resp.SkipBody is true then it skips reading the response body.
+//
+// If maxBodySize > 0 and the body size exceeds maxBodySize,
+// then ErrBodyTooLarge is returned.
+// If maxBodySize <= 0, no limit is applied and the response may consume
+// unbounded memory.
+//
+// io.EOF is returned if r is closed before reading the first header byte.
 func (resp *Response) ReadLimitBody(r *bufio.Reader, maxBodySize int) error {
 	resp.resetSkipHeader()
 	err := resp.Header.Read(r)
 	if err != nil {
 		return err
 	}
-	for n := 0; ; // ReadLimitBody reads response headers from the given r,
-	// then reads the body using the ReadBody function and limiting the body size.
-	//
-	// Informational responses other than "101 Switching Protocols" are consumed
-	// before the final response is read.
-	//
-	// If resp.SkipBody is true then it skips reading the response body.
-	//
-	// If maxBodySize > 0 and the body size exceeds maxBodySize,
-	// then ErrBodyTooLarge is returned.
-	// If maxBodySize <= 0, no limit is applied and the response may consume
-	// unbounded memory.
-	//
-	// io.EOF is returned if r is closed before reading the first header byte.
-	n++ {
+	for n := 0; ; n++ {
 		if resp.Header.statusCode < 100 || resp.Header.statusCode > 199 || resp.Header.statusCode == StatusSwitchingProtocols {
 			break
 		}
 		if n >= maxInterimResponses {
 			return errTooManyInterimResponses
+		}
+		if resp.OnInterimResponse != nil {
+			resp.OnInterimResponse(resp.Header.statusCode, &resp.Header)
 		}
 		if err = resp.Header.Read(r); err != nil {
 			return err
@@ -507,6 +535,10 @@ func (resp *Response) ReadLimitBody(r *bufio.Reader, maxBodySize int) error {
 	return nil
 }
 
+// ReadBody reads response body from the given r, limiting the body size.
+//
+// If maxBodySize > 0 and the body size exceeds maxBodySize,
+// then ErrBodyTooLarge is returned.
 func (resp *Response) ReadBody(r *bufio.Reader, maxBodySize int) (err error) {
 	bodyBuf := resp.BodyBuffer()
 	bodyBuf.Reset()
@@ -536,32 +568,28 @@ func (resp *Response) ReadBody(r *bufio.Reader, maxBodySize int) (err error) {
 		resp.bodyStream = bytes.NewReader(bodyBuf.B)
 	}
 	return err
-} // ReadBody reads response body from the given r, limiting the body size.
-//
-// If maxBodySize > 0 and the body size exceeds maxBodySize,
-// then ErrBodyTooLarge is returned.
+}
 
 func (resp *Response) mustSkipBody() bool {
 	return resp.SkipBody || resp.Header.mustSkipContentLength()
 }
 
+// WriteTo writes response to w. It implements io.WriterTo.
 func (resp *Response) WriteTo(w io.Writer) (int64, error) {
 	return writeBufio(resp, w)
-} // WriteTo writes response to w. It implements io.WriterTo.
+}
 
-func (resp *Response) WriteGzip(w *bufio.Writer) error {
-	return resp.WriteGzipLevel(w, machcompress.CompressDefaultCompression)
-} // WriteGzip writes response with gzipped body to w.
+// WriteGzip writes response with gzipped body to w.
 //
 // The method gzips response body and sets 'Content-Encoding: gzip'
 // header before writing response to w.
 //
 // WriteGzip doesn't flush response to w for performance reasons.
+func (resp *Response) WriteGzip(w *bufio.Writer) error {
+	return resp.WriteGzipLevel(w, machcompress.CompressDefaultCompression)
+}
 
-func (resp *Response) WriteGzipLevel(w *bufio.Writer, level int) error {
-	resp.gzipBody(level)
-	return resp.Write(w)
-} // WriteGzipLevel writes response with gzipped body to w.
+// WriteGzipLevel writes response with gzipped body to w.
 //
 // Level is the desired compression level:
 //
@@ -575,20 +603,22 @@ func (resp *Response) WriteGzipLevel(w *bufio.Writer, level int) error {
 // header before writing response to w.
 //
 // WriteGzipLevel doesn't flush response to w for performance reasons.
+func (resp *Response) WriteGzipLevel(w *bufio.Writer, level int) error {
+	resp.gzipBody(level)
+	return resp.Write(w)
+}
 
-func (resp *Response) WriteDeflate(w *bufio.Writer) error {
-	return resp.WriteDeflateLevel(w, machcompress.CompressDefaultCompression)
-} // WriteDeflate writes response with deflated body to w.
+// WriteDeflate writes response with deflated body to w.
 //
 // The method deflates response body and sets 'Content-Encoding: deflate'
 // header before writing response to w.
 //
 // WriteDeflate doesn't flush response to w for performance reasons.
+func (resp *Response) WriteDeflate(w *bufio.Writer) error {
+	return resp.WriteDeflateLevel(w, machcompress.CompressDefaultCompression)
+}
 
-func (resp *Response) WriteDeflateLevel(w *bufio.Writer, level int) error {
-	resp.deflateBody(level)
-	return resp.Write(w)
-} // WriteDeflateLevel writes response with deflated body to w.
+// WriteDeflateLevel writes response with deflated body to w.
 //
 // Level is the desired compression level:
 //
@@ -602,6 +632,10 @@ func (resp *Response) WriteDeflateLevel(w *bufio.Writer, level int) error {
 // header before writing response to w.
 //
 // WriteDeflateLevel doesn't flush response to w for performance reasons.
+func (resp *Response) WriteDeflateLevel(w *bufio.Writer, level int) error {
+	resp.deflateBody(level)
+	return resp.Write(w)
+}
 
 func (resp *Response) brotliBody(level int) {
 	if len(resp.Header.ContentEncoding()) > 0 {
@@ -711,6 +745,11 @@ func (resp *Response) zstdBody(level int) {
 	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
 } //nolint:unused
 
+// Write writes response to w.
+//
+// Write doesn't flush response to w for performance reasons.
+//
+// See also WriteTo.
 func (resp *Response) Write(w *bufio.Writer) error {
 	sendBody := !resp.mustSkipBody()
 	if resp.bodyStream != nil {
@@ -730,11 +769,7 @@ func (resp *Response) Write(w *bufio.Writer) error {
 		}
 	}
 	return nil
-} // Write writes response to w.
-//
-// Write doesn't flush response to w for performance reasons.
-//
-// See also WriteTo.
+}
 
 func (resp *Response) writeBodyStream(w *bufio.Writer, sendBody bool) (err error) {
 	defer func() {
@@ -794,31 +829,33 @@ func (resp *Response) closeBodyStream(wErr error) error {
 	return err
 }
 
-func (resp *Response) String() string {
-	return getHTTPString(resp)
-} // String returns response representation.
+// String returns response representation.
 //
 // Returns error message instead of response representation on error.
 //
 // Use Write instead of String for performance-critical code.
+func (resp *Response) String() string {
+	return getHTTPString(resp)
+}
 
+// BodyScoped borrows the response body without memory allocation.
 func (resp *Response) BodyScoped(s *borrow.Scope) borrow.Bytes {
 	b := resp.Body()
 	if len(b) == 0 {
 		return borrow.Bytes{}
 	}
 	return borrow.NewBytes(b, nil)
-} // Borrow methods moved from borrow.go
-// BodyScoped borrows the response body without memory allocation.
+}
 
-func (resp *Response) ReadBodyScoped(fn func([]byte) error) error { // ReadBodyScoped executes fn with the underlying response body buffer borrowed for the duration of the call.
-
+// ReadBodyScoped executes fn with the underlying response body buffer borrowed for the duration of the call.
+func (resp *Response) ReadBodyScoped(fn func([]byte) error) error {
 	s := borrow.AcquireScope()
 	defer s.Release()
 	b := resp.Body()
 	return fn(b)
 }
 
+// ReadStreamScoped reads from the response body stream chunk by chunk, passing each borrowed slice to fn.
 func (resp *Response) ReadStreamScoped(s *borrow.Scope, fn func(chunk borrow.Bytes) error) error {
 	r := resp.BodyStream()
 	if r == nil {
@@ -828,8 +865,7 @@ func (resp *Response) ReadStreamScoped(s *borrow.Scope, fn func(chunk borrow.Byt
 		}
 		return nil
 	}
-	buf := make([]byte, // ReadStreamScoped reads from the response body stream chunk by chunk, passing each borrowed slice to fn.
-		4096)
+	buf := make([]byte, 4096)
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {

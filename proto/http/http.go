@@ -1,4 +1,3 @@
-// Code automatically split by refactoring script
 
 package http
 
@@ -26,11 +25,12 @@ var (
 	responseBodyPoolSizeLimit atomic.Int64
 )
 
+// SetBodySizePoolLimit set the max body size for bodies to be returned to the pool.
+// If the body size is larger it will be released instead of put back into the pool for reuse.
 func SetBodySizePoolLimit(reqBodyLimit, respBodyLimit int) {
 	requestBodyPoolSizeLimit.Store(int64(reqBodyLimit))
 	responseBodyPoolSizeLimit.Store(int64(respBodyLimit))
-} // SetBodySizePoolLimit set the max body size for bodies to be returned to the pool.
-// If the body size is larger it will be released instead of put back into the pool for reuse.
+}
 
 type ReadCloserWithError interface {
 	io.Reader
@@ -153,8 +153,9 @@ func SwapResponseBody(a, b *Response) {
 	a.bodyStream, b.bodyStream = b.bodyStream, a.bodyStream
 }
 
-var ErrNoMultipartForm = errors.New("mach: request content-type has bad boundary or is not multipart/form-data") // ErrNoMultipartForm means that the request's Content-Type
+// ErrNoMultipartForm means that the request's Content-Type
 // isn't 'multipart/form-data'.
+var ErrNoMultipartForm = errors.New("mach: request content-type has bad boundary or is not multipart/form-data")
 
 func marshalMultipartForm(f *multipart.Form, boundary string) ([]byte, error) {
 	var buf bytesconv.ByteBuffer
@@ -164,6 +165,8 @@ func marshalMultipartForm(f *multipart.Form, boundary string) ([]byte, error) {
 	return buf.B, nil
 }
 
+// WriteMultipartForm writes the given multipart form f with the given
+// boundary to w.
 func WriteMultipartForm(w io.Writer, f *multipart.Form, boundary string) error {
 	if boundary == "" {
 		return errors.New("form boundary cannot be empty")
@@ -172,9 +175,7 @@ func WriteMultipartForm(w io.Writer, f *multipart.Form, boundary string) error {
 	if err := mw.SetBoundary(boundary); err != nil {
 		return fmt.Errorf("cannot use form boundary %q: %w", boundary, err)
 	}
-	for k, vv := range // WriteMultipartForm writes the given multipart form f with the given
-	// boundary to w.
-	f.Value {
+	for k, vv := range f.Value {
 		for _, v := range vv {
 			if err := mw.WriteField(k, v); err != nil {
 				return fmt.Errorf("cannot write form field %q value %q: %w", k, v, err)
@@ -221,11 +222,13 @@ func readMultipartForm(r io.Reader, boundary string, size, maxInMemoryFileSize i
 
 const defaultMaxInMemoryFileSize = 16 * 1024 * 1024
 
-var ErrGetOnly = errors.New("mach: non-get request received") // ErrGetOnly is returned when server expects only GET requests,
+// ErrGetOnly is returned when server expects only GET requests,
 // but some other type of request came (Server.GetOnly option is true).
+var ErrGetOnly = errors.New("mach: non-get request received")
 
-const maxInterimResponses = 100 // maxInterimResponses limits the number of consecutive informational responses
+// maxInterimResponses limits the number of consecutive informational responses
 // accepted before ReadLimitBody returns errTooManyInterimResponses.
+const maxInterimResponses = 100
 
 var errTooManyInterimResponses = errors.New("mach: too many 1xx informational responses received")
 
@@ -420,7 +423,8 @@ func closeBodyStreamReader(bodyStream io.Reader, wErr error) error {
 	return err
 }
 
-const minCompressLen = 200 // Bodies with sizes smaller than minCompressLen aren't compressed at all.
+// minCompressLen: bodies with sizes smaller than minCompressLen aren't compressed at all.
+const minCompressLen = 200
 
 type writeFlusher interface {
 	io.Writer
@@ -450,7 +454,8 @@ func (w *flushWriter) WriteString(s string) (int, error) {
 	return w.Write(bytesconv.S2B(s))
 }
 
-type ErrBodyStreamWritePanic struct{ error } // ErrBodyStreamWritePanic is returned when panic happens during writing body stream.
+// ErrBodyStreamWritePanic is returned when panic happens during writing body stream.
+type ErrBodyStreamWritePanic struct{ error }
 
 func getHTTPString(hw httpWriter) string {
 	w := bytesconv.AcquireByteBuffer()
@@ -468,10 +473,7 @@ func getHTTPString(hw httpWriter) string {
 
 type httpWriter interface{ Write(w *bufio.Writer) error }
 
-type BodyWriterTo interface {
-	io.WriterTo
-	SupportsBodyWriteTo() bool
-} // BodyWriterTo lets a body stream control whether fasthttp may use WriteTo
+// BodyWriterTo lets a body stream control whether fasthttp may use WriteTo
 // instead of Read when consuming the stream.
 //
 // Returning false from SupportsBodyWriteTo forces fasthttp to use Read.
@@ -486,6 +488,10 @@ type BodyWriterTo interface {
 // A bare io.WriterTo check is avoided for direct chunked framing because a
 // WriteTo promoted from an embedded reader would opt in by accident and bypass
 // an overridden Read; the bool also lets an embedding type opt back out.
+type BodyWriterTo interface {
+	io.WriterTo
+	SupportsBodyWriteTo() bool
+}
 
 type chunkedBodyWriter struct {
 	w   *bufio.Writer
@@ -505,9 +511,9 @@ func (cw *chunkedBodyWriter) Write(p []byte) (int, error) {
 
 func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 	var wt io.WriterTo
-	switch v := r.(type // Frame WriteTo output directly, skipping zerocopy.CopyBufPool, for bodies whose
+	// Frame WriteTo output directly, skipping zerocopy.CopyBufPool, for bodies whose
 	// WriteTo is known to match reading.
-	) {
+	switch v := r.(type) {
 	case *bytes.Reader:
 		wt = v
 	case *bytes.Buffer:
@@ -622,8 +628,9 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 	return w.Flush()
 }
 
-var ErrBodyTooLarge = zerocopy.ErrBodyTooLarge // ErrBodyTooLarge is returned if either request or response body exceeds
+// ErrBodyTooLarge is returned if either request or response body exceeds
 // the given limit.
+var ErrBodyTooLarge = zerocopy.ErrBodyTooLarge
 
 func copyZeroAllocWithLimit(w io.Writer, r io.Reader, maxBodySize int) (int64, error) {
 	return bytesconv.CopyZeroAllocWithLimit(w, r, maxBodySize)
@@ -720,7 +727,8 @@ func appendBodyFixedSize(r *bufio.Reader, dst []byte, n int) ([]byte, error) {
 	}
 }
 
-type ErrBrokenChunk struct{ error } // ErrBrokenChunk is returned when server receives a broken chunked body (Transfer-Encoding: chunked).
+// ErrBrokenChunk is returned when server receives a broken chunked body (Transfer-Encoding: chunked).
+type ErrBrokenChunk struct{ error }
 
 // readBodyChunked parses a chunked transfer coding body (RFC 9112 Section 7.1).
 // It repeatedly reads chunk sizes and data until the terminating 0-size chunk is found.
