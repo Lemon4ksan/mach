@@ -6,6 +6,7 @@ package h3
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"testing"
 
@@ -52,16 +53,18 @@ func TestSendRequest_HeadersAndBody(t *testing.T) {
 	_, err = io.ReadFull(r, headerBlock)
 	require.NoError(t, err)
 
-	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(headerBlock, nil)
+	handler := &testHeadersHandler{}
+	decoder := qpack.NewDecoder(4096, 100, func(code uint64, msg string) {})
+	prog := decoder.CreateProgressiveDecoder(0, handler)
+	prog.Decode(headerBlock)
+	prog.EndHeaderBlock()
+
+	if handler.err != nil {
+		t.Fatalf("qpack decode failed: %v", handler.err)
+	}
 
 	headers := make(map[string]string)
-	for {
-		hf, dErr := decodeFn()
-		if dErr != nil {
-			break
-		}
-
+	for _, hf := range handler.headers {
 		headers[hf.Name] = hf.Value
 	}
 
@@ -130,14 +133,12 @@ func TestReadResponse_Success(t *testing.T) {
 	var streamBuf bytes.Buffer
 
 	// Build QPACK headers block
-	var qpackBuf bytes.Buffer
-
-	enc := qpack.NewEncoder(&qpackBuf)
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "content-type", Value: "application/json"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "server", Value: "aoni-h3-server"})
-
-	hBlock := qpackBuf.Bytes()
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "content-type", Value: "application/json"},
+		{Name: "server", Value: "aoni-h3-server"},
+	}
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
 	streamBuf.Write(hBlock)
 
@@ -169,11 +170,10 @@ func TestReadResponse_MultiChunkData(t *testing.T) {
 	var streamBuf bytes.Buffer
 
 	// HEADERS frame
-	var qpackBuf bytes.Buffer
-
-	enc := qpack.NewEncoder(&qpackBuf)
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "206"})
-	hBlock := qpackBuf.Bytes()
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "206"},
+	}
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
 	streamBuf.Write(hBlock)
 
@@ -212,12 +212,11 @@ func TestReadResponse_WithTrailers(t *testing.T) {
 	var streamBuf bytes.Buffer
 
 	// 1. HEADERS frame
-	var qpackBuf bytes.Buffer
-
-	enc := qpack.NewEncoder(&qpackBuf)
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "trailer", Value: "grpc-status, grpc-message"})
-	hBlock := qpackBuf.Bytes()
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "trailer", Value: "grpc-status, grpc-message"},
+	}
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
 	streamBuf.Write(hBlock)
 
@@ -227,12 +226,11 @@ func TestReadResponse_WithTrailers(t *testing.T) {
 	streamBuf.Write(body)
 
 	// 3. Trailing HEADERS frame
-	var trailerBuf bytes.Buffer
-
-	encTrailer := qpack.NewEncoder(&trailerBuf)
-	_ = encTrailer.WriteField(qpack.HeaderField{Name: "grpc-status", Value: "0"})
-	_ = encTrailer.WriteField(qpack.HeaderField{Name: "grpc-message", Value: "OK"})
-	tBlock := trailerBuf.Bytes()
+	trailersHeaders := []qpack.HeaderField{
+		{Name: "grpc-status", Value: "0"},
+		{Name: "grpc-message", Value: "OK"},
+	}
+	tBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, trailersHeaders, nil)
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(tBlock))))
 	streamBuf.Write(tBlock)
 
@@ -261,8 +259,11 @@ func TestReadResponse_Informational100Continue(t *testing.T) {
 	// 1. Informational 100 Continue HEADERS frame
 	var qpackBuf100 bytes.Buffer
 
-	enc100 := qpack.NewEncoder(&qpackBuf100)
-	_ = enc100.WriteField(qpack.HeaderField{Name: ":status", Value: "100"})
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "100"},
+	}
+	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	qpackBuf100.Write(block)
 	hBlock100 := qpackBuf100.Bytes()
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock100))))
 	streamBuf.Write(hBlock100)
@@ -270,9 +271,12 @@ func TestReadResponse_Informational100Continue(t *testing.T) {
 	// 2. Final 200 OK HEADERS frame
 	var qpackBuf200 bytes.Buffer
 
-	enc200 := qpack.NewEncoder(&qpackBuf200)
-	_ = enc200.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
-	_ = enc200.WriteField(qpack.HeaderField{Name: "x-final", Value: "true"})
+	headers = []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "x-final", Value: "true"},
+	}
+	block = qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	qpackBuf200.Write(block)
 	hBlock200 := qpackBuf200.Bytes()
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock200))))
 	streamBuf.Write(hBlock200)
@@ -334,9 +338,13 @@ func TestReadResponse_UnknownFrameDiscarded(t *testing.T) {
 	// 2. HEADERS frame
 	var qpackBuf bytes.Buffer
 
-	enc := qpack.NewEncoder(&qpackBuf)
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "204"})
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "204"},
+	}
+	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	qpackBuf.Write(block)
 	hBlock := qpackBuf.Bytes()
+
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
 	streamBuf.Write(hBlock)
 
@@ -406,18 +414,21 @@ func TestReadResponse_LargeHeaders_Pooled(t *testing.T) {
 	// Build large headers block (> 4 KB) to trigger pooled storage
 	var qpackBuf bytes.Buffer
 
-	enc := qpack.NewEncoder(&qpackBuf)
-
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
-
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+	}
+	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	qpackBuf.Write(block)
+	hBlock := qpackBuf.Bytes()
 	for i := range 100 {
-		_ = enc.WriteField(qpack.HeaderField{
+		headers = append(headers, qpack.HeaderField{
 			Name:  "x-custom-large-header-" + string(rune('a'+(i%26))),
 			Value: "some-repeated-value-that-fills-space-0123456789-abcdefghijklmnopqrstuvwxyz",
 		})
 	}
+	block = qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	hBlock = block
 
-	hBlock := qpackBuf.Bytes()
 	require.Greater(t, len(hBlock), 4096)
 
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
@@ -451,9 +462,11 @@ func TestDoScoped_Execution(t *testing.T) {
 		qpackBuf  bytes.Buffer
 	)
 
-	enc := qpack.NewEncoder(&qpackBuf)
-
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+	}
+	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	qpackBuf.Write(block)
 	hBlock := qpackBuf.Bytes()
 
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
@@ -470,4 +483,17 @@ func TestDoScoped_Execution(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode())
 	assert.Equal(t, "scoped body content", string(resp.Body()))
+}
+
+type testHeadersHandler struct {
+	headers []qpack.HeaderField
+	err     error
+}
+
+func (h *testHeadersHandler) OnHeaderDecoded(name, value string) {
+	h.headers = append(h.headers, qpack.HeaderField{Name: name, Value: value})
+}
+func (h *testHeadersHandler) OnDecodingCompleted() {}
+func (h *testHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.err = errors.New(errorMessage)
 }

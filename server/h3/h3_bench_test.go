@@ -7,7 +7,6 @@ package h3_test
 import (
 	"github.com/lemon4ksan/foundation/net/http/status"
 
-	"bytes"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
@@ -34,17 +33,15 @@ func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
 func BenchmarkQPACK_DecodeRequestHeaders(b *testing.B) {
 	codec := coreh3.NewQPACKCodec()
 
-	var buf bytes.Buffer
-
-	enc := qpack.NewEncoder(&buf)
-	_ = enc.WriteField(qpack.HeaderField{Name: ":method", Value: "GET"})
-	_ = enc.WriteField(qpack.HeaderField{Name: ":path", Value: "/api/v1/users"})
-	_ = enc.WriteField(qpack.HeaderField{Name: ":scheme", Value: "https"})
-	_ = enc.WriteField(qpack.HeaderField{Name: ":authority", Value: "api.example.com"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "user-agent", Value: "sein-bench-client"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "accept", Value: "application/json"})
-
-	raw := buf.Bytes()
+	headers := []qpack.HeaderField{
+		{Name: ":method", Value: "GET"},
+		{Name: ":path", Value: "/api/v1/users"},
+		{Name: ":scheme", Value: "https"},
+		{Name: ":authority", Value: "api.example.com"},
+		{Name: "user-agent", Value: "sein-bench-client"},
+		{Name: "accept", Value: "application/json"},
+	}
+	raw := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 
 	b.ReportAllocs()
 

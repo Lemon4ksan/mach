@@ -73,6 +73,15 @@ func NewClientConn(conn *quic.Conn, settings *coreh3.Settings) (*ClientConn, err
 		closed:   make(chan struct{}),
 	}
 
+	cc.qpack.SetErrorHandler(func(err error) {
+		var qErr *coreh3.QPACKStreamError
+		if errors.As(err, &qErr) {
+			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(qErr.Code), qErr.Message)
+		} else {
+			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3GeneralProtocolError), err.Error())
+		}
+	})
+
 	if err := cc.setupControlStream(); err != nil {
 		_ = conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3NoError), "failed control stream setup")
 		return nil, err
@@ -239,9 +248,10 @@ func (cc *ClientConn) Do(
 	}
 
 	done := make(chan struct{})
-	defer close(done)
+	cancelDone := make(chan struct{})
 
 	go func() {
+		defer close(cancelDone)
 		select {
 		case <-ctx.Done():
 			str.CancelWrite(errCodeH3RequestCancelled)
@@ -253,10 +263,20 @@ func (cc *ClientConn) Do(
 	defer str.Close() //nolint:errcheck
 
 	if err := cc.sendRequest(str, req, headerOrder); err != nil {
+		close(done)
+		<-cancelDone
+		return nil, err
+	}
+	if err := str.Close(); err != nil {
+		close(done)
+		<-cancelDone
 		return nil, err
 	}
 
-	return cc.readResponse(str, resp)
+	trailers, rErr := cc.readResponse(str, resp)
+	close(done)
+	<-cancelDone
+	return trailers, rErr
 }
 
 // DoScoped executes a h1.Request over a QUIC stream and scopes response body allocations to s.
@@ -277,9 +297,10 @@ func (cc *ClientConn) DoScoped(
 	}
 
 	done := make(chan struct{})
-	defer close(done)
+	cancelDone := make(chan struct{})
 
 	go func() {
+		defer close(cancelDone)
 		select {
 		case <-ctx.Done():
 			str.CancelWrite(errCodeH3RequestCancelled)
@@ -291,10 +312,20 @@ func (cc *ClientConn) DoScoped(
 	defer str.Close() //nolint:errcheck
 
 	if err := cc.sendRequest(str, req, headerOrder); err != nil {
+		close(done)
+		<-cancelDone
+		return nil, err
+	}
+	if err := str.Close(); err != nil {
+		close(done)
+		<-cancelDone
 		return nil, err
 	}
 
-	return cc.readResponseScoped(str, resp, s)
+	trailers, rErr := cc.readResponseScoped(str, resp, s)
+	close(done)
+	<-cancelDone
+	return trailers, rErr
 }
 
 func (cc *ClientConn) readResponseScoped(

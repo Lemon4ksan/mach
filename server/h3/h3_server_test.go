@@ -5,9 +5,10 @@
 package h3_test
 
 import (
+	"errors"
+
 	"github.com/lemon4ksan/foundation/net/http/status"
 
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -148,22 +149,22 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	reqStream, err := clientConn.OpenStreamSync(ctx)
 	require.NoError(t, err)
 
-	var qpackBuf bytes.Buffer
-
-	enc := qpack.NewEncoder(&qpackBuf)
-	require.NoError(t, enc.WriteField(qpack.HeaderField{Name: ":method", Value: "GET"}))
-	require.NoError(t, enc.WriteField(qpack.HeaderField{Name: ":path", Value: "/hello"}))
-	require.NoError(t, enc.WriteField(qpack.HeaderField{Name: ":scheme", Value: "https"}))
-	require.NoError(t, enc.WriteField(qpack.HeaderField{Name: ":authority", Value: addr}))
+	headers := []qpack.HeaderField{
+		{Name: ":method", Value: "GET"},
+		{Name: ":path", Value: "/hello"},
+		{Name: ":scheme", Value: "https"},
+		{Name: ":authority", Value: addr},
+	}
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 
 	var frameHdr [16]byte
 
 	hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-	hdrBytes = varint.Append(hdrBytes, uint64(qpackBuf.Len()))
+	hdrBytes = varint.Append(hdrBytes, uint64(len(hBlock)))
 
 	_, err = reqStream.Write(hdrBytes)
 	require.NoError(t, err)
-	_, err = reqStream.Write(qpackBuf.Bytes())
+	_, err = reqStream.Write(hBlock)
 	require.NoError(t, err)
 	require.NoError(t, reqStream.Close()) // Close write side to signal end of stream
 
@@ -182,14 +183,19 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	_, err = io.ReadFull(reqStream, respHeaderBytes)
 	require.NoError(t, err)
 
-	dec := qpack.NewDecoder()
+	decoder := qpack.NewDecoder(4096, 100, func(code uint64, msg string) {})
 
 	var (
 		statusCode  string
 		contentType string
 	)
 
-	err = dec.DecodeFields(respHeaderBytes, nil, func(hf qpack.HeaderField) bool {
+	hdrsHandler := &testHeadersHandler{}
+	prog := decoder.CreateProgressiveDecoder(0, hdrsHandler)
+	prog.Decode(respHeaderBytes)
+	prog.EndHeaderBlock()
+	for _, hf := range hdrsHandler.headers {
+		
 		if hf.Name == ":status" {
 			statusCode = hf.Value
 		}
@@ -198,8 +204,8 @@ func TestH3Server_EndToEnd(t *testing.T) {
 			contentType = hf.Value
 		}
 
-		return true
-	})
+
+	}
 	require.NoError(t, err)
 	assert.Equal(t, "200", statusCode)
 	assert.Equal(t, "text/plain", contentType)
@@ -216,4 +222,16 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	_, err = io.ReadFull(reqStream, respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "Hello HTTP/3 QUIC World!", string(respBody))
+}
+
+type testHeadersHandler struct {
+	headers []qpack.HeaderField
+	err     error
+}
+func (h *testHeadersHandler) OnHeaderDecoded(name, value string) {
+	h.headers = append(h.headers, qpack.HeaderField{Name: name, Value: value})
+}
+func (h *testHeadersHandler) OnDecodingCompleted() {}
+func (h *testHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.err = errors.New(errorMessage)
 }

@@ -297,7 +297,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 		Headers:    parsedHeaders,
 		Body:       bodyBuf.Bytes(),
 		RemoteAddr: sc.quicConn.RemoteAddr().String(),
-		Ctx:        context.Background(),
+		Ctx:        stream.Context(),
 	}
 
 	res := &ServerResponse{

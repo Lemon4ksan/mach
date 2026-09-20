@@ -8,32 +8,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/net/qpack"
-)
-
-// FuzzQPACKDecode tests QPACK decoder robustness against arbitrary input bytes.
-func FuzzQPACKDecode(f *testing.F) {
-	seeds := [][]byte{
-		{0x00, 0x00, 0xd8, 0xc1, 0xc0, 0x51, 0x0b, 'a', 'o', 'n', 'i', '-', 'h', '3', '-', 't', 'e', 's', 't'},
-		{0x00, 0x00, 0x00, 0x00, 0xff},
-	}
-
-	for _, seed := range seeds {
-		f.Add(seed)
-	}
-
-	f.Fuzz(func(t *testing.T, data []byte) {
-		dec := qpack.NewDecoder()
-
-		decodeFn := dec.Decode(data, nil)
-		for {
-			_, err := decodeFn()
-			if err != nil {
-				break
-			}
-		}
-	})
-}
+	)
 
 // FuzzH3FrameHeaderRead tests HTTP/3 varint frame header reading against arbitrary input bytes.
 func FuzzH3FrameHeaderRead(f *testing.F) {

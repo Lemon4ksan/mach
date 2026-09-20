@@ -36,21 +36,18 @@ func TestQPACKEncodeRequestHeaders(t *testing.T) {
 		t.Fatalf("EncodeRequestHeaders failed: %v", err)
 	}
 
-	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes(), nil)
+	decoder := codec.Decoder()
+	handler := &testHeadersHandler{}
+	prog := decoder.CreateProgressiveDecoder(0, handler)
+	prog.Decode(buf.Bytes())
+	prog.EndHeaderBlock()
+
+	if handler.err != nil {
+		t.Fatalf("qpack decode failed: %v", handler.err)
+	}
 
 	decodedMap := make(map[string]string)
-
-	for {
-		hf, err := decodeFn()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			t.Fatalf("qpack decode failed: %v", err)
-		}
-
+	for _, hf := range handler.headers {
 		decodedMap[hf.Name] = hf.Value
 	}
 
@@ -98,21 +95,18 @@ func TestQPACKOrderedHeadersSequence(t *testing.T) {
 		t.Fatalf("EncodeRequestHeaders failed: %v", err)
 	}
 
-	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes(), nil)
+	decoder := codec.Decoder()
+	handler := &testHeadersHandler{}
+	prog := decoder.CreateProgressiveDecoder(0, handler)
+	prog.Decode(buf.Bytes())
+	prog.EndHeaderBlock()
+
+	if handler.err != nil {
+		t.Fatalf("qpack decode failed: %v", handler.err)
+	}
 
 	var capturedKeys []string
-
-	for {
-		hf, err := decodeFn()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			t.Fatalf("qpack decode failed: %v", err)
-		}
-
+	for _, hf := range handler.headers {
 		if !hf.IsPseudo() {
 			capturedKeys = append(capturedKeys, hf.Name)
 		}
@@ -134,11 +128,13 @@ func TestQPACKDecodeResponseHeaders(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	enc := qpack.NewEncoder(&buf)
-
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "201"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "content-type", Value: "application/json"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "content-length", Value: "128"})
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "201"},
+		{Name: "content-type", Value: "application/json"},
+		{Name: "content-length", Value: "128"},
+	}
+	block := codec.Encoder().EncodeHeaderList(0, headers, nil)
+	buf.Write(block)
 
 	var respHeader h1.ResponseHeader
 
@@ -166,10 +162,11 @@ func TestQPACKDecodeResponseMissingStatus(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	enc := qpack.NewEncoder(&buf)
-
-	_ = enc.WriteField(qpack.HeaderField{Name: "content-type", Value: "text/plain"})
-
+	headers := []qpack.HeaderField{
+		{Name: "content-type", Value: "text/plain"},
+	}
+	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	buf.Write(block)
 	var respHeader h1.ResponseHeader
 
 	_, err := codec.DecodeResponseHeaders(0, buf.Bytes(), &respHeader)
@@ -196,8 +193,19 @@ func TestQPACKEncodeExtendedCONNECTProtocolHeader(t *testing.T) {
 	err := codec.EncodeRequestHeaders(0, &buf, req, nil)
 	require.NoError(t, err)
 
-	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes(), nil)
+	decoder := qpack.NewDecoder(4096, 100, func(code uint64, msg string) {})
+	handler := &testHeadersHandler{}
+	prog := decoder.CreateProgressiveDecoder(0, handler)
+	prog.Decode(buf.Bytes())
+	prog.EndHeaderBlock()
+	decodeFn := func() (qpack.HeaderField, error) {
+		if len(handler.headers) == 0 {
+			return qpack.HeaderField{}, io.EOF
+		}
+		hf := handler.headers[0]
+		handler.headers = handler.headers[1:]
+		return hf, nil
+	}
 
 	decodedMap := make(map[string]string)
 	for {
@@ -291,8 +299,19 @@ func TestQPACKForbiddenHeadersFilteringInEncode(t *testing.T) {
 	err := codec.EncodeRequestHeaders(0, &buf, req, nil)
 	require.NoError(t, err)
 
-	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(buf.Bytes(), nil)
+	decoder := qpack.NewDecoder(4096, 100, func(code uint64, msg string) {})
+	handler := &testHeadersHandler{}
+	prog := decoder.CreateProgressiveDecoder(0, handler)
+	prog.Decode(buf.Bytes())
+	prog.EndHeaderBlock()
+	decodeFn := func() (qpack.HeaderField, error) {
+		if len(handler.headers) == 0 {
+			return qpack.HeaderField{}, io.EOF
+		}
+		hf := handler.headers[0]
+		handler.headers = handler.headers[1:]
+		return hf, nil
+	}
 
 	decodedMap := make(map[string]string)
 	for {
@@ -337,8 +356,19 @@ func TestRFC9204AppendixBExamples(t *testing.T) {
 		0xd7, // 1101 0111: Indexed static field line (RFC 9204 §4.5.2): T=1, index 23 = ":scheme: https"
 	}
 
-	dec := qpack.NewDecoder()
-	decodeFn := dec.Decode(rawBlock, nil)
+	decoder := qpack.NewDecoder(4096, 100, func(code uint64, msg string) {})
+	handler := &testHeadersHandler{}
+	prog := decoder.CreateProgressiveDecoder(0, handler)
+	prog.Decode(rawBlock)
+	prog.EndHeaderBlock()
+	decodeFn := func() (qpack.HeaderField, error) {
+		if len(handler.headers) == 0 {
+			return qpack.HeaderField{}, io.EOF
+		}
+		hf := handler.headers[0]
+		handler.headers = handler.headers[1:]
+		return hf, nil
+	}
 
 	fields := make(map[string]string)
 	for {
@@ -384,10 +414,13 @@ func BenchmarkQPACKDecodeResponseHeaders(b *testing.B) {
 
 	var buf bytes.Buffer
 
-	enc := qpack.NewEncoder(&buf)
-	_ = enc.WriteField(qpack.HeaderField{Name: ":status", Value: "200"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "sec-websocket-version", Value: "13"})
-	_ = enc.WriteField(qpack.HeaderField{Name: "sec-websocket-protocol", Value: "chat.v1"})
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "sec-websocket-version", Value: "13"},
+		{Name: "sec-websocket-protocol", Value: "chat.v1"},
+	}
+	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+	buf.Write(block)
 	encoded := buf.Bytes()
 
 	var respHeader h1.ResponseHeader
@@ -398,4 +431,17 @@ func BenchmarkQPACKDecodeResponseHeaders(b *testing.B) {
 		respHeader.Reset()
 		_, _ = codec.DecodeResponseHeaders(0, encoded, &respHeader)
 	}
+}
+
+type testHeadersHandler struct {
+	headers []qpack.HeaderField
+	err     error
+}
+
+func (h *testHeadersHandler) OnHeaderDecoded(name, value string) {
+	h.headers = append(h.headers, qpack.HeaderField{Name: name, Value: value})
+}
+func (h *testHeadersHandler) OnDecodingCompleted() {}
+func (h *testHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.err = errors.New(errorMessage)
 }
