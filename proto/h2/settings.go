@@ -182,10 +182,10 @@ func (st *Settings) Encode() {
 }
 
 func (st *Settings) appendSetting(key uint16, val uint32) {
-
 	st.rawSettings = append(st.rawSettings,
-		byte(key>>8), byte(key),
-		byte(val>>24), byte(val>>16), byte(val>>8), byte(val),
+		byte(key>>8), byte(key&0xff), //nolint:gosec // extracting 16-bit octets
+		byte(val>>24), byte((val>>16)&0xff),
+		byte((val>>8)&0xff), byte(val&0xff), //nolint:gosec // extracting 32-bit octets
 	)
 }
 
@@ -193,6 +193,7 @@ func (st *Settings) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() != 0 {
 		return NewGoAwayError(ProtocolError, "SETTINGS frame must be on stream 0")
 	}
+
 	// RFC 9113 §6.5: A SETTINGS frame with length other than a multiple of 6 octets MUST be treated as FRAME_SIZE_ERROR.
 	if len(fr.payload)%6 != 0 {
 		return NewGoAwayError(FrameSizeError, "wrong payload for settings (RFC 9113 §6.5)")

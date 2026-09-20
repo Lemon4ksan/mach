@@ -11,7 +11,6 @@ import (
 
 	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/codec/compress/brotli"
-
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 

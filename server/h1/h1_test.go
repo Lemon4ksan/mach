@@ -12,12 +12,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/net/http/status"
-
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
-
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/http/status"
+	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -132,7 +131,7 @@ func TestResponseSerialization(t *testing.T) {
 		t.Fatalf("unexpected error writing response: %v", err)
 	}
 
-	bw.Flush()
+	_ = bw.Flush()
 
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("HTTP/1.1 201 Created\r\n")) {
@@ -508,5 +507,6 @@ func createTestCookie(name, value, path []byte) *zerocopy.Cookie {
 	c.SetKeyBytes(name)
 	c.SetValueBytes(value)
 	c.SetPathBytes(path)
+
 	return c
 }

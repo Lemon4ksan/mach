@@ -35,7 +35,7 @@ func TestSettingsEncodeAndParse(t *testing.T) {
 		t.Fatalf("expected FrameTypeSettings (%d), got %d", FrameTypeSettings, frameType)
 	}
 
-	if int(payloadLen) != r.Len() {
+	if payloadLen != uint64(r.Len()) { //nolint:gosec // buffer length is non-negative
 		t.Fatalf("payload length mismatch: header specifies %d, remaining buffer is %d", payloadLen, r.Len())
 	}
 

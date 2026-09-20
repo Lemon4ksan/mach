@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package client
 
 import (
@@ -50,6 +54,7 @@ func NewPoolManager[T any]() *PoolManager[T] {
 // otherwise dials a new one subject to MaxConnsPerHost.
 func (p *PoolManager[T]) Get(ctx context.Context, addr string) (T, error) {
 	p.mu.Lock()
+
 	hp, ok := p.pools[addr]
 	if !ok {
 		hp = &hostPool[T]{}
@@ -68,17 +73,21 @@ func (p *PoolManager[T]) Get(ctx context.Context, addr string) (T, error) {
 		}
 
 		p.mu.Unlock()
+
 		if p.IsHealthy != nil && !p.IsHealthy(ic.conn) {
 			p.mu.Lock()
 			hp.count--
 			continue
 		}
+
 		return ic.conn, nil
 	}
 
 	if p.MaxConnsPerHost > 0 && hp.count >= p.MaxConnsPerHost {
 		p.mu.Unlock()
+
 		var zero T
+
 		return zero, context.DeadlineExceeded // Or a custom ErrMaxConnsPerHost
 	}
 
@@ -90,7 +99,9 @@ func (p *PoolManager[T]) Get(ctx context.Context, addr string) (T, error) {
 		p.mu.Lock()
 		hp.count--
 		p.mu.Unlock()
+
 		var zero T
+
 		return zero, err
 	}
 

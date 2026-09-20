@@ -16,11 +16,10 @@ import (
 	"strconv"
 	"strings"
 
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
-
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 )
 
 var (

@@ -5,9 +5,6 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
-	"github.com/lemon4ksan/foundation/net/http/status"
-
 	"bufio"
 	"bytes"
 	"context"
@@ -18,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lemon4ksan/foundation/net/hpack"
+	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
@@ -242,8 +241,8 @@ func (sc *ServerConn) handleSettings(fr *coreh2.FrameHeader) error {
 				sc.peerMaxFrameSize = mfs
 			}
 
-			if iws := st.MaxWindowSize(); iws > 0 {
-				sc.peerInitialWin = int32(iws)
+			if iws := st.MaxWindowSize(); iws > 0 && iws <= 0x7fffffff {
+				sc.peerInitialWin = int32(iws) //nolint:gosec // bounds checked
 			}
 		}
 	}

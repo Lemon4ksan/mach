@@ -5,11 +5,10 @@
 package h2_test
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
-
 	"crypto/rand"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/net/hpack"
 	"github.com/lemon4ksan/foundation/testing/assert"
 
 	"github.com/lemon4ksan/mach/proto/h2"

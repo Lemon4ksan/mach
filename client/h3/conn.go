@@ -16,9 +16,9 @@ import (
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
+	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
-	"github.com/lemon4ksan/foundation/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -28,11 +28,6 @@ const errCodeH3RequestCancelled = quic.StreamErrorCode(coreh3.ErrCodeH3RequestCa
 var (
 	dataBufPool = generic.NewPool(func() *[]byte {
 		b := make([]byte, 32768)
-		return &b
-	})
-
-	h3RequestStorage = pool.NewPerPStorage(func() *[]byte {
-		b := make([]byte, 0, 65536)
 		return &b
 	})
 
@@ -147,22 +142,40 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 	switch streamType {
 	case coreh3.StreamTypeControl:
 		if cc.hasControlIn.Swap(true) {
-			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate control stream")
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+				"duplicate control stream",
+			)
+
 			return
 		}
+
 		cc.handleControlStream(r)
+
 	case coreh3.StreamTypeQPACKEncoder:
 		if cc.hasQPACKEncoder.Swap(true) {
-			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK encoder stream")
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+				"duplicate QPACK encoder stream",
+			)
+
 			return
 		}
+
 		_, _ = io.Copy(io.Discard, str)
+
 	case coreh3.StreamTypeQPACKDecoder:
 		if cc.hasQPACKDecoder.Swap(true) {
-			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK decoder stream")
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+				"duplicate QPACK decoder stream",
+			)
+
 			return
 		}
+
 		_, _ = io.Copy(io.Discard, str)
+
 	default:
 		// Unknown unidirectional stream: RFC 9114 §6.2
 	}
@@ -252,6 +265,7 @@ func (cc *ClientConn) Do(
 
 	go func() {
 		defer close(cancelDone)
+
 		select {
 		case <-ctx.Done():
 			str.CancelWrite(errCodeH3RequestCancelled)
@@ -267,6 +281,7 @@ func (cc *ClientConn) Do(
 		<-cancelDone
 		return nil, err
 	}
+
 	if err := str.Close(); err != nil {
 		close(done)
 		<-cancelDone
@@ -274,8 +289,10 @@ func (cc *ClientConn) Do(
 	}
 
 	trailers, rErr := cc.readResponse(str, resp)
+
 	close(done)
 	<-cancelDone
+
 	return trailers, rErr
 }
 
@@ -301,6 +318,7 @@ func (cc *ClientConn) DoScoped(
 
 	go func() {
 		defer close(cancelDone)
+
 		select {
 		case <-ctx.Done():
 			str.CancelWrite(errCodeH3RequestCancelled)
@@ -316,6 +334,7 @@ func (cc *ClientConn) DoScoped(
 		<-cancelDone
 		return nil, err
 	}
+
 	if err := str.Close(); err != nil {
 		close(done)
 		<-cancelDone
@@ -323,8 +342,10 @@ func (cc *ClientConn) DoScoped(
 	}
 
 	trailers, rErr := cc.readResponseScoped(str, resp, s)
+
 	close(done)
 	<-cancelDone
+
 	return trailers, rErr
 }
 
@@ -337,7 +358,9 @@ func (cc *ClientConn) readResponseScoped(
 }
 
 func (cc *ClientConn) sendRequest(str *quic.Stream, req *h1.Request, headerOrder []string) error {
-	return cc.sendRequestTo(str, req, headerOrder, uint64(str.StreamID()))
+	streamID := uint64(str.StreamID()) //nolint:gosec // StreamID is positive
+
+	return cc.sendRequestTo(str, req, headerOrder, streamID)
 }
 
 func (cc *ClientConn) sendRequestTo(w io.Writer, req *h1.Request, headerOrder []string, streamID uint64) error {
@@ -347,11 +370,13 @@ func (cc *ClientConn) sendRequestTo(w io.Writer, req *h1.Request, headerOrder []
 	if err := cc.qpack.EncodeRequestHeaders(streamID, &buf, req, headerOrder); err != nil {
 		return err
 	}
+
 	headerBlock := buf.Bytes()
-	
+
 	body := req.Body()
 
 	headLen := varint.Len(coreh3.FrameTypeHeaders) + varint.Len(uint64(len(headerBlock)))
+
 	totalLen := headLen + len(headerBlock)
 	if len(body) > 0 {
 		totalLen += varint.Len(coreh3.FrameTypeData) + varint.Len(uint64(len(body))) + len(body)
@@ -387,7 +412,9 @@ func (cc *ClientConn) readResponse(
 	str *quic.Stream,
 	resp *h1.Response,
 ) (trailers map[string][]string, err error) {
-	return cc.readResponseFrom(str, resp, uint64((*str).StreamID()))
+	streamID := uint64((*str).StreamID()) //nolint:gosec // StreamID is positive
+
+	return cc.readResponseFrom(str, resp, streamID)
 }
 
 func (cc *ClientConn) readResponseFrom(

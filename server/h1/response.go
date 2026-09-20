@@ -8,12 +8,10 @@ import (
 	"io"
 	"strconv"
 
+	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
-
-	"github.com/lemon4ksan/foundation/net/http/header"
-
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 

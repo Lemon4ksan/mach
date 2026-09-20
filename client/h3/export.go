@@ -6,6 +6,7 @@ package h3
 
 import (
 	"github.com/lemon4ksan/foundation/net/quic"
+
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -17,8 +18,10 @@ const FrameTypeHeaders = coreh3.FrameTypeHeaders
 
 var ReadFrameHeader = coreh3.ReadFrameHeader
 
-type QUICOption = quic.Option
-type QUICTransport = quic.Transport
-type QUICConnection = quic.Conn
+type (
+	QUICOption     = quic.Option
+	QUICTransport  = quic.Transport
+	QUICConnection = quic.Conn
+)
 
 var QUICWithDatagrams = quic.WithDatagrams

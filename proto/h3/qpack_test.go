@@ -10,10 +10,10 @@ import (
 	"io"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/net/qpack"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/foundation/net/qpack"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
@@ -167,6 +167,7 @@ func TestQPACKDecodeResponseMissingStatus(t *testing.T) {
 	}
 	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 	buf.Write(block)
+
 	var respHeader h1.ResponseHeader
 
 	_, err := codec.DecodeResponseHeaders(0, buf.Bytes(), &respHeader)
@@ -198,12 +199,15 @@ func TestQPACKEncodeExtendedCONNECTProtocolHeader(t *testing.T) {
 	prog := decoder.CreateProgressiveDecoder(0, handler)
 	prog.Decode(buf.Bytes())
 	prog.EndHeaderBlock()
+
 	decodeFn := func() (qpack.HeaderField, error) {
 		if len(handler.headers) == 0 {
 			return qpack.HeaderField{}, io.EOF
 		}
+
 		hf := handler.headers[0]
 		handler.headers = handler.headers[1:]
+
 		return hf, nil
 	}
 
@@ -304,12 +308,15 @@ func TestQPACKForbiddenHeadersFilteringInEncode(t *testing.T) {
 	prog := decoder.CreateProgressiveDecoder(0, handler)
 	prog.Decode(buf.Bytes())
 	prog.EndHeaderBlock()
+
 	decodeFn := func() (qpack.HeaderField, error) {
 		if len(handler.headers) == 0 {
 			return qpack.HeaderField{}, io.EOF
 		}
+
 		hf := handler.headers[0]
 		handler.headers = handler.headers[1:]
+
 		return hf, nil
 	}
 
@@ -361,12 +368,15 @@ func TestRFC9204AppendixBExamples(t *testing.T) {
 	prog := decoder.CreateProgressiveDecoder(0, handler)
 	prog.Decode(rawBlock)
 	prog.EndHeaderBlock()
+
 	decodeFn := func() (qpack.HeaderField, error) {
 		if len(handler.headers) == 0 {
 			return qpack.HeaderField{}, io.EOF
 		}
+
 		hf := handler.headers[0]
 		handler.headers = handler.headers[1:]
+
 		return hf, nil
 	}
 

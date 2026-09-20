@@ -7,9 +7,8 @@ package http
 import (
 	"bytes"
 
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 func peekArgBytesHeaders(h *coreheaders.Headers, key []byte) []byte {

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/net/http/status"
-
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 	"golang.org/x/net/http2"
@@ -25,7 +24,9 @@ import (
 )
 
 func TestH2Server_EndToEnd(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
 	defer ln.Close() //nolint:errcheck
@@ -78,7 +79,8 @@ func TestH2Server_EndToEnd(t *testing.T) {
 			AllowHTTP: true,
 			//nolint:staticcheck
 			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-				return net.Dial(network, addr)
+				var d net.Dialer
+				return d.DialContext(ctx, network, addr)
 			},
 		},
 		Timeout: 5 * time.Second,
@@ -87,7 +89,9 @@ func TestH2Server_EndToEnd(t *testing.T) {
 	addr := ln.Addr().String()
 
 	// 1. Test GET /hello
-	resp, err := client.Get("http://" + addr + "/hello")
+	reqHello, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+addr+"/hello", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(reqHello)
 	require.NoError(t, err)
 	assert.Equal(t, status.OK, resp.StatusCode)
 	assert.Equal(t, "HTTP/2.0", resp.Proto)
@@ -100,7 +104,15 @@ func TestH2Server_EndToEnd(t *testing.T) {
 
 	// 2. Test POST /echo
 	postData := "Multiplexed Stream Payload 2026"
-	respPost, err := client.Post("http://"+addr+"/echo", "text/plain", strings.NewReader(postData))
+	reqPost, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"http://"+addr+"/echo",
+		strings.NewReader(postData),
+	)
+	reqPost.Header.Set("Content-Type", "text/plain")
+	require.NoError(t, err)
+	respPost, err := client.Do(reqPost)
 	require.NoError(t, err)
 	assert.Equal(t, status.OK, respPost.StatusCode)
 
@@ -117,7 +129,18 @@ func TestH2Server_EndToEnd(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 
-			r, err := client.Get("http://" + addr + "/hello")
+			reqStream, sErr := http.NewRequestWithContext(
+				context.Background(),
+				http.MethodGet,
+				"http://"+addr+"/hello",
+				nil,
+			)
+			if sErr != nil {
+				t.Errorf("stream %d failed to create req: %v", id, sErr)
+				return
+			}
+
+			r, err := client.Do(reqStream)
 			if err != nil {
 				t.Errorf("stream %d failed: %v", id, err)
 				return

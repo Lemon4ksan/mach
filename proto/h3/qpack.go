@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package h3
 
 import (
@@ -11,6 +15,7 @@ import (
 	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/qpack"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/http"
 )
 
@@ -26,6 +31,7 @@ func (e *QPACKStreamError) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
+
 	return fmt.Sprintf("h3: QPACK %s stream error (code: 0x%04x, internal: %d): %s",
 		generic.Ternary(e.IsEncoder, "encoder", "decoder"), uint64(e.Code), e.InternalCode, e.Message)
 }
@@ -34,9 +40,11 @@ func (e *QPACKStreamError) Is(target error) bool {
 	if e == nil {
 		return false
 	}
+
 	if target == ErrQPACKDecompressFailed && e.Code == ErrCodeQpackDecompressionFailed {
 		return true
 	}
+
 	return false
 }
 
@@ -59,6 +67,7 @@ func (q *QPACKCodec) recordError(err error) {
 	if q.lastErr == nil {
 		q.lastErr = err
 	}
+
 	hook := q.errHook
 	q.errMu.Unlock()
 
@@ -89,6 +98,7 @@ func (q *QPACKCodec) ErrChan() <-chan error {
 func (q *QPACKCodec) SetErrorHandler(fn func(err error)) {
 	q.errMu.Lock()
 	defer q.errMu.Unlock()
+
 	q.errHook = fn
 }
 
@@ -137,12 +147,18 @@ func (q *QPACKCodec) Encoder() *qpack.Encoder {
 }
 
 // EncodeRequestHeaders encodes request headers into a QPACK block.
-func (q *QPACKCodec) EncodeRequestHeaders(streamID uint64, w io.Writer, req *http.Request, orderedKeys []string) (retErr error) {
+func (q *QPACKCodec) EncodeRequestHeaders(
+	streamID uint64,
+	w io.Writer,
+	req *http.Request,
+	orderedKeys []string,
+) (retErr error) {
 	if err := q.Err(); err != nil {
 		return err
 	}
 
 	var block []byte
+
 	encErr := func() (err error) {
 		q.encMu.Lock()
 		defer q.encMu.Unlock()
@@ -176,6 +192,7 @@ func (q *QPACKCodec) EncodeRequestHeaders(streamID uint64, w io.Writer, req *htt
 			if ct := req.Header.ContentType(); len(ct) > 0 {
 				headers = append(headers, qpack.HeaderField{Name: "content-type", Value: bytesconv.B2S(ct)})
 			}
+
 			if cl := req.Header.ContentLength(); cl >= 0 {
 				headers = append(headers, qpack.HeaderField{Name: "content-length", Value: strconv.Itoa(cl)})
 			}
@@ -192,6 +209,7 @@ func (q *QPACKCodec) EncodeRequestHeaders(streamID uint64, w io.Writer, req *htt
 					for i := range k {
 						keyBuf[i] = bytesconv.LowercaseByte(k[i])
 					}
+
 					keyStr = string(keyBuf)
 				} else {
 					keyStr = string(bytesconv.AppendToLower(nil, k))
@@ -202,14 +220,15 @@ func (q *QPACKCodec) EncodeRequestHeaders(streamID uint64, w io.Writer, req *htt
 		}
 
 		block = q.encoder.EncodeHeaderList(streamID, headers, nil)
+
 		return nil
 	}()
-
 	if encErr != nil {
 		return encErr
 	}
 
 	_, writeErr := w.Write(block)
+
 	return writeErr
 }
 
@@ -218,6 +237,7 @@ func isForbiddenH3Header(key, val []byte) bool {
 	if len(key) == 0 || key[0] == ':' {
 		return true
 	}
+
 	keyStr := bytesconv.B2S(key)
 	if bytesconv.EqualFoldASCII(keyStr, "connection") ||
 		bytesconv.EqualFoldASCII(keyStr, "keep-alive") ||
@@ -228,9 +248,11 @@ func isForbiddenH3Header(key, val []byte) bool {
 		bytesconv.EqualFoldASCII(keyStr, "sec-websocket-accept") {
 		return true
 	}
+
 	if bytesconv.EqualFoldASCII(keyStr, "te") {
 		return !bytesconv.EqualFoldASCII(bytesconv.B2S(val), "trailers")
 	}
+
 	return false
 }
 
@@ -238,6 +260,7 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 	if key == "" || key[0] == ':' {
 		return true
 	}
+
 	if bytesconv.EqualFoldASCII(key, "connection") ||
 		bytesconv.EqualFoldASCII(key, "keep-alive") ||
 		bytesconv.EqualFoldASCII(key, "proxy-connection") ||
@@ -247,15 +270,19 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 		bytesconv.EqualFoldASCII(key, "sec-websocket-accept") {
 		return true
 	}
+
 	if bytesconv.EqualFoldASCII(key, "te") {
 		return !bytesconv.EqualFoldASCII(bytesconv.B2S(val), "trailers")
 	}
+
 	return false
 }
 
 func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) []qpack.HeaderField {
-	var headers []qpack.HeaderField
-	var visitedBits uint64
+	var (
+		headers     []qpack.HeaderField
+		visitedBits uint64
+	)
 
 	numOrdered := min(len(orderedKeys), 64)
 	keys := orderedKeys[:numOrdered]
@@ -302,6 +329,7 @@ func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) 
 			for i := range k {
 				keyBuf[i] = bytesconv.LowercaseByte(k[i])
 			}
+
 			keyStr = string(keyBuf)
 		} else {
 			keyStr = string(bytesconv.AppendToLower(nil, k))
@@ -312,6 +340,7 @@ func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) 
 			Value: bytesconv.B2S(v),
 		})
 	}
+
 	return headers
 }
 
@@ -326,25 +355,31 @@ func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
 	if h.parseErr != nil {
 		return
 	}
+
 	if name == ":status" {
 		if h.hasStatus {
 			h.parseErr = ErrMalformedHeader
 			return
 		}
+
 		code, err := strconv.Atoi(value)
 		if err != nil {
 			h.parseErr = err
 			return
 		}
+
 		h.statusCode = code
 		if h.statusCode == 101 {
 			h.parseErr = ErrMalformedHeader
 			return
 		}
+
 		if h.statusCode < 100 || h.statusCode >= 200 {
 			h.res.SetStatusCode(h.statusCode)
 		}
+
 		h.hasStatus = true
+
 		return
 	}
 
@@ -357,8 +392,10 @@ func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
 		if clen, err := strconv.Atoi(value); err == nil {
 			h.res.SetContentLength(clen)
 		}
+
 		return
 	}
+
 	h.res.AddBytesKV(bytesconv.S2B(name), bytesconv.S2B(value))
 }
 
@@ -367,7 +404,11 @@ func (h *responseHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorM
 	h.parseErr = ErrQPACKDecompressFailed
 }
 
-func (q *QPACKCodec) DecodeResponseHeaders(streamID uint64, headerBlock []byte, res *http.ResponseHeader) (statusCode int, retErr error) {
+func (q *QPACKCodec) DecodeResponseHeaders(
+	streamID uint64,
+	headerBlock []byte,
+	res *http.ResponseHeader,
+) (statusCode int, retErr error) {
 	if err := q.Err(); err != nil {
 		return 0, err
 	}
@@ -393,9 +434,11 @@ func (q *QPACKCodec) DecodeResponseHeaders(streamID uint64, headerBlock []byte, 
 	if handler.parseErr != nil {
 		return 0, handler.parseErr
 	}
+
 	if !handler.hasStatus {
 		return 0, ErrMissingStatusHeader
 	}
+
 	return handler.statusCode, nil
 }
 
@@ -408,6 +451,7 @@ func (h *trailersHandler) OnHeaderDecoded(name, value string) {
 	if len(name) > 0 && name[0] == ':' {
 		return
 	}
+
 	h.trailers[name] = append(h.trailers[name], value)
 }
 func (h *trailersHandler) OnDecodingCompleted() {}
@@ -415,7 +459,10 @@ func (h *trailersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage
 	h.err = ErrQPACKDecompressFailed
 }
 
-func (q *QPACKCodec) DecodeResponseTrailers(streamID uint64, headerBlock []byte) (trailers map[string][]string, retErr error) {
+func (q *QPACKCodec) DecodeResponseTrailers(
+	streamID uint64,
+	headerBlock []byte,
+) (trailers map[string][]string, retErr error) {
 	if err := q.Err(); err != nil {
 		return nil, err
 	}
@@ -437,9 +484,11 @@ func (q *QPACKCodec) DecodeResponseTrailers(streamID uint64, headerBlock []byte)
 	handler := &trailersHandler{trailers: make(map[string][]string)}
 	decoder := q.decoder.CreateProgressiveDecoder(streamID, handler)
 	decoder.Decode(headerBlock)
+
 	if handler.err != nil {
 		return nil, handler.err
 	}
+
 	return handler.trailers, nil
 }
 
@@ -458,6 +507,7 @@ func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
 	if h.malformed || h.err != nil {
 		return
 	}
+
 	for i := 0; i < len(k); i++ {
 		c := k[i]
 		if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
@@ -465,6 +515,7 @@ func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
 			return
 		}
 	}
+
 	for i := 0; i < len(v); i++ {
 		if v[i] == 0 {
 			h.malformed = true
@@ -477,31 +528,40 @@ func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
 			h.malformed = true
 			return
 		}
+
 		switch k {
 		case ":method":
 			if h.method != "" {
 				h.malformed = true
 				return
 			}
+
 			h.method = v
+
 		case ":path":
 			if h.path != "" {
 				h.malformed = true
 				return
 			}
+
 			h.path = v
+
 		case ":scheme":
 			if h.scheme != "" {
 				h.malformed = true
 				return
 			}
+
 			h.scheme = v
+
 		case ":authority":
 			if h.authority != "" {
 				h.malformed = true
 				return
 			}
+
 			h.authority = v
+
 		case ":protocol":
 			h.reqHeaders.Set(":protocol", v)
 		default:
@@ -525,6 +585,7 @@ func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
 				return
 			}
 		}
+
 		h.reqHeaders.Add(k, v)
 	}
 }
@@ -534,7 +595,11 @@ func (h *requestHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorMe
 	h.err = ErrQPACKDecompressFailed
 }
 
-func (q *QPACKCodec) DecodeRequestHeaders(streamID uint64, headerBlock []byte, reqHeaders *headkit.Headers) (method, path, scheme, authority string, retErr error) {
+func (q *QPACKCodec) DecodeRequestHeaders(
+	streamID uint64,
+	headerBlock []byte,
+	reqHeaders *headkit.Headers,
+) (method, path, scheme, authority string, retErr error) {
 	if err := q.Err(); err != nil {
 		return "", "", "", "", err
 	}
@@ -561,12 +626,15 @@ func (q *QPACKCodec) DecodeRequestHeaders(streamID uint64, headerBlock []byte, r
 	if handler.err != nil {
 		return "", "", "", "", handler.err
 	}
+
 	if handler.malformed {
 		return "", "", "", "", ErrMalformedHeader
 	}
+
 	if handler.method == "" {
 		return "", "", "", "", ErrMissingMethodOrPath
 	}
+
 	if handler.method == "CONNECT" {
 		isExtended := reqHeaders.Get(":protocol") != ""
 		if isExtended {
@@ -581,10 +649,16 @@ func (q *QPACKCodec) DecodeRequestHeaders(streamID uint64, headerBlock []byte, r
 	} else if handler.path == "" || handler.scheme == "" {
 		return "", "", "", "", ErrMissingMethodOrPath
 	}
+
 	return handler.method, handler.path, handler.scheme, handler.authority, nil
 }
 
-func (q *QPACKCodec) EncodeResponseHeaders(streamID uint64, statusCode int, headers headkit.Headers, bodyLen int) (block []byte) {
+func (q *QPACKCodec) EncodeResponseHeaders(
+	streamID uint64,
+	statusCode int,
+	headers headkit.Headers,
+	bodyLen int,
+) (block []byte) {
 	q.encMu.Lock()
 	defer q.encMu.Unlock()
 
@@ -596,16 +670,20 @@ func (q *QPACKCodec) EncodeResponseHeaders(streamID uint64, statusCode int, head
 	}()
 
 	var list []qpack.HeaderField
+
 	list = append(list, qpack.HeaderField{Name: ":status", Value: strconv.Itoa(statusCode)})
 	if bodyLen >= 0 {
 		list = append(list, qpack.HeaderField{Name: "content-length", Value: strconv.Itoa(bodyLen)})
 	}
+
 	for k, v := range headers.All() {
 		kLower := strings.ToLower(k)
 		if isForbiddenH3Header([]byte(kLower), []byte(v)) {
 			continue
 		}
+
 		list = append(list, qpack.HeaderField{Name: kLower, Value: v})
 	}
+
 	return q.encoder.EncodeHeaderList(streamID, list, nil)
 }

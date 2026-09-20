@@ -143,10 +143,12 @@ func TestFramesSerializationRoundtrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fhOut := AcquireFrameHeader()
+
 			streamID := uint32(1)
 			if tc.frame.Type() == FrameSettings || tc.frame.Type() == FramePing || tc.frame.Type() == FrameGoAway {
 				streamID = 0
 			}
+
 			fhOut.SetStream(streamID)
 			fhOut.SetBody(tc.frame)
 

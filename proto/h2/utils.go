@@ -5,8 +5,6 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
-
 	"bufio"
 	"bytes"
 	"io"
@@ -14,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/net/hpack"
 	"github.com/lemon4ksan/foundation/silicon/randkit"
 
 	h1 "github.com/lemon4ksan/mach/proto/http"
@@ -87,9 +86,9 @@ func PerformHandshake(preface bool, bw *bufio.Writer, st *Settings, maxWin int32
 
 func uint24ToBytes(b []byte, n uint32) {
 	_ = b[2]
-	b[0] = byte(n >> 16)
-	b[1] = byte(n >> 8)
-	b[2] = byte(n)
+	b[0] = byte((n >> 16) & 0xff) //nolint:gosec // 24-bit octet
+	b[1] = byte((n >> 8) & 0xff)  //nolint:gosec // 24-bit octet
+	b[2] = byte(n & 0xff)         //nolint:gosec // 24-bit octet
 }
 
 func bytesToUint24(b []byte) uint32 {
@@ -98,15 +97,21 @@ func bytesToUint24(b []byte) uint32 {
 }
 
 func appendUint32Bytes(dst []byte, n uint32) []byte {
-	return append(dst, byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+	return append(
+		dst,
+		byte(n>>24),
+		byte((n>>16)&0xff),
+		byte((n>>8)&0xff),
+		byte(n&0xff),
+	) //nolint:gosec // extracting octets
 }
 
 func uint32ToBytes(b []byte, n uint32) {
 	_ = b[3]
 	b[0] = byte(n >> 24)
-	b[1] = byte(n >> 16)
-	b[2] = byte(n >> 8)
-	b[3] = byte(n)
+	b[1] = byte((n >> 16) & 0xff) //nolint:gosec // extracting octet
+	b[2] = byte((n >> 8) & 0xff)  //nolint:gosec // extracting octet
+	b[3] = byte(n & 0xff)         //nolint:gosec // extracting octet
 }
 
 func bytesToUint32(b []byte) uint32 {

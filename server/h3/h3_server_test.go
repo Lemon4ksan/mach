@@ -5,10 +5,6 @@
 package h3_test
 
 import (
-	"errors"
-
-	"github.com/lemon4ksan/foundation/net/http/status"
-
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -17,17 +13,19 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"io"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
+	"github.com/lemon4ksan/foundation/net/http/status"
+	"github.com/lemon4ksan/foundation/net/qpack"
+	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/foundation/net/qpack"
-	"github.com/lemon4ksan/foundation/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/server/h3"
 )
@@ -66,7 +64,7 @@ func generateTestTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {
 	}
 
 	clientTLS := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // in-memory test certificates
 		NextProtos:         []string{"h3"},
 	}
 
@@ -194,8 +192,8 @@ func TestH3Server_EndToEnd(t *testing.T) {
 	prog := decoder.CreateProgressiveDecoder(0, hdrsHandler)
 	prog.Decode(respHeaderBytes)
 	prog.EndHeaderBlock()
+
 	for _, hf := range hdrsHandler.headers {
-		
 		if hf.Name == ":status" {
 			statusCode = hf.Value
 		}
@@ -203,9 +201,8 @@ func TestH3Server_EndToEnd(t *testing.T) {
 		if hf.Name == "content-type" {
 			contentType = hf.Value
 		}
-
-
 	}
+
 	require.NoError(t, err)
 	assert.Equal(t, "200", statusCode)
 	assert.Equal(t, "text/plain", contentType)
@@ -228,6 +225,7 @@ type testHeadersHandler struct {
 	headers []qpack.HeaderField
 	err     error
 }
+
 func (h *testHeadersHandler) OnHeaderDecoded(name, value string) {
 	h.headers = append(h.headers, qpack.HeaderField{Name: name, Value: value})
 }

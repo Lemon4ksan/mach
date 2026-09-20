@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/quic"
+
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -172,16 +172,28 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 
 	case coreh3.StreamTypeQPACKEncoder:
 		if sc.hasQPACKEncoder.Swap(true) {
-			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK encoder stream")
+			_ = sc.quicConn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+				"duplicate QPACK encoder stream",
+			)
+
 			return
 		}
+
 		_, _ = io.Copy(io.Discard, stream)
+
 	case coreh3.StreamTypeQPACKDecoder:
 		if sc.hasQPACKDecoder.Swap(true) {
-			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError), "duplicate QPACK decoder stream")
+			_ = sc.quicConn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+				"duplicate QPACK decoder stream",
+			)
+
 			return
 		}
+
 		_, _ = io.Copy(io.Discard, stream)
+
 	default:
 		// RFC 9114 §6.2: Unknown unidirectional stream types MUST either be discarded or cancelled
 		_, _ = io.Copy(io.Discard, stream)
@@ -257,7 +269,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 			}
 
 			if frameLen > 0 {
-				lr := io.LimitReader(stream, int64(frameLen))
+				lr := io.LimitReader(stream, int64(frameLen)) //nolint:gosec // frameLen fits within int64
 				if _, err := io.Copy(&bodyBuf, lr); err != nil {
 					return
 				}
@@ -266,7 +278,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 		default:
 			// Skip unknown frame (RFC 9114 §7.2.8 & §9)
 			if frameLen > 0 {
-				lr := io.LimitReader(stream, int64(frameLen))
+				lr := io.LimitReader(stream, int64(frameLen)) //nolint:gosec // frameLen fits within int64
 				_, _ = io.Copy(io.Discard, lr)
 			}
 		}
@@ -282,14 +294,20 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	var parsedHeaders coreheaders.Headers
 	parsedHeaders.Reset()
 
-	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(uint64(stream.StreamID()), headerBlock, &parsedHeaders)
+	streamID := uint64(stream.StreamID()) //nolint:gosec // StreamID is positive
+
+	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(
+		streamID,
+		headerBlock,
+		&parsedHeaders,
+	)
 	if err != nil {
 		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
 		return
 	}
 
 	req := &ServerRequest{
-		StreamID:   uint64(stream.StreamID()),
+		StreamID:   streamID,
 		Method:     method,
 		Path:       path,
 		Scheme:     scheme,
@@ -310,7 +328,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	}
 
 	// Write response HEADERS frame
-	respBlock := sc.qpack.EncodeResponseHeaders(uint64(stream.StreamID()), res.StatusCode, res.Headers, len(res.Body))
+	respBlock := sc.qpack.EncodeResponseHeaders(streamID, res.StatusCode, res.Headers, len(res.Body))
 
 	var frameHdr [16]byte
 

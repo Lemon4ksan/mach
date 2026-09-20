@@ -5,11 +5,11 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
-
 	"bufio"
 	"bytes"
 	"testing"
+
+	"github.com/lemon4ksan/foundation/net/hpack"
 )
 
 // FuzzHPACKDecode tests hpack.HPACK decoder robustness against arbitrary byte inputs.

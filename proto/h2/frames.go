@@ -32,6 +32,7 @@ func (c *Continuation) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "CONTINUATION frame must be on a specific stream, not 0")
 	}
+
 	c.endHeaders = fr.Flags().Has(FlagEndHeaders)
 	c.SetHeader(fr.payload)
 
@@ -69,6 +70,7 @@ func (d *Data) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "DATA frame must be on a specific stream, not 0")
 	}
+
 	payload := fr.payload
 
 	if fr.Flags().Has(FlagPadded) {
@@ -95,8 +97,10 @@ func (d *Data) Serialize(fr *FrameHeader) {
 
 	if d.hasPadding {
 		fr.SetFlags(fr.Flags().Add(FlagPadded))
+
 		padLen := byte(0) // Default 0 padding
 		fr.payload = append(fr.payload, padLen)
+
 		fr.payload = append(fr.payload, d.b...)
 		for i := byte(0); i < padLen; i++ {
 			fr.payload = append(fr.payload, 0)
@@ -129,6 +133,7 @@ func (ga *GoAway) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() != 0 {
 		return NewGoAwayError(ProtocolError, "GOAWAY frame must be on stream 0")
 	}
+
 	if len(fr.payload) < 8 {
 		return NewGoAwayError(FrameSizeError, "invalid GOAWAY frame size (RFC 9113 §6.8)")
 	}
@@ -193,6 +198,7 @@ func (h *Headers) Deserialize(frh *FrameHeader) error {
 	if frh.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "HEADERS frame must be on a specific stream, not 0")
 	}
+
 	flags := frh.Flags()
 	payload := frh.payload
 
@@ -212,10 +218,12 @@ func (h *Headers) Deserialize(frh *FrameHeader) error {
 
 		h.priority = true
 		h.exclusive = (payload[0] & 0x80) != 0
+
 		h.stream = bytesToUint32(payload) & (1<<31 - 1)
 		if h.stream == frh.Stream() {
 			return NewGoAwayError(ProtocolError, "stream cannot depend on itself (RFC 9113 §5.3.1)")
 		}
+
 		h.weight = payload[4]
 		payload = payload[5:]
 	}
@@ -251,9 +259,11 @@ func (h *Headers) Serialize(frh *FrameHeader) {
 
 		var priBuf [5]byte
 		uint32ToBytes(priBuf[0:4], h.stream)
+
 		if h.exclusive {
 			priBuf[0] |= 0x80
 		}
+
 		priBuf[4] = h.weight
 		frh.payload = append(frh.payload, priBuf[:]...)
 	}
@@ -269,6 +279,7 @@ func (h *Headers) Serialize(frh *FrameHeader) {
 		if len(frh.payload) > 0 {
 			frh.payload[0] = padLen
 		}
+
 		for i := byte(0); i < padLen; i++ {
 			frh.payload = append(frh.payload, 0)
 		}
@@ -293,6 +304,7 @@ func (p *Ping) Deserialize(frh *FrameHeader) error {
 	if frh.Stream() != 0 {
 		return NewGoAwayError(ProtocolError, "PING frame must be on stream 0")
 	}
+
 	p.ack = frh.Flags().Has(FlagAck)
 	if len(frh.payload) != 8 {
 		return NewGoAwayError(FrameSizeError, "invalid PING frame size (RFC 9113 §6.7)")
@@ -331,15 +343,18 @@ func (pry *Priority) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "PRIORITY frame must be on a specific stream, not 0")
 	}
+
 	if len(fr.payload) != 5 {
 		return NewGoAwayError(FrameSizeError, "invalid PRIORITY frame size (RFC 9113 §6.3)")
 	}
 
 	pry.exclusive = (fr.payload[0] & 0x80) != 0
+
 	pry.stream = bytesToUint32(fr.payload) & (1<<31 - 1)
 	if pry.stream == fr.Stream() {
 		return NewGoAwayError(ProtocolError, "stream cannot depend on itself (RFC 9113 §5.3.1)")
 	}
+
 	pry.weight = fr.payload[4]
 
 	return nil
@@ -350,6 +365,7 @@ func (pry *Priority) Serialize(fr *FrameHeader) {
 	if pry.exclusive {
 		fr.payload[0] |= 0x80
 	}
+
 	fr.payload = append(fr.payload, pry.weight)
 }
 
@@ -382,6 +398,7 @@ func (pp *PushPromise) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "PUSH_PROMISE frame must be on a specific stream, not 0")
 	}
+
 	payload := fr.payload
 
 	if fr.Flags().Has(FlagPadded) {
@@ -424,6 +441,7 @@ func (rst *RstStream) Deserialize(fr *FrameHeader) error {
 	if fr.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "RST_STREAM frame must be on a specific stream, not 0")
 	}
+
 	if len(fr.payload) != 4 {
 		return NewGoAwayError(FrameSizeError, "invalid RST_STREAM frame size (RFC 9113 §6.4)")
 	}
@@ -460,6 +478,7 @@ func (wu *WindowUpdate) Deserialize(fr *FrameHeader) error {
 		if fr.Stream() == 0 {
 			return NewGoAwayError(ProtocolError, "window increment of zero on connection")
 		}
+
 		return NewResetStreamError(ProtocolError, "window increment of zero on stream")
 	}
 

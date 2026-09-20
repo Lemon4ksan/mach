@@ -45,8 +45,8 @@ func NewStreamReader(sw StreamWriter) io.ReadCloser {
 
 	go func() {
 		sw(bw)
-		bw.Flush() //nolint:errcheck
-		pw.Close() //nolint:errcheck
+		_ = bw.Flush()
+		_ = pw.Close()
 
 		streamWriterBufPool.Put(bw)
 	}()

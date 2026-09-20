@@ -34,18 +34,19 @@ func ParseHexUint(src []byte) (int, int, error) {
 		c := src[i]
 
 		var d int
-		if c >= '0' && c <= '9' {
+		switch {
+		case c >= '0' && c <= '9':
 			d = int(c - '0')
-		} else if c >= 'a' && c <= 'f' {
+		case c >= 'a' && c <= 'f':
 			d = int(c - 'a' + 10)
-		} else if c >= 'A' && c <= 'F' {
+		case c >= 'A' && c <= 'F':
 			d = int(c - 'A' + 10)
-		} else {
+		default:
 			if i == 0 {
 				return 0, 0, errEmptyHexNum
 			}
 
-			break
+			return val, i, nil
 		}
 
 		val = (val << 4) | d

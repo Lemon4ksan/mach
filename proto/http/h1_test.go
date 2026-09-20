@@ -16,7 +16,7 @@ func TestH1Engine_URIAndArgs(t *testing.T) {
 	u := zerocopy.AcquireURI()
 	defer zerocopy.ReleaseURI(u)
 
-	u.Parse(nil, []byte("https://example.com:8080/path/test?foo=bar&baz=123")) //nolint:errcheck
+	_ = u.Parse(nil, []byte("https://example.com:8080/path/test?foo=bar&baz=123"))
 
 	if string(u.Scheme()) != "https" {
 		t.Fatalf("expected scheme https, got %s", u.Scheme())
@@ -211,10 +211,10 @@ func BenchmarkURI_Scoped(b *testing.B) {
 	u := zerocopy.AcquireURI()
 	defer zerocopy.ReleaseURI(u)
 
-	u.Parse(
+	_ = u.Parse(
 		nil,
 		[]byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details"),
-	) //nolint:errcheck
+	)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -238,10 +238,10 @@ func BenchmarkURI_LegacyAlloc(b *testing.B) {
 	u := zerocopy.AcquireURI()
 	defer zerocopy.ReleaseURI(u)
 
-	u.Parse(
+	_ = u.Parse(
 		nil,
 		[]byte("https://user:pass@api.aoni.dev:8443/v1/users/42/transactions?limit=50&offset=100#details"),
-	) //nolint:errcheck
+	)
 
 	b.ReportAllocs()
 	b.ResetTimer()

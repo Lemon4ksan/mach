@@ -23,7 +23,7 @@ func DecodeLegacy(b []byte) *LegacyDataFrame {
 	}
 
 	length := uint32(b[0])<<16 | uint32(b[1])<<8 | uint32(b[2])
-	if uint32(len(b)) < 9+length {
+	if len(b) < int(9+length) {
 		return nil
 	}
 

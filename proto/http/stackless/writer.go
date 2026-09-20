@@ -91,7 +91,7 @@ func (w *writer) Close() error {
 
 func (w *writer) Reset(dstW io.Writer) {
 	w.xw.Reset()
-	w.do(opReset) //nolint:errcheck
+	_ = w.do(opReset)
 	w.dstW = dstW
 }
 

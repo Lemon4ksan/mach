@@ -15,8 +15,8 @@ import (
 	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/codec/compress/flate"
 	"github.com/lemon4ksan/foundation/codec/compress/gzip"
-
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/http/stackless"
 )
 
@@ -57,7 +57,7 @@ func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
 }
 
 func releaseFlateReader(zr io.ReadCloser) {
-	zr.Close() //nolint:errcheck
+	_ = zr.Close()
 	flateReaderPool.Put(zr)
 }
 
@@ -91,7 +91,7 @@ func AcquireStacklessGzipWriter(w io.Writer, level int) stackless.Writer {
 }
 
 func ReleaseStacklessGzipWriter(sw stackless.Writer, level int) {
-	sw.Close() //nolint:errcheck
+	_ = sw.Close()
 
 	nLevel := normalizeCompressLevel(level)
 	p := stacklessGzipWriterPoolMap[nLevel]
@@ -127,7 +127,7 @@ func acquireRealGzipWriter(w io.Writer, level int) *gzip.Writer {
 }
 
 func releaseRealGzipWriter(zw *gzip.Writer, level int) {
-	zw.Close() //nolint:errcheck
+	_ = zw.Close()
 
 	nLevel := normalizeCompressLevel(level)
 	p := realGzipWriterPoolMap[nLevel]
@@ -151,7 +151,8 @@ var (
 //   - CompressHuffmanOnly
 func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 	w := &byteSliceWriter{b: dst}
-	WriteGzipLevel(w, src, level) //nolint:errcheck
+	_, _ = WriteGzipLevel(w, src, level)
+
 	return w.b
 }
 
@@ -205,7 +206,7 @@ func nonblockingWriteGzip(ctxv any) {
 	ctx := ctxv.(*compressCtx) //nolint:forcetypeassert
 	zw := acquireRealGzipWriter(ctx.w, ctx.level)
 
-	zw.Write(ctx.p) //nolint:errcheck // no way to handle this error anyway
+	_, _ = zw.Write(ctx.p)
 
 	releaseRealGzipWriter(zw, ctx.level)
 }
@@ -263,7 +264,8 @@ func AppendGunzipBytes(dst, src []byte) ([]byte, error) {
 //   - CompressHuffmanOnly
 func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 	w := &byteSliceWriter{b: dst}
-	WriteDeflateLevel(w, src, level) //nolint:errcheck
+	_, _ = WriteDeflateLevel(w, src, level)
+
 	return w.b
 }
 
@@ -317,7 +319,7 @@ func nonblockingWriteDeflate(ctxv any) {
 	ctx := ctxv.(*compressCtx) //nolint:forcetypeassert
 	zw := acquireRealDeflateWriter(ctx.w, ctx.level)
 
-	zw.Write(ctx.p) //nolint:errcheck // no way to handle this error anyway
+	_, _ = zw.Write(ctx.p)
 
 	releaseRealDeflateWriter(zw, ctx.level)
 }
@@ -427,7 +429,7 @@ func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
 }
 
 func ReleaseStacklessDeflateWriter(sw stackless.Writer, level int) {
-	sw.Close() //nolint:errcheck
+	_ = sw.Close()
 
 	nLevel := normalizeCompressLevel(level)
 	p := stacklessDeflateWriterPoolMap[nLevel]
@@ -463,7 +465,7 @@ func acquireRealDeflateWriter(w io.Writer, level int) *zlib.Writer {
 }
 
 func releaseRealDeflateWriter(zw *zlib.Writer, level int) {
-	zw.Close() //nolint:errcheck
+	_ = zw.Close()
 
 	nLevel := normalizeCompressLevel(level)
 	p := realDeflateWriterPoolMap[nLevel]
@@ -507,7 +509,7 @@ func isFileCompressible(f fs.File, minCompressRatio float64) bool {
 		return false
 	}
 
-	seeker.Seek(0, io.SeekStart) //nolint:errcheck
+	_, _ = seeker.Seek(0, io.SeekStart)
 
 	if err != nil {
 		return false

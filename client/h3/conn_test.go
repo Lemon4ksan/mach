@@ -12,10 +12,10 @@ import (
 
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
+	"github.com/lemon4ksan/foundation/net/qpack"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/foundation/net/qpack"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -411,24 +411,17 @@ func TestReadResponse_LargeHeaders_Pooled(t *testing.T) {
 
 	var streamBuf bytes.Buffer
 
-	// Build large headers block (> 4 KB) to trigger pooled storage
-	var qpackBuf bytes.Buffer
+	headers := make([]qpack.HeaderField, 0, 101)
+	headers = append(headers, qpack.HeaderField{Name: ":status", Value: "200"})
 
-	headers := []qpack.HeaderField{
-		{Name: ":status", Value: "200"},
-	}
-	block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
-	qpackBuf.Write(block)
-	hBlock := qpackBuf.Bytes()
 	for i := range 100 {
 		headers = append(headers, qpack.HeaderField{
 			Name:  "x-custom-large-header-" + string(rune('a'+(i%26))),
 			Value: "some-repeated-value-that-fills-space-0123456789-abcdefghijklmnopqrstuvwxyz",
 		})
 	}
-	block = qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
-	hBlock = block
 
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
 	require.Greater(t, len(hBlock), 4096)
 
 	streamBuf.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))

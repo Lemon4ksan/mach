@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Code automatically split by refactoring script
 
 package http
@@ -171,17 +175,21 @@ var (
 func (h *header) AddTrailerBytes(trailer []byte) (err error) {
 	for i := -1; i+1 < len(trailer); {
 		trailer = trailer[i+1:]
+
 		i = bytes.IndexByte(trailer, ',')
 		if i < 0 {
 			i = len(trailer)
 		}
+
 		key := trim(trailer[:i])
 		if !isValidTrailerKey(key) || isBadTrailer(key) {
 			err = ErrBadTrailer
 			continue
 		}
+
 		h.bufK = append(h.bufK[:0], key...)
 		zerocopy.NormalizeHeaderKeyValidated(h.bufK, h.disableNormalizing)
+
 		if cap(h.trailer) > len(h.trailer) {
 			h.trailer = h.trailer[:len(h.trailer)+1]
 			h.trailer[len(h.trailer)-1] = append(h.trailer[len(h.trailer)-1][:0], h.bufK...)
@@ -191,6 +199,7 @@ func (h *header) AddTrailerBytes(trailer []byte) (err error) {
 			h.trailer = append(h.trailer, key)
 		}
 	}
+
 	return err
 }
 
@@ -198,11 +207,13 @@ func isValidTrailerKey(key []byte) bool {
 	if len(key) == 0 {
 		return false
 	}
+
 	for _, c := range key {
 		if !zerocopy.ValidHeaderFieldByte(c) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -216,11 +227,13 @@ func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 	if len(a) == 0 {
 		return false, false
 	}
+
 	for _, c := range a {
 		if !zerocopy.ValidHeaderFieldByte(c) {
 			return false, false
 		}
 	}
+
 	return true, false
 }
 
@@ -238,58 +251,75 @@ func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 		for idxSemi < len(b) && b[idxSemi] != ';' {
 			idxSemi++
 		}
+
 		if idxSemi >= len(b) {
 			return
 		}
+
 		b = b[idxSemi+1:]
 		for len(b) > 0 && b[0] == ' ' {
 			b = b[1:]
 		}
+
 		n := 0
 		if len(b) == 0 || !zerocopy.ValidHeaderFieldByte(b[n]) {
 			return
 		}
+
 		n++
 		for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
 			n++
 		}
+
 		if n >= len(b)-1 || b[n] != '=' {
 			return
 		}
+
 		param := b[:n]
+
 		n++
 		switch {
 		case zerocopy.ValidHeaderFieldByte(b[n]):
 			m := n
+
 			n++
 			for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
 				n++
 			}
+
 			if !f(param, b[m:n]) {
 				return
 			}
+
 		case b[n] == '"':
 			foundEndQuote := false
 			escaping := false
 			n++
+
 			m := n
 			for ; n < len(b); n++ {
 				if b[n] == '"' && !escaping {
 					foundEndQuote = true
 					break
 				}
+
 				escaping = (b[n] == '\\' && !escaping)
 			}
+
 			if !foundEndQuote {
 				return
 			}
+
 			if !f(param, b[m:n]) {
 				return
 			}
+
 			n++
+
 		default:
 			return
 		}
+
 		b = b[n:]
 	}
 }
@@ -299,6 +329,7 @@ func (h *header) Protocol() []byte {
 	if len(h.protocol) == 0 {
 		return zerocopy.StrHTTP11
 	}
+
 	return h.protocol
 }
 
@@ -402,9 +433,11 @@ func (h *header) ReadTrailer(r *bufio.Reader) error {
 		if err == nil {
 			return nil
 		}
+
 		if !errors.Is(err, ErrNeedMore) {
 			return err
 		}
+
 		n = r.Buffered() + 1
 	}
 }
@@ -415,64 +448,87 @@ func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
 		if x, ok := err.(interface{ Timeout() bool }); ok && x.Timeout() {
 			return ErrTimeout
 		}
+
 		if n == 1 || err == io.EOF {
 			return io.EOF
 		}
+
 		if errors.Is(err, bufio.ErrBufferFull) {
 			if h.SecureErrorLogMessage {
 				return &ErrSmallBuffer{error: ErrReadingResponseTrailer}
 			}
+
 			return &ErrSmallBuffer{error: fmt.Errorf("error when reading response trailer: %w", ErrSmallReadBuffer)}
 		}
+
 		return fmt.Errorf("error when reading response trailer: %w", err)
 	}
+
 	b = mustPeekBuffered(r)
+
 	headersLen, errParse := parseTrailerHeaders(b, &h.h, h.disableNormalizing)
 	if errParse != nil {
 		if err == io.EOF {
 			return err
 		}
+
 		return headerError("response", err, errParse, b, h.SecureErrorLogMessage)
 	}
+
 	mustDiscard(r, headersLen)
+
 	return nil
 }
 
-func headerError(typ string, err, errParse error, b []byte, SecureErrorLogMessage bool) error {
+func headerError(typ string, err, errParse error, b []byte, secureErrorLogMessage bool) error {
 	if !errors.Is(errParse, ErrNeedMore) {
-		return headerErrorMsg(typ, errParse, b, SecureErrorLogMessage)
+		return headerErrorMsg(typ, errParse, b, secureErrorLogMessage)
 	}
+
 	if err == nil {
 		return ErrNeedMore
 	}
+
 	if isOnlyCRLF(b) {
 		return io.EOF
 	}
+
 	if !errors.Is(err, bufio.ErrBufferFull) {
-		return headerErrorMsg(typ, err, b, SecureErrorLogMessage)
+		return headerErrorMsg(typ, err, b, secureErrorLogMessage)
 	}
-	return &ErrSmallBuffer{error: headerErrorMsg(typ, ErrSmallReadBuffer, b, SecureErrorLogMessage)}
+
+	return &ErrSmallBuffer{error: headerErrorMsg(typ, ErrSmallReadBuffer, b, secureErrorLogMessage)}
 }
 
-func headerErrorMsg(typ string, err error, b []byte, SecureErrorLogMessage bool) error {
-	if SecureErrorLogMessage {
+func headerErrorMsg(typ string, err error, b []byte, secureErrorLogMessage bool) error {
+	if secureErrorLogMessage {
 		return fmt.Errorf("error when reading %s headers: %w: buffer size=%d", typ, err, len(b))
 	}
-	return fmt.Errorf("error when reading %s headers: %w: buffer size=%d, contents: %s", typ, err, len(b), bufferSnippet(b))
+
+	return fmt.Errorf(
+		"error when reading %s headers: %w: buffer size=%d, contents: %s",
+		typ,
+		err,
+		len(b),
+		bufferSnippet(b),
+	)
 }
 
 func bufferSnippet(b []byte) string {
 	n := len(b)
 	start := 200
+
 	end := n - start
 	if start >= end {
 		start = n
 		end = n
 	}
+
 	bStart, bEnd := b[:start], b[end:]
 	if len(bEnd) == 0 {
 		return fmt.Sprintf("%q", b)
 	}
+
 	return fmt.Sprintf("%q...%q", bStart, bEnd)
 }
 
@@ -482,6 +538,7 @@ func isOnlyCRLF(b []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -525,30 +582,38 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 }
 
 func parseTrailer(src []byte, //nolint:unused
-	dest []zerocopy.ArgsKV, disableNormalizing bool) ([]zerocopy.ArgsKV, int, error) {
+	dest []zerocopy.ArgsKV, disableNormalizing bool,
+) ([]zerocopy.ArgsKV, int, error) {
 	var s headerScanner
+
 	s.b = src
 	for s.next() {
 		s.key = trimTrailingSpace(s.key)
+
 		s.value = trimTrailingSpace(s.value)
 		if len(s.key) == 0 {
 			continue
 		}
+
 		disable := disableNormalizing || s.keyHasSpace
 		if isBadTrailer(s.key) {
 			return dest, 0, fmt.Errorf("forbidden trailer key %q", s.key)
 		}
+
 		for _, ch := range s.value {
 			if !validHeaderValueByte(ch) {
 				return dest, 0, fmt.Errorf("invalid trailer value %q", s.value)
 			}
 		}
+
 		zerocopy.NormalizeHeaderKeyValidated(s.key, disable)
 		dest = zerocopy.AppendArgBytes(dest, s.key, s.value, zerocopy.ArgsHasValue)
 	}
+
 	if s.err != nil {
 		return dest, 0, s.err
 	}
+
 	return dest, s.r, nil
 }
 
@@ -556,14 +621,21 @@ func isBadTrailer(key []byte) bool {
 	if len(key) == 0 {
 		return true
 	}
+
 	switch key[0] | 0x20 {
 	case 'a':
 		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrAuthorization)
 	case 'c':
 		if len(key) >= len(HeaderContentType) && zerocopy.CaseInsensitiveCompare(key[:8], zerocopy.StrContentType[:8]) {
-			return zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentEncoding[8:]) || zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentLength[8:]) || zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentType[8:]) || zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentRange[8:])
+			return zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentEncoding[8:]) ||
+				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentLength[8:]) ||
+				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentType[8:]) ||
+				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentRange[8:])
 		}
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrConnection) || zerocopy.CaseInsensitiveCompare(key, zerocopy.StrCookie)
+
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrConnection) ||
+			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrCookie)
+
 	case 'e':
 		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrExpect)
 	case 'h':
@@ -575,25 +647,37 @@ func isBadTrailer(key []byte) bool {
 	case 'm':
 		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrMaxForwards)
 	case 'p':
-		if len(key) >= len(HeaderProxyConnection) && zerocopy.CaseInsensitiveCompare(key[:6], zerocopy.StrProxyConnection[:6]) {
-			return zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyConnection[6:]) || zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthenticate[6:]) || zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthorization[6:])
+		if len(key) >= len(HeaderProxyConnection) &&
+			zerocopy.CaseInsensitiveCompare(key[:6], zerocopy.StrProxyConnection[:6]) {
+			return zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyConnection[6:]) ||
+				zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthenticate[6:]) ||
+				zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthorization[6:])
 		}
+
 	case 'r':
 		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrRange)
 	case 's':
 		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrSetCookie)
 	case 't':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTE) || zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTrailer) || zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTransferEncoding)
+		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTE) ||
+			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTrailer) ||
+			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTransferEncoding)
 	case 'w':
 		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrWWWAuthenticate)
 	case 'x':
-		return (len(key) >= 11 && zerocopy.CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) || (len(key) >= 9 && zerocopy.CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
+		return (len(key) >= 11 && zerocopy.CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) ||
+			(len(key) >= 9 && zerocopy.CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
 	}
+
 	return false
 }
 
 func isHTTPVersion(proto []byte) bool {
-	return len(proto) == len(zerocopy.StrHTTP11) && bytes.HasPrefix(proto, zerocopy.StrHTTP11[:5]) && proto[6] == '.' && proto[5] >= '0' && proto[5] <= '9' && proto[7] >= '0' && proto[7] <= '9'
+	return len(proto) == len(zerocopy.StrHTTP11) && bytes.HasPrefix(proto, zerocopy.StrHTTP11[:5]) && proto[6] == '.' &&
+		proto[5] >= '0' &&
+		proto[5] <= '9' &&
+		proto[7] >= '0' &&
+		proto[7] <= '9'
 }
 
 func isValidMethod(method []byte) bool {
@@ -602,6 +686,7 @@ func isValidMethod(method []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -609,24 +694,31 @@ func validateRequestURI(method, requestURI []byte) error {
 	if zerocopy.StringContainsCTLByte(requestURI) {
 		return zerocopy.ErrorInvalidURI
 	}
+
 	if bytes.IndexByte(requestURI, ' ') >= 0 {
 		return zerocopy.ErrorInvalidURI
 	}
+
 	if len(requestURI) == 1 && requestURI[0] == '*' {
 		return nil
 	}
+
 	if len(requestURI) > 0 && requestURI[0] == '/' {
 		return nil
 	}
+
 	if before, _, ok := bytes.Cut(requestURI, zerocopy.StrColonSlashSlash); ok {
 		if !zerocopy.IsValidScheme(before) {
 			return zerocopy.ErrorInvalidURI
 		}
+
 		return nil
 	}
+
 	if bytes.Equal(method, zerocopy.StrConnect) {
 		return nil
 	}
+
 	return zerocopy.ErrorInvalidURI
 }
 
@@ -634,17 +726,22 @@ func readRawHeaders(dst, buf []byte) ([]byte, int, error) {
 	if len(buf) == 0 {
 		return dst[:0], 0, ErrNeedMore
 	}
+
 	if simd.MatchCRLF(buf) {
 		return dst, 2, nil
 	}
+
 	if buf[0] == nChar {
 		return dst, 1, nil
 	}
+
 	idx := simd.IndexCRLFCRLF(buf)
 	if idx < 0 {
 		return dst, 0, ErrNeedMore
 	}
+
 	dst = append(dst, buf[:idx]...)
+
 	return dst, idx, nil
 }
 
@@ -653,9 +750,11 @@ func parseContentLength(b []byte) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("cannot parse content-length: %w", err)
 	}
+
 	if n != len(b) {
 		return -1, fmt.Errorf("cannot parse content-length: %w", ErrNonNumericChars)
 	}
+
 	return v, nil
 }
 
@@ -669,14 +768,17 @@ func (s *headerValueScanner) next() bool {
 	if len(b) == 0 {
 		return false
 	}
+
 	before, after, ok := bytes.Cut(b, []byte{','})
 	if !ok {
 		s.value = stripSpace(b)
 		s.b = b[len(b):]
 		return true
 	}
+
 	s.value = stripSpace(before)
 	s.b = after
+
 	return true
 }
 
@@ -684,20 +786,24 @@ func stripSpace(b []byte) []byte {
 	for len(b) > 0 && b[0] == ' ' {
 		b = b[1:]
 	}
+
 	for len(b) > 0 && b[len(b)-1] == ' ' {
 		b = b[:len(b)-1]
 	}
+
 	return b
 }
 
 func hasHeaderValue(s, value []byte) bool {
 	var vs headerValueScanner
+
 	vs.b = s
 	for vs.next() {
 		if zerocopy.CaseInsensitiveCompare(vs.value, value) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -706,10 +812,12 @@ func nextLine(b []byte) ([]byte, []byte, error) {
 	if nNext < 0 {
 		return nil, nil, ErrNeedMore
 	}
+
 	n := nNext
 	if n > 0 && b[n-1] == rChar {
 		n--
 	}
+
 	return b[:n], b[nNext+1:], nil
 }
 
@@ -750,6 +858,7 @@ func appendTrailerBytes(dst []byte, trailer [][]byte, sep []byte) []byte {
 			dst = append(dst, sep...)
 		}
 	}
+
 	return dst
 }
 
@@ -759,6 +868,7 @@ func copyTrailer(dst, src [][]byte) [][]byte {
 	} else {
 		dst = make([][]byte, len(src))
 	}
+
 	for i := range dst {
 		l := len(src[i])
 		if cap(dst[i]) >= l {
@@ -766,8 +876,10 @@ func copyTrailer(dst, src [][]byte) [][]byte {
 		} else {
 			dst[i] = make([]byte, l)
 		}
+
 		copy(dst[i], src[i])
 	}
+
 	return dst
 }
 
@@ -787,6 +899,7 @@ func mustPeekBuffered(r *bufio.Reader) []byte {
 	if len(buf) == 0 || err != nil {
 		panic(fmt.Sprintf("bufio.Reader.Peek() returned unexpected data (%q, %v)", buf, err))
 	}
+
 	return buf
 }
 

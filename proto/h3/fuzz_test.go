@@ -7,8 +7,7 @@ package h3
 import (
 	"bytes"
 	"testing"
-
-	)
+)
 
 // FuzzH3FrameHeaderRead tests HTTP/3 varint frame header reading against arbitrary input bytes.
 func FuzzH3FrameHeaderRead(f *testing.F) {

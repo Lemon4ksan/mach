@@ -44,7 +44,7 @@ func (f Frame) IsValid() bool {
 	}
 
 	// Check if the entire payload is actually available in the slice
-	return uint32(len(f)) >= 9+f.Length()
+	return len(f) >= int(9+f.Length())
 }
 
 // DataFrame is an In-Situ wrapper specific to HTTP/2 DATA frames.

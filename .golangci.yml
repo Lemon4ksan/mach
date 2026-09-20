@@ -49,7 +49,6 @@ linters:
     - perfsprint
     - gosec
     - wsl_v5
-    - depguard
 
   settings:
     revive:

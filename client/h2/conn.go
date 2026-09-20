@@ -5,9 +5,6 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/generic"
-	"github.com/lemon4ksan/foundation/net/hpack"
-
 	"bufio"
 	"bytes"
 	"context"
@@ -26,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
+	"github.com/lemon4ksan/foundation/net/hpack"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/clock"
 	"github.com/lemon4ksan/foundation/silicon/ringbuf"
@@ -691,9 +690,11 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	ctx.StreamID = id
 	ctx.SetState(streamOpen)
 
-	initWin := int32(c.serverS.MaxWindowSize())
-	if initWin <= 0 {
-		initWin = 65535
+	maxWin := c.serverS.MaxWindowSize()
+	initWin := int32(65535)
+
+	if maxWin > 0 && maxWin <= 0x7fffffff {
+		initWin = int32(maxWin)
 	}
 
 	ctx.streamWindow.Store(initWin)
@@ -795,8 +796,8 @@ func (c *Conn) writeData(fh *coreh2.FrameHeader, ctx *Context, body []byte) erro
 			return wErr
 		}
 
-		c.serverWindow.Add(-int32(chunkSize))
-		ctx.streamWindow.Add(-int32(chunkSize))
+		c.serverWindow.Add(-int32(chunkSize))   //nolint:gosec // chunkSize bounded by H2 frame size <= 16MB
+		ctx.streamWindow.Add(-int32(chunkSize)) //nolint:gosec // chunkSize bounded by H2 frame size <= 16MB
 
 		offset = end
 	}
@@ -1127,7 +1128,7 @@ func (c *Conn) handlePingAck(ping *coreh2.Ping) {
 		c.pingUnacks--
 	}
 
-	pingTime := time.Unix(0, int64(binary.BigEndian.Uint64(ping.Data()[:])))
+	pingTime := time.Unix(0, int64(binary.BigEndian.Uint64(ping.Data()))) //nolint:gosec // timestamp int64 conversion
 	if c.onDisconnect != nil && pingTime.IsZero() {
 		return
 	}
@@ -1219,7 +1220,7 @@ func (c *Conn) writePing() error {
 	defer coreh2.ReleaseFrameHeader(fr)
 
 	ping := coreh2.AcquireFrame(coreh2.FramePing).(*coreh2.Ping)
-	binary.BigEndian.PutUint64(ping.Data()[:], uint64(clock.CoarseNowNano()))
+	binary.BigEndian.PutUint64(ping.Data(), uint64(clock.CoarseNowNano())) //nolint:gosec // timestamp uint64 conversion
 	fr.SetBody(ping)
 
 	c.writeMu.Lock()
@@ -1288,7 +1289,7 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 
 	case coreh2.FrameData:
 		data := fr.Body().(*coreh2.Data)
-		dataLen := int32(fr.Len())
+		dataLen := int32(fr.Len()) //nolint:gosec // H2 frame length is 24-bit max (<= 16MB)
 
 		if data.Len() != 0 {
 			reqCtx.Response.AppendBody(data.Data())

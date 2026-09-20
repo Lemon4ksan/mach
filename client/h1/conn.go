@@ -34,6 +34,7 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 	if err := req.Write(cc.bw); err != nil {
 		return err
 	}
+
 	if err := cc.bw.Flush(); err != nil {
 		return err
 	}
@@ -45,7 +46,8 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 
 	select {
 	case <-ctx.Done():
-		cc.Close()
+		_ = cc.Close()
+
 		return ctx.Err()
 	case err := <-errCh:
 		return err

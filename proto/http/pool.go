@@ -20,6 +20,7 @@ func AcquireRequest() *Request {
 	if v == nil {
 		return &Request{}
 	}
+
 	return v.(*Request)
 }
 
@@ -44,6 +45,7 @@ func AcquireResponse() *Response {
 	if v == nil {
 		return &Response{}
 	}
+
 	return v.(*Response)
 }
 

@@ -5,12 +5,13 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
-
 	"bufio"
 	"bytes"
+	"context"
 	"net"
 	"testing"
+
+	"github.com/lemon4ksan/foundation/net/hpack"
 
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1 "github.com/lemon4ksan/mach/proto/http"
@@ -30,35 +31,13 @@ func runMockH2Server(
 	}
 
 	serverSettings := &coreh2.Settings{}
+	serverSettings.Reset()
 	serverSettings.SetMaxWindowSize(1 << 20)
 
 	if err := coreh2.PerformHandshake(false, bw, serverSettings, 1<<20); err != nil {
 		t.Errorf("server: handshake failed: %v", err)
 		return
 	}
-
-	frClientSettings, err := coreh2.ReadFrameFrom(br)
-	if err != nil {
-		t.Errorf("server: read client settings failed: %v", err)
-		return
-	}
-
-	coreh2.ReleaseFrameHeader(frClientSettings)
-
-	ackFrame := coreh2.AcquireFrameHeader()
-
-	stRes := coreh2.AcquireFrame(coreh2.FrameSettings).(*coreh2.Settings)
-	stRes.SetAck(true)
-	ackFrame.SetBody(stRes)
-
-	if _, err := ackFrame.WriteTo(bw); err != nil {
-		t.Errorf("server: write settings ack failed: %v", err)
-		return
-	}
-
-	_ = bw.Flush()
-
-	coreh2.ReleaseFrameHeader(ackFrame)
 
 	dec := hpack.AcquireHPACK()
 	enc := hpack.AcquireHPACK()
@@ -72,10 +51,28 @@ func runMockH2Server(
 			return
 		}
 
-		if fr.Type() == coreh2.FrameHeaders {
-			// Save the request stream ID before releasing the frame header object back to pool
-			streamID := fr.Stream()
+		switch fr.Type() {
+		case coreh2.FrameSettings:
+			st := fr.Body().(*coreh2.Settings)
+			if !st.IsAck() {
+				ackFrame := coreh2.AcquireFrameHeader()
+				stRes := coreh2.AcquireFrame(coreh2.FrameSettings).(*coreh2.Settings)
+				stRes.SetAck(true)
+				ackFrame.SetBody(stRes)
 
+				if _, err := ackFrame.WriteTo(bw); err != nil {
+					coreh2.ReleaseFrameHeader(ackFrame)
+					coreh2.ReleaseFrameHeader(fr)
+					return
+				}
+
+				_ = bw.Flush()
+
+				coreh2.ReleaseFrameHeader(ackFrame)
+			}
+
+		case coreh2.FrameHeaders:
+			streamID := fr.Stream()
 			hFrame := fr.Body().(FrameWithHeaders)
 			req := &h1.Request{}
 			resp := &h1.Response{}
@@ -155,8 +152,69 @@ func runMockH2Server(
 			}
 
 			continue
+
+		case coreh2.FrameWindowUpdate, coreh2.FramePing:
+			// ignore
 		}
 
 		coreh2.ReleaseFrameHeader(fr)
+	}
+}
+
+func TestClientConn_MockServer(t *testing.T) {
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+
+	defer ln.Close()
+
+	go func() {
+		serverConn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+
+		defer serverConn.Close()
+
+		runMockH2Server(t, serverConn, func(req *h1.Request, resp *h1.Response, rawHeaders []string) {
+			resp.SetStatusCode(200)
+			resp.SetBody([]byte("h2-ok"))
+		})
+	}()
+
+	var d net.Dialer
+
+	clientConn, err := d.DialContext(context.Background(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+
+	defer clientConn.Close()
+
+	cc := NewConn(clientConn, ConnOpts{})
+	if err := cc.Handshake(); err != nil {
+		t.Fatalf("handshake failed: %v", err)
+	}
+
+	defer cc.Close()
+
+	req := h1.AcquireRequest()
+	defer h1.ReleaseRequest(req)
+
+	req.Header.SetMethod("GET")
+	req.SetRequestURI("http://example.com/test")
+
+	resp := h1.AcquireResponse()
+	defer h1.ReleaseResponse(resp)
+
+	if err := cc.Do(context.Background(), req, resp); err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+
+	if resp.StatusCode() != 200 || string(resp.Body()) != "h2-ok" {
+		t.Fatalf("unexpected response: %d, body: %s", resp.StatusCode(), string(resp.Body()))
 	}
 }

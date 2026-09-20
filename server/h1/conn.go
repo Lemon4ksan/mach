@@ -13,21 +13,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/http/header"
-	"github.com/lemon4ksan/foundation/silicon/pool"
-
 	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/pool"
 )
 
 var (
 	readerStorage = pool.NewPerPStorage(func() *bufio.Reader {
 		return bufio.NewReaderSize(nil, 4096)
 	})
-	writerStorage = pool.NewPerPStorage(func() *bytesconv.ByteBuffer {
-		return bytesconv.AcquireByteBuffer()
-	})
-	reqStorage = pool.NewPerPStorage(func() *Request {
+	writerStorage = pool.NewPerPStorage(bytesconv.AcquireByteBuffer)
+	reqStorage    = pool.NewPerPStorage(func() *Request {
 		return &Request{
 			Body:    make([]byte, 0, 1024),
 			Headers: coreheaders.NewWithCapacity(16),

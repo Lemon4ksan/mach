@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/net/http/status"
-
 	"github.com/lemon4ksan/foundation/timekit"
 )
 
@@ -26,7 +25,6 @@ var (
 	hdrTransferChunked     = []byte("Transfer-Encoding: chunked\r\n")
 	hdrContentLengthPrefix = []byte("Content-Length: ")
 	hdrCRLF                = []byte("\r\n")
-	hdrColonSpace          = []byte(": ")
 	hdrSetCookiePrefix     = []byte("Set-Cookie: ")
 )
 

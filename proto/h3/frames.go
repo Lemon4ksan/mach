@@ -130,7 +130,7 @@ func (s *Settings) Encode() []byte {
 
 // DecodeSettings decodes an incoming H3 SETTINGS frame and verifies that no reserved HTTP/2 settings are present (RFC 9114 §7.2.4 & §7.2.4.1).
 func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
-	lr := io.LimitReader(r, int64(payloadLen))
+	lr := io.LimitReader(r, int64(payloadLen)) //nolint:gosec // payloadLen fits int64
 	qr := varint.NewReader(lr)
 
 	st := &Settings{
@@ -153,6 +153,7 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		if seen[id] {
 			return nil, ErrH3SettingsError
 		}
+
 		seen[id] = true
 
 		val, err := varint.Read(qr)
@@ -166,7 +167,7 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 			return nil, ErrH3SettingsError
 
 		case SettingMaxFieldSectionSize:
-			st.MaxFieldSectionSize = int64(val)
+			st.MaxFieldSectionSize = int64(val) //nolint:gosec // setting value fits int64
 		case SettingQpackMaxTableCapacity:
 			st.QpackMaxTableCap = val
 		case SettingQpackBlockedStreams:
@@ -175,12 +176,16 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 			if val != 1 {
 				return nil, ErrH3SettingsError
 			}
+
 			st.EnableDatagrams = true
+
 		case SettingEnableConnectProtocol:
 			if val != 0 && val != 1 {
 				return nil, ErrH3SettingsError
 			}
+
 			st.EnableConnect = (val == 1)
+
 		default:
 			st.Other[id] = val
 		}

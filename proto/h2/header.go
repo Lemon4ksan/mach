@@ -5,12 +5,11 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
-
 	"bufio"
 	"io"
 	"sync"
 
+	"github.com/lemon4ksan/foundation/net/hpack"
 	"github.com/lemon4ksan/foundation/silicon/offheap"
 )
 
@@ -105,7 +104,7 @@ func (f *FrameHeader) parseValues(header []byte) {
 
 // PackFrameHeader serializes frame header into dst (at least 9 bytes).
 func PackFrameHeader(dst []byte, length int, kind FrameType, flags FrameFlags, stream uint32) {
-	uint24ToBytes(dst[:3], uint32(length))
+	uint24ToBytes(dst[:3], uint32(length)) //nolint:gosec // 24-bit H2 frame length
 	dst[3] = byte(kind)
 	dst[4] = byte(flags)
 	uint32ToBytes(dst[5:], stream)
