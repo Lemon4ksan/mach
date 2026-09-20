@@ -5,6 +5,7 @@
 package h3
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -301,26 +302,25 @@ func (cc *ClientConn) readResponseScoped(
 	resp *h1.Response,
 	_ *borrow.Scope,
 ) (trailers map[string][]string, err error) {
-	return cc.readResponseFrom(reader, resp)
+	return cc.readResponseFrom(reader, resp, 0)
 }
 
 func (cc *ClientConn) sendRequest(str *quic.Stream, req *h1.Request, headerOrder []string) error {
-	return cc.sendRequestTo(str, req, headerOrder)
+	return cc.sendRequestTo(str, req, headerOrder, uint64(str.StreamID()))
 }
 
-func (cc *ClientConn) sendRequestTo(w io.Writer, req *h1.Request, headerOrder []string) error {
-	p := cc.qpack.AcquireEncoder()
-	defer cc.qpack.ReleaseEncoder(p)
-
-	headerBlock, err := cc.qpack.EncodeRequestHeadersPooled(p, req, headerOrder)
-	if err != nil {
+func (cc *ClientConn) sendRequestTo(w io.Writer, req *h1.Request, headerOrder []string, streamID uint64) error {
+	// Encode headers into a block so we know the size. Wait, we don't have it natively anymore unless we use a buffer.
+	// We'll write to a buffer first.
+	buf := bytes.Buffer{}
+	if err := cc.qpack.EncodeRequestHeaders(streamID, &buf, req, headerOrder); err != nil {
 		return err
 	}
-
+	headerBlock := buf.Bytes()
+	
 	body := req.Body()
 
 	headLen := varint.Len(coreh3.FrameTypeHeaders) + varint.Len(uint64(len(headerBlock)))
-
 	totalLen := headLen + len(headerBlock)
 	if len(body) > 0 {
 		totalLen += varint.Len(coreh3.FrameTypeData) + varint.Len(uint64(len(body))) + len(body)
@@ -329,35 +329,25 @@ func (cc *ClientConn) sendRequestTo(w io.Writer, req *h1.Request, headerOrder []
 	var (
 		stackOut [8192]byte
 		out      []byte
-		heapBuf  *[]byte
 	)
 
 	if totalLen <= len(stackOut) {
 		out = stackOut[:0]
 	} else {
-		heapBuf = h3RequestStorage.Get()
-
-		b := (*heapBuf)[:0]
-		if cap(b) < totalLen {
-			b = make([]byte, 0, totalLen)
-		}
-
-		out = b
-		defer func() {
-			*heapBuf = out[:0]
-			h3RequestStorage.Put(heapBuf)
-		}()
+		out = make([]byte, 0, totalLen)
 	}
 
-	out = coreh3.AppendHeadersHeader(out, uint64(len(headerBlock)))
-
+	out = varint.Append(out, coreh3.FrameTypeHeaders)
+	out = varint.Append(out, uint64(len(headerBlock)))
 	out = append(out, headerBlock...)
+
 	if len(body) > 0 {
-		out = coreh3.AppendDataHeader(out, uint64(len(body)))
+		out = varint.Append(out, coreh3.FrameTypeData)
+		out = varint.Append(out, uint64(len(body)))
 		out = append(out, body...)
 	}
 
-	_, err = w.Write(out)
+	_, err := w.Write(out)
 
 	return err
 }
@@ -366,12 +356,13 @@ func (cc *ClientConn) readResponse(
 	str *quic.Stream,
 	resp *h1.Response,
 ) (trailers map[string][]string, err error) {
-	return cc.readResponseFrom(str, resp)
+	return cc.readResponseFrom(str, resp, uint64((*str).StreamID()))
 }
 
 func (cc *ClientConn) readResponseFrom(
 	reader io.Reader,
 	resp *h1.Response,
+	streamID uint64,
 ) (trailers map[string][]string, err error) {
 	r := varint.NewReader(reader)
 	headersParsed := false
@@ -424,7 +415,7 @@ func (cc *ClientConn) readResponseFrom(
 			}
 
 			if headersParsed {
-				trailers, err = cc.qpack.DecodeResponseTrailers(headerBlock)
+				trailers, err = cc.qpack.DecodeResponseTrailers(streamID, headerBlock)
 
 				if heapHeaderBuf != nil {
 					*heapHeaderBuf = (*heapHeaderBuf)[:0]
@@ -435,7 +426,7 @@ func (cc *ClientConn) readResponseFrom(
 					return nil, err
 				}
 			} else {
-				statusCode, err := cc.qpack.DecodeResponseHeaders(headerBlock, &resp.Header)
+				statusCode, err := cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
 
 				if heapHeaderBuf != nil {
 					*heapHeaderBuf = (*heapHeaderBuf)[:0]

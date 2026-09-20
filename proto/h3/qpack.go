@@ -1,96 +1,73 @@
-// Copyright (c) 2026 Lemon4ksan All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package h3
 
 import (
-	"bytes"
 	"io"
 	"strconv"
 	"strings"
 
-	"github.com/lemon4ksan/foundation/generic"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-
 	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/qpack"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/mach/proto/http"
 )
 
-// PooledEncoder encapsulates a pooled buffer and QPACK encoder for zero-allocation serialization.
-type PooledEncoder struct {
-	buf *bytes.Buffer
-	enc *qpack.Encoder
+type qpackDelegate struct{}
+
+func (d qpackDelegate) OnEncoderStreamError(errorCode uint64, errorMessage string) {
+	panic("qpack encoder stream error: " + errorMessage)
 }
 
-var encoderPool = generic.NewPool(func() *PooledEncoder {
-	buf := new(bytes.Buffer)
+func (d qpackDelegate) OnDecoderStreamError(errorCode uint64, errorMessage string) {
+	panic("qpack decoder stream error: " + errorMessage)
+}
 
-	return &PooledEncoder{
-		buf: buf,
-		enc: qpack.NewEncoder(buf),
-	}
-})
-
-// QPACKCodec manages zero-allocation QPACK header serialization and deserialization (RFC 9204 Â§2, Â§3 & Â§4).
+// QPACKCodec manages QPACK header serialization and deserialization.
 type QPACKCodec struct {
-	decoder *qpack.Decoder
+	decoder *qpack.QpackDecoder
+	encoder *qpack.QpackEncoder
 }
 
-// NewQPACKCodec instantiates a new QPACKCodec (RFC 9204 Â§2.2).
+// NewQPACKCodec instantiates a new QPACKCodec.
 func NewQPACKCodec() *QPACKCodec {
+	d := qpackDelegate{}
 	return &QPACKCodec{
-		decoder: qpack.NewDecoder(),
+		decoder: qpack.NewQpackDecoder(4096, 100, d),
+		encoder: qpack.NewQpackEncoderWithDefaults(d),
 	}
 }
 
-// AcquireEncoder obtains a pooled QPACK encoder for zero-allocation encoding.
-func (q *QPACKCodec) AcquireEncoder() *PooledEncoder {
-	p := encoderPool.Get()
-	p.buf.Reset()
-	p.enc.Reset(p.buf)
-
-	return p
+func (q *QPACKCodec) Decoder() *qpack.QpackDecoder {
+	return q.decoder
 }
 
-// ReleaseEncoder returns a pooled QPACK encoder back to the memory pool.
-func (q *QPACKCodec) ReleaseEncoder(p *PooledEncoder) {
-	if p != nil {
-		encoderPool.Put(p)
-	}
+func (q *QPACKCodec) Encoder() *qpack.QpackEncoder {
+	return q.encoder
 }
 
-// WriteDecoderTable processes instructions received over the QPACK Encoder Stream (RFC 9204 Â§4.2 & Â§4.3).
-//
-// Note: Currently quic-go/qpack operates on static tables (RFC 9204 Appendix A) and does not expose
-// dynamic table instructions, so incoming bytes are safely consumed.
-func (q *QPACKCodec) WriteDecoderTable(_ []byte) error {
-	// We don't support dynamic tables (capacity 0). Receiving instructions is an error.
-	return ErrQPACKDecompressFailed
-}
-
-// EncodeRequestHeadersPooled encodes request headers into the pooled encoder's buffer with 0 heap allocations.
-func (q *QPACKCodec) EncodeRequestHeadersPooled(
-	p *PooledEncoder,
-	req *http.Request,
-	orderedKeys []string,
-) ([]byte, error) {
-	enc := p.enc
-
+// EncodeRequestHeaders encodes request headers into a QPACK block.
+func (q *QPACKCodec) EncodeRequestHeaders(streamID uint64, w io.Writer, req *http.Request, orderedKeys []string) error {
+	var headers []qpack.HeaderField
+	
 	method := bytesconv.B2S(req.Header.Method())
-	_ = enc.WriteField(qpack.HeaderField{Name: ":method", Value: method})
-	_ = enc.WriteField(qpack.HeaderField{Name: ":scheme", Value: bytesconv.B2S(req.URI().Scheme())})
-	_ = enc.WriteField(qpack.HeaderField{Name: ":authority", Value: bytesconv.B2S(req.URI().Host())})
-	_ = enc.WriteField(qpack.HeaderField{Name: ":path", Value: bytesconv.B2S(req.URI().RequestURI())})
+	headers = append(headers, qpack.HeaderField{Name: ":method", Value: method})
+	headers = append(headers, qpack.HeaderField{Name: ":scheme", Value: bytesconv.B2S(req.URI().Scheme())})
+	headers = append(headers, qpack.HeaderField{Name: ":authority", Value: bytesconv.B2S(req.URI().Host())})
+	headers = append(headers, qpack.HeaderField{Name: ":path", Value: bytesconv.B2S(req.URI().RequestURI())})
 
 	if protoVal := req.Header.Peek(":protocol"); len(protoVal) > 0 {
-		_ = enc.WriteField(qpack.HeaderField{Name: ":protocol", Value: bytesconv.B2S(protoVal)})
+		headers = append(headers, qpack.HeaderField{Name: ":protocol", Value: bytesconv.B2S(protoVal)})
 	}
 
 	if len(orderedKeys) > 0 {
-		q.encodeOrderedHeaders(enc, req, orderedKeys)
+		headers = append(headers, q.getOrderedHeaders(req, orderedKeys)...)
 	} else {
+		if ct := req.Header.ContentType(); len(ct) > 0 {
+			headers = append(headers, qpack.HeaderField{Name: "content-type", Value: bytesconv.B2S(ct)})
+		}
+		if cl := req.Header.ContentLength(); cl >= 0 {
+			headers = append(headers, qpack.HeaderField{Name: "content-length", Value: strconv.Itoa(cl)})
+		}
+
 		var stackKeyBuf [128]byte
 		for k, v := range req.Header.All() {
 			if isForbiddenH3Header(k, v) {
@@ -103,43 +80,25 @@ func (q *QPACKCodec) EncodeRequestHeadersPooled(
 				for i := range k {
 					keyBuf[i] = bytesconv.LowercaseByte(k[i])
 				}
-
 				keyStr = bytesconv.B2S(keyBuf)
 			} else {
 				keyStr = bytesconv.B2S(bytesconv.AppendToLower(nil, k))
 			}
 
-			_ = enc.WriteField(qpack.HeaderField{Name: keyStr, Value: bytesconv.B2S(v)})
+			headers = append(headers, qpack.HeaderField{Name: keyStr, Value: bytesconv.B2S(v)})
 		}
 	}
 
-	return p.buf.Bytes(), nil
-}
-
-// EncodeRequestHeaders encodes a fasthttp request header into a QPACK block (RFC 9204 Â§4.5),
-// strictly maintaining the specified orderedKeys sequence for RFC 9220 Extended CONNECT.
-func (q *QPACKCodec) EncodeRequestHeaders(w io.Writer, req *http.Request, orderedKeys []string) error {
-	p := q.AcquireEncoder()
-	defer q.ReleaseEncoder(p)
-
-	block, err := q.EncodeRequestHeadersPooled(p, req, orderedKeys)
-	if err != nil {
-		return err
-	}
-
-	_, err = w.Write(block)
-
+	block := q.encoder.EncodeHeaderList(streamID, headers, nil)
+	_, err := w.Write(block)
 	return err
 }
 
-// isForbiddenH3Header checks if a header field is prohibited in HTTP/3 (RFC 9114 Â§4.1, Â§4.3 & Â§4.5).
-// Transfer-Encoding, Upgrade, Connection, and hop-by-hop headers MUST NOT be sent.
-// TE header is only permitted if its value is "trailers".
+// isForbiddenH3Header checks if a header field is prohibited in HTTP/3 (RFC 9114 §4.1, §4.3 & §4.5).
 func isForbiddenH3Header(key, val []byte) bool {
 	if len(key) == 0 || key[0] == ':' {
 		return true
 	}
-
 	keyStr := bytesconv.B2S(key)
 	if bytesconv.EqualFoldASCII(keyStr, "connection") ||
 		bytesconv.EqualFoldASCII(keyStr, "keep-alive") ||
@@ -150,11 +109,9 @@ func isForbiddenH3Header(key, val []byte) bool {
 		bytesconv.EqualFoldASCII(keyStr, "sec-websocket-accept") {
 		return true
 	}
-
 	if bytesconv.EqualFoldASCII(keyStr, "te") {
 		return !bytesconv.EqualFoldASCII(bytesconv.B2S(val), "trailers")
 	}
-
 	return false
 }
 
@@ -162,7 +119,6 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 	if key == "" || key[0] == ':' {
 		return true
 	}
-
 	if bytesconv.EqualFoldASCII(key, "connection") ||
 		bytesconv.EqualFoldASCII(key, "keep-alive") ||
 		bytesconv.EqualFoldASCII(key, "proxy-connection") ||
@@ -172,21 +128,20 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 		bytesconv.EqualFoldASCII(key, "sec-websocket-accept") {
 		return true
 	}
-
 	if bytesconv.EqualFoldASCII(key, "te") {
 		return !bytesconv.EqualFoldASCII(bytesconv.B2S(val), "trailers")
 	}
-
 	return false
 }
 
-func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *http.Request, orderedKeys []string) {
+func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) []qpack.HeaderField {
+	var headers []qpack.HeaderField
 	var visitedBits uint64
 
 	numOrdered := min(len(orderedKeys), 64)
 	keys := orderedKeys[:numOrdered]
 
-	for i := range numOrdered {
+	for i := 0; i < numOrdered; i++ {
 		key := keys[i]
 		val := req.Header.Peek(key)
 
@@ -195,22 +150,19 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *http.Request,
 		}
 
 		if len(val) > 0 {
-			_ = enc.WriteField(qpack.HeaderField{Name: key, Value: bytesconv.B2S(val)})
-
+			headers = append(headers, qpack.HeaderField{Name: key, Value: bytesconv.B2S(val)})
 			visitedBits |= (1 << i)
 		}
 	}
 
 	for k, v := range req.Header.All() {
 		kStr := bytesconv.B2S(k)
-
 		if isForbiddenH3Header(k, v) {
 			continue
 		}
 
 		skip := false
-
-		for i := range numOrdered {
+		for i := 0; i < numOrdered; i++ {
 			if (visitedBits&(1<<i)) != 0 && bytesconv.EqualFoldASCII(kStr, keys[i]) {
 				skip = true
 				break
@@ -228,283 +180,249 @@ func (q *QPACKCodec) encodeOrderedHeaders(enc *qpack.Encoder, req *http.Request,
 
 		if len(k) <= len(stackKeyBuf) {
 			keyBuf := stackKeyBuf[:len(k)]
-
-			_ = keyBuf[len(k)-1]
 			for i := range k {
 				keyBuf[i] = bytesconv.LowercaseByte(k[i])
 			}
-
 			keyStr = bytesconv.B2S(keyBuf)
 		} else {
 			keyStr = bytesconv.B2S(bytesconv.AppendToLower(nil, k))
 		}
 
-		_ = enc.WriteField(qpack.HeaderField{
+		headers = append(headers, qpack.HeaderField{
 			Name:  keyStr,
 			Value: bytesconv.B2S(v),
 		})
 	}
+	return headers
 }
 
-// DecodeResponseHeaders parses a QPACK header block directly into fasthttp ResponseHeader (RFC 9204 Â§2.2 & Â§4.5),
-// returning the parsed status code and ignoring 1xx informational frames (RFC 9114 Â§4.1).
-func (q *QPACKCodec) DecodeResponseHeaders(headerBlock []byte, res *http.ResponseHeader) (int, error) {
-	var (
-		hasStatus  bool
-		statusCode int
-		parseErr   error
-	)
+type responseHeaderHandler struct {
+	res        *http.ResponseHeader
+	hasStatus  bool
+	statusCode int
+	parseErr   error
+}
 
-	err := q.decoder.DecodeFields(headerBlock, nil, func(hf qpack.HeaderField) bool {
-		if hf.Name == ":status" {
-			if hasStatus {
-				parseErr = ErrMalformedHeader
-				return false
-			}
-
-			code, err := strconv.Atoi(hf.Value)
-			if err != nil {
-				parseErr = err
-				return false
-			}
-
-			statusCode = code
-			if statusCode == 101 {
-				parseErr = ErrMalformedHeader
-				return false
-			}
-			if statusCode < 100 || statusCode >= 200 {
-				res.SetStatusCode(statusCode)
-			}
-
-			hasStatus = true
-
-			return true
+func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
+	if h.parseErr != nil {
+		return
+	}
+	if name == ":status" {
+		if h.hasStatus {
+			h.parseErr = ErrMalformedHeader
+			return
 		}
-
-		if hf.IsPseudo() {
-			return true
+		code, err := strconv.Atoi(value)
+		if err != nil {
+			h.parseErr = err
+			return
 		}
-
-		if hf.Name == "content-length" {
-			if clen, err := strconv.Atoi(hf.Value); err == nil {
-				res.SetContentLength(clen)
-			}
-
-			return true
+		h.statusCode = code
+		if h.statusCode == 101 {
+			h.parseErr = ErrMalformedHeader
+			return
 		}
-
-		res.AddBytesKV(bytesconv.S2B(hf.Name), bytesconv.S2B(hf.Value))
-
-		return true
-	})
-	if err != nil {
-		return 0, ErrQPACKDecompressFailed
+		if h.statusCode < 100 || h.statusCode >= 200 {
+			h.res.SetStatusCode(h.statusCode)
+		}
+		h.hasStatus = true
+		return
 	}
 
-	if parseErr != nil {
-		return 0, parseErr
+	// Pseudo-headers check (simplified)
+	if len(name) > 0 && name[0] == ':' {
+		return
 	}
 
-	if !hasStatus {
+	if name == "content-length" {
+		if clen, err := strconv.Atoi(value); err == nil {
+			h.res.SetContentLength(clen)
+		}
+		return
+	}
+	h.res.AddBytesKV(bytesconv.S2B(name), bytesconv.S2B(value))
+}
+
+func (h *responseHeaderHandler) OnDecodingCompleted() {}
+func (h *responseHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.parseErr = ErrQPACKDecompressFailed
+}
+
+func (q *QPACKCodec) DecodeResponseHeaders(streamID uint64, headerBlock []byte, res *http.ResponseHeader) (int, error) {
+	handler := &responseHeaderHandler{res: res}
+	decoder := q.decoder.CreateProgressiveDecoder(streamID, handler)
+	decoder.Decode(headerBlock)
+
+	if handler.parseErr != nil {
+		return 0, handler.parseErr
+	}
+	if !handler.hasStatus {
 		return 0, ErrMissingStatusHeader
 	}
-
-	return statusCode, nil
+	return handler.statusCode, nil
 }
 
-// DecodeResponseTrailers decodes a QPACK header block containing response trailers into a key-value map (RFC 9204 Â§2.2 & Â§4.5).
-func (q *QPACKCodec) DecodeResponseTrailers(headerBlock []byte) (map[string][]string, error) {
-	trailers := make(map[string][]string)
+type trailersHandler struct {
+	trailers map[string][]string
+	err      error
+}
 
-	err := q.decoder.DecodeFields(headerBlock, nil, func(hf qpack.HeaderField) bool {
-		if hf.IsPseudo() {
-			return true
+func (h *trailersHandler) OnHeaderDecoded(name, value string) {
+	if len(name) > 0 && name[0] == ':' {
+		return
+	}
+	h.trailers[name] = append(h.trailers[name], value)
+}
+func (h *trailersHandler) OnDecodingCompleted() {}
+func (h *trailersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.err = ErrQPACKDecompressFailed
+}
+
+func (q *QPACKCodec) DecodeResponseTrailers(streamID uint64, headerBlock []byte) (map[string][]string, error) {
+	handler := &trailersHandler{trailers: make(map[string][]string)}
+	decoder := q.decoder.CreateProgressiveDecoder(streamID, handler)
+	decoder.Decode(headerBlock)
+	if handler.err != nil {
+		return nil, handler.err
+	}
+	return handler.trailers, nil
+}
+
+type requestHeaderHandler struct {
+	reqHeaders           *headkit.Headers
+	method               string
+	path                 string
+	scheme               string
+	authority            string
+	hasSeenRegularHeader bool
+	malformed            bool
+	err                  error
+}
+
+func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
+	if h.malformed || h.err != nil {
+		return
+	}
+	for i := 0; i < len(k); i++ {
+		c := k[i]
+		if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
+			h.malformed = true
+			return
 		}
-
-		trailers[hf.Name] = append(trailers[hf.Name], hf.Value)
-
-		return true
-	})
-	if err != nil {
-		return nil, ErrQPACKDecompressFailed
+	}
+	for i := 0; i < len(v); i++ {
+		if v[i] == 0 {
+			h.malformed = true
+			return
+		}
 	}
 
-	return trailers, nil
+	if len(k) > 0 && k[0] == ':' {
+		if h.hasSeenRegularHeader {
+			h.malformed = true
+			return
+		}
+		switch k {
+		case ":method":
+			if h.method != "" {
+				h.malformed = true
+				return
+			}
+			h.method = v
+		case ":path":
+			if h.path != "" {
+				h.malformed = true
+				return
+			}
+			h.path = v
+		case ":scheme":
+			if h.scheme != "" {
+				h.malformed = true
+				return
+			}
+			h.scheme = v
+		case ":authority":
+			if h.authority != "" {
+				h.malformed = true
+				return
+			}
+			h.authority = v
+		case ":protocol":
+			h.reqHeaders.Set(":protocol", v)
+		default:
+			h.malformed = true
+			return
+		}
+	} else {
+		h.hasSeenRegularHeader = true
+		switch k {
+		case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
+			h.malformed = true
+			return
+		case "te":
+			if !bytesconv.EqualFoldASCII(v, "trailers") {
+				h.malformed = true
+				return
+			}
+		case "host":
+			if h.authority != "" && v != h.authority {
+				h.malformed = true
+				return
+			}
+		}
+		h.reqHeaders.Add(k, v)
+	}
 }
 
-func (q *QPACKCodec) DecodeRequestHeaders(
-	headerBlock []byte,
-	reqHeaders *headkit.Headers,
-) (method, path, scheme, authority string, err error) {
+func (h *requestHeaderHandler) OnDecodingCompleted() {}
+func (h *requestHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.err = ErrQPACKDecompressFailed
+}
+
+func (q *QPACKCodec) DecodeRequestHeaders(streamID uint64, headerBlock []byte, reqHeaders *headkit.Headers) (string, string, string, string, error) {
 	reqHeaders.Reset()
+	handler := &requestHeaderHandler{reqHeaders: reqHeaders}
+	decoder := q.decoder.CreateProgressiveDecoder(streamID, handler)
+	decoder.Decode(headerBlock)
 
-	var (
-		hasSeenRegularHeader bool
-		malformed            bool
-	)
-
-	arena := reqHeaders.GetRawBuf()
-
-	decodeErr := q.decoder.DecodeFields(headerBlock, &arena, func(hf qpack.HeaderField) bool {
-		k := hf.Name
-		v := hf.Value
-
-		// RFC 9114 §4.1.2: All field names MUST be lowercase ASCII
-		for i := 0; i < len(k); i++ {
-			c := k[i]
-			if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
-				malformed = true
-				return false
-			}
-		}
-		for i := 0; i < len(v); i++ {
-			if v[i] == 0 {
-				malformed = true
-				return false
-			}
-		}
-
-		if hf.IsPseudo() {
-			// RFC 9114 §4.3: Pseudo-headers MUST appear before regular headers
-			if hasSeenRegularHeader {
-				malformed = true
-				return false
-			}
-
-			switch k {
-			case ":method":
-				if method != "" {
-					malformed = true
-					return false
-				}
-
-				method = v
-
-			case ":path":
-				if path != "" {
-					malformed = true
-					return false
-				}
-
-				path = v
-
-			case ":scheme":
-				if scheme != "" {
-					malformed = true
-					return false
-				}
-
-				scheme = v
-
-			case ":authority":
-				if authority != "" {
-					malformed = true
-					return false
-				}
-
-				authority = v
-
-			case ":protocol":
-				// RFC 9220: Extended CONNECT for WebSockets
-				reqHeaders.Set(":protocol", v)
-			default:
-				malformed = true
-				return false
-			}
-		} else {
-			hasSeenRegularHeader = true
-
-			// RFC 9114 §4.1.2 & §4.1: Prohibited hop-by-hop headers in HTTP/3
-			switch k {
-			case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
-				malformed = true
-				return false
-			case "te":
-				if !bytesconv.EqualFoldASCII(v, "trailers") {
-					malformed = true
-					return false
-				}
-			case "host":
-				if authority != "" && v != authority {
-					malformed = true
-					return false
-				}
-			}
-
-			reqHeaders.Add(k, v)
-		}
-
-		return true
-	})
-	if decodeErr != nil {
-		return "", "", "", "", ErrQPACKDecompressFailed
+	if handler.err != nil {
+		return "", "", "", "", handler.err
 	}
-
-	if malformed {
+	if handler.malformed {
 		return "", "", "", "", ErrMalformedHeader
 	}
-
-	if method == "" {
+	if handler.method == "" {
 		return "", "", "", "", ErrMissingMethodOrPath
 	}
-
-	if method == "CONNECT" {
+	if handler.method == "CONNECT" {
 		isExtended := reqHeaders.Get(":protocol") != ""
 		if isExtended {
-			if scheme == "" || path == "" || authority == "" {
+			if handler.scheme == "" || handler.path == "" || handler.authority == "" {
 				return "", "", "", "", ErrMissingMethodOrPath
 			}
 		} else {
-			if scheme != "" || path != "" || authority == "" {
+			if handler.scheme != "" || handler.path != "" || handler.authority == "" {
 				return "", "", "", "", ErrMalformedHeader
 			}
 		}
-	} else if path == "" || scheme == "" {
+	} else if handler.path == "" || handler.scheme == "" {
 		return "", "", "", "", ErrMissingMethodOrPath
 	}
-
-	reqHeaders.SetRawBuf(arena)
-
-	return method, path, scheme, authority, nil
+	return handler.method, handler.path, handler.scheme, handler.authority, nil
 }
 
-func (q *QPACKCodec) EncodeResponseHeaders(statusCode int, headers headkit.Headers, bodyLen int) []byte {
-	pe := encoderPool.Get()
-	defer encoderPool.Put(pe)
-
-	pe.buf.Reset()
-	pe.enc.Reset(pe.buf)
-
-	// 1. :status pseudo-header
-	_ = pe.enc.WriteField(qpack.HeaderField{
-		Name:  ":status",
-		Value: strconv.Itoa(statusCode),
-	})
-
-	// 2. content-length
+func (q *QPACKCodec) EncodeResponseHeaders(streamID uint64, statusCode int, headers headkit.Headers, bodyLen int) []byte {
+	var list []qpack.HeaderField
+	list = append(list, qpack.HeaderField{Name: ":status", Value: strconv.Itoa(statusCode)})
 	if bodyLen >= 0 {
-		_ = pe.enc.WriteField(qpack.HeaderField{
-			Name:  "content-length",
-			Value: strconv.Itoa(bodyLen),
-		})
+		list = append(list, qpack.HeaderField{Name: "content-length", Value: strconv.Itoa(bodyLen)})
 	}
-
 	for k, v := range headers.All() {
 		kLower := strings.ToLower(k)
-
 		if isForbiddenH3Header([]byte(kLower), []byte(v)) {
-			continue // skip in VisitAll
+			continue
 		}
-
-		_ = pe.enc.WriteField(qpack.HeaderField{
-			Name:  kLower,
-			Value: v,
-		})
+		list = append(list, qpack.HeaderField{Name: kLower, Value: v})
 	}
-
-	result := make([]byte, pe.buf.Len())
-	copy(result, pe.buf.Bytes())
-
-	return result
+	return q.encoder.EncodeHeaderList(streamID, list, nil)
 }

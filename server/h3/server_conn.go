@@ -282,7 +282,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	var parsedHeaders coreheaders.Headers
 	parsedHeaders.Reset()
 
-	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(headerBlock, &parsedHeaders)
+	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(uint64(stream.StreamID()), headerBlock, &parsedHeaders)
 	if err != nil {
 		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
 		return
@@ -310,7 +310,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	}
 
 	// Write response HEADERS frame
-	respBlock := sc.qpack.EncodeResponseHeaders(res.StatusCode, res.Headers, len(res.Body))
+	respBlock := sc.qpack.EncodeResponseHeaders(uint64(stream.StreamID()), res.StatusCode, res.Headers, len(res.Body))
 
 	var frameHdr [16]byte
 

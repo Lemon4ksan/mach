@@ -27,7 +27,7 @@ func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		_ = codec.EncodeResponseHeaders(status.OK, headers, 128)
+		_ = codec.EncodeResponseHeaders(0, status.OK, headers, 128)
 	}
 }
 
@@ -53,7 +53,7 @@ func BenchmarkQPACK_DecodeRequestHeaders(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		_, _, _, _, _ = codec.DecodeRequestHeaders(raw, &reqHeaders)
+		_, _, _, _, _ = codec.DecodeRequestHeaders(0, raw, &reqHeaders)
 	}
 }
 

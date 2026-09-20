@@ -37,7 +37,7 @@ func TestSendRequest_HeadersAndBody(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := cc.sendRequestTo(&buf, req, nil)
+	err := cc.sendRequestTo(&buf, req, nil, 0)
 	require.NoError(t, err)
 
 	r := bytes.NewReader(buf.Bytes())
@@ -102,7 +102,7 @@ func TestSendRequest_HeadersOnly(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := cc.sendRequestTo(&buf, req, nil)
+	err := cc.sendRequestTo(&buf, req, nil, 0)
 	require.NoError(t, err)
 
 	r := bytes.NewReader(buf.Bytes())
@@ -149,7 +149,7 @@ func TestReadResponse_Success(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	trailers, err := cc.readResponseFrom(&streamBuf, resp)
+	trailers, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.NoError(t, err)
 	assert.Empty(t, trailers)
 
@@ -195,7 +195,7 @@ func TestReadResponse_MultiChunkData(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	_, err := cc.readResponseFrom(&streamBuf, resp)
+	_, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.NoError(t, err)
 
 	assert.Equal(t, 206, resp.StatusCode())
@@ -239,7 +239,7 @@ func TestReadResponse_WithTrailers(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	trailers, err := cc.readResponseFrom(&streamBuf, resp)
+	trailers, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.NoError(t, err)
 
 	assert.Equal(t, 200, resp.StatusCode())
@@ -285,7 +285,7 @@ func TestReadResponse_Informational100Continue(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	_, err := cc.readResponseFrom(&streamBuf, resp)
+	_, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.NoError(t, err)
 
 	assert.Equal(t, 200, resp.StatusCode())
@@ -309,7 +309,7 @@ func TestReadResponse_UnexpectedDataBeforeHeaders(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	_, err := cc.readResponseFrom(&streamBuf, resp)
+	_, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, coreh3.ErrFrameUnexpected)
 }
@@ -343,7 +343,7 @@ func TestReadResponse_UnknownFrameDiscarded(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	_, err := cc.readResponseFrom(&streamBuf, resp)
+	_, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 204, resp.StatusCode())
 }
@@ -389,7 +389,7 @@ func TestSendRequest_LargePayload_Pooled(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := cc.sendRequestTo(&buf, req, nil)
+	err := cc.sendRequestTo(&buf, req, nil, 0)
 	require.NoError(t, err)
 	assert.Greater(t, buf.Len(), 32768)
 }
@@ -430,7 +430,7 @@ func TestReadResponse_LargeHeaders_Pooled(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	_, err := cc.readResponseFrom(&streamBuf, resp)
+	_, err := cc.readResponseFrom(&streamBuf, resp, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode())
 	assert.Equal(t, "large headers body", string(resp.Body()))

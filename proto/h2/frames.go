@@ -189,8 +189,6 @@ func (h *Headers) Reset() {
 	h.rawHeaders = h.rawHeaders[:0]
 }
 
-
-
 func (h *Headers) Deserialize(frh *FrameHeader) error {
 	if frh.Stream() == 0 {
 		return NewGoAwayError(ProtocolError, "HEADERS frame must be on a specific stream, not 0")
@@ -250,7 +248,7 @@ func (h *Headers) Serialize(frh *FrameHeader) {
 
 	if h.priority {
 		frh.SetFlags(frh.Flags().Add(FlagPriority))
-		
+
 		var priBuf [5]byte
 		uint32ToBytes(priBuf[0:4], h.stream)
 		if h.exclusive {

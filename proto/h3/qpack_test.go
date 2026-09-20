@@ -32,7 +32,7 @@ func TestQPACKEncodeRequestHeaders(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	if err := codec.EncodeRequestHeaders(&buf, req, nil); err != nil {
+	if err := codec.EncodeRequestHeaders(0, &buf, req, nil); err != nil {
 		t.Fatalf("EncodeRequestHeaders failed: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestQPACKOrderedHeadersSequence(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	if err := codec.EncodeRequestHeaders(&buf, req, orderedKeys); err != nil {
+	if err := codec.EncodeRequestHeaders(0, &buf, req, orderedKeys); err != nil {
 		t.Fatalf("EncodeRequestHeaders failed: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestQPACKDecodeResponseHeaders(t *testing.T) {
 
 	var respHeader h1.ResponseHeader
 
-	if _, err := codec.DecodeResponseHeaders(buf.Bytes(), &respHeader); err != nil {
+	if _, err := codec.DecodeResponseHeaders(0, buf.Bytes(), &respHeader); err != nil {
 		t.Fatalf("DecodeResponseHeaders failed: %v", err)
 	}
 
@@ -172,7 +172,7 @@ func TestQPACKDecodeResponseMissingStatus(t *testing.T) {
 
 	var respHeader h1.ResponseHeader
 
-	_, err := codec.DecodeResponseHeaders(buf.Bytes(), &respHeader)
+	_, err := codec.DecodeResponseHeaders(0, buf.Bytes(), &respHeader)
 	if !errors.Is(err, ErrMissingStatusHeader) {
 		t.Fatalf("expected ErrMissingStatusHeader, got %v", err)
 	}
@@ -193,7 +193,7 @@ func TestQPACKEncodeExtendedCONNECTProtocolHeader(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := codec.EncodeRequestHeaders(&buf, req, nil)
+	err := codec.EncodeRequestHeaders(0, &buf, req, nil)
 	require.NoError(t, err)
 
 	dec := qpack.NewDecoder()
@@ -288,7 +288,7 @@ func TestQPACKForbiddenHeadersFilteringInEncode(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err := codec.EncodeRequestHeaders(&buf, req, nil)
+	err := codec.EncodeRequestHeaders(0, &buf, req, nil)
 	require.NoError(t, err)
 
 	dec := qpack.NewDecoder()
@@ -375,7 +375,7 @@ func BenchmarkQPACKEncodeRequestHeaders(b *testing.B) {
 
 	for b.Loop() {
 		buf.Reset()
-		_ = codec.EncodeRequestHeaders(&buf, req, nil)
+		_ = codec.EncodeRequestHeaders(0, &buf, req, nil)
 	}
 }
 
@@ -396,6 +396,6 @@ func BenchmarkQPACKDecodeResponseHeaders(b *testing.B) {
 
 	for b.Loop() {
 		respHeader.Reset()
-		_, _ = codec.DecodeResponseHeaders(encoded, &respHeader)
+		_, _ = codec.DecodeResponseHeaders(0, encoded, &respHeader)
 	}
 }
