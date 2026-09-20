@@ -146,6 +146,10 @@ func NewConn(c net.Conn, opts ConnOpts) *Conn {
 		nc.current.SetPush(false)
 	}
 
+	if nc.current.HeaderTableSize() > 0 {
+		nc.dec.SetMaxCapacity(nc.current.HeaderTableSize())
+	}
+
 	nc.enc.DisableDynamicTable = false
 
 	return nc
@@ -378,9 +382,7 @@ func (c *Conn) Handshake() error {
 		st.CopyTo(&c.serverS)
 		c.serverStreamWindow += c.serverS.MaxWindowSize()
 
-		if st.HeaderTableSize() <= coreh2.DefaultHeaderTableSize {
-			c.enc.SetMaxTableSize(st.HeaderTableSize())
-		}
+		c.enc.SetMaxTableSize(st.HeaderTableSize())
 
 		c.sendSettingsAck()
 	}
