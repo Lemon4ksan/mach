@@ -15,12 +15,17 @@ import (
 )
 
 var (
-	ErrInvalidChunkSize   = errors.New("h1: invalid chunk size in chunked encoding")
+	// ErrInvalidChunkSize is returned when a chunk-size line cannot be parsed as valid hexadecimal (RFC 9112 §7.1).
+	ErrInvalidChunkSize = errors.New("h1: invalid chunk size in chunked encoding")
+
+	// ErrChunkBoundaryError is returned when chunk data is not followed by CRLF (RFC 9112 §7.1).
 	ErrChunkBoundaryError = errors.New("h1: missing CRLF at chunk boundary")
-	errEmptyHexNum        = errors.New("h1: empty hex number")
+
+	errEmptyHexNum = errors.New("h1: empty hex number")
 )
 
-// ParseHexUint parses a hex-encoded uint from src.
+// ParseHexUint parses a hex-encoded uint from src for chunk-size decoding (RFC 9112 §7.1).
+// Returns the parsed integer, number of bytes consumed, or an error.
 func ParseHexUint(src []byte) (int, int, error) {
 	if len(src) == 0 {
 		return 0, 0, errEmptyHexNum
@@ -55,7 +60,8 @@ func ParseHexUint(src []byte) (int, int, error) {
 	return val, i, nil
 }
 
-// FormatHexUint writes the hex representation of val into buf.
+// FormatHexUint writes the hex representation of val into buf for chunk-size encoding (RFC 9112 §7.1).
+// Operates with zero heap allocations.
 func FormatHexUint(buf *[16]byte, val int) int {
 	if val == 0 {
 		buf[0] = '0'
@@ -81,19 +87,20 @@ func FormatHexUint(buf *[16]byte, val int) int {
 	return count
 }
 
-// ChunkedReader decodes an HTTP/1.1 chunked transfer-encoded byte stream using SIMD hex parsing.
+// ChunkedReader decodes an HTTP/1.1 chunked transfer-encoded byte stream (RFC 9112 §7.1).
+// Not safe for concurrent use across multiple goroutines.
 type ChunkedReader struct {
 	r         *bufio.Reader
 	remaining int64
 	done      bool
 }
 
-// NewChunkedReader creates a new ChunkedReader wrapping the provided bufio.Reader.
+// NewChunkedReader creates a ChunkedReader wrapping the provided bufio.Reader (RFC 9112 §7.1).
 func NewChunkedReader(r *bufio.Reader) *ChunkedReader {
 	return &ChunkedReader{r: r}
 }
 
-// Read reads decoded data from the chunked stream.
+// Read reads decoded data from the chunked stream into p (RFC 9112 §7.1).
 func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 	if cr.done {
 		return 0, io.EOF
@@ -151,11 +158,12 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-// ReadAllChunked drains all chunked content into a preallocated byte slice.
+// ReadAllChunked drains all chunked content into a preallocated byte slice up to maxBodySize (RFC 9112 §7.1, RFC 9110 §8.6).
 func ReadAllChunked(r *bufio.Reader, maxBodySize int64) ([]byte, error) {
 	cr := NewChunkedReader(r)
 
-	var buf bytes.Buffer
+	buf := bytesconv.AcquireByteBuffer()
+	defer bytesconv.ReleaseByteBuffer(buf)
 
 	lr := io.LimitReader(cr, maxBodySize+1)
 
@@ -164,24 +172,28 @@ func ReadAllChunked(r *bufio.Reader, maxBodySize int64) ([]byte, error) {
 		return nil, err
 	}
 
-	if int64(buf.Len()) > maxBodySize {
-		return nil, errors.New("h1: request body exceeds maximum allowed size")
+	if int64(len(buf.B)) > maxBodySize {
+		return nil, ErrBodyTooLarge
 	}
 
-	return buf.Bytes(), nil
+	res := make([]byte, len(buf.B))
+	copy(res, buf.B)
+
+	return res, nil
 }
 
-// ChunkedWriter writes data using HTTP/1.1 chunked transfer encoding.
+// ChunkedWriter writes data using HTTP/1.1 chunked transfer coding (RFC 9112 §7.1).
+// Not safe for concurrent use across multiple goroutines.
 type ChunkedWriter struct {
 	w *bytesconv.ByteBuffer
 }
 
-// NewChunkedWriter creates a new ChunkedWriter wrapping w.
+// NewChunkedWriter creates a new ChunkedWriter wrapping w (RFC 9112 §7.1).
 func NewChunkedWriter(w *bytesconv.ByteBuffer) *ChunkedWriter {
 	return &ChunkedWriter{w: w}
 }
 
-// Write frames p as a chunk: "<hex-length>\r\n<data>\r\n" and flushes.
+// Write frames p as a chunk: "<hex-length>\r\n<data>\r\n" and flushes (RFC 9112 §7.1).
 func (cw *ChunkedWriter) Write(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -199,7 +211,7 @@ func (cw *ChunkedWriter) Write(p []byte) (int, error) {
 	return len(p), cw.w.Flush()
 }
 
-// Close writes the terminal chunk "0\r\n\r\n" and flushes.
+// Close writes the terminal chunk "0\r\n\r\n" and flushes (RFC 9112 §7.1).
 func (cw *ChunkedWriter) Close() error {
 	_, _ = cw.w.WriteString("0\r\n\r\n")
 	return cw.w.Flush()

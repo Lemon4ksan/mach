@@ -6,61 +6,71 @@ package h2
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/net/hpack"
-	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/silicon/pool"
+	"golang.org/x/sys/cpu"
 
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
-// ServerHandlerFunc is the callback signature for dispatching an incoming H2 stream request.
+// ServerHandlerFunc is the callback signature for dispatching an incoming HTTP/2 stream request (RFC 9113 §8.1).
+//
+// In compliance with RFC 9113 §5 (Streams and Multiplexing), handlers are executed concurrently
+// in dedicated per-stream goroutines. The handler must not retain references to req or res after
+// returning.
 type ServerHandlerFunc func(req *ServerRequest, res *ServerResponse) error
 
-// ServerRequest represents a parsed incoming HTTP/2 stream request.
+// ServerRequest represents a parsed incoming HTTP/2 stream request in compliance with
+// RFC 9113 §8.3 (Request Pseudo-Header Fields) and RFC 8441 §4 (Extended CONNECT).
+//
+// Concurrency:
+// ServerRequest is allocated per stream and passed to a single ServerHandlerFunc goroutine.
+// It is not safe for concurrent use across multiple goroutines without external synchronization.
 type ServerRequest struct {
-	StreamID   uint32
-	Method     string
-	Path       string
-	Scheme     string
-	Authority  string
-	Protocol   string
-	Headers    http.Header
-	Body       []byte
-	RemoteAddr string
-	Ctx        context.Context
+	StreamID   uint32          // StreamID is the odd-numbered stream identifier (RFC 9113 §5.1.1).
+	Method     string          // Method is the :method pseudo-header value (RFC 9113 §8.3.1).
+	Path       string          // Path is the :path pseudo-header value (RFC 9113 §8.3.1).
+	Scheme     string          // Scheme is the :scheme pseudo-header value (RFC 9113 §8.3.1).
+	Authority  string          // Authority is the :authority pseudo-header value (RFC 9113 §8.3.1).
+	Protocol   string          // Protocol is the :protocol pseudo-header for extended CONNECT (RFC 8441 §4).
+	Headers    http.Header     // Headers contains regular, lowercase header fields (RFC 9113 §8.2).
+	Body       []byte          // Body contains the reassembled payload from DATA frames (RFC 9113 §6.1).
+	RemoteAddr string          // RemoteAddr is the peer network address.
+	Ctx        context.Context // Ctx is the stream context cancelled upon stream termination or reset.
 }
 
-// ServerResponse represents an outgoing HTTP/2 stream response.
+// ServerResponse represents an outgoing HTTP/2 stream response in compliance with
+// RFC 9113 §8.4 (Response Pseudo-Header Fields) and RFC 9110 §15 (Status Codes).
+//
+// Concurrency:
+// ServerResponse is populated by the stream handler and serialized by the connection write loop.
+// It is not safe for concurrent modification.
 type ServerResponse struct {
-	StatusCode int
-	Headers    http.Header
-	Body       []byte
+	StatusCode int         // StatusCode is the HTTP response status code (RFC 9113 §8.4 :status).
+	Headers    http.Header // Headers contains outgoing response headers.
+	Body       []byte      // Body contains response payload framed into DATA frames (RFC 9113 §6.1).
 }
 
-type serverStream struct {
-	id          uint32
-	method      string
-	path        string
-	scheme      string
-	authority   string
-	protocol    string
-	headers     http.Header
-	headerBlock bytes.Buffer
-	body        bytes.Buffer
-	endHeaders  bool
-	endStream   bool
-}
-
-// ServerConn manages a single server-side HTTP/2 connection.
+// ServerConn manages a single server-side HTTP/2 connection session in compliance with
+// RFC 9113 §3 (Starting HTTP/2), §4 (HTTP Frames), §5 (Streams and Multiplexing),
+// and §6 (Frame Definitions).
+//
+// Concurrency:
+// ServerConn is safe for concurrent use. Inbound frame demuxing is handled by Serve(),
+// while outbound frames and responses are serialized via writeMu. In-flight stream
+// goroutines are tracked by streamsWg to ensure race-free teardown and pooling.
+//
+// Silicon Invariants:
+// Hot atomic state counters are isolated on a dedicated cache line (_ cpu.CacheLinePad)
+// to prevent false sharing during high-concurrency stream multiplexing. Connection instances
+// are pooled via Per-P storage (foundation/silicon/pool) with zero allocations on hot paths.
 type ServerConn struct {
 	conn      net.Conn
 	br        *bufio.Reader
@@ -72,15 +82,26 @@ type ServerConn struct {
 	writeMu   sync.Mutex
 	streamsMu sync.RWMutex
 	streams   map[uint32]*serverStream
-	isClosed  atomic.Bool
-	closeErr  error
+	streamsWg sync.WaitGroup
 
 	peerMaxFrameSize uint32
 	peerInitialWin   int32
+
+	_ cpu.CacheLinePad
+
+	isClosed       atomic.Bool
+	isReleased     atomic.Bool
+	connSendWindow atomic.Int32
+	closeErr       error
+
+	ctx      context.Context
+	cancelFn context.CancelFunc
 }
 
 var serverConnStorage = pool.NewPerPStorage(func() *ServerConn {
 	return &ServerConn{
+		br:               bufio.NewReaderSize(nil, 4096),
+		bw:               bufio.NewWriterSize(nil, 4096),
 		hpackDec:         hpack.AcquireHPACK(),
 		hpackEnc:         hpack.AcquireHPACK(),
 		streams:          make(map[uint32]*serverStream, 64),
@@ -89,36 +110,64 @@ var serverConnStorage = pool.NewPerPStorage(func() *ServerConn {
 	}
 })
 
-// NewServerConn creates a new HTTP/2 server connection handler wrapping netConn.
+// NewServerConn creates a new HTTP/2 server connection handler wrapping netConn (RFC 9113 §3).
+//
+// Lifecycle:
+// Connection instances are acquired from an internal Per-P storage pool. When Serve()
+// completes, Release() MUST be called to return the ServerConn to the pool.
 func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc := serverConnStorage.Get()
+
 	sc.conn = netConn
-	sc.br = bufio.NewReaderSize(netConn, 4096)
-	sc.bw = bufio.NewWriterSize(netConn, 4096)
+	if sc.br == nil {
+		sc.br = bufio.NewReaderSize(netConn, 4096)
+	} else {
+		sc.br.Reset(netConn)
+	}
+
+	if sc.bw == nil {
+		sc.bw = bufio.NewWriterSize(netConn, 4096)
+	} else {
+		sc.bw.Reset(netConn)
+	}
+
 	sc.handler = handler
 	sc.isClosed.Store(false)
+	sc.isReleased.Store(false)
 	sc.closeErr = nil
 	sc.peerMaxFrameSize = coreh2.DefaultMaxLen
 	sc.peerInitialWin = 65535
+	sc.connSendWindow.Store(65535)
+
+	sc.ctx, sc.cancelFn = context.WithCancel(context.Background())
+
 	sc.hpackDec.Reset()
 	sc.hpackEnc.Reset()
 	sc.hpackEnc.DisableDynamicTable = true
+
+	sc.streamsMu.Lock()
 	clear(sc.streams)
+	sc.streamsMu.Unlock()
 
 	return sc
 }
 
-// Release returns the ServerConn to the core pool.
-func (sc *ServerConn) Release() {
-	sc.isClosed.Store(true)
-	clear(sc.streams)
-	serverConnStorage.Put(sc)
-}
-
-// Serve runs the main HTTP/2 server connection loop.
+// Serve runs the main HTTP/2 server connection loop (RFC 9113 §3.4, §3.5).
+//
+// Serve reads and validates the 24-byte client connection preface, exchanges initial
+// SETTINGS frames, and demuxes incoming frames until the client terminates or an error occurs.
+// Serve closes the underlying network connection upon return.
 func (sc *ServerConn) Serve() error {
 	defer func() {
-		_ = sc.conn.Close()
+		sc.isClosed.Store(true)
+
+		if sc.cancelFn != nil {
+			sc.cancelFn()
+		}
+
+		if sc.conn != nil {
+			_ = sc.conn.Close()
+		}
 	}()
 
 	// 1. Read and verify 24-byte client connection preface (RFC 9113 §3.4)
@@ -126,7 +175,7 @@ func (sc *ServerConn) Serve() error {
 		return errors.New("h2: invalid connection preface")
 	}
 
-	// 2. Send initial server SETTINGS frame
+	// 2. Send initial server SETTINGS frame (RFC 9113 §6.5)
 	st := &coreh2.Settings{}
 	st.SetMaxConcurrentStreams(1000)
 	st.SetMaxFrameSize(coreh2.DefaultMaxLen)
@@ -136,434 +185,68 @@ func (sc *ServerConn) Serve() error {
 		return err
 	}
 
-	// 3. Main frame reading loop
-	for {
-		if sc.isClosed.Load() {
-			return sc.closeErr
-		}
-
-		fr, err := coreh2.ReadFrameFrom(sc.br)
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
-				return nil
-			}
-
-			return err
-		}
-
-		switch fr.Type() {
-		case coreh2.FrameSettings:
-			if err := sc.handleSettings(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FramePing:
-			if err := sc.handlePing(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameHeaders:
-			if err := sc.handleHeaders(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameContinuation:
-			if err := sc.handleContinuation(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameData:
-			if err := sc.handleData(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameWindowUpdate:
-			// Flow control window updates
-			coreh2.ReleaseFrameHeader(fr)
-
-		case coreh2.FrameResetStream:
-			sc.streamsMu.Lock()
-			delete(sc.streams, fr.Stream())
-			sc.streamsMu.Unlock()
-			coreh2.ReleaseFrameHeader(fr)
-
-		case coreh2.FrameGoAway:
-			coreh2.ReleaseFrameHeader(fr)
-			return nil
-
-		default:
-			coreh2.ReleaseFrameHeader(fr)
-		}
-	}
+	// 3. Main frame reading and demuxing loop
+	return sc.readLoop()
 }
 
-func (sc *ServerConn) sendSettings(st *coreh2.Settings, ack bool) error {
-	sc.writeMu.Lock()
-	defer sc.writeMu.Unlock()
-
-	fr := coreh2.AcquireFrameHeader()
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	stFrame := coreh2.AcquireFrame(coreh2.FrameSettings).(*coreh2.Settings)
-	if ack {
-		stFrame.SetAck(true)
-		fr.SetFlags(coreh2.FlagAck)
-	} else {
-		st.CopyTo(stFrame)
-	}
-
-	fr.SetBody(stFrame)
-
-	if _, err := fr.WriteTo(sc.bw); err != nil {
-		return err
-	}
-
-	return sc.bw.Flush()
-}
-
-func (sc *ServerConn) handleSettings(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	if fr.Flags().Has(coreh2.FlagAck) {
-		// Client ACKed our settings
+// Close terminates the HTTP/2 server connection and closes the underlying socket (RFC 9113 §6.8).
+func (sc *ServerConn) Close() error {
+	if sc.isClosed.Swap(true) {
 		return nil
 	}
 
-	// Apply peer settings
-	if body := fr.Body(); body != nil {
-		if st, ok := body.(*coreh2.Settings); ok {
-			if mfs := st.MaxFrameSize(); mfs >= 16384 && mfs <= 16777215 {
-				sc.peerMaxFrameSize = mfs
-			}
-
-			if iws := st.MaxWindowSize(); iws > 0 && iws <= 0x7fffffff {
-				sc.peerInitialWin = int32(iws) //nolint:gosec // bounds checked
-			}
-		}
+	if sc.cancelFn != nil {
+		sc.cancelFn()
 	}
 
-	// Send Settings ACK
-	return sc.sendSettings(nil, true)
+	if sc.conn != nil {
+		return sc.conn.Close()
+	}
+
+	return nil
 }
 
-func (sc *ServerConn) handlePing(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	if fr.Flags().Has(coreh2.FlagAck) {
-		return nil
-	}
-
-	sc.writeMu.Lock()
-	defer sc.writeMu.Unlock()
-
-	ackFr := coreh2.AcquireFrameHeader()
-	defer coreh2.ReleaseFrameHeader(ackFr)
-
-	ping := fr.Body().(*coreh2.Ping)
-	ackPing := coreh2.AcquireFrame(coreh2.FramePing).(*coreh2.Ping)
-	ackPing.SetData(ping.Data())
-
-	ackFr.SetFlags(coreh2.FlagAck)
-	ackFr.SetBody(ackPing)
-
-	if _, err := ackFr.WriteTo(sc.bw); err != nil {
-		return err
-	}
-
-	return sc.bw.Flush()
+// Closed reports whether the server connection has been marked as closed.
+func (sc *ServerConn) Closed() bool {
+	return sc.isClosed.Load()
 }
 
-func (sc *ServerConn) handleHeaders(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-	// RFC 9113 §5.1.1: Client-initiated streams MUST use non-zero, odd-numbered stream identifiers
-	if streamID == 0 || (streamID%2) == 0 {
-		return coreh2.ProtocolError
+// Release waits for all active stream dispatch goroutines to complete, tears down
+// connection resources, and returns the ServerConn to the Per-P storage pool.
+//
+// Concurrency:
+// Release is race-safe against asynchronous stream handlers and socket disconnects.
+// It guarantees zero pool contamination and eliminates use-after-free conditions.
+func (sc *ServerConn) Release() {
+	if sc.isReleased.Swap(true) {
+		return
 	}
 
-	hFrame := fr.Body().(*coreh2.Headers)
-	endHeaders := fr.Flags().Has(coreh2.FlagEndHeaders)
-	endStream := fr.Flags().Has(coreh2.FlagEndStream)
+	sc.isClosed.Store(true)
 
-	st := &serverStream{
-		id:         streamID,
-		headers:    make(http.Header),
-		endHeaders: endHeaders,
-		endStream:  endStream,
+	if sc.cancelFn != nil {
+		sc.cancelFn()
 	}
 
-	// Write raw header fragment
-	st.headerBlock.Write(hFrame.Headers())
+	if sc.conn != nil {
+		_ = sc.conn.Close()
+	}
 
+	// Wait for all in-flight stream dispatch goroutines to exit (Resolves Escalation 2)
+	sc.streamsWg.Wait()
+
+	// Mutex-protected map cleanup
 	sc.streamsMu.Lock()
-	sc.streams[streamID] = st
+	clear(sc.streams)
 	sc.streamsMu.Unlock()
 
-	if endHeaders {
-		return sc.finishHeaderBlock(st)
+	if sc.br != nil {
+		sc.br.Reset(nil)
 	}
 
-	return nil
-}
-
-func (sc *ServerConn) handleContinuation(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
-	if !ok {
-		return errors.New("h2: CONTINUATION on unknown stream (RFC 9113 §6.10)")
+	if sc.bw != nil {
+		sc.bw.Reset(nil)
 	}
 
-	cFrame := fr.Body().(*coreh2.Continuation)
-	st.headerBlock.Write(cFrame.Headers())
-
-	if fr.Flags().Has(coreh2.FlagEndHeaders) {
-		st.endHeaders = true
-		return sc.finishHeaderBlock(st)
-	}
-
-	return nil
-}
-
-func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
-	rawBlock := st.headerBlock.Bytes()
-
-	hf := hpack.AcquireHeaderField()
-	defer hpack.ReleaseHeaderField(hf)
-
-	var hasSeenRegularHeader bool
-	for len(rawBlock) > 0 {
-		hf.Reset()
-
-		var err error
-
-		rawBlock, err = sc.hpackDec.Next(hf, rawBlock)
-		if err != nil {
-			// RFC 7541 & RFC 9113 §4.3: HPACK decoding errors MUST be treated as COMPRESSION_ERROR
-			return coreh2.CompressionError
-		}
-
-		if hf.Empty() {
-			continue
-		}
-
-		k := string(hf.KeyBytes())
-		v := string(hf.ValueBytes())
-
-		// RFC 9113 §8.2: All field names MUST be lowercase ASCII
-		for i := 0; i < len(k); i++ {
-			if k[i] >= 'A' && k[i] <= 'Z' {
-				return coreh2.ProtocolError
-			}
-		}
-
-		if hf.IsPseudo() {
-			// RFC 9113 §8.3: Pseudo-headers MUST appear before regular headers
-			if hasSeenRegularHeader {
-				return coreh2.ProtocolError
-			}
-
-			switch k {
-			case ":method":
-				if st.method != "" {
-					return coreh2.ProtocolError
-				}
-
-				st.method = v
-
-			case ":path":
-				if st.path != "" {
-					return coreh2.ProtocolError
-				}
-
-				st.path = v
-
-			case ":scheme":
-				if st.scheme != "" {
-					return coreh2.ProtocolError
-				}
-
-				st.scheme = v
-
-			case ":authority":
-				if st.authority != "" {
-					return coreh2.ProtocolError
-				}
-
-				st.authority = v
-
-			case ":protocol":
-				// RFC 8441 §4: Extended CONNECT pseudo-header
-				if st.protocol != "" {
-					return coreh2.ProtocolError
-				}
-
-				st.protocol = v
-
-			default:
-				// RFC 9113 §8.3: Unknown or invalid pseudo-header
-				return coreh2.ProtocolError
-			}
-		} else {
-			hasSeenRegularHeader = true
-
-			// RFC 9113 §8.2.2: Connection-specific headers are prohibited in HTTP/2
-			switch k {
-			case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
-				return coreh2.ProtocolError
-			case "te":
-				if v != "trailers" {
-					return coreh2.ProtocolError
-				}
-			}
-
-			st.headers.Add(k, v)
-		}
-	}
-
-	// RFC 9113 §8.3.1 & RFC 8441 §4: Mandatory request pseudo-headers
-	if st.method == "" {
-		return coreh2.ProtocolError
-	}
-
-	if st.protocol != "" {
-		// RFC 8441 §4: :protocol pseudo-header is only valid on CONNECT requests with :scheme and :path
-		if st.method != "CONNECT" || st.scheme == "" || st.path == "" {
-			return coreh2.ProtocolError
-		}
-	} else if st.method != "CONNECT" && (st.scheme == "" || st.path == "") {
-		return coreh2.ProtocolError
-	}
-
-	if st.endStream {
-		go sc.dispatchStream(st)
-	}
-
-	return nil
-}
-
-func (sc *ServerConn) handleData(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
-	if !ok {
-		return nil
-	}
-
-	dFrame := fr.Body().(*coreh2.Data)
-	st.body.Write(dFrame.Data())
-
-	if fr.Flags().Has(coreh2.FlagEndStream) {
-		st.endStream = true
-		go sc.dispatchStream(st)
-	}
-
-	return nil
-}
-
-func (sc *ServerConn) dispatchStream(st *serverStream) {
-	req := &ServerRequest{
-		StreamID:   st.id,
-		Method:     st.method,
-		Path:       st.path,
-		Scheme:     st.scheme,
-		Authority:  st.authority,
-		Protocol:   st.protocol,
-		Headers:    st.headers,
-		Body:       st.body.Bytes(),
-		RemoteAddr: sc.conn.RemoteAddr().String(),
-		Ctx:        context.Background(),
-	}
-
-	res := &ServerResponse{
-		StatusCode: status.OK,
-		Headers:    make(http.Header),
-	}
-
-	if sc.handler != nil {
-		_ = sc.handler(req, res)
-	}
-
-	_ = sc.writeResponse(st.id, res)
-
-	sc.streamsMu.Lock()
-	delete(sc.streams, st.id)
-	sc.streamsMu.Unlock()
-}
-
-func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error {
-	sc.writeMu.Lock()
-	defer sc.writeMu.Unlock()
-
-	hdrFr := coreh2.AcquireFrameHeader()
-	defer coreh2.ReleaseFrameHeader(hdrFr)
-
-	sc.encMu.Lock()
-	hFrame := coreh2.AcquireFrame(coreh2.FrameHeaders).(*coreh2.Headers)
-	coreh2.SerializeResponseHeaders(hFrame, sc.hpackEnc, res.StatusCode, res.Headers, len(res.Body))
-	sc.encMu.Unlock()
-
-	hdrFr.SetStream(streamID)
-	hdrFr.SetFlags(coreh2.FlagEndHeaders)
-
-	if len(res.Body) == 0 {
-		hdrFr.SetFlags(coreh2.FlagEndHeaders | coreh2.FlagEndStream)
-	}
-
-	hdrFr.SetBody(hFrame)
-
-	if _, err := hdrFr.WriteTo(sc.bw); err != nil {
-		return err
-	}
-
-	// 2. Serialize DATA Frames
-	body := res.Body
-
-	maxChunk := int(sc.peerMaxFrameSize)
-	if maxChunk <= 0 {
-		maxChunk = coreh2.DefaultMaxLen
-	}
-
-	for len(body) > 0 {
-		chunkSize := min(len(body), maxChunk)
-		chunk := body[:chunkSize]
-		body = body[chunkSize:]
-
-		dataFr := coreh2.AcquireFrameHeader()
-		dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
-		dFrame.SetData(chunk)
-
-		dataFr.SetStream(streamID)
-
-		if len(body) == 0 {
-			dataFr.SetFlags(coreh2.FlagEndStream)
-		}
-
-		dataFr.SetBody(dFrame)
-
-		_, err := dataFr.WriteTo(sc.bw)
-		coreh2.ReleaseFrameHeader(dataFr)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return sc.bw.Flush()
+	serverConnStorage.Put(sc)
 }

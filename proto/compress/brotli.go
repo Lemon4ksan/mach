@@ -63,6 +63,11 @@ func WriteUnbrotli(w io.Writer, p []byte) (int, error) {
 	return WriteUnbrotliLimit(w, p, 0)
 }
 
+// WriteUnbrotliLimit decompresses Brotli payload p and writes up to maxBodySize uncompressed bytes to w (RFC 7932).
+//
+// If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
+// more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
+// Concurrency: Thread-safe; utilizes pooled brotli readers.
 func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	r := &byteSliceReader{b: p}
 

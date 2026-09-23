@@ -4,11 +4,16 @@
 
 package h1
 
-import coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+import "github.com/lemon4ksan/foundation/net/headkit"
 
+// Headers represents a high-performance HTTP/1.1 header block backed by foundation/net/headkit (RFC 9110 §6.3, RFC 9112).
+//
+// Concurrency:
+//   - Not safe for concurrent use across multiple goroutines.
 type (
-	Headers     = coreheaders.Headers
-	HeaderEntry = coreheaders.HeaderEntry
+	Headers     = headkit.Headers
+	HeaderEntry = headkit.HeaderEntry
 )
 
-var NewHeadersWithCapacity = coreheaders.NewWithCapacity
+// NewHeadersWithCapacity allocates a new Headers table with preallocated entry capacity (RFC 9110 §6.3).
+var NewHeadersWithCapacity = headkit.NewWithCapacity

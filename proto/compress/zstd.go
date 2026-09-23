@@ -13,11 +13,17 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
+// Supported Zstandard compression speed levels (RFC 8878).
 const (
+	// CompressZstdSpeedNotSet indicates default compression speed.
 	CompressZstdSpeedNotSet = iota
+	// CompressZstdBestSpeed indicates fastest compression speed.
 	CompressZstdBestSpeed
+	// CompressZstdDefault indicates standard balanced compression speed.
 	CompressZstdDefault
+	// CompressZstdSpeedBetter indicates improved compression ratio over default.
 	CompressZstdSpeedBetter
+	// CompressZstdBestCompression indicates maximum compression ratio.
 	CompressZstdBestCompression
 )
 
@@ -60,6 +66,11 @@ func WriteUnzstd(w io.Writer, p []byte) (int, error) {
 	return WriteUnzstdLimit(w, p, 0)
 }
 
+// WriteUnzstdLimit decompresses Zstandard payload p and writes up to maxBodySize uncompressed bytes to w (RFC 8878).
+//
+// If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
+// more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
+// Concurrency: Thread-safe; utilizes pooled zstd decoders.
 func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	r := &byteSliceReader{b: p}
 

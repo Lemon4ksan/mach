@@ -7,12 +7,14 @@ package h1_test
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"testing"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
@@ -401,7 +403,7 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 }
 
 func TestHeaders_Comprehensive(t *testing.T) {
-	h := coreheaders.NewWithCapacity(8)
+	h := headkit.NewWithCapacity(8)
 	h.Set("Content-Type", "application/json")
 	h.Set("X-Custom", "initial")
 	h.Set("X-Custom", "updated") // overwrite
@@ -436,7 +438,7 @@ func TestHeaders_Comprehensive(t *testing.T) {
 func TestRequest_ClientIP_And_EarlyHints_Hijack(t *testing.T) {
 	req := &h1.Request{
 		RemoteAddr: "192.0.2.1:12345",
-		Headers:    coreheaders.NewWithCapacity(4),
+		Headers:    headkit.NewWithCapacity(4),
 	}
 
 	// 1. Direct RemoteAddr with port
@@ -509,4 +511,89 @@ func createTestCookie(name, value, path []byte) *zerocopy.Cookie {
 	c.SetPathBytes(path)
 
 	return c
+}
+
+func TestConnHandler_RequestSmuggling_ConnectionClose(t *testing.T) {
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	ch := &h1.ConnHandler{
+		Handler: func(req *h1.Request, res *h1.Response) error {
+			res.StatusCode = status.OK
+			res.Body = []byte("smuggling-handled")
+
+			return nil
+		},
+	}
+
+	go func() {
+		conn, aErr := ln.Accept()
+		if aErr != nil {
+			return
+		}
+
+		_ = ch.ServeConn(conn)
+	}()
+
+	var d net.Dialer
+
+	conn, err := d.DialContext(context.Background(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Dual TE + CL request followed immediately by pipelined data
+	rawReq := "POST /smuggle HTTP/1.1\r\n" +
+		"Host: 127.0.0.1\r\n" +
+		"Transfer-Encoding: chunked\r\n" +
+		"Content-Length: 5\r\n" +
+		"\r\n" +
+		"5\r\nhello\r\n0\r\n\r\n" +
+		"GET /pipelined HTTP/1.1\r\n" +
+		"Host: 127.0.0.1\r\n\r\n"
+
+	if _, err := conn.Write([]byte(rawReq)); err != nil {
+		t.Fatalf("failed to write raw request: %v", err)
+	}
+
+	br := bufio.NewReader(conn)
+
+	resp, err := http.ReadResponse(br, nil)
+	if err != nil {
+		t.Fatalf("failed to read response: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	if !resp.Close && resp.Header.Get("Connection") != "close" {
+		t.Errorf(
+			"expected Connection: close indicator, resp.Close=%v, header=%q",
+			resp.Close,
+			resp.Header.Get("Connection"),
+		)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+
+	if string(body) != "smuggling-handled" {
+		t.Errorf("expected body 'smuggling-handled', got %q", string(body))
+	}
+
+	// Verify socket was closed by server (cannot read second pipelined response)
+	_, err = br.ReadByte()
+	if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+		t.Errorf("expected io.EOF on closed connection, got %v", err)
+	}
 }

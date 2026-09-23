@@ -16,39 +16,58 @@ import (
 	"strconv"
 	"strings"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
 var (
-	ErrMalformedRequestLine        = errors.New("h1: malformed request line (RFC 9112 §3)")
-	ErrUnsupportedProtocol         = errors.New("h1: unsupported protocol version (RFC 9112 §2.3)")
-	ErrBodyTooLarge                = errors.New("h1: request body exceeds maximum allowed size (RFC 9110 §15.5.14)")
-	ErrMissingHostHeader           = errors.New("h1: missing host header in HTTP/1.1 request (RFC 9112 §3.2)")
+	// ErrMalformedRequestLine is returned when the request-line fails RFC 9112 §3 syntax rules.
+	ErrMalformedRequestLine = errors.New("h1: malformed request line (RFC 9112 §3)")
+
+	// ErrUnsupportedProtocol is returned when the request protocol is not HTTP/1.0 or HTTP/1.1 (RFC 9112 §2.3).
+	ErrUnsupportedProtocol = errors.New("h1: unsupported protocol version (RFC 9112 §2.3)")
+
+	// ErrBodyTooLarge is returned when the request body exceeds MaxBodySize (RFC 9110 §15.5.14).
+	ErrBodyTooLarge = errors.New("h1: request body exceeds maximum allowed size (RFC 9110 §15.5.14)")
+
+	// ErrMissingHostHeader is returned when an HTTP/1.1 request lacks a Host header (RFC 9112 §3.2).
+	ErrMissingHostHeader = errors.New("h1: missing host header in HTTP/1.1 request (RFC 9112 §3.2)")
+
+	// ErrUnsupportedTransferEncoding is returned when Transfer-Encoding does not end with chunked (RFC 9112 §6.3).
 	ErrUnsupportedTransferEncoding = errors.New("h1: request transfer-encoding must end with chunked (RFC 9112 §6.3)")
-	ErrHijackNotSupported          = errors.New("h1: hijacking not supported on this connection")
+
+	// ErrHijackNotSupported is returned when connection hijacking is attempted on a non-hijackable socket (RFC 9110 §15.2.2).
+	ErrHijackNotSupported = errors.New("h1: hijacking not supported on this connection")
 )
 
-// Request holds parsed HTTP/1.1 request data without net/http wrapping.
+// Request holds parsed HTTP/1.1 request data without net/http wrapping (RFC 9112, RFC 9110).
+//
+// Concurrency:
+//   - A Request instance is owned by a single connection goroutine and is NOT safe for concurrent use.
+//
+// Memory Lifecycle:
+//   - Acquired from Per-P storage before read and returned after connection termination or handler completion.
+//   - Callers must not retain references to Request or its Body across calls.
 type Request struct {
-	Conn         net.Conn
-	Method       string
-	URI          string
-	Path         string
-	Query        string
-	Proto        string
-	Host         string
-	Headers      coreheaders.Headers
-	Body         []byte
-	RemoteAddr   string
-	TLS          *tls.ConnectionState
-	HijackFn     func() (net.Conn, *bufio.ReadWriter, error)
-	EarlyHintsFn func(h http.Header) error
+	Conn            net.Conn
+	Method          string
+	URI             string
+	Path            string
+	Query           string
+	Proto           string
+	Host            string
+	Headers         headkit.Headers
+	Body            []byte
+	RemoteAddr      string
+	TLS             *tls.ConnectionState
+	HijackFn        func() (net.Conn, *bufio.ReadWriter, error)
+	EarlyHintsFn    func(h http.Header) error
+	CloseConnection bool // RFC 9112 §6.3 / §11.2 forced connection close indicator
 }
 
-// WriteEarlyHints sends an intermediate 103 Early Hints response to the client.
+// WriteEarlyHints sends an intermediate 103 Early Hints informational response to the client (RFC 8297).
 func (r *Request) WriteEarlyHints(h http.Header) error {
 	if r.EarlyHintsFn != nil {
 		return r.EarlyHintsFn(h)
@@ -57,7 +76,7 @@ func (r *Request) WriteEarlyHints(h http.Header) error {
 	return nil
 }
 
-// Reset clears the request structure for pooling.
+// Reset clears the request structure for recycling into Per-P storage.
 func (r *Request) Reset() {
 	r.EarlyHintsFn = nil
 	r.Method = ""
@@ -67,13 +86,20 @@ func (r *Request) Reset() {
 	r.Proto = ""
 	r.Host = ""
 	r.Headers.Reset()
-	r.Body = r.Body[:0]
+
+	if cap(r.Body) > 64*1024 {
+		r.Body = make([]byte, 0, 1024)
+	} else {
+		r.Body = r.Body[:0]
+	}
+
 	r.RemoteAddr = ""
 	r.TLS = nil
 	r.HijackFn = nil
+	r.CloseConnection = false
 }
 
-// Hijack takes over the raw network connection from the server.
+// Hijack takes over the raw network connection from the server (RFC 9110 §15.2.2).
 func (r *Request) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if r.HijackFn == nil {
 		return nil, nil, ErrHijackNotSupported
@@ -250,7 +276,9 @@ func (r *Request) finishRequestBodyRead(
 ) error {
 	// RFC 9112 §6.3 Item 3: If both Transfer-Encoding and Content-Length are present,
 	// Transfer-Encoding overrides Content-Length to mitigate Request Smuggling (RFC 9112 §11.2).
+	// RFC 9112 §11.2 mandates that the server MUST close the connection after the response.
 	if hasTE && hasCL {
+		r.CloseConnection = true
 		r.Headers.Del(header.ContentLength)
 	}
 
@@ -304,7 +332,7 @@ func (r *Request) finishRequestBodyRead(
 	return nil
 }
 
-// ClientIP extracts the client IP address from remote address.
+// ClientIP extracts the client IP address from RemoteAddr, stripping any port number.
 func (r *Request) ClientIP() string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {

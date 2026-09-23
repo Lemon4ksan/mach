@@ -10,7 +10,7 @@ import (
 	"io"
 	"testing"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 
 	"github.com/lemon4ksan/mach/server/h1"
 )
@@ -53,7 +53,7 @@ func FuzzH1Header(f *testing.F) {
 	f.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiJ9")
 
 	f.Fuzz(func(t *testing.T, key, val string) {
-		var headers coreheaders.Headers
+		var headers headkit.Headers
 		headers.Set(key, val)
 		_ = headers.Get(key)
 		headers.Add(key, val)

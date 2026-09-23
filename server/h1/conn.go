@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
@@ -23,11 +23,13 @@ var (
 	readerStorage = pool.NewPerPStorage(func() *bufio.Reader {
 		return bufio.NewReaderSize(nil, 4096)
 	})
-	writerStorage = pool.NewPerPStorage(bytesconv.AcquireByteBuffer)
-	reqStorage    = pool.NewPerPStorage(func() *Request {
+	writerStorage = pool.NewPerPStorage(func() *bytesconv.ByteBuffer {
+		return &bytesconv.ByteBuffer{}
+	})
+	reqStorage = pool.NewPerPStorage(func() *Request {
 		return &Request{
 			Body:    make([]byte, 0, 1024),
-			Headers: coreheaders.NewWithCapacity(16),
+			Headers: headkit.NewWithCapacity(16),
 		}
 	})
 	resStorage = pool.NewPerPStorage(func() *Response {
@@ -37,19 +39,29 @@ var (
 	})
 )
 
-// HandlerFunc is the core callback for dispatching an incoming H1 request to the server router.
+// HandlerFunc is the core callback for dispatching an incoming H1 request to the server router (RFC 9110 §3).
+//
+// Lifecycle:
+//   - Both req and res are recycled into Per-P storage after the handler returns.
+//   - Handlers MUST NOT retain references to req, res, or their buffers beyond the return of HandlerFunc.
 type HandlerFunc func(req *Request, res *Response) error
 
-// ConnHandler manages the lifecycle of a single incoming TCP or TLS connection.
+// ConnHandler manages the lifecycle of a single incoming TCP or TLS connection (RFC 9112 §9).
 type ConnHandler struct {
-	ReadTimeout  time.Duration
+	// ReadTimeout specifies the maximum duration for reading the entire request.
+	ReadTimeout time.Duration
+	// WriteTimeout specifies the maximum duration for writing the complete response.
 	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
-	MaxBodySize  int64
-	Handler      HandlerFunc
+	// IdleTimeout specifies the maximum duration to wait for the next request on a keep-alive connection.
+	IdleTimeout time.Duration
+	// MaxBodySize sets the maximum permitted body payload size in bytes (RFC 9110 §8.6).
+	MaxBodySize int64
+	// Handler is the callback invoked for each received HTTP request.
+	Handler HandlerFunc
 }
 
-// ServeConn processes HTTP/1.1 requests sequentially on conn until closed or error occurs.
+// ServeConn processes HTTP/1.1 requests sequentially on conn until closed, timed out, or error occurs (RFC 9112 §9.3).
+// Mitigates request smuggling by terminating the connection if conflicting framing headers are detected (RFC 9112 §11.2).
 func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 	br := readerStorage.Get()
 	br.Reset(conn)
@@ -63,8 +75,11 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			_ = bw.Flush()
 			_ = conn.Close()
 
+			br.Reset(nil)
 			readerStorage.Put(br)
-			bytesconv.ReleaseByteBuffer(bw)
+
+			bw.Reset()
+			writerStorage.Put(bw)
 		}
 	}()
 
@@ -94,10 +109,24 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 	}
 
 	req := reqStorage.Get()
-	defer reqStorage.Put(req)
+	defer func() {
+		if cap(req.Body) > 64*1024 {
+			req.Body = make([]byte, 0, 1024)
+		}
+
+		req.Reset()
+		reqStorage.Put(req)
+	}()
 
 	res := resStorage.Get()
-	defer resStorage.Put(res)
+	defer func() {
+		if cap(res.Body) > 64*1024 {
+			res.Body = make([]byte, 0, 1024)
+		}
+
+		res.Reset()
+		resStorage.Put(res)
+	}()
 
 	remoteAddr := conn.RemoteAddr().String()
 
@@ -151,8 +180,8 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 
 		keepAlive := req.Headers.IsKeepAlive(req.Proto)
 		// RFC 9112 §6.3 Item 3 & §11.2: To mitigate Request Smuggling when both Transfer-Encoding
-		// and Content-Length were received, the server MUST close the connection after responding.
-		if req.Headers.Has(header.TransferEncoding) && req.Headers.Has(header.ContentLength) {
+		// and Content-Length were received, or when forced by CloseConnection, close the connection.
+		if req.CloseConnection || (req.Headers.Has(header.TransferEncoding) && req.Headers.Has(header.ContentLength)) {
 			keepAlive = false
 		}
 
@@ -166,6 +195,15 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 				res.StatusCode = 500
 				res.Body = []byte(`{"error":"INTERNAL_ERROR","message":"Internal Server Error"}`)
 			}
+		}
+
+		if req.CloseConnection {
+			keepAlive = false
+		}
+
+		if res.Headers.Has(header.Connection) &&
+			bytesconv.EqualFoldASCII(res.Headers.Get(header.Connection), header.ValueClose) {
+			keepAlive = false
 		}
 
 		if isHijacked {

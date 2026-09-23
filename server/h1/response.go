@@ -8,32 +8,49 @@ import (
 	"io"
 	"strconv"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/header"
 	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// Response carries HTTP/1.1 response state to be serialized directly over the wire.
+// Response carries HTTP/1.1 response state to be serialized directly over the wire (RFC 9112 §2.1, RFC 9110 §15).
+//
+// Concurrency:
+//   - Not safe for concurrent use across multiple goroutines.
+//
+// Memory Lifecycle:
+//   - Acquired from Per-P storage per request and recycled after WriteTo completes.
 type Response struct {
-	StatusCode   int
-	Headers      coreheaders.Headers
-	Cookies      []*zerocopy.Cookie
-	Body         []byte
+	// StatusCode is the HTTP response status code (RFC 9110 §15). Defaults to 200 OK.
+	StatusCode int
+	// Headers holds response header fields (RFC 9110 §6.3).
+	Headers headkit.Headers
+	// Cookies holds Set-Cookie attributes (RFC 6265 §4.1).
+	Cookies []*zerocopy.Cookie
+	// Body holds the static response payload bytes.
+	Body []byte
+	// StreamWriter provides chunked streaming response generation (RFC 9112 §7.1).
 	StreamWriter func(w io.Writer) error
 }
 
-// Reset clears the response for recycling.
+// Reset clears the response for recycling into Per-P storage.
 func (res *Response) Reset() {
 	res.StatusCode = status.OK
 	res.Headers.Reset()
 	res.Cookies = res.Cookies[:0]
-	res.Body = res.Body[:0]
+
+	if cap(res.Body) > 64*1024 {
+		res.Body = make([]byte, 0, 1024)
+	} else {
+		res.Body = res.Body[:0]
+	}
+
 	res.StreamWriter = nil
 }
 
-// WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to the writer.
+// WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to bw (RFC 9112 §2.1, RFC 9110 §15).
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
 func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
 	code := res.StatusCode
@@ -98,7 +115,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 	for _, c := range res.Cookies {
 		if c != nil {
 			_, _ = bw.Write(hdrSetCookiePrefix)
-			_, _ = bw.WriteString(c.String())
+			bw.B = c.AppendBytes(bw.B)
 			_, _ = bw.Write(hdrCRLF)
 		}
 	}

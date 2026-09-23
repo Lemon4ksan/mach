@@ -8,4 +8,5 @@ import (
 	"errors"
 )
 
+// ErrServerClosed is returned by the server's Serve functions after a call to Close or Shutdown (RFC 9112).
 var ErrServerClosed = errors.New("h1: server is closed")

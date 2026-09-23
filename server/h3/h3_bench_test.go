@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/status"
 	"github.com/lemon4ksan/foundation/net/qpack"
 
@@ -17,7 +17,7 @@ import (
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
 	codec := coreh3.NewQPACKCodec()
-	headers := coreheaders.NewWithCapacity(16)
+	headers := headkit.NewWithCapacity(16)
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Server", "Sein/2.0")
 	headers.Set("X-Powered-By", "Plan9-AVX2")
@@ -44,7 +44,7 @@ func BenchmarkQPACK_DecodeRequestHeaders(b *testing.B) {
 
 	b.ReportAllocs()
 
-	var reqHeaders coreheaders.Headers
+	var reqHeaders headkit.Headers
 
 	b.ResetTimer()
 

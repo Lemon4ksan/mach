@@ -18,8 +18,6 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 
 </div>
 
----
-
 ## Architecture: The Zero-Drag Manifesto
 
 Named after the Mach number and aerodynamic concept of **Zero Drag**, `mach` eliminates computational friction from network pipelines:
@@ -28,8 +26,6 @@ Named after the Mach number and aerodynamic concept of **Zero Drag**, `mach` eli
 * **Forever-Frozen Standard**: Mechanics strictly implement IETF RFCs (HTTP/1.1 RFC 9112, HTTP/2 RFC 9113, HPACK RFC 7541, HTTP/3 RFC 9114, QPACK RFC 9204).
 * **Symmetric Isolation**: Client and server architectures require fundamentally distinct memory layouts, buffer reuse patterns, and concurrency lifecycles. `mach` isolates them into distinct packages (`mach/client` vs `mach/server`).
 * **Zero Heap Allocation on Hot Path**: Every frame, header slice, and URI component is read and recycled using multi-tiered arenas, Per-P pools, and scoped borrow semantics.
-
----
 
 ## Protocol Index
 
@@ -58,8 +54,6 @@ mach/
     └── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
 ```
 
----
-
 ## Honest Benchmarks
 
 All benchmarks measured on bare-metal hardware (`12th Gen Intel Core i5-12400F @ 4.40 GHz`, Go 1.27, Windows x86_64).
@@ -74,8 +68,6 @@ Instead of allocating and copying wire bytes into Go structs, `proto/h2/overlay`
 | **`mach/proto/h2/overlay`** | **`0.49 ns/op`** | **0 B/op** | **0 allocs/op** |
 | **Improvement** | **35.0x faster** | **100% memory eliminated** | **Zero garbage created** |
 
----
-
 ### 2. HTTP/1.1 SIMD Wire Scanning & Header Parsing
 
 Accelerated vector scanners scan `\r\n` and colon delimiters using hardware SIMD registers:
@@ -86,8 +78,6 @@ Accelerated vector scanners scan `\r\n` and colon delimiters using hardware SIMD
 | **Response Header Full SIMD Parse** | **`1,481.0 ns/op`** | **`446.28 MB/s`** | 25 allocs/op |
 | **Scoped Borrow Pipeline** | **`106.0 ns/op`** | Wire decoding + Header mapping | **0 allocs/op** |
 | Legacy Copy Pipeline | `121.0 ns/op` | 80 B/op | 1 allocs/op |
-
----
 
 ### 3. Multi-Tiered Memory Pool Latency
 
@@ -100,8 +90,6 @@ Comparison of object recycling strategies across parallel execution threads:
 | Standard `sync.Pool` | `4.574 ns/op` | 0 B/op | 0 allocs/op |
 | Connection-Bound Frame Pool (Ping/WU/Rst) | **`10.510 ns/op`** | **0 B/op** | **0 allocs/op** |
 
----
-
 ### 4. HTTP/3 & QPACK Wire Performance
 
 | Component | Operation | Latency | Memory | Allocations |
@@ -110,8 +98,6 @@ Comparison of object recycling strategies across parallel execution threads:
 | **QPACK Response Decode** | Decode headers into map | **`943.8 ns/op`** | 693 B/op | 13 allocs/op |
 | **QPACK Request Decode** | Decode headers into map | **`1,056.0 ns/op`** | 696 B/op | 9 allocs/op |
 | **QPACK Request Encode** | Encode dynamic headers | **`1,962.0 ns/op`** | 2,208 B/op | 34 allocs/op |
-
----
 
 ## Engineering Invariants
 
@@ -123,8 +109,6 @@ Comparison of object recycling strategies across parallel execution threads:
    State transitions are driven synchronously by the caller's thread or explicit external reactors. No unmonitored goroutine leaks.
 4. **RFC Invariant Integrity**:
    No non-standard extensions or framework-specific compromises in `mach/proto`.
-
----
 
 ## Continuous Fuzzing & Verification
 
@@ -144,8 +128,6 @@ Run micro-benchmarks with memory profiling:
 ```bash
 go test -bench=. -benchmem ./...
 ```
-
----
 
 ## License
 

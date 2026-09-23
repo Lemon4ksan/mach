@@ -2,25 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Code automatically split by refactoring script
-
 package http
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
-	"fmt"
-	"io"
-	"iter"
-	"sync"
-	"sync/atomic"
-	"time"
 
-	coreheaders "github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/foundation/net/headkit"
 	"github.com/lemon4ksan/foundation/net/http/zerocopy"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
 const (
@@ -28,8 +16,70 @@ const (
 	nChar = byte('\n')
 )
 
+var (
+	// ErrBadTrailer is returned when a message contains a forbidden trailer field (RFC 9112 Section 7.1.2).
+	ErrBadTrailer = errors.New("mach: contain forbidden trailer")
+
+	// ErrReadingResponseHeaders is returned when an error occurs while reading response headers (RFC 9112 Section 2.1).
+	ErrReadingResponseHeaders = errors.New("mach: error when reading response headers")
+
+	// ErrReadingResponseTrailer is returned when an error occurs while reading response trailers (RFC 9112 Section 7.1.2).
+	ErrReadingResponseTrailer = errors.New("mach: error when reading response trailer")
+
+	// ErrResponseFirstLineMissingSpace is returned when whitespace is missing in the status line (RFC 9112 Section 3.1).
+	ErrResponseFirstLineMissingSpace = errors.New("mach: cannot find whitespace in the first line of response")
+
+	// ErrUnexpectedStatusCodeChar is returned when a status code contains non-digit characters (RFC 9112 Section 3.1.2).
+	ErrUnexpectedStatusCodeChar = errors.New("mach: unexpected char at the end of status code")
+
+	// ErrMissingRequestMethod is returned when an HTTP request line is missing the method token (RFC 9112 Section 3.1.1).
+	ErrMissingRequestMethod = errors.New("mach: cannot find http request method")
+
+	// ErrUnsupportedRequestMethod is returned when an unsupported method token is encountered (RFC 9112 Section 3.1.1).
+	ErrUnsupportedRequestMethod = errors.New("mach: unsupported http request method")
+
+	// ErrExtraWhitespaceInRequestLine is returned when redundant whitespace appears in the request line (RFC 9112 Section 3).
+	ErrExtraWhitespaceInRequestLine = errors.New("mach: extra whitespace in request line")
+
+	// ErrEmptyRequestURI is returned when the target request-URI is empty (RFC 9112 Section 3.2).
+	ErrEmptyRequestURI = errors.New("mach: requesturi cannot be empty")
+
+	// ErrDuplicateContentLength is returned when duplicate conflicting Content-Length headers are received (RFC 9112 Section 6.2).
+	ErrDuplicateContentLength = errors.New("mach: duplicate content-length header")
+
+	// ErrUnsupportedTransferEncoding is returned when an unsupported Transfer-Encoding coding is encountered (RFC 9112 Section 6.1).
+	ErrUnsupportedTransferEncoding = errors.New("mach: unsupported transfer-encoding")
+
+	// ErrNonNumericChars is returned when Content-Length contains non-numeric characters (RFC 9110 Section 8.6).
+	ErrNonNumericChars = errors.New("mach: non-numeric chars found")
+
+	// ErrNeedMore indicates that more data is required to complete header parsing.
+	ErrNeedMore = errors.New("mach: need more data: cannot find trailing lf")
+
+	// ErrSmallReadBuffer is returned when the read buffer is too small to contain the headers.
+	ErrSmallReadBuffer = errors.New("mach: small read buffer. increase readbuffersize")
+)
+
+// ErrNothingRead is returned when a keep-alive connection is closed,
+// either because the remote closed it or because of a read timeout.
+type ErrNothingRead struct{ error }
+
+// Unwrap returns the underlying error.
+func (e ErrNothingRead) Unwrap() error { return e.error }
+
+// ErrSmallBuffer is returned when the provided buffer size is too small
+// for reading request and/or response headers.
+//
+// ReadBufferSize value from Server or clients should reduce the number
+// of such errors.
+type ErrSmallBuffer struct{ error }
+
+// Unwrap returns the underlying error.
+func (e *ErrSmallBuffer) Unwrap() error { return e.error }
+
+// header represents common HTTP header state shared between RequestHeader and ResponseHeader.
 type header struct {
-	h                     coreheaders.Headers
+	h                     headkit.Headers
 	cookies               []zerocopy.ArgsKV
 	bufK                  []byte
 	bufV                  []byte
@@ -46,17 +96,17 @@ type header struct {
 	noDefaultContentType  bool
 }
 
-// ConnectionClose returns true if 'Connection: close' header is set.
+// ConnectionClose returns true if 'Connection: close' header is set (RFC 9110 Section 7.6.1).
 func (h *header) ConnectionClose() bool {
 	return h.connectionClose
 }
 
-// SetConnectionClose sets 'Connection: close' header.
+// SetConnectionClose sets 'Connection: close' header (RFC 9110 Section 7.6.1).
 func (h *header) SetConnectionClose() {
 	h.connectionClose = true
 }
 
-// ResetConnectionClose clears 'Connection: close' header if it exists.
+// ResetConnectionClose clears 'Connection: close' header if it exists (RFC 9110 Section 7.6.1).
 func (h *header) ResetConnectionClose() {
 	if h.connectionClose {
 		h.connectionClose = false
@@ -64,267 +114,17 @@ func (h *header) ResetConnectionClose() {
 	}
 }
 
-// SetContentType sets Content-Type header value.
+// SetContentType sets Content-Type header value (RFC 9110 Section 8.3).
 func (h *header) SetContentType(contentType string) {
 	h.contentType = zerocopy.InitHeaderValueString(h.contentType, contentType)
 }
 
-// SetContentTypeBytes sets Content-Type header value.
+// SetContentTypeBytes sets Content-Type header value (RFC 9110 Section 8.3).
 func (h *header) SetContentTypeBytes(contentType []byte) {
 	h.contentType = zerocopy.InitHeaderValueBytes(h.contentType, contentType)
 }
 
-// SetTrailer sets header Trailer value for chunked response
-// to indicate which headers will be sent after the body.
-//
-// Use Set to set the trailer header later.
-//
-// Trailers are only supported with chunked transfer.
-// Trailers allow the sender to include additional headers at the end of chunked messages.
-//
-// The following trailers are forbidden:
-// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
-// 2. routing (e.g., Host),
-// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
-// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
-// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
-// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
-//
-// Return ErrBadTrailer if contain any forbidden trailers.
-func (h *header) SetTrailer(trailer string) error {
-	return h.SetTrailerBytes(bytesconv.S2B(trailer))
-}
-
-// SetTrailerBytes sets Trailer header value for chunked response
-// to indicate which headers will be sent after the body.
-//
-// Use Set to set the trailer header later.
-//
-// Trailers are only supported with chunked transfer.
-// Trailers allow the sender to include additional headers at the end of chunked messages.
-//
-// The following trailers are forbidden:
-// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
-// 2. routing (e.g., Host),
-// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
-// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
-// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
-// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
-//
-// Return ErrBadTrailer if contain any forbidden trailers.
-func (h *header) SetTrailerBytes(trailer []byte) error {
-	h.trailer = h.trailer[:0]
-	return h.AddTrailerBytes(trailer)
-}
-
-// AddTrailer add Trailer header value for chunked response
-// to indicate which headers will be sent after the body.
-//
-// Use Set to set the trailer header later.
-//
-// Trailers are only supported with chunked transfer.
-// Trailers allow the sender to include additional headers at the end of chunked messages.
-//
-// The following trailers are forbidden:
-// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
-// 2. routing (e.g., Host),
-// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
-// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
-// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
-// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
-//
-// Return ErrBadTrailer if contain any forbidden trailers.
-func (h *header) AddTrailer(trailer string) error {
-	return h.AddTrailerBytes(bytesconv.S2B(trailer))
-}
-
-var (
-	ErrBadTrailer                    = errors.New("mach: contain forbidden trailer")
-	ErrReadingResponseHeaders        = errors.New("mach: error when reading response headers")
-	ErrReadingResponseTrailer        = errors.New("mach: error when reading response trailer")
-	ErrResponseFirstLineMissingSpace = errors.New("mach: cannot find whitespace in the first line of response")
-	ErrUnexpectedStatusCodeChar      = errors.New("mach: unexpected char at the end of status code")
-	ErrMissingRequestMethod          = errors.New("mach: cannot find http request method")
-	ErrUnsupportedRequestMethod      = errors.New("mach: unsupported http request method")
-	ErrExtraWhitespaceInRequestLine  = errors.New("mach: extra whitespace in request line")
-	ErrEmptyRequestURI               = errors.New("mach: requesturi cannot be empty")
-	ErrDuplicateContentLength        = errors.New("mach: duplicate content-length header")
-	ErrUnsupportedTransferEncoding   = errors.New("mach: unsupported transfer-encoding")
-	ErrNonNumericChars               = errors.New("mach: non-numeric chars found")
-	ErrNeedMore                      = errors.New("mach: need more data: cannot find trailing lf")
-	ErrSmallReadBuffer               = errors.New("mach: small read buffer. increase readbuffersize")
-)
-
-// AddTrailerBytes add Trailer header value for chunked response
-// to indicate which headers will be sent after the body.
-//
-// Use Set to set the trailer header later.
-//
-// Trailers are only supported with chunked transfer.
-// Trailers allow the sender to include additional headers at the end of chunked messages.
-//
-// The following trailers are forbidden:
-// 1. necessary for message framing (e.g., Transfer-Encoding and Content-Length),
-// 2. routing (e.g., Host),
-// 3. request modifiers (e.g., controls and conditionals in Section 5 of [RFC7231]),
-// 4. authentication (e.g., see [RFC7235] and [RFC6265]),
-// 5. response control data (e.g., see Section 7.1 of [RFC7231]),
-// 6. determining how to process the payload (e.g., Content-Encoding, Content-Type, Content-Range, and Trailer)
-//
-// Return ErrBadTrailer if contain any forbidden trailers.
-func (h *header) AddTrailerBytes(trailer []byte) (err error) {
-	for i := -1; i+1 < len(trailer); {
-		trailer = trailer[i+1:]
-
-		i = bytes.IndexByte(trailer, ',')
-		if i < 0 {
-			i = len(trailer)
-		}
-
-		key := trim(trailer[:i])
-		if !isValidTrailerKey(key) || isBadTrailer(key) {
-			err = ErrBadTrailer
-			continue
-		}
-
-		h.bufK = append(h.bufK[:0], key...)
-		zerocopy.NormalizeHeaderKeyValidated(h.bufK, h.disableNormalizing)
-
-		if cap(h.trailer) > len(h.trailer) {
-			h.trailer = h.trailer[:len(h.trailer)+1]
-			h.trailer[len(h.trailer)-1] = append(h.trailer[len(h.trailer)-1][:0], h.bufK...)
-		} else {
-			key = make([]byte, len(h.bufK))
-			copy(key, h.bufK)
-			h.trailer = append(h.trailer, key)
-		}
-	}
-
-	return err
-}
-
-func isValidTrailerKey(key []byte) bool {
-	if len(key) == 0 {
-		return false
-	}
-
-	for _, c := range key {
-		if !zerocopy.ValidHeaderFieldByte(c) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// validHeaderValueByte returns true if c valid header value byte
-// as defined by RFC 7230.
-func validHeaderValueByte(c byte) bool {
-	return zerocopy.ValidHeaderValueByteTable[c] == 1
-}
-
-func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
-	if len(a) == 0 {
-		return false, false
-	}
-
-	for _, c := range a {
-		if !zerocopy.ValidHeaderFieldByte(c) {
-			return false, false
-		}
-	}
-
-	return true, false
-}
-
-// VisitHeaderParams calls f for each parameter in the given header bytes.
-// It stops processing when f returns false or an invalid parameter is found.
-// Parameter values may be quoted, in which case \ is treated as an escape
-// character, and the value is unquoted before being passed to value.
-// See: https://www.rfc-editor.org/rfc/rfc9110#section-5.6.6
-//
-// f must not retain references to key and/or value after returning.
-// Copy key and/or value contents before returning if you need retaining them.
-func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
-	for len(b) > 0 {
-		idxSemi := 0
-		for idxSemi < len(b) && b[idxSemi] != ';' {
-			idxSemi++
-		}
-
-		if idxSemi >= len(b) {
-			return
-		}
-
-		b = b[idxSemi+1:]
-		for len(b) > 0 && b[0] == ' ' {
-			b = b[1:]
-		}
-
-		n := 0
-		if len(b) == 0 || !zerocopy.ValidHeaderFieldByte(b[n]) {
-			return
-		}
-
-		n++
-		for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
-			n++
-		}
-
-		if n >= len(b)-1 || b[n] != '=' {
-			return
-		}
-
-		param := b[:n]
-
-		n++
-		switch {
-		case zerocopy.ValidHeaderFieldByte(b[n]):
-			m := n
-
-			n++
-			for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
-				n++
-			}
-
-			if !f(param, b[m:n]) {
-				return
-			}
-
-		case b[n] == '"':
-			foundEndQuote := false
-			escaping := false
-			n++
-
-			m := n
-			for ; n < len(b); n++ {
-				if b[n] == '"' && !escaping {
-					foundEndQuote = true
-					break
-				}
-
-				escaping = (b[n] == '\\' && !escaping)
-			}
-
-			if !foundEndQuote {
-				return
-			}
-
-			if !f(param, b[m:n]) {
-				return
-			}
-
-			n++
-
-		default:
-			return
-		}
-
-		b = b[n:]
-	}
-}
-
-// Protocol returns HTTP protocol.
+// Protocol returns HTTP protocol version bytes (RFC 9112 Section 2.3).
 func (h *header) Protocol() []byte {
 	if len(h.protocol) == 0 {
 		return zerocopy.StrHTTP11
@@ -333,23 +133,15 @@ func (h *header) Protocol() []byte {
 	return h.protocol
 }
 
-// IsHTTP11 returns true if the header is HTTP/1.1.
+// IsHTTP11 returns true if the protocol is HTTP/1.1 (RFC 9112 Section 2.3).
 func (h *header) IsHTTP11() bool {
 	return !h.noHTTP11
 }
 
 // DisableNormalizing disables header names' normalization.
 //
-// By default all the header names are normalized by uppercasing
-// the first letter and all the first letters following dashes,
-// while lowercasing all the other letters.
-// Examples:
-//
-//   - CONNECTION -> Connection
-//   - conteNT-tYPE -> Content-Type
-//   - foo-bar-baz -> Foo-Bar-Baz
-//
-// Disable header names' normalization only if know what are you doing.
+// By default all header names are normalized by uppercasing the first letter
+// and all first letters following dashes, while lowercasing all other letters.
 // The previous setting is returned.
 func (h *header) DisableNormalizing() bool {
 	orig := h.disableNormalizing
@@ -360,15 +152,7 @@ func (h *header) DisableNormalizing() bool {
 // EnableNormalizing enables header names' normalization.
 //
 // Header names are normalized by uppercasing the first letter and
-// all the first letters following dashes, while lowercasing all
-// the other letters.
-// Examples:
-//
-//   - CONNECTION -> Connection
-//   - conteNT-tYPE -> Content-Type
-//   - foo-bar-baz -> Foo-Bar-Baz
-//
-// This is enabled by default unless disabled using DisableNormalizing().
+// all first letters following dashes, while lowercasing all other letters.
 // The previous setting is returned.
 func (h *header) EnableNormalizing() bool {
 	orig := h.disableNormalizing
@@ -376,7 +160,7 @@ func (h *header) EnableNormalizing() bool {
 	return orig
 }
 
-// SetNoDefaultContentType allows you to control if a default Content-Type header will be set (false) or not (true).
+// SetNoDefaultContentType controls whether a default Content-Type header will be omitted.
 func (h *header) SetNoDefaultContentType(noDefaultContentType bool) {
 	h.noDefaultContentType = noDefaultContentType
 }
@@ -395,516 +179,146 @@ func (h *header) copyTo(dst *header) {
 	copyHeaders(&dst.h, &h.h)
 }
 
-// Trailers returns an iterator over trailers in h.
-//
-// The value of trailer may invalid outside the iteration loop.
-func (h *header) Trailers() iter.Seq[[]byte] {
-	return func(yield func([]byte) bool) {
-		for i := range h.trailer {
-			if !yield(h.trailer[i]) {
-				break
-			}
-		}
-	}
-}
-
-// setNonSpecial directly put into map i.e. not a basic header.
 func (h *header) setNonSpecial(key, value []byte) {
 	setArgBytesHeaders(&h.h, key, value, zerocopy.ArgsHasValue)
 }
 
-// PeekTrailerKeys return all trailer keys.
+// RequestHeader represents an HTTP request header block (RFC 9112 Section 2.1).
 //
-// The returned value is valid until the request is released,
-// either though ReleaseResponse or your request handler returning.
-// Any future calls to the Peek* will modify the returned value.
-// Do not store references to returned value. Make copies instead.
-func (h *header) PeekTrailerKeys() [][]byte {
-	return h.trailer
-}
-
-// ReadTrailer reads the trailing header fields (trailers) after a chunked body (RFC 9112 Section 7.1.2).
+// It is forbidden copying RequestHeader instances by value.
+// Create new instances instead and use CopyTo.
 //
-// io.EOF is returned if r is closed before reading the first byte.
-func (h *header) ReadTrailer(r *bufio.Reader) error {
-	n := 1
-	for {
-		err := h.tryReadTrailer(r, n)
-		if err == nil {
-			return nil
-		}
+// RequestHeader instance MUST NOT be used from concurrently running goroutines.
+type RequestHeader struct {
+	header
+	noCopy zerocopy.NoCopy
+	method []byte
 
-		if !errors.Is(err, ErrNeedMore) {
-			return err
-		}
+	requestURI []byte
+	host       []byte
+	userAgent  []byte
+	rawHeaders []byte // stores an immutable copy of headers as they were received from the wire.
 
-		n = r.Buffered() + 1
-	}
+	disableSpecialHeader bool
+	cookiesCollected     bool
 }
 
-func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
-	b, err := r.Peek(n)
-	if len(b) == 0 {
-		if x, ok := err.(interface{ Timeout() bool }); ok && x.Timeout() {
-			return ErrTimeout
-		}
-
-		if n == 1 || err == io.EOF {
-			return io.EOF
-		}
-
-		if errors.Is(err, bufio.ErrBufferFull) {
-			if h.SecureErrorLogMessage {
-				return &ErrSmallBuffer{error: ErrReadingResponseTrailer}
-			}
-
-			return &ErrSmallBuffer{error: fmt.Errorf("error when reading response trailer: %w", ErrSmallReadBuffer)}
-		}
-
-		return fmt.Errorf("error when reading response trailer: %w", err)
-	}
-
-	b = mustPeekBuffered(r)
-
-	headersLen, errParse := parseTrailerHeaders(b, &h.h, h.disableNormalizing)
-	if errParse != nil {
-		if err == io.EOF {
-			return err
-		}
-
-		return headerError("response", err, errParse, b, h.SecureErrorLogMessage)
-	}
-
-	mustDiscard(r, headersLen)
-
-	return nil
-}
-
-func headerError(typ string, err, errParse error, b []byte, secureErrorLogMessage bool) error {
-	if !errors.Is(errParse, ErrNeedMore) {
-		return headerErrorMsg(typ, errParse, b, secureErrorLogMessage)
-	}
-
-	if err == nil {
-		return ErrNeedMore
-	}
-
-	if isOnlyCRLF(b) {
-		return io.EOF
-	}
-
-	if !errors.Is(err, bufio.ErrBufferFull) {
-		return headerErrorMsg(typ, err, b, secureErrorLogMessage)
-	}
-
-	return &ErrSmallBuffer{error: headerErrorMsg(typ, ErrSmallReadBuffer, b, secureErrorLogMessage)}
-}
-
-func headerErrorMsg(typ string, err error, b []byte, secureErrorLogMessage bool) error {
-	if secureErrorLogMessage {
-		return fmt.Errorf("error when reading %s headers: %w: buffer size=%d", typ, err, len(b))
-	}
-
-	return fmt.Errorf(
-		"error when reading %s headers: %w: buffer size=%d, contents: %s",
-		typ,
-		err,
-		len(b),
-		bufferSnippet(b),
-	)
-}
-
-func bufferSnippet(b []byte) string {
-	n := len(b)
-	start := 200
-
-	end := n - start
-	if start >= end {
-		start = n
-		end = n
-	}
-
-	bStart, bEnd := b[:start], b[end:]
-	if len(bEnd) == 0 {
-		return fmt.Sprintf("%q", b)
-	}
-
-	return fmt.Sprintf("%q...%q", bStart, bEnd)
-}
-
-func isOnlyCRLF(b []byte) bool {
-	for _, ch := range b {
-		if ch != rChar && ch != nChar {
-			return false
-		}
-	}
-
-	return true
-}
-
-func updateServerDate() {
-	refreshServerDate()
-	go func() {
-		for {
-			time.Sleep(time.Second)
-			refreshServerDate()
-		}
-	}()
-}
-
-var (
-	serverDate     atomic.Pointer[[]byte]
-	serverDateOnce sync.Once
-) // serverDateOnce.Do(updateServerDate)
-
-func refreshServerDate() {
-	b := zerocopy.AppendHTTPDate(nil, time.Now())
-	serverDate.Store(&b)
-}
-
-func appendHeaderLine(dst, key, value []byte) []byte {
-	dst = append(dst, key...)
-	dst = append(dst, zerocopy.StrColonSpace...)
-
-	if bytes.IndexByte(value, '\n') < 0 && bytes.IndexByte(value, '\r') < 0 {
-		dst = append(dst, value...)
-	} else {
-		for _, c := range value {
-			if c == '\n' || c == '\r' {
-				dst = append(dst, ' ')
-			} else {
-				dst = append(dst, c)
-			}
-		}
-	}
-
-	return append(dst, zerocopy.StrCRLF...)
-}
-
-func parseTrailer(src []byte, //nolint:unused
-	dest []zerocopy.ArgsKV, disableNormalizing bool,
-) ([]zerocopy.ArgsKV, int, error) {
-	var s headerScanner
-
-	s.b = src
-	for s.next() {
-		s.key = trimTrailingSpace(s.key)
-
-		s.value = trimTrailingSpace(s.value)
-		if len(s.key) == 0 {
-			continue
-		}
-
-		disable := disableNormalizing || s.keyHasSpace
-		if isBadTrailer(s.key) {
-			return dest, 0, fmt.Errorf("forbidden trailer key %q", s.key)
-		}
-
-		for _, ch := range s.value {
-			if !validHeaderValueByte(ch) {
-				return dest, 0, fmt.Errorf("invalid trailer value %q", s.value)
-			}
-		}
-
-		zerocopy.NormalizeHeaderKeyValidated(s.key, disable)
-		dest = zerocopy.AppendArgBytes(dest, s.key, s.value, zerocopy.ArgsHasValue)
-	}
-
-	if s.err != nil {
-		return dest, 0, s.err
-	}
-
-	return dest, s.r, nil
-}
-
-func isBadTrailer(key []byte) bool {
-	if len(key) == 0 {
-		return true
-	}
-
-	switch key[0] | 0x20 {
-	case 'a':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrAuthorization)
-	case 'c':
-		if len(key) >= len(HeaderContentType) && zerocopy.CaseInsensitiveCompare(key[:8], zerocopy.StrContentType[:8]) {
-			return zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentEncoding[8:]) ||
-				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentLength[8:]) ||
-				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentType[8:]) ||
-				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentRange[8:])
-		}
-
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrConnection) ||
-			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrCookie)
-
-	case 'e':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrExpect)
-	case 'h':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrHost)
-	case 'k':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrKeepAlive)
-	case 'l':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrLocation)
-	case 'm':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrMaxForwards)
-	case 'p':
-		if len(key) >= len(HeaderProxyConnection) &&
-			zerocopy.CaseInsensitiveCompare(key[:6], zerocopy.StrProxyConnection[:6]) {
-			return zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyConnection[6:]) ||
-				zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthenticate[6:]) ||
-				zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthorization[6:])
-		}
-
-	case 'r':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrRange)
-	case 's':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrSetCookie)
-	case 't':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTE) ||
-			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTrailer) ||
-			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTransferEncoding)
-	case 'w':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrWWWAuthenticate)
-	case 'x':
-		return (len(key) >= 11 && zerocopy.CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) ||
-			(len(key) >= 9 && zerocopy.CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
-	}
-
-	return false
-}
-
-func isHTTPVersion(proto []byte) bool {
-	return len(proto) == len(zerocopy.StrHTTP11) && bytes.HasPrefix(proto, zerocopy.StrHTTP11[:5]) && proto[6] == '.' &&
-		proto[5] >= '0' &&
-		proto[5] <= '9' &&
-		proto[7] >= '0' &&
-		proto[7] <= '9'
-}
-
-func isValidMethod(method []byte) bool {
-	for _, ch := range method {
-		if zerocopy.ValidMethodValueByteTable[ch] == 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-func validateRequestURI(method, requestURI []byte) error {
-	if zerocopy.StringContainsCTLByte(requestURI) {
-		return zerocopy.ErrorInvalidURI
-	}
-
-	if bytes.IndexByte(requestURI, ' ') >= 0 {
-		return zerocopy.ErrorInvalidURI
-	}
-
-	if len(requestURI) == 1 && requestURI[0] == '*' {
-		return nil
-	}
-
-	if len(requestURI) > 0 && requestURI[0] == '/' {
-		return nil
-	}
-
-	if before, _, ok := bytes.Cut(requestURI, zerocopy.StrColonSlashSlash); ok {
-		if !zerocopy.IsValidScheme(before) {
-			return zerocopy.ErrorInvalidURI
-		}
-
-		return nil
-	}
-
-	if bytes.Equal(method, zerocopy.StrConnect) {
-		return nil
-	}
-
-	return zerocopy.ErrorInvalidURI
-}
-
-func readRawHeaders(dst, buf []byte) ([]byte, int, error) {
-	if len(buf) == 0 {
-		return dst[:0], 0, ErrNeedMore
-	}
-
-	if simd.MatchCRLF(buf) {
-		return dst, 2, nil
-	}
-
-	if buf[0] == nChar {
-		return dst, 1, nil
-	}
-
-	idx := simd.IndexCRLFCRLF(buf)
-	if idx < 0 {
-		return dst, 0, ErrNeedMore
-	}
-
-	dst = append(dst, buf[:idx]...)
-
-	return dst, idx, nil
-}
-
-func parseContentLength(b []byte) (int, error) {
-	v, n, err := zerocopy.ParseUintBuf(b)
-	if err != nil {
-		return -1, fmt.Errorf("cannot parse content-length: %w", err)
-	}
-
-	if n != len(b) {
-		return -1, fmt.Errorf("cannot parse content-length: %w", ErrNonNumericChars)
-	}
-
-	return v, nil
-}
-
-type headerValueScanner struct {
-	b     []byte
-	value []byte
-}
-
-func (s *headerValueScanner) next() bool {
-	b := s.b
-	if len(b) == 0 {
-		return false
-	}
-
-	before, after, ok := bytes.Cut(b, []byte{','})
-	if !ok {
-		s.value = stripSpace(b)
-		s.b = b[len(b):]
-		return true
-	}
-
-	s.value = stripSpace(before)
-	s.b = after
-
-	return true
-}
-
-func stripSpace(b []byte) []byte {
-	for len(b) > 0 && b[0] == ' ' {
-		b = b[1:]
-	}
-
-	for len(b) > 0 && b[len(b)-1] == ' ' {
-		b = b[:len(b)-1]
-	}
-
-	return b
-}
-
-func hasHeaderValue(s, value []byte) bool {
-	var vs headerValueScanner
-
-	vs.b = s
-	for vs.next() {
-		if zerocopy.CaseInsensitiveCompare(vs.value, value) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func nextLine(b []byte) ([]byte, []byte, error) {
-	nNext := simd.IndexByteVector(b, nChar)
-	if nNext < 0 {
-		return nil, nil, ErrNeedMore
-	}
-
-	n := nNext
-	if n > 0 && b[n-1] == rChar {
-		n--
-	}
-
-	return b[:n], b[nNext+1:], nil
-}
-
-// AppendNormalizedHeaderKey appends normalized header key (name) to dst
-// and returns the resulting dst.
+// Reset clears request header.
 //
-// Normalized header key starts with uppercase letter. The first letters
-// after dashes are also uppercased. All the other letters are lowercased.
-// Examples:
+// Thread-safe: No.
+func (h *RequestHeader) Reset() {
+	h.disableSpecialHeader = false
+	h.disableNormalizing = false
+	h.SetNoDefaultContentType(false)
+	h.resetSkipNormalize()
+}
+
+func (h *RequestHeader) resetSkipNormalize() {
+	h.noHTTP11 = false
+	h.connectionClose = false
+	h.contentLength = 0
+	h.contentLengthBytes = h.contentLengthBytes[:0]
+	h.method = h.method[:0]
+	h.protocol = h.protocol[:0]
+	h.requestURI = h.requestURI[:0]
+	h.host = h.host[:0]
+	h.contentType = h.contentType[:0]
+	h.userAgent = h.userAgent[:0]
+	h.trailer = h.trailer[:0]
+	h.mulHeader = h.mulHeader[:0]
+	h.h.Reset()
+	h.cookies = h.cookies[:0]
+	h.cookiesCollected = false
+	h.rawHeaders = h.rawHeaders[:0]
+}
+
+// CopyTo copies all headers from h to dst.
 //
-//   - coNTENT-TYPe -> Content-Type
-//   - HOST -> Host
-//   - foo-bar-baz -> Foo-Bar-Baz
-func AppendNormalizedHeaderKey(dst []byte, key string) []byte {
-	dst = append(dst, key...)
-	zerocopy.NormalizeHeaderKey(dst[len(dst)-len(key):], false)
-	return dst
+// Thread-safe: No.
+func (h *RequestHeader) CopyTo(dst *RequestHeader) {
+	dst.Reset()
+	h.copyTo(&dst.header)
+	dst.method = append(dst.method, h.method...)
+	dst.requestURI = append(dst.requestURI, h.requestURI...)
+	dst.host = append(dst.host, h.host...)
+	dst.userAgent = append(dst.userAgent, h.userAgent...)
+	dst.cookiesCollected = h.cookiesCollected
+	dst.rawHeaders = append(dst.rawHeaders, h.rawHeaders...)
 }
 
-// AppendNormalizedHeaderKeyBytes appends normalized header key (name) to dst
-// and returns the resulting dst.
+// DisableSpecialHeader disables special header processing.
 //
-// Normalized header key starts with uppercase letter. The first letters
-// after dashes are also uppercased. All the other letters are lowercased.
-// Examples:
+// Special headers are: Content-Type, Content-Length, Connection, Transfer-Encoding, Host, User-Agent.
+// The previous setting is returned.
+func (h *RequestHeader) DisableSpecialHeader() bool {
+	orig := h.disableSpecialHeader
+	h.disableSpecialHeader = true
+	return orig
+}
+
+// EnableSpecialHeader enables special header processing.
 //
-//   - coNTENT-TYPe -> Content-Type
-//   - HOST -> Host
-//   - foo-bar-baz -> Foo-Bar-Baz
-func AppendNormalizedHeaderKeyBytes(dst, key []byte) []byte {
-	return AppendNormalizedHeaderKey(dst, bytesconv.B2S(key))
+// Special headers are: Content-Type, Content-Length, Connection, Transfer-Encoding, Host, User-Agent.
+// The previous setting is returned.
+func (h *RequestHeader) EnableSpecialHeader() bool {
+	orig := h.disableSpecialHeader
+	h.disableSpecialHeader = false
+	return orig
 }
 
-func appendTrailerBytes(dst []byte, trailer [][]byte, sep []byte) []byte {
-	for i, n := 0, len(trailer); i < n; i++ {
-		dst = append(dst, trailer[i]...)
-		if i+1 < n {
-			dst = append(dst, sep...)
-		}
-	}
-
-	return dst
-}
-
-func copyTrailer(dst, src [][]byte) [][]byte {
-	if cap(dst) >= len(src) {
-		dst = dst[:len(src)]
-	} else {
-		dst = make([][]byte, len(src))
-	}
-
-	for i := range dst {
-		l := len(src[i])
-		if cap(dst[i]) >= l {
-			dst[i] = dst[i][:l]
-		} else {
-			dst[i] = make([]byte, l)
-		}
-
-		copy(dst[i], src[i])
-	}
-
-	return dst
-}
-
-// ErrNothingRead is returned when a keep-alive connection is closed,
-// either because the remote closed it or because of a read timeout.
-type ErrNothingRead struct{ error }
-
-// ErrSmallBuffer is returned when the provided buffer size is too small
-// for reading request and/or response headers.
+// ResponseHeader represents an HTTP response header block (RFC 9112 Section 2.1).
 //
-// ReadBufferSize value from Server or clients should reduce the number
-// of such errors.
-type ErrSmallBuffer struct{ error }
+// It is forbidden copying ResponseHeader instances by value.
+// Create new instances instead and use CopyTo.
+//
+// ResponseHeader instance MUST NOT be used from concurrently running goroutines.
+type ResponseHeader struct {
+	header
+	noCopy        zerocopy.NoCopy
+	statusMessage []byte
 
-func mustPeekBuffered(r *bufio.Reader) []byte {
-	buf, err := r.Peek(r.Buffered())
-	if len(buf) == 0 || err != nil {
-		panic(fmt.Sprintf("bufio.Reader.Peek() returned unexpected data (%q, %v)", buf, err))
-	}
-
-	return buf
+	contentEncoding []byte
+	server          []byte
+	statusCode      int
+	noDefaultDate   bool
 }
 
-func mustDiscard(r *bufio.Reader, n int) {
-	if _, err := r.Discard(n); err != nil {
-		panic(fmt.Sprintf("bufio.Reader.Discard(%d) failed: %v", n, err))
-	}
+// Reset clears response header.
+//
+// Thread-safe: No.
+func (h *ResponseHeader) Reset() {
+	h.disableNormalizing = false
+	h.SetNoDefaultContentType(false)
+	h.noDefaultDate = false
+	h.resetSkipNormalize()
+}
+
+func (h *ResponseHeader) resetSkipNormalize() {
+	h.noHTTP11 = false
+	h.connectionClose = false
+	h.statusCode = 0
+	h.statusMessage = h.statusMessage[:0]
+	h.protocol = h.protocol[:0]
+	h.contentLength = 0
+	h.contentLengthBytes = h.contentLengthBytes[:0]
+	h.contentType = h.contentType[:0]
+	h.contentEncoding = h.contentEncoding[:0]
+	h.server = h.server[:0]
+	h.h.Reset()
+	h.cookies = h.cookies[:0]
+	h.trailer = h.trailer[:0]
+	h.mulHeader = h.mulHeader[:0]
+}
+
+// CopyTo copies all headers from h to dst.
+//
+// Thread-safe: No.
+func (h *ResponseHeader) CopyTo(dst *ResponseHeader) {
+	dst.Reset()
+	h.copyTo(&dst.header)
+	dst.noDefaultDate = h.noDefaultDate
+	dst.statusCode = h.statusCode
+	dst.statusMessage = append(dst.statusMessage, h.statusMessage...)
+	dst.contentEncoding = append(dst.contentEncoding, h.contentEncoding...)
+	dst.server = append(dst.server, h.server...)
 }

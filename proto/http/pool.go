@@ -6,7 +6,31 @@ package http
 
 import (
 	"sync"
+	"sync/atomic"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
+
+var (
+	requestBodyPoolSizeLimit  atomic.Int64
+	responseBodyPoolSizeLimit atomic.Int64
+
+	responseBodyPool bytesconv.ByteBufferPool
+	requestBodyPool  bytesconv.ByteBufferPool
+)
+
+// SetBodySizePoolLimit sets the maximum byte size for request and response body buffers
+// to be recycled in internal ByteBuffer pools.
+//
+// Buffers exceeding these limits are released to the garbage collector upon disposal
+// rather than being retained in the pool, mitigating heap bloat from sporadic large payloads.
+// Passing negative values disables the size cap (unlimited reuse).
+//
+// Concurrency: Thread-safe; uses atomic store operations.
+func SetBodySizePoolLimit(reqBodyLimit, respBodyLimit int) {
+	requestBodyPoolSizeLimit.Store(int64(reqBodyLimit))
+	responseBodyPoolSizeLimit.Store(int64(respBodyLimit))
+}
 
 var requestStorage sync.Pool
 
@@ -56,4 +80,9 @@ func AcquireResponse() *Response {
 func ReleaseResponse(resp *Response) {
 	resp.Reset()
 	responseStorage.Put(resp)
+}
+
+func init() {
+	requestBodyPoolSizeLimit.Store(-1)
+	responseBodyPoolSizeLimit.Store(-1)
 }

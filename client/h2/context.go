@@ -12,6 +12,7 @@ import (
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
+// DefaultPingInterval specifies the default 10-second period between keepalive PING frames (RFC 9113 §6.7).
 const DefaultPingInterval = time.Second * 10
 
 type streamState int32
@@ -23,6 +24,8 @@ const (
 	streamClosed
 )
 
+// ClientOpts defines legacy connection configuration options retained for backward compatibility.
+// Use ConnOpts in conn.go as the primary connection options type.
 type ClientOpts struct {
 	PingInterval  time.Duration
 	OnRTT         func(time.Duration)
@@ -30,22 +33,40 @@ type ClientOpts struct {
 	Settings      *coreh2.Settings
 }
 
+// Context encapsulates stream-level lifecycle state, request/response message envelopes,
+// and stream flow-control windows for an active HTTP/2 exchange (RFC 9113 §5.1).
+//
+// Concurrency:
+// StreamID and state are managed via atomic primitives to eliminate data races between
+// request cancellation (CancelStream) and egress request writing (writeRequest).
 type Context struct {
 	Request        *h1.Request
 	Response       *h1.Response
 	Err            chan error
 	Trailers       map[string][]string
-	StreamID       uint32
+	StreamID       atomic.Uint32
 	streamWindow   atomic.Int32
 	streamRxWindow atomic.Int32
 	state          atomic.Int32
 	headersParsed  bool
 }
 
+// ID returns the active stream identifier (RFC 9113 §5.1.1).
+func (ctx *Context) ID() uint32 {
+	return ctx.StreamID.Load()
+}
+
+// SetID sets the active stream identifier.
+func (ctx *Context) SetID(id uint32) {
+	ctx.StreamID.Store(id)
+}
+
+// State returns the current stream state (RFC 9113 §5.1).
 func (ctx *Context) State() streamState {
 	return streamState(ctx.state.Load())
 }
 
+// SetState updates the stream state.
 func (ctx *Context) SetState(s streamState) {
 	ctx.state.Store(int32(s))
 }
