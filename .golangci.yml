@@ -73,3 +73,32 @@ linters:
     presets:
       - common-false-positives
       - std-error-handling
+    rules:
+      - linters: [errcheck, revive, staticcheck, protogetter]
+        path: .*(pb\.go|generated\.go)
+
+      - linters: [gosec]
+        text: "G103:"
+
+      - linters: [gosec]
+        text: "G104:"
+
+      - linters: [gosec]
+        text: "G404:"
+
+      - linters: [gosec]
+        text: "G115:"
+
+      - linters: [gosec]
+        text: "G306:|G301:"
+
+      - linters: [revive]
+        path: "_test\\.go"
+        text: "exported: (exported|comment on exported)"
+
+      - linters: [gosec, noctx, bodyclose, errcheck, prealloc, staticcheck, errorlint, gocritic, unused, perfsprint, ineffassign, wsl_v5]
+        path: "_test\\.go"
+
+    paths:
+      - "tests/.*"
+      - "scripts/.*"
