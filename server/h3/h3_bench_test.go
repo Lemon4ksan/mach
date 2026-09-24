@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/qpack"
-
-	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {

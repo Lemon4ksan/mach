@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/mach/proto/sse"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/proto/sse"
 )
 
 type customCloserReader struct {

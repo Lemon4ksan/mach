@@ -5,9 +5,10 @@
 package qpack
 
 import (
-	"github.com/lemon4ksan/mach/hpack"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
+
+	"github.com/lemon4ksan/mach/hpack"
 )
 
 var huffmanDecStorage = pool.NewPerPStorage(func() *[]byte {

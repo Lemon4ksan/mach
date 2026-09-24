@@ -54,6 +54,7 @@ func (q *BufferQueue) Push(b []byte) {
 	if len(b) == 0 {
 		return
 	}
+
 	q.bufs = append(q.bufs, b)
 	q.totalBytes += int64(len(b))
 }

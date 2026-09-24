@@ -128,6 +128,7 @@ func (r *Reader[T]) All() iter.Seq2[T, error] {
 				if !errors.Is(err, io.EOF) {
 					yield(val, err)
 				}
+
 				return
 			}
 
@@ -159,6 +160,7 @@ func (r *Reader[T]) Channel(ctx context.Context) (<-chan T, <-chan error) {
 					if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
 						errCh <- err
 					}
+
 					return
 				}
 

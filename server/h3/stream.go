@@ -12,12 +12,12 @@ import (
 	"net/http"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	"github.com/lemon4ksan/mach/proto/headkit"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H3 stream request (RFC 9114 §4.1).

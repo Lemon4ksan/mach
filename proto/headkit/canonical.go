@@ -39,6 +39,7 @@ func IsCanonical(s string) bool {
 				return false
 			}
 		}
+
 		upper = (c == '-')
 	}
 
@@ -66,6 +67,7 @@ func CanonicalKeyBytes(b []byte) []byte {
 				b[i] += 'a' - 'A'
 			}
 		}
+
 		upper = (c == '-')
 	}
 

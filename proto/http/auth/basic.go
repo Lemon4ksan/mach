@@ -101,6 +101,7 @@ func ParseBasicChallenge(challengeHeader string) (BasicChallenge, bool) {
 	parsedParams, _ := ExtractChallengeParams(challengeHeader, "Basic")
 
 	var ch BasicChallenge
+
 	foundRealm := false
 
 	if realm, ok := parsedParams["realm"]; ok {
@@ -120,6 +121,7 @@ func ParseBasicChallenge(challengeHeader string) (BasicChallenge, bool) {
 // InScope verifies whether a target request URI falls within the canonical protection space (RFC 7617 §2.2).
 func InScope(reqURL, scopeRootURL string) bool {
 	parsedReq, errReq := url.Parse(reqURL)
+
 	parsedScope, errScope := url.Parse(scopeRootURL)
 	if errReq != nil || errScope != nil {
 		return false

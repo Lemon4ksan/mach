@@ -11,10 +11,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
+
+	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // Read reads an HTTP request header block from r up to and including the CRLFCRLF terminator (RFC 9112 Section 2.1).

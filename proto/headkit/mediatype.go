@@ -27,6 +27,7 @@ func ParseMediaType(v string) (string, DirectivesMap, error) {
 	}
 
 	rawType, rest, ok := strings.Cut(v, ";")
+
 	mediaType := strings.ToLower(strings.TrimSpace(rawType))
 	if mediaType == "" || !strings.Contains(mediaType, "/") {
 		return "", DirectivesMap{}, ErrInvalidMediaType
@@ -105,6 +106,7 @@ func FormatMediaType(mediaType string, params map[string]string) string {
 		sb.WriteString("; ")
 		sb.WriteString(strings.ToLower(strings.TrimSpace(k)))
 		sb.WriteString("=")
+
 		if strings.ContainsAny(v, " ;\"=(),/") {
 			sb.WriteString(strconvQuote(v))
 		} else {

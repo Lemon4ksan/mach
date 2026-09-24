@@ -41,6 +41,7 @@ func Accepts(header string) iter.Seq[AcceptItem] {
 			}
 
 			var end int
+
 			inQuote := false
 
 			for end = 0; end < len(s); end++ {
@@ -78,6 +79,7 @@ func parseAcceptToken(token string) AcceptItem {
 	parts := strings.Split(token, ";")
 	val := strings.ToLower(strings.TrimSpace(parts[0]))
 	q := float32(1.0)
+
 	var params map[string]string
 
 	for i := 1; i < len(parts); i++ {
@@ -87,6 +89,7 @@ func parseAcceptToken(token string) AcceptItem {
 		}
 
 		k, v, ok := strings.Cut(p, "=")
+
 		k = strings.ToLower(strings.TrimSpace(k))
 		if ok {
 			v = strings.TrimSpace(v)
@@ -105,6 +108,7 @@ func parseAcceptToken(token string) AcceptItem {
 			if params == nil {
 				params = make(map[string]string)
 			}
+
 			params[k] = v
 		}
 	}
@@ -131,6 +135,7 @@ func SortedAccepts(header string) []AcceptItem {
 		} else if b.Q < a.Q {
 			return -1
 		}
+
 		return 0
 	})
 

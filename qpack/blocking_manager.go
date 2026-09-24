@@ -37,6 +37,7 @@ func (s *IndexSet) MinIndex() (uint64, bool) {
 	if !s.hasIndex {
 		return 0, false
 	}
+
 	return s.minIndex, true
 }
 
@@ -45,6 +46,7 @@ func (s *IndexSet) MaxIndex() (uint64, bool) {
 	if !s.hasIndex {
 		return 0, false
 	}
+
 	return s.maxIndex, true
 }
 
@@ -53,6 +55,7 @@ func (s *IndexSet) RequiredInsertCount() uint64 {
 	if !s.hasIndex {
 		return 0
 	}
+
 	return s.maxIndex + 1
 }
 
@@ -67,6 +70,7 @@ func (s *IndexSet) Insert(index uint64) {
 		if index < s.minIndex {
 			s.minIndex = index
 		}
+
 		if index > s.maxIndex {
 			s.maxIndex = index
 		}
@@ -109,16 +113,20 @@ func NewHeaderData(indices []uint64) HeaderData {
 			hasMinIndex:         false,
 		}
 	}
+
 	minIdx := indices[0]
+
 	maxIdx := indices[0]
 	for _, idx := range indices[1:] {
 		if idx < minIdx {
 			minIdx = idx
 		}
+
 		if idx > maxIdx {
 			maxIdx = idx
 		}
 	}
+
 	return HeaderData{
 		indices:             indices,
 		requiredInsertCount: maxIdx + 1,
@@ -183,6 +191,7 @@ func NewBlockingManager(maxBlockedStreams ...uint64) *BlockingManager {
 	if len(maxBlockedStreams) > 0 {
 		maxVal = maxBlockedStreams[0]
 	}
+
 	return &BlockingManager{
 		streamMap:             make(map[uint64][]HeaderData),
 		blockedStreams:        make(map[uint64]struct{}),
@@ -221,7 +230,9 @@ func (m *BlockingManager) OnHeaderBlockReceived(streamId, requiredInsertCount ui
 	if requiredInsertCount > m.knownReceivedCount {
 		m.blockedStreams[streamId] = struct{}{}
 	}
+
 	_, blocked := m.blockedStreams[streamId]
+
 	return blocked
 }
 
@@ -232,8 +243,10 @@ func (m *BlockingManager) OnInsertCountIncrement(increment uint64) bool {
 	if math.MaxUint64-m.knownReceivedCount < increment {
 		return false
 	}
+
 	m.knownReceivedCount += increment
 	m.updateBlockedStreams()
+
 	return true
 }
 
@@ -282,8 +295,10 @@ func (m *BlockingManager) OnStreamCancellation(streamId uint64) {
 				m.removeMinIndex(blocks[i].minIndex)
 			}
 		}
+
 		delete(m.streamMap, streamId)
 	}
+
 	delete(m.blockedStreams, streamId)
 }
 
@@ -368,9 +383,11 @@ func (m *BlockingManager) BlockingAllowedOnStream(streamId uint64, maxBlockedStr
 	if len(maxBlockedStreams) > 0 {
 		maxBlocked = maxBlockedStreams[0]
 	}
+
 	if m.IsBlocked(streamId) {
 		return true
 	}
+
 	return uint64(len(m.blockedStreams)) < maxBlocked
 }
 
@@ -387,11 +404,13 @@ func (m *BlockingManager) isStreamBlocked(streamId uint64) bool {
 	if !ok || len(blocks) == 0 {
 		return false
 	}
+
 	for i := range blocks {
 		if blocks[i].requiredInsertCount > m.knownReceivedCount {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -416,8 +435,10 @@ func (m *BlockingManager) removeMinIndex(index uint64) {
 	if !ok {
 		return
 	}
+
 	if count <= 1 {
 		delete(m.minIndexRefCounts, index)
+
 		if index == m.smallestBlockingIndex {
 			m.recomputeSmallestBlockingIndex()
 		}
@@ -431,11 +452,13 @@ func (m *BlockingManager) recomputeSmallestBlockingIndex() {
 		m.smallestBlockingIndex = math.MaxUint64
 		return
 	}
+
 	minVal := uint64(math.MaxUint64)
 	for idx := range m.minIndexRefCounts {
 		if idx < minVal {
 			minVal = idx
 		}
 	}
+
 	m.smallestBlockingIndex = minVal
 }

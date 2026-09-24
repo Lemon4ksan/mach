@@ -7,8 +7,9 @@ package contentdisposition_test
 import (
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/http/contentdisposition"
 	"github.com/lemon4ksan/foundation/testing/assert"
+
+	"github.com/lemon4ksan/mach/proto/http/contentdisposition"
 )
 
 func TestContentDisposition_RFC6266_And_RFC8187(t *testing.T) {

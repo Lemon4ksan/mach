@@ -12,12 +12,12 @@ import (
 
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/mach/qpack"
 )
 
 func TestSendRequest_HeadersAndBody(t *testing.T) {

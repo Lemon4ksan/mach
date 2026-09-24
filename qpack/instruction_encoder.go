@@ -121,6 +121,7 @@ func (e *InstructionEncoder) doSbit(sBit bool) {
 	if sBit {
 		e.byte_ |= field.Param
 	}
+
 	e.fieldIdx++
 	e.state = encoderStateStartField
 }
@@ -197,5 +198,6 @@ func qpackEncodeVarint(highBits, prefixLength uint8, varint uint64, output *[]by
 		*output = append(*output, uint8(0x80|(varint%128)))
 		varint >>= 7
 	}
+
 	*output = append(*output, uint8(varint))
 }

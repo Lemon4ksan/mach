@@ -82,9 +82,11 @@ func (e *Error) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
+
 	if e.Err != nil {
 		return fmt.Sprintf("qpack: error %d: %s: %v", e.Code, e.Message, e.Err)
 	}
+
 	return fmt.Sprintf("qpack: error %d: %s", e.Code, e.Message)
 }
 
@@ -93,6 +95,7 @@ func (e *Error) Unwrap() error {
 	if e == nil {
 		return nil
 	}
+
 	return e.Err
 }
 
@@ -101,12 +104,15 @@ func (e *Error) Is(target error) bool {
 	if e == nil || target == nil {
 		return false
 	}
+
 	if qerr, ok := target.(*Error); ok {
 		return e.Code == qerr.Code
 	}
+
 	if e.Err != nil && errors.Is(e.Err, target) {
 		return true
 	}
+
 	switch target {
 	case ErrDecompressionFailed:
 		return e.Code == ErrCodeDecompressionFailed
@@ -127,6 +133,7 @@ func (e *Error) Is(target error) bool {
 			ErrCodeEncoderSetDynamicTableCapacity:
 			return true
 		}
+
 	case ErrDecoderStream:
 		switch e.Code {
 		case ErrCodeDecoderStreamError,
@@ -137,6 +144,7 @@ func (e *Error) Is(target error) bool {
 			ErrCodeDecoderIncorrectAcknowledgement:
 			return true
 		}
+
 	case ErrIntegerOverflow:
 		return e.Code == ErrCodeEncoderIntegerTooLarge || e.Code == ErrCodeDecoderIntegerTooLarge
 	case ErrStringLiteralTooLong:
@@ -149,6 +157,7 @@ func (e *Error) Is(target error) bool {
 		return e.Code == ErrCodeEncoderInsertionDynamicEntryNotFound ||
 			e.Code == ErrCodeEncoderDuplicateDynamicEntryNotFound
 	}
+
 	return false
 }
 

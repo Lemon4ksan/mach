@@ -8,7 +8,6 @@ import (
 	"bufio"
 
 	"github.com/lemon4ksan/mach/hpack"
-
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 

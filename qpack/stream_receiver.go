@@ -60,10 +60,12 @@ func NewEncoderStreamReceiver(delegate EncoderStreamReceiverDelegate) *EncoderSt
 	if delegate == nil {
 		panic("qpack: delegate must not be nil")
 	}
+
 	r := &EncoderStreamReceiver{
 		delegate: delegate,
 	}
 	r.instructionDecoder = NewInstructionDecoder(EncoderStreamLanguage(), r)
+
 	return r
 }
 
@@ -73,6 +75,7 @@ func (r *EncoderStreamReceiver) Decode(data []byte) {
 	if len(data) == 0 || r.errorDetected {
 		return
 	}
+
 	r.instructionDecoder.Decode(data)
 }
 
@@ -81,6 +84,7 @@ func (r *EncoderStreamReceiver) EndDecoding() {
 	if r.errorDetected {
 		return
 	}
+
 	r.instructionDecoder.EndDecoding()
 }
 
@@ -89,24 +93,30 @@ func (r *EncoderStreamReceiver) EndDecoding() {
 // If an instruction decoding error occurs, ErrEncoderStream is returned.
 func (r *EncoderStreamReceiver) ReadFrom(reader io.Reader) (int64, error) {
 	buf := make([]byte, 4096)
+
 	var total int64
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 {
 			r.Decode(buf[:n])
+
 			total += int64(n)
 			if r.errorDetected {
 				return total, ErrEncoderStream
 			}
 		}
+
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				r.EndDecoding()
+
 				if r.errorDetected {
 					return total, ErrEncoderStream
 				}
+
 				return total, nil
 			}
+
 			return total, err
 		}
 	}
@@ -120,6 +130,7 @@ func (r *EncoderStreamReceiver) OnInstructionDecoded(instruction *Instruction) b
 			r.instructionDecoder.Varint(),
 			r.instructionDecoder.Value(),
 		)
+
 		return true
 	}
 
@@ -128,6 +139,7 @@ func (r *EncoderStreamReceiver) OnInstructionDecoded(instruction *Instruction) b
 			r.instructionDecoder.Name(),
 			r.instructionDecoder.Value(),
 		)
+
 		return true
 	}
 
@@ -152,6 +164,7 @@ func (r *EncoderStreamReceiver) OnInstructionDecodingError(
 	if r.errorDetected {
 		return
 	}
+
 	r.errorDetected = true
 	r.delegate.Error(QPACK_ENCODER_STREAM_ERROR, errorMessage)
 }
@@ -168,10 +181,12 @@ func NewDecoderStreamReceiver(delegate DecoderStreamReceiverDelegate) *DecoderSt
 	if delegate == nil {
 		panic("qpack: delegate must not be nil")
 	}
+
 	r := &DecoderStreamReceiver{
 		delegate: delegate,
 	}
 	r.instructionDecoder = NewInstructionDecoder(DecoderStreamLanguage(), r)
+
 	return r
 }
 
@@ -181,6 +196,7 @@ func (r *DecoderStreamReceiver) Decode(data []byte) {
 	if len(data) == 0 || r.errorDetected {
 		return
 	}
+
 	r.instructionDecoder.Decode(data)
 }
 
@@ -189,6 +205,7 @@ func (r *DecoderStreamReceiver) EndDecoding() {
 	if r.errorDetected {
 		return
 	}
+
 	r.instructionDecoder.EndDecoding()
 }
 
@@ -197,24 +214,30 @@ func (r *DecoderStreamReceiver) EndDecoding() {
 // If an instruction decoding error occurs, ErrDecoderStream is returned.
 func (r *DecoderStreamReceiver) ReadFrom(reader io.Reader) (int64, error) {
 	buf := make([]byte, 4096)
+
 	var total int64
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 {
 			r.Decode(buf[:n])
+
 			total += int64(n)
 			if r.errorDetected {
 				return total, ErrDecoderStream
 			}
 		}
+
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				r.EndDecoding()
+
 				if r.errorDetected {
 					return total, ErrDecoderStream
 				}
+
 				return total, nil
 			}
+
 			return total, err
 		}
 	}
@@ -248,6 +271,7 @@ func (r *DecoderStreamReceiver) OnInstructionDecodingError(
 	if r.errorDetected {
 		return
 	}
+
 	r.errorDetected = true
 	r.delegate.Error(QPACK_DECODER_STREAM_ERROR, errorMessage)
 }
@@ -271,6 +295,7 @@ func QuicErrorCodeFromDecoderInstructionError(errCode InstructionDecoderErrorCod
 	if errCode == InstructionDecoderIntegerTooLarge {
 		return QUIC_QPACK_DECODER_STREAM_INTEGER_TOO_LARGE
 	}
+
 	return 0
 }
 

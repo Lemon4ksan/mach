@@ -125,6 +125,7 @@ func (f *Framer) WriteFrame(w io.Writer, flags byte, payload []byte) (int, error
 	}
 
 	var header [5]byte
+
 	header[0] = flags
 	binary.BigEndian.PutUint32(header[1:5], length)
 

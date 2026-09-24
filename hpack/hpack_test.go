@@ -30,7 +30,6 @@ func TestHuffmanEncodingSymmetry(t *testing.T) {
 	}
 }
 
-
 func TestHPACKDynamicTableShrinking(t *testing.T) {
 	hp := AcquireHPACK()
 	defer ReleaseHPACK(hp)

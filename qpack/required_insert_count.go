@@ -11,6 +11,7 @@ func EncodeRequiredInsertCount(requiredInsertCount, maxEntries uint64) uint64 {
 	if requiredInsertCount == 0 {
 		return 0
 	}
+
 	return (requiredInsertCount % (2 * maxEntries)) + 1
 }
 
@@ -37,6 +38,7 @@ func DecodeRequiredInsertCount(encodedRequiredInsertCount, maxEntries, totalNumb
 	if reqInsertCount > math.MaxUint64-totalNumberOfInserts {
 		return 0, false
 	}
+
 	reqInsertCount += totalNumberOfInserts
 
 	if currentWrapped >= reqInsertCount {
@@ -44,5 +46,6 @@ func DecodeRequiredInsertCount(encodedRequiredInsertCount, maxEntries, totalNumb
 	}
 
 	reqInsertCount -= currentWrapped
+
 	return reqInsertCount, true
 }

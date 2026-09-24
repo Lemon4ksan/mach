@@ -12,6 +12,7 @@ func AbsoluteIndexToEncoderStreamRelativeIndex(absoluteIndex, insertedEntryCount
 	if absoluteIndex >= insertedEntryCount {
 		panic("qpack: absoluteIndex must be less than insertedEntryCount")
 	}
+
 	return insertedEntryCount - absoluteIndex - 1
 }
 
@@ -26,6 +27,7 @@ func EncoderStreamRelativeIndexToAbsoluteIndex(relativeIndex, insertedEntryCount
 	if relativeIndex >= insertedEntryCount {
 		return 0, false
 	}
+
 	return insertedEntryCount - relativeIndex - 1, true
 }
 
@@ -40,6 +42,7 @@ func AbsoluteIndexToRequestStreamRelativeIndex(absoluteIndex, base uint64) uint6
 	if absoluteIndex >= base {
 		panic("qpack: absoluteIndex must be less than base")
 	}
+
 	return base - absoluteIndex - 1
 }
 
@@ -54,6 +57,7 @@ func RequestStreamRelativeIndexToAbsoluteIndex(relativeIndex, base uint64) (uint
 	if relativeIndex >= base {
 		return 0, false
 	}
+
 	return base - relativeIndex - 1, true
 }
 
@@ -68,6 +72,7 @@ func PostBaseIndexToAbsoluteIndex(postBaseIndex, base uint64) (uint64, bool) {
 	if postBaseIndex >= math.MaxUint64-base {
 		return 0, false
 	}
+
 	return base + postBaseIndex, true
 }
 
@@ -77,5 +82,6 @@ func AbsoluteIndexToPostBaseIndex(absoluteIndex, base uint64) uint64 {
 	if absoluteIndex < base {
 		panic("qpack: absoluteIndex must be greater than or equal to base")
 	}
+
 	return absoluteIndex - base
 }

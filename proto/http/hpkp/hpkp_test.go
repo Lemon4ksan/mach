@@ -15,9 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/mach/proto/http/hpkp"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/proto/http/hpkp"
 )
 
 func generateTestCert(t *testing.T, commonName string) (*x509.Certificate, []byte) {

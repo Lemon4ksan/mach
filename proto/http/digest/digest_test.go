@@ -16,9 +16,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/http/digest"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/proto/http/digest"
 )
 
 func TestDigestAuth_MD5_Success(t *testing.T) {

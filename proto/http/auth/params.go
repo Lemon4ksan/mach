@@ -22,6 +22,7 @@ func ExtractChallengeParams(header, scheme string) (map[string]string, bool) {
 	if len(rest) > 0 && rest[0] != ' ' && rest[0] != '\t' && rest[0] != ',' && rest[0] != '=' {
 		return nil, false
 	}
+
 	rest = strings.TrimSpace(rest)
 
 	m := make(map[string]string)
@@ -48,33 +49,44 @@ func ExtractChallengeParams(header, scheme string) (map[string]string, bool) {
 		var val string
 		if len(rest) > 0 && rest[0] == '"' {
 			rest = rest[1:]
+
 			var sb strings.Builder
+
 			escaped := false
+
 			foundQuote := false
 			for i, c := range rest {
 				if escaped {
 					sb.WriteRune(c)
+
 					escaped = false
+
 					continue
 				}
+
 				if c == '\\' {
 					escaped = true
 					continue
 				}
+
 				if c == '"' {
 					rest = rest[i+1:]
 					foundQuote = true
 					break
 				}
+
 				sb.WriteRune(c)
 			}
+
 			if !foundQuote {
 				rest = ""
 			}
+
 			val = sb.String()
 		} else {
 			commaIdx := strings.IndexByte(rest, ',')
 			spaceIdx2 := strings.IndexByte(rest, ' ')
+
 			endIdx := commaIdx
 			if spaceIdx2 >= 0 && (endIdx < 0 || spaceIdx2 < endIdx) {
 				endIdx = spaceIdx2

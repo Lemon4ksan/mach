@@ -102,6 +102,7 @@ func (d *ProgressiveDecoder) Decode(data []byte) {
 		if !d.prefixDecoder.Decode(data[:1]) {
 			return
 		}
+
 		if d.errorDetected {
 			return
 		}
@@ -117,6 +118,7 @@ func (d *ProgressiveDecoder) Decode(data []byte) {
 			d.onError(QPACK_DECOMPRESSION_FAILED, "Too much buffered data.")
 			return
 		}
+
 		d.buffer = append(d.buffer, data...)
 	} else {
 		d.instructionDecoder.Decode(data)
@@ -130,15 +132,20 @@ func (d *ProgressiveDecoder) Write(p []byte) (n int, err error) {
 		if d.lastErr != nil {
 			return 0, d.lastErr
 		}
+
 		return 0, ErrDecompressionFailed
 	}
+
 	d.Decode(p)
+
 	if d.errorDetected {
 		if d.lastErr != nil {
 			return 0, d.lastErr
 		}
+
 		return 0, ErrDecompressionFailed
 	}
+
 	return len(p), nil
 }
 
@@ -166,15 +173,19 @@ func (d *ProgressiveDecoder) OnInstructionDecoded(instruction *Instruction) bool
 	if instruction == IndexedHeaderFieldInstruction() {
 		return d.doIndexedHeaderFieldInstruction()
 	}
+
 	if instruction == IndexedHeaderFieldPostBaseInstruction() {
 		return d.doIndexedHeaderFieldPostBaseInstruction()
 	}
+
 	if instruction == LiteralHeaderFieldNameReferenceInstruction() {
 		return d.doLiteralHeaderFieldNameReferenceInstruction()
 	}
+
 	if instruction == LiteralHeaderFieldPostBaseNameReferenceInstruction() {
 		return d.doLiteralHeaderFieldPostBaseInstruction()
 	}
+
 	if instruction == LiteralHeaderFieldInstruction() {
 		return d.doLiteralHeaderFieldInstruction()
 	}
@@ -198,6 +209,7 @@ func (d *ProgressiveDecoder) OnInsertCountReachedThreshold() {
 
 	if len(d.buffer) > 0 {
 		buf := d.buffer
+
 		d.buffer = nil
 		if !d.instructionDecoder.Decode(buf) {
 			return
@@ -221,22 +233,28 @@ func (d *ProgressiveDecoder) Close() error {
 	if d.decoding && !d.cancelled && !d.blocked {
 		d.EndHeaderBlock()
 	}
+
 	if d.blocked {
 		if d.enforcer != nil {
 			d.enforcer.OnStreamUnblocked(d.streamID)
 		}
+
 		if !d.cancelled && d.headerTable != nil {
 			d.headerTable.UnregisterObserver(d.requiredInsertCount, d)
 		}
+
 		d.blocked = false
 		d.buffer = nil
 	}
+
 	if d.errorDetected {
 		if d.lastErr != nil {
 			return d.lastErr
 		}
+
 		return ErrDecompressionFailed
 	}
+
 	return nil
 }
 
@@ -255,15 +273,18 @@ func (d *ProgressiveDecoder) doPrefixInstruction() bool {
 		d.onError(QPACK_DECOMPRESSION_FAILED, "Error decoding Required Insert Count.")
 		return false
 	}
+
 	d.requiredInsertCount = ric
 
 	sign := d.prefixDecoder.SBit()
 	deltaBase := d.prefixDecoder.Varint2()
+
 	base, ok := d.deltaBaseToBase(sign, deltaBase)
 	if !ok {
 		d.onError(QPACK_DECOMPRESSION_FAILED, "Error calculating Base.")
 		return false
 	}
+
 	d.base = base
 
 	d.prefixDecoded = true
@@ -273,6 +294,7 @@ func (d *ProgressiveDecoder) doPrefixInstruction() bool {
 			d.onError(QPACK_DECOMPRESSION_FAILED, "Limit on number of blocked streams exceeded.")
 			return false
 		}
+
 		d.blocked = true
 		d.headerTable.RegisterObserver(d.requiredInsertCount, d)
 	}
@@ -306,6 +328,7 @@ func (d *ProgressiveDecoder) doIndexedHeaderFieldInstruction() bool {
 		}
 
 		d.headerTable.SetDynamicTableEntryReferenced()
+
 		return d.onHeaderDecoded(false, entry.Name, entry.Value)
 	}
 
@@ -343,6 +366,7 @@ func (d *ProgressiveDecoder) doIndexedHeaderFieldPostBaseInstruction() bool {
 	}
 
 	d.headerTable.SetDynamicTableEntryReferenced()
+
 	return d.onHeaderDecoded(false, entry.Name, entry.Value)
 }
 
@@ -372,6 +396,7 @@ func (d *ProgressiveDecoder) doLiteralHeaderFieldNameReferenceInstruction() bool
 		}
 
 		d.headerTable.SetDynamicTableEntryReferenced()
+
 		return d.onHeaderDecoded(false, entry.Name, d.instructionDecoder.Value())
 	}
 
@@ -409,6 +434,7 @@ func (d *ProgressiveDecoder) doLiteralHeaderFieldPostBaseInstruction() bool {
 	}
 
 	d.headerTable.SetDynamicTableEntryReferenced()
+
 	return d.onHeaderDecoded(false, entry.Name, d.instructionDecoder.Value())
 }
 
@@ -449,6 +475,7 @@ func (d *ProgressiveDecoder) onError(errorCode uint64, errorMessage string) {
 	if d.errorDetected {
 		return
 	}
+
 	d.errorDetected = true
 	d.lastErr = NewError(ErrorCode(errorCode), errorMessage)
 	// Might destroy d synchronously in handler.
@@ -460,12 +487,14 @@ func (d *ProgressiveDecoder) deltaBaseToBase(sign bool, deltaBase uint64) (uint6
 		if deltaBase == math.MaxUint64 || d.requiredInsertCount < deltaBase+1 {
 			return 0, false
 		}
+
 		return d.requiredInsertCount - deltaBase - 1, true
 	}
 
 	if deltaBase > math.MaxUint64-d.requiredInsertCount {
 		return 0, false
 	}
+
 	return d.requiredInsertCount + deltaBase, true
 }
 

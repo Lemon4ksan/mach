@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 	"golang.org/x/net/http2"
 
+	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/server/h2"
 )
 

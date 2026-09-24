@@ -50,8 +50,10 @@ func Parse(header string) []Service {
 		}
 
 		// Parse host and port
-		var host string
-		var port int
+		var (
+			host string
+			port int
+		)
 
 		colonIdx := strings.LastIndexByte(hostPort, ':')
 		if colonIdx != -1 {

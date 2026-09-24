@@ -85,7 +85,9 @@ func (s *EncoderStreamSender) Flush() {
 	if len(s.buffer) == 0 {
 		return
 	}
+
 	data := s.buffer
+
 	s.buffer = nil
 	if s.delegate != nil {
 		s.delegate.WriteStreamData(data)
@@ -98,9 +100,11 @@ func (s *EncoderStreamSender) FlushTo(w io.Writer) error {
 	if len(s.buffer) == 0 {
 		return nil
 	}
+
 	data := s.buffer
 	s.buffer = nil
 	_, err := w.Write(data)
+
 	return err
 }
 
@@ -167,7 +171,9 @@ func (s *DecoderStreamSender) Flush() {
 	if len(s.buffer) == 0 {
 		return
 	}
+
 	data := s.buffer
+
 	s.buffer = nil
 	if s.delegate != nil {
 		s.delegate.WriteStreamData(data)
@@ -180,8 +186,10 @@ func (s *DecoderStreamSender) FlushTo(w io.Writer) error {
 	if len(s.buffer) == 0 {
 		return nil
 	}
+
 	data := s.buffer
 	s.buffer = nil
 	_, err := w.Write(data)
+
 	return err
 }

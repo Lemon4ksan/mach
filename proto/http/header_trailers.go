@@ -12,9 +12,10 @@ import (
 	"io"
 	"iter"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // SetTrailer specifies a trailer header field to be sent after a chunked message body (RFC 9112 Section 7.1.2).

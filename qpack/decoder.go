@@ -53,6 +53,7 @@ func NewDecoder(
 // RFC 9204 §2.2.2.2 & Chromium Decoder::OnStreamReset.
 func (d *Decoder) OnStreamReset(streamID uint64) {
 	delete(d.blockedStreams, streamID)
+
 	if d.headerTable.MaximumDynamicTableCapacity() > 0 {
 		d.decoderStreamSender.SendStreamCancellation(streamID)
 	}
@@ -137,9 +138,11 @@ func (d *Decoder) DecodeHeaderBlock(streamID uint64, block []byte) ([]HeaderFiel
 	progDec := d.CreateProgressiveDecoder(streamID, handler)
 	progDec.Decode(block)
 	progDec.EndHeaderBlock()
+
 	if handler.err != nil {
 		return nil, handler.err
 	}
+
 	return handler.headers, nil
 }
 
@@ -150,6 +153,7 @@ func (d *Decoder) DecodeHeaderBlockSeq(streamID uint64, block []byte) (iter.Seq2
 	if err != nil {
 		return nil, err
 	}
+
 	return HeaderFields(fields).All(), nil
 }
 
@@ -167,10 +171,12 @@ func (d *Decoder) InsertWithNameReference(isStatic bool, nameIndex uint64, value
 				QUIC_QPACK_ENCODER_STREAM_ERROR_INSERTING_STATIC,
 				"Error inserting entry with name reference.",
 			)
+
 			return
 		}
 
 		d.headerTable.InsertEntry(entry.Name, value)
+
 		return
 	}
 
@@ -193,6 +199,7 @@ func (d *Decoder) InsertWithNameReference(isStatic bool, nameIndex uint64, value
 			QUIC_QPACK_ENCODER_STREAM_ERROR_INSERTING_DYNAMIC,
 			"Error inserting entry with name reference.",
 		)
+
 		return
 	}
 
@@ -256,6 +263,7 @@ func (d *Decoder) Error(qpackError uint64, errorMessage string) {
 			errorCode = QUIC_QPACK_ENCODER_STREAM_HUFFMAN_ENCODING_ERROR
 		}
 	}
+
 	d.OnErrorDetected(errorCode, errorMessage)
 }
 

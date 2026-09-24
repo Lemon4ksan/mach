@@ -36,6 +36,7 @@ func Directives(header string) iter.Seq2[string, string] {
 
 			// Find next delimiter taking quotes into account
 			var end int
+
 			inQuote := false
 
 			for end = 0; end < len(s); end++ {
@@ -44,6 +45,7 @@ func Directives(header string) iter.Seq2[string, string] {
 					end++
 					continue
 				}
+
 				if c == '"' {
 					inQuote = !inQuote
 				} else if c == ',' && !inQuote {
@@ -66,6 +68,7 @@ func Directives(header string) iter.Seq2[string, string] {
 			}
 
 			k, v, ok := strings.Cut(token, "=")
+
 			k = strings.ToLower(strings.TrimSpace(k))
 			if ok {
 				v = strings.TrimSpace(v)
@@ -97,6 +100,7 @@ func DirectivesBytes(b []byte) iter.Seq2[[]byte, []byte] {
 			}
 
 			var end int
+
 			inQuote := false
 
 			for end = 0; end < len(s); end++ {
@@ -105,6 +109,7 @@ func DirectivesBytes(b []byte) iter.Seq2[[]byte, []byte] {
 					end++
 					continue
 				}
+
 				if c == '"' {
 					inQuote = !inQuote
 				} else if c == ',' && !inQuote {
@@ -127,6 +132,7 @@ func DirectivesBytes(b []byte) iter.Seq2[[]byte, []byte] {
 			}
 
 			k, v, ok := bytes.Cut(token, []byte{'='})
+
 			k = bytes.ToLower(bytes.TrimSpace(k))
 			if ok {
 				v = bytes.TrimSpace(v)
@@ -158,6 +164,7 @@ func ParamDirectives(header string) iter.Seq2[string, string] {
 			}
 
 			var end int
+
 			inQuote := false
 
 			for end = 0; end < len(s); end++ {
@@ -166,6 +173,7 @@ func ParamDirectives(header string) iter.Seq2[string, string] {
 					end++
 					continue
 				}
+
 				if c == '"' {
 					inQuote = !inQuote
 				} else if c == ';' && !inQuote {
@@ -188,6 +196,7 @@ func ParamDirectives(header string) iter.Seq2[string, string] {
 			}
 
 			k, v, ok := strings.Cut(token, "=")
+
 			k = strings.ToLower(strings.TrimSpace(k))
 			if ok {
 				v = strings.TrimSpace(v)
@@ -229,6 +238,7 @@ func (d DirectivesMap) Has(key string) bool {
 	}
 
 	_, ok := d.m[strings.ToLower(key)]
+
 	return ok
 }
 

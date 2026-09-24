@@ -10,11 +10,11 @@ import (
 	"io"
 	"testing"
 
-	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	h1 "github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/mach/qpack"
 )
 
 func TestQPACKEncodeRequestHeaders(t *testing.T) {

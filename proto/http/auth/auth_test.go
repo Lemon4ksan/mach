@@ -7,9 +7,10 @@ package auth_test
 import (
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/http/auth"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/proto/http/auth"
 )
 
 func TestBasicAuth_RFC7617(t *testing.T) {

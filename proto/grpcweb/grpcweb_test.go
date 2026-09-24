@@ -11,9 +11,10 @@ import (
 	"io"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/grpcweb"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/proto/grpcweb"
 )
 
 func TestGRPCWeb_Framing_Roundtrip_And_Errors(t *testing.T) {

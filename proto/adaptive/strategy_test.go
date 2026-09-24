@@ -7,8 +7,9 @@ package adaptive_test
 import (
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/adaptive"
 	"github.com/lemon4ksan/foundation/testing/assert"
+
+	"github.com/lemon4ksan/mach/proto/adaptive"
 )
 
 func TestAdaptiveStrategy_Increments(t *testing.T) {

@@ -78,6 +78,7 @@ func NewEncoder(
 		headerListCount:           0,
 	}
 	encoder.decoderStreamReceiver = NewDecoderStreamReceiver(encoder)
+
 	return encoder
 }
 
@@ -120,6 +121,7 @@ func (e *Encoder) EncodeHeaderSeq(
 	for hf := range headers {
 		list = append(list, hf)
 	}
+
 	return e.EncodeHeaderList(streamID, list, encoderStreamSentByteCount)
 }
 
@@ -133,6 +135,7 @@ func (e *Encoder) EncodeHeaderSeq2(
 	for name, value := range headers {
 		list = append(list, HeaderField{Name: name, Value: value})
 	}
+
 	return e.EncodeHeaderList(streamID, list, encoderStreamSentByteCount)
 }
 
@@ -175,7 +178,9 @@ func (e *Encoder) SetMaximumBlockedStreams(maximumBlockedStreams uint64) bool {
 	if maximumBlockedStreams < e.maximumBlockedStreams {
 		return false
 	}
+
 	e.maximumBlockedStreams = maximumBlockedStreams
+
 	return true
 }
 
@@ -311,6 +316,7 @@ func splitHeaderField(name, value string, crumbling CookieCrumbling) []HeaderFie
 	if name == "cookie" {
 		if crumbling == CookieCrumblingEnabled {
 			var result []HeaderField
+
 			start := 0
 			for start < len(value) {
 				idx := strings.IndexByte(value[start:], ';')
@@ -318,18 +324,23 @@ func splitHeaderField(name, value string, crumbling CookieCrumbling) []HeaderFie
 					result = append(result, HeaderField{Name: name, Value: value[start:]})
 					break
 				}
+
 				end := start + idx
 				result = append(result, HeaderField{Name: name, Value: value[start:end]})
+
 				start = end + 1
 				if start < len(value) && value[start] == ' ' {
 					start++
 				}
 			}
+
 			if len(result) == 0 {
 				result = append(result, HeaderField{Name: name, Value: ""})
 			}
+
 			return result
 		}
+
 		return []HeaderField{{Name: name, Value: value}}
 	}
 
@@ -337,11 +348,14 @@ func splitHeaderField(name, value string, crumbling CookieCrumbling) []HeaderFie
 	if !strings.ContainsRune(value, '\x00') {
 		return []HeaderField{{Name: name, Value: value}}
 	}
+
 	parts := strings.Split(value, "\x00")
+
 	result := make([]HeaderField, len(parts))
 	for i, p := range parts {
 		result[i] = HeaderField{Name: name, Value: p}
 	}
+
 	return result
 }
 
@@ -360,6 +374,7 @@ func (e *Encoder) firstPassEncode(
 	var representations []*InstructionWithValues
 
 	knownReceivedCount := e.blockingManager.KnownReceivedCount()
+
 	smallestNonEvictableIndex := e.blockingManager.SmallestBlockingIndex()
 	if knownReceivedCount < smallestNonEvictableIndex {
 		smallestNonEvictableIndex = knownReceivedCount
@@ -389,6 +404,7 @@ func (e *Encoder) firstPassEncode(
 					representations,
 					EncodeIndexedHeaderField(true, matchResult.Index, referredIndices),
 				)
+
 				continue
 			}
 
@@ -404,16 +420,20 @@ func (e *Encoder) firstPassEncode(
 						smallestNonEvictableIndex = matchResult.Index
 						e.headerTable.SetSmallestAllowedIndex(smallestNonEvictableIndex)
 					}
+
 					e.headerTable.SetDynamicTableEntryReferenced()
+
 					continue
 				}
 			} else {
 				// Entry is draining. Try duplicate instead if possible.
 				entrySize := EntrySize(name, value)
+
 				limitIndex := smallestNonEvictableIndex
 				if matchResult.Index < limitIndex {
 					limitIndex = matchResult.Index
 				}
+
 				if blockingAllowed &&
 					entrySize <= e.headerTable.MaxInsertSizeWithoutEvictingGivenEntry(limitIndex) &&
 					canWrite {
@@ -427,11 +447,14 @@ func (e *Encoder) firstPassEncode(
 						representations,
 						EncodeIndexedHeaderField(false, newIndex, referredIndices),
 					)
+
 					if matchResult.Index < smallestNonEvictableIndex {
 						smallestNonEvictableIndex = matchResult.Index
 						e.headerTable.SetSmallestAllowedIndex(smallestNonEvictableIndex)
 					}
+
 					e.headerTable.SetDynamicTableEntryReferenced()
+
 					continue
 				}
 			}
@@ -443,7 +466,9 @@ func (e *Encoder) firstPassEncode(
 				representations = append(representations, EncodeLiteralHeaderField(name, value))
 				continue
 			}
+
 			matchResult = matchResultNameOnly
+
 			fallthrough
 
 		case MatchTypeName:
@@ -454,6 +479,7 @@ func (e *Encoder) firstPassEncode(
 					canWrite {
 					e.encoderStreamSender.SendInsertWithNameReference(true, matchResult.Index, value)
 					newIndex := e.headerTable.InsertEntry(name, value)
+
 					representations = append(
 						representations,
 						EncodeIndexedHeaderField(false, newIndex, referredIndices),
@@ -462,21 +488,26 @@ func (e *Encoder) firstPassEncode(
 						smallestNonEvictableIndex = newIndex
 						e.headerTable.SetSmallestAllowedIndex(smallestNonEvictableIndex)
 					}
+
 					continue
 				}
+
 				representations = append(
 					representations,
 					EncodeLiteralHeaderFieldWithNameReference(true, matchResult.Index, value, referredIndices),
 				)
+
 				continue
 			}
 
 			// Dynamic name match
 			entrySize := EntrySize(name, value)
+
 			limitIndex := smallestNonEvictableIndex
 			if matchResult.Index < limitIndex {
 				limitIndex = matchResult.Index
 			}
+
 			if blockingAllowed &&
 				entrySize <= e.headerTable.MaxInsertSizeWithoutEvictingGivenEntry(limitIndex) &&
 				canWrite {
@@ -484,11 +515,14 @@ func (e *Encoder) firstPassEncode(
 				e.encoderStreamSender.SendInsertWithNameReference(false, relIndex, value)
 				newIndex := e.headerTable.InsertEntry(name, value)
 				representations = append(representations, EncodeIndexedHeaderField(false, newIndex, referredIndices))
+
 				if matchResult.Index < smallestNonEvictableIndex {
 					smallestNonEvictableIndex = matchResult.Index
 					e.headerTable.SetSmallestAllowedIndex(smallestNonEvictableIndex)
 				}
+
 				e.headerTable.SetDynamicTableEntryReferenced()
+
 				continue
 			}
 
@@ -501,11 +535,14 @@ func (e *Encoder) firstPassEncode(
 					smallestNonEvictableIndex = matchResult.Index
 					e.headerTable.SetSmallestAllowedIndex(smallestNonEvictableIndex)
 				}
+
 				e.headerTable.SetDynamicTableEntryReferenced()
+
 				continue
 			}
 
 			representations = append(representations, EncodeLiteralHeaderField(name, value))
+
 			continue
 
 		case MatchTypeNoMatch:
@@ -515,15 +552,18 @@ func (e *Encoder) firstPassEncode(
 				canWrite {
 				e.encoderStreamSender.SendInsertWithoutNameReference(name, value)
 				newIndex := e.headerTable.InsertEntry(name, value)
+
 				representations = append(representations, EncodeIndexedHeaderField(false, newIndex, referredIndices))
 				if newIndex < smallestNonEvictableIndex {
 					smallestNonEvictableIndex = newIndex
 					e.headerTable.SetSmallestAllowedIndex(smallestNonEvictableIndex)
 				}
+
 				continue
 			}
 
 			representations = append(representations, EncodeLiteralHeaderField(name, value))
+
 			continue
 		}
 	}
@@ -532,11 +572,13 @@ func (e *Encoder) firstPassEncode(
 	if encoderStreamSentByteCount != nil {
 		*encoderStreamSentByteCount = currentBuffered - initialBuffered
 	}
+
 	if canWrite {
 		e.encoderStreamSender.Flush()
 	}
 
 	e.headerListCount++
+
 	return representations
 }
 
@@ -547,6 +589,7 @@ func (e *Encoder) secondPassEncode(
 	requiredInsertCount uint64,
 ) []byte {
 	instructionEncoder := NewInstructionEncoder(e.huffmanEncoding)
+
 	var encodedHeaders []byte
 
 	// Header block prefix
@@ -564,6 +607,7 @@ func (e *Encoder) secondPassEncode(
 			relIndex := AbsoluteIndexToRequestStreamRelativeIndex(representation.Varint(), base)
 			representation.SetVarint(relIndex)
 		}
+
 		encodedHeaders = instructionEncoder.Encode(representation, encodedHeaders)
 	}
 
@@ -579,6 +623,7 @@ func EncodeIndexedHeaderField(
 	if !isStatic {
 		referredIndices.Insert(index)
 	}
+
 	return InstructionWithValuesIndexedHeaderField(isStatic, index)
 }
 
@@ -592,6 +637,7 @@ func EncodeLiteralHeaderFieldWithNameReference(
 	if !isStatic {
 		referredIndices.Insert(index)
 	}
+
 	return InstructionWithValuesLiteralHeaderFieldNameReference(isStatic, index, value)
 }
 

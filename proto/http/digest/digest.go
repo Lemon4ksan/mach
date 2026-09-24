@@ -453,6 +453,7 @@ func (dc *digestCredentials) String() string {
 
 func encodeRFC8187Simple(s string) string {
 	var sb strings.Builder
+
 	const hexChars = "0123456789ABCDEF"
 
 	for i := 0; i < len(s); i++ {

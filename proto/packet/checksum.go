@@ -67,7 +67,9 @@ func ValidateInternetChecksum(b []byte) bool {
 	if len(b) == 0 {
 		return false
 	}
+
 	c := CalculateInternetChecksum(b)
+
 	return c == 0 || c == 0xffff
 }
 
@@ -76,5 +78,6 @@ func ValidateICMPv6Checksum(srcIP, dstIP netip.Addr, icmpMessage []byte) bool {
 	if len(icmpMessage) < 4 {
 		return false
 	}
+
 	return CalculateICMPv6Checksum(srcIP, dstIP, icmpMessage) == 0
 }

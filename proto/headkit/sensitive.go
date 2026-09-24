@@ -96,6 +96,7 @@ func RedactHeader(h http.Header) http.Header {
 			for i, v := range vv {
 				masked[i] = RedactValue(k, v)
 			}
+
 			redacted[k] = masked
 		} else {
 			copied := make([]string, len(vv))

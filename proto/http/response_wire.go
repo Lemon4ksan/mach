@@ -11,10 +11,9 @@ import (
 	"fmt"
 	"io"
 
+	machcompress "github.com/lemon4ksan/mach/proto/compress"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
-
-	machcompress "github.com/lemon4ksan/mach/proto/compress"
 )
 
 // Read deserializes an HTTP response (handling interim 1xx responses like Early Hints) from r (RFC 9110 Section 15.2, RFC 9112 Section 2.1).

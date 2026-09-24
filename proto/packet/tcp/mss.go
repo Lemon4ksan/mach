@@ -89,6 +89,7 @@ func updateMSSOption(options []byte, maxMSS uint16) bool {
 				binary.BigEndian.PutUint16(options[optIdx+2:optIdx+4], maxMSS)
 				return true
 			}
+
 			return false
 		}
 

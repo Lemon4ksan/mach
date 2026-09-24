@@ -34,6 +34,7 @@ func (rb *qpackRingBuffer) front() *Entry {
 	if rb.count == 0 {
 		return nil
 	}
+
 	return rb.entries[rb.head]
 }
 
@@ -45,7 +46,9 @@ func (rb *qpackRingBuffer) at(offset int) *Entry {
 	if offset < 0 || offset >= rb.count {
 		return nil
 	}
+
 	idx := (rb.head + offset) % len(rb.entries)
+
 	return rb.entries[idx]
 }
 
@@ -60,13 +63,16 @@ func (rb *qpackRingBuffer) pushBack(entry *Entry) {
 		rb.count = 0
 	} else if rb.count == len(rb.entries) {
 		newCap := len(rb.entries) * 2
+
 		newEntries := make([]*Entry, newCap)
 		for i := 0; i < rb.count; i++ {
 			newEntries[i] = rb.entries[(rb.head+i)%len(rb.entries)]
 		}
+
 		rb.entries = newEntries
 		rb.head = 0
 	}
+
 	idx := (rb.head + rb.count) % len(rb.entries)
 	rb.entries[idx] = entry
 	rb.count++
@@ -80,10 +86,12 @@ func (rb *qpackRingBuffer) popFront() *Entry {
 	if rb.count == 0 {
 		return nil
 	}
+
 	entry := rb.entries[rb.head]
 	rb.entries[rb.head] = nil // Avoid memory retention
 	rb.head = (rb.head + 1) % len(rb.entries)
 	rb.count--
+
 	return entry
 }
 
@@ -150,8 +158,10 @@ func (t *HeaderTableBase) SetDynamicTableCapacity(capacity uint64) bool {
 	if capacity > t.maximumDynamicTableCapacity {
 		return false
 	}
+
 	t.dynamicTableCapacity = capacity
 	t.EvictDownToCapacity(capacity)
+
 	return true
 }
 
@@ -164,6 +174,7 @@ func (t *HeaderTableBase) SetMaximumDynamicTableCapacity(maximumDynamicTableCapa
 		t.maxEntries = maximumDynamicTableCapacity / 32
 		return true
 	}
+
 	return maximumDynamicTableCapacity == t.maximumDynamicTableCapacity
 }
 
@@ -189,6 +200,7 @@ func (t *HeaderTableBase) baseRemoveEntryFromEnd() {
 	if entry == nil {
 		return
 	}
+
 	entrySize := entry.Size()
 	t.dynamicTableSize -= entrySize
 	t.dynamicEntries.popFront()
@@ -280,6 +292,7 @@ func NewEncoderHeaderTable() *EncoderHeaderTable {
 	}
 	t.initBase()
 	t.removeEntryFromEndHook = t.removeEntryFromEndOverride
+
 	return t
 }
 
@@ -299,6 +312,7 @@ func (t *EncoderHeaderTable) removeEntryFromEndOverride() {
 	if entry == nil {
 		return
 	}
+
 	index := t.droppedEntryCount
 
 	key := qpackLookupEntry{name: entry.Name, value: entry.Value}
@@ -362,16 +376,19 @@ func (t *EncoderHeaderTable) MaxInsertSizeWithoutEvictingGivenEntry(index uint64
 	if index < t.droppedEntryCount {
 		return 0
 	}
+
 	if index > t.InsertedEntryCount() {
 		return t.dynamicTableCapacity
 	}
 
 	maxInsertSize := t.dynamicTableCapacity - t.dynamicTableSize
+
 	entryIndex := t.droppedEntryCount
 	for entry := range t.dynamicEntries.Entries() {
 		if entryIndex >= index {
 			break
 		}
+
 		entryIndex++
 		maxInsertSize += entry.Size()
 	}
@@ -407,6 +424,7 @@ func (t *EncoderHeaderTable) DrainingIndex(drainingFraction float64) uint64 {
 	entryIndex := t.droppedEntryCount
 	for entry := range t.dynamicEntries.Entries() {
 		spaceAboveDrainingIndex += entry.Size()
+
 		entryIndex++
 		if spaceAboveDrainingIndex >= requiredSpace {
 			return entryIndex
@@ -427,6 +445,7 @@ func (t *EncoderHeaderTable) Entries() iter.Seq2[uint64, *Entry] {
 			if !yield(idx, entry) {
 				return
 			}
+
 			idx++
 		}
 	}
@@ -457,6 +476,7 @@ func NewDecoderHeaderTable() *DecoderHeaderTable {
 		observers: make([]observerEntry, 0, 8),
 	}
 	t.initBase()
+
 	return t
 }
 
@@ -469,8 +489,10 @@ func (t *DecoderHeaderTable) InsertEntry(name, value string) uint64 {
 		if t.observers[0].requiredInsertCount > insertedCount {
 			break
 		}
+
 		observer := t.observers[0].observer
 		t.observers = t.observers[1:]
+
 		observer.OnInsertCountReachedThreshold()
 	}
 
@@ -484,6 +506,7 @@ func (t *DecoderHeaderTable) RegisterObserver(requiredInsertCount uint64, observ
 	}
 
 	entry := observerEntry{requiredInsertCount: requiredInsertCount, observer: observer}
+
 	idx := len(t.observers)
 	for i, o := range t.observers {
 		if o.requiredInsertCount > requiredInsertCount {
@@ -491,6 +514,7 @@ func (t *DecoderHeaderTable) RegisterObserver(requiredInsertCount uint64, observ
 			break
 		}
 	}
+
 	t.observers = append(t.observers[:idx], append([]observerEntry{entry}, t.observers[idx:]...)...)
 }
 
@@ -507,6 +531,7 @@ func (t *DecoderHeaderTable) UnregisterObserver(requiredInsertCount uint64, obse
 // Cancel cancels and deregisters all active observers.
 func (t *DecoderHeaderTable) Cancel() {
 	observers := t.observers
+
 	t.observers = nil
 	for _, o := range observers {
 		o.observer.Cancel()
@@ -526,6 +551,7 @@ func (t *DecoderHeaderTable) LookupEntry(isStatic bool, index uint64) *Entry {
 		if index >= uint64(len(staticEntries)) {
 			return nil
 		}
+
 		return &staticEntries[index]
 	}
 
@@ -552,6 +578,7 @@ func (t *DecoderHeaderTable) Entries() iter.Seq2[uint64, *Entry] {
 			if !yield(idx, entry) {
 				return
 			}
+
 			idx++
 		}
 	}

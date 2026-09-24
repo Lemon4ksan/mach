@@ -11,11 +11,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/altsvc"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // SetByteRange sets 'Range: bytes=startPos-endPos' header (RFC 9110 Section 14.1.2).

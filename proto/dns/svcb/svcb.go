@@ -161,9 +161,11 @@ func (r *Record) ALPN() []string {
 	}
 
 	var alpns []string
+
 	idx := 0
 	for idx < len(val) {
 		l := int(val[idx])
+
 		idx++
 		if idx+l > len(val) {
 			break
@@ -304,7 +306,9 @@ func ParseRDATA(rdata []byte) (*Record, error) {
 
 	offset = newOffset
 	params := make(map[SvcParamKey][]byte)
+
 	var lastKey uint16
+
 	firstKey := true
 
 	for offset < len(rdata) {
@@ -350,8 +354,10 @@ func (r *Record) MarshalRDATA() ([]byte, error) {
 		return nil, errors.New("svcb: nil record")
 	}
 
-	var buf bytes.Buffer
-	var prioBuf [2]byte
+	var (
+		buf     bytes.Buffer
+		prioBuf [2]byte
+	)
 	binary.BigEndian.PutUint16(prioBuf[:], r.Priority)
 	buf.Write(prioBuf[:])
 
@@ -359,6 +365,7 @@ func (r *Record) MarshalRDATA() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	buf.Write(domainBytes)
 
 	// Sort keys in strictly increasing numerical order per RFC 9460 §2.2
@@ -366,10 +373,12 @@ func (r *Record) MarshalRDATA() ([]byte, error) {
 	for k := range r.Params {
 		keys = append(keys, k)
 	}
+
 	slices.Sort(keys)
 
 	for _, k := range keys {
 		val := r.Params[k]
+
 		var hdr [4]byte
 		binary.BigEndian.PutUint16(hdr[0:2], uint16(k))
 		binary.BigEndian.PutUint16(hdr[2:4], uint16(len(val)))
@@ -411,6 +420,7 @@ func EncodeALPN(alpns []string) []byte {
 		if len(a) > 255 || len(a) == 0 {
 			continue
 		}
+
 		buf.WriteByte(byte(len(a)))
 		buf.WriteString(a)
 	}
@@ -461,6 +471,7 @@ func parseDomainName(data []byte, offset int) (string, int, error) {
 	}
 
 	var labels []string
+
 	curr := offset
 
 	for {
@@ -530,9 +541,11 @@ func ParseResponseRecords(dnsMsg []byte, expectedType uint16) ([]*Record, error)
 		if err != nil {
 			return nil, err
 		}
+
 		if newOffset+4 > len(dnsMsg) {
 			return nil, ErrTruncatedRDATA
 		}
+
 		offset = newOffset + 4
 	}
 
@@ -544,6 +557,7 @@ func ParseResponseRecords(dnsMsg []byte, expectedType uint16) ([]*Record, error)
 		if err != nil {
 			return nil, err
 		}
+
 		if newOffset+10 > len(dnsMsg) {
 			return nil, ErrTruncatedRDATA
 		}
@@ -586,6 +600,7 @@ func skipName(data []byte, offset int) (int, error) {
 			if curr+2 > len(data) {
 				return 0, ErrTruncatedRDATA
 			}
+
 			return curr + 2, nil
 		}
 

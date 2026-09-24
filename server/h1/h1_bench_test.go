@@ -10,9 +10,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
+	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 

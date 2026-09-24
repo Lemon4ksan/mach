@@ -38,6 +38,7 @@ func WithLimits(initSize, maxSize int) Strategy {
 	if initSize < 512 {
 		initSize = 512
 	}
+
 	if maxSize < initSize {
 		maxSize = initSize
 	}
@@ -102,10 +103,12 @@ func incrPowerOfTwo(n int) int {
 	if n <= 0 {
 		return DefaultInitBufferSize
 	}
+
 	next := n << 1
 	if next < n { // overflow protection
 		return n
 	}
+
 	return next
 }
 
@@ -116,7 +119,9 @@ func prevPowerOfTwo(n int) int {
 	if n <= 4 {
 		return 1
 	}
+
 	// Use leading zeros to calculate the previous power of two with 0 allocations in 1 CPU instruction.
 	lz := bits.LeadingZeros64(uint64(n - 1))
+
 	return 1 << (63 - lz)
 }

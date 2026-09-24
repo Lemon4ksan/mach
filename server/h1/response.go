@@ -8,11 +8,12 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/header"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire (RFC 9112 §2.1, RFC 9110 §15).

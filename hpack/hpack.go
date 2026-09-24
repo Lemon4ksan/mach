@@ -5,13 +5,13 @@
 package hpack
 
 import (
-	"errors"
-
 	"bytes"
+	"errors"
 	"fmt"
 
-	"github.com/lemon4ksan/mach/proto/http/rodata"
 	"github.com/lemon4ksan/foundation/silicon/pool"
+
+	"github.com/lemon4ksan/mach/proto/http/rodata"
 )
 
 const (
@@ -222,6 +222,7 @@ func (hp *HPACK) SetMaxTableSize(size uint32) {
 	if size > hp.MaxCapacity {
 		hp.MaxCapacity = size
 	}
+
 	if hp.dynamicSize > size {
 		hp.shrink()
 	}
@@ -450,10 +451,11 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 			// RFC 7541 §6.3: Dynamic Table Size Update ('001' 3-bit prefix)
 			var n uint64
 
-						b, n = readInt(5, b)
+			b, n = readInt(5, b)
 			if uint32(n) > hp.MaxCapacity {
 				return b, errors.New("hpack: dynamic table size update exceeds maximum capacity")
 			}
+
 			hp.maxTableSize = uint32(n)
 			hp.shrink()
 		}
@@ -569,7 +571,6 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 
 	return b, nil
 }
-
 
 // AppendHeader encodes hf into dst using the optimal HPACK binary representation (RFC 7541 §6).
 func (hp *HPACK) AppendHeader(dst []byte, hf *HeaderField, store bool) []byte {

@@ -9,8 +9,9 @@ import (
 	"iter"
 	"math/bits"
 
-	"github.com/lemon4ksan/mach/proto/http/header"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
+	"github.com/lemon4ksan/mach/proto/http/header"
 )
 
 const (
@@ -385,6 +386,7 @@ func (h *Headers) All() iter.Seq2[string, string] {
 				}
 			}
 		}
+
 		for i := 0; i < len(h.dynamic); i++ {
 			if !yield(h.dynamic[i].Key, h.dynamic[i].Value) {
 				return

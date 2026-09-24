@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/mach/proto/http/altsvc"
 	"github.com/lemon4ksan/foundation/testing/assert"
+
+	"github.com/lemon4ksan/mach/proto/http/altsvc"
 )
 
 func TestParse(t *testing.T) {

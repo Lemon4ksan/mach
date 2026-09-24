@@ -59,5 +59,6 @@ func (hfs HeaderFields) Get(name string) (string, bool) {
 			return hfs[i].Value, true
 		}
 	}
+
 	return "", false
 }

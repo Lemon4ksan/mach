@@ -92,6 +92,7 @@ func (l *Language) Instructions() []*Instruction {
 	if l == nil {
 		return nil
 	}
+
 	return *l
 }
 

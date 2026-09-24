@@ -80,6 +80,7 @@ func (v *qpackVarintDecoder) Error() bool   { return v.errorDetected }
 // Returns the number of bytes consumed from data and status.
 func (v *qpackVarintDecoder) Start(prefixLength uint8, data []byte) (int, decodeStatus) {
 	v.Reset()
+
 	if len(data) == 0 {
 		return 0, decodeStatusInProgress
 	}
@@ -94,12 +95,14 @@ func (v *qpackVarintDecoder) Start(prefixLength uint8, data []byte) (int, decode
 
 	v.offset = 0
 	consumed, status := v.Resume(data[1:])
+
 	return 1 + consumed, status
 }
 
 // Resume continues decoding continuation bytes.
 func (v *qpackVarintDecoder) Resume(data []byte) (int, decodeStatus) {
 	const maxOffset = 63
+
 	consumed := 0
 
 	for v.offset < maxOffset {
@@ -142,6 +145,7 @@ func (v *qpackVarintDecoder) Resume(data []byte) (int, decodeStatus) {
 	}
 
 	v.errorDetected = true
+
 	return consumed, decodeStatusError
 }
 
@@ -222,11 +226,13 @@ func (d *InstructionDecoder) lookupOpcode(b byte) *Instruction {
 	if d.language == nil {
 		return nil
 	}
+
 	for _, instruction := range *d.language {
 		if (b & instruction.Opcode.Mask) == instruction.Opcode.Value {
 			return instruction
 		}
 	}
+
 	return nil
 }
 
@@ -247,7 +253,6 @@ func (d *InstructionDecoder) Decode(data []byte) bool {
 		d.state == stateStartField ||
 		d.state == stateVarintDone ||
 		d.state == stateReadStringDone {
-
 		switch d.state {
 		case stateStartInstruction:
 			d.doStartInstruction(data)
@@ -284,6 +289,7 @@ func (d *InstructionDecoder) doStartInstruction(data []byte) {
 		d.onError(InstructionDecoderIntegerTooLarge, "Invalid opcode.")
 		return
 	}
+
 	d.sBit = false
 	d.varint = 0
 	d.varint2 = 0
@@ -300,6 +306,7 @@ func (d *InstructionDecoder) doStartField() {
 		if !d.delegate.OnInstructionDecoded(d.instruction) {
 			d.errorDetected = true
 		}
+
 		return
 	}
 
@@ -327,16 +334,20 @@ func (d *InstructionDecoder) doReadBit(data []byte) {
 
 func (d *InstructionDecoder) doVarintStart(data []byte) int {
 	field := d.instruction.Fields[d.fieldIdx]
+
 	consumed, status := d.varintDecoder.Start(field.Param, data)
 	if status == decodeStatusError {
 		d.onError(InstructionDecoderIntegerTooLarge, "Encoded integer too large.")
 		return consumed
 	}
+
 	if status == decodeStatusDone {
 		d.state = stateVarintDone
 		return consumed
 	}
+
 	d.state = stateVarintResume
+
 	return consumed
 }
 
@@ -346,10 +357,12 @@ func (d *InstructionDecoder) doVarintResume(data []byte) int {
 		d.onError(InstructionDecoderIntegerTooLarge, "Encoded integer too large.")
 		return consumed
 	}
+
 	if status == decodeStatusDone {
 		d.state = stateVarintDone
 		return consumed
 	}
+
 	return consumed
 }
 
@@ -369,7 +382,9 @@ func (d *InstructionDecoder) doVarintDone() {
 			d.onError(InstructionDecoderStringLiteralTooLong, "String literal too long.")
 			return
 		}
+
 		d.stringLength = d.varintDecoder.Value()
+
 		d.stringBuffer = d.stringBuffer[:0]
 		if d.stringLength == 0 {
 			d.state = stateReadStringDone
@@ -382,10 +397,12 @@ func (d *InstructionDecoder) doVarintDone() {
 func (d *InstructionDecoder) doReadString(data []byte) int {
 	remainingNeeded := int(d.stringLength) - len(d.stringBuffer)
 	toRead := min(len(data), remainingNeeded)
+
 	d.stringBuffer = append(d.stringBuffer, data[:toRead]...)
 	if uint64(len(d.stringBuffer)) == d.stringLength {
 		d.state = stateReadStringDone
 	}
+
 	return toRead
 }
 
@@ -397,6 +414,7 @@ func (d *InstructionDecoder) doReadStringDone() {
 			d.onError(InstructionDecoderHuffmanEncodingError, "Error in Huffman-encoded string.")
 			return
 		}
+
 		str = decoded
 	} else {
 		str = string(d.stringBuffer)

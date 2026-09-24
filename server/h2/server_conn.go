@@ -13,10 +13,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lemon4ksan/mach/hpack"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 	"golang.org/x/sys/cpu"
 
+	"github.com/lemon4ksan/mach/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
