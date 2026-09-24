@@ -11,7 +11,7 @@ import (
 	"io"
 	"mime/multipart"
 
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // PostArgs returns the parsed application/x-www-form-urlencoded POST parameters (RFC 1866).

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 func TestH1Engine_URIAndArgs(t *testing.T) {

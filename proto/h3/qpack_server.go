@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lemon4ksan/foundation/net/headkit"
-	"github.com/lemon4ksan/foundation/net/qpack"
+	"github.com/lemon4ksan/mach/proto/headkit"
+	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 

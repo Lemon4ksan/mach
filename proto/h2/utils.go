@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lemon4ksan/foundation/net/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 	"github.com/lemon4ksan/foundation/silicon/randkit"
 
 	h1 "github.com/lemon4ksan/mach/proto/http"

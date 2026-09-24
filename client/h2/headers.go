@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/lemon4ksan/foundation/generic"
-	"github.com/lemon4ksan/foundation/net/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"

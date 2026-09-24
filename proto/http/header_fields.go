@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/headkit"
-	"github.com/lemon4ksan/foundation/net/http/altsvc"
-	"github.com/lemon4ksan/foundation/net/http/status"
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/headkit"
+	"github.com/lemon4ksan/mach/proto/http/altsvc"
+	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 

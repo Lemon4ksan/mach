@@ -5,7 +5,7 @@
 package http
 
 import (
-	fheader "github.com/lemon4ksan/foundation/net/http/header"
+	fheader "github.com/lemon4ksan/mach/proto/http/header"
 )
 
 const (

@@ -7,8 +7,8 @@ package http
 import (
 	"errors"
 
-	"github.com/lemon4ksan/foundation/net/headkit"
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/headkit"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 const (

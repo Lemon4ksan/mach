@@ -13,7 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lemon4ksan/foundation/net/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 	"golang.org/x/sys/cpu"
 

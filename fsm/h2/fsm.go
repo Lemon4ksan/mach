@@ -5,7 +5,7 @@
 package h2
 
 import (
-	"github.com/lemon4ksan/foundation/net/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 )
 
 // Event is yielded by the state machine.

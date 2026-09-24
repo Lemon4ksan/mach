@@ -4,7 +4,7 @@
 
 package h1
 
-import "github.com/lemon4ksan/foundation/net/headkit"
+import "github.com/lemon4ksan/mach/proto/headkit"
 
 // Headers represents a high-performance HTTP/1.1 header block backed by foundation/net/headkit (RFC 9110 §6.3, RFC 9112).
 //

@@ -13,7 +13,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // Read deserializes an HTTP request (including headers and entity body) from the buffered reader r (RFC 9112 Section 2.1).

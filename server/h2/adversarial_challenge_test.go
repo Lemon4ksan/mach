@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/http/status"
+	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/foundation/testing/require"
 
 	h2client "github.com/lemon4ksan/mach/client/h2"

@@ -6,7 +6,7 @@ package http
 
 import (
 	"github.com/lemon4ksan/foundation/borrow"
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // PeekScoped borrows the header value associated with key into scope s (RFC 9110 Section 5.1).

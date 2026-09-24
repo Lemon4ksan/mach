@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/http/status"
+	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/foundation/timekit"
 )
 

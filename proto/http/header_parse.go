@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/foundation/net/http/status"
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 )

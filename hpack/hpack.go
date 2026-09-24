@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/lemon4ksan/foundation/net/http/rodata"
+	"github.com/lemon4ksan/mach/proto/http/rodata"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 )
 

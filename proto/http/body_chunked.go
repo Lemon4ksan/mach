@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 var errChunkedStream = errors.New("chunked stream")

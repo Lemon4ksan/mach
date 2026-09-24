@@ -11,7 +11,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/net/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1 "github.com/lemon4ksan/mach/proto/http"

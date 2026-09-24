@@ -12,7 +12,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/qpack"
+	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 

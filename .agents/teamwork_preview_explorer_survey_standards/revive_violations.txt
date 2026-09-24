@@ -1,0 +1,638 @@
+..\..\client\h1\conn.go:15:6: exported: exported type ClientConn should have comment or be unexported (revive)
+type ClientConn struct {
+     ^
+..\..\client\h1\conn.go:21:1: exported: exported function NewClientConn should have comment or be unexported (revive)
+func NewClientConn(c net.Conn) *ClientConn {
+^
+..\..\client\h1\conn.go:29:1: exported: exported method ClientConn.Do should have comment or be unexported (revive)
+func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Response) error {
+^
+..\..\client\h1\conn.go:57:1: exported: exported method ClientConn.Close should have comment or be unexported (revive)
+func (cc *ClientConn) Close() error {
+^
+..\..\client\h2\conn.go:1646:1: exported: exported method Conn.Do should have comment or be unexported (revive)
+func (c *Conn) Do(ctx context.Context, req *h1.Request, res *h1.Response) error {
+^
+..\..\client\h2\context.go:15:7: exported: exported const DefaultPingInterval should have comment or be unexported (revive)
+const DefaultPingInterval = time.Second * 10
+      ^
+..\..\client\h2\context.go:26:6: exported: exported type ClientOpts should have comment or be unexported (revive)
+type ClientOpts struct {
+     ^
+..\..\client\h2\context.go:33:6: exported: exported type Context should have comment or be unexported (revive)
+type Context struct {
+     ^
+..\..\client\h2\context.go:45:1: exported: exported method Context.State should have comment or be unexported (revive)
+func (ctx *Context) State() streamState {
+^
+..\..\client\h2\context.go:49:1: exported: exported method Context.SetState should have comment or be unexported (revive)
+func (ctx *Context) SetState(s streamState) {
+^
+..\..\client\h2\export.go:15:6: exported: exported type HPACK should have comment or be unexported (revive)
+type HPACK = hpack.HPACK
+     ^
+..\..\client\h2\export.go:17:1: exported: exported function AcquireHPACK should have comment or be unexported (revive)
+func AcquireHPACK() *HPACK   { return hpack.AcquireHPACK() }
+^
+..\..\client\h2\export.go:18:1: exported: exported function ReleaseHPACK should have comment or be unexported (revive)
+func ReleaseHPACK(hp *HPACK) { hpack.ReleaseHPACK(hp) }
+^
+..\..\client\h2\export.go:21:2: exported: exported type FrameType should have comment or be unexported (revive)
+	FrameType = coreh2.FrameType
+	^
+..\..\client\h2\export.go:22:2: exported: exported type Frame should have comment or be unexported (revive)
+	Frame     = coreh2.Frame
+	^
+..\..\client\h2\export.go:25:1: exported: exported function AcquireFrame should have comment or be unexported (revive)
+func AcquireFrame(t FrameType) Frame { return coreh2.AcquireFrame(t) }
+^
+..\..\client\h2\export.go:26:1: exported: exported function ReleaseFrame should have comment or be unexported (revive)
+func ReleaseFrame(f Frame)           { coreh2.ReleaseFrame(f) }
+^
+..\..\client\h2\export.go:28:6: exported: exported type HeaderField should have comment or be unexported (revive)
+type HeaderField = hpack.HeaderField
+     ^
+..\..\client\h2\export.go:30:1: exported: exported function AcquireHeaderField should have comment or be unexported (revive)
+func AcquireHeaderField() *HeaderField   { return hpack.AcquireHeaderField() }
+^
+..\..\client\h2\export.go:31:1: exported: exported function ReleaseHeaderField should have comment or be unexported (revive)
+func ReleaseHeaderField(hf *HeaderField) { hpack.ReleaseHeaderField(hf) }
+^
+..\..\client\h2\export.go:33:7: exported: exported const FrameHeaders should have comment or be unexported (revive)
+const FrameHeaders = coreh2.FrameHeaders
+      ^
+..\..\client\h2\export.go:36:2: exported: exported type Headers should have comment or be unexported (revive)
+	Headers     = coreh2.Headers
+	^
+..\..\client\h2\export.go:37:2: exported: exported type FrameHeader should have comment or be unexported (revive)
+	FrameHeader = coreh2.FrameHeader
+	^
+..\..\client\h2\export.go:40:1: exported: exported function AcquireFrameHeader should have comment or be unexported (revive)
+func AcquireFrameHeader() *FrameHeader   { return coreh2.AcquireFrameHeader() }
+^
+..\..\client\h2\export.go:41:1: exported: exported function ReleaseFrameHeader should have comment or be unexported (revive)
+func ReleaseFrameHeader(fh *FrameHeader) { coreh2.ReleaseFrameHeader(fh) }
+^
+..\..\client\h2\export.go:43:7: exported: exported const FrameSettings should have comment or be unexported (revive)
+const FrameSettings = coreh2.FrameSettings
+      ^
+..\..\client\h2\export.go:45:6: exported: exported type Settings should have comment or be unexported (revive)
+type Settings = coreh2.Settings
+     ^
+..\..\client\h2\export.go:47:1: exported: exported function ReadFrameFrom should have comment or be unexported (revive)
+func ReadFrameFrom(br *bufio.Reader) (*FrameHeader, error) { return coreh2.ReadFrameFrom(br) }
+^
+..\..\client\h2\export.go:49:7: exported: exported const FrameData should have comment or be unexported (revive)
+const FrameData = coreh2.FrameData
+      ^
+..\..\client\h2\export.go:51:6: exported: exported type Data should have comment or be unexported (revive)
+type Data = coreh2.Data
+     ^
+..\..\client\h2\export.go:53:7: exported: exported const FrameWindowUpdate should have comment or be unexported (revive)
+const FrameWindowUpdate = coreh2.FrameWindowUpdate
+      ^
+..\..\client\h2\export.go:55:6: exported: exported type WindowUpdate should have comment or be unexported (revive)
+type WindowUpdate = coreh2.WindowUpdate
+     ^
+..\..\client\h3\conn.go:90:1: exported: exported method ClientConn.IsClosed should have comment or be unexported (revive)
+func (cc *ClientConn) IsClosed() bool {
+^
+..\..\client\h3\export.go:13:6: exported: exported type QPACKCodec should have comment or be unexported (revive)
+type QPACKCodec = coreh3.QPACKCodec
+     ^
+..\..\client\h3\export.go:15:1: exported: exported function NewQPACKCodec should have comment or be unexported (revive)
+func NewQPACKCodec() *QPACKCodec { return coreh3.NewQPACKCodec() }
+^
+..\..\client\h3\export.go:17:7: exported: exported const FrameTypeHeaders should have comment or be unexported (revive)
+const FrameTypeHeaders = coreh3.FrameTypeHeaders
+      ^
+..\..\client\h3\export.go:19:5: exported: exported var ReadFrameHeader should have comment or be unexported (revive)
+var ReadFrameHeader = coreh3.ReadFrameHeader
+    ^
+..\..\client\h3\export.go:22:2: exported: exported type QUICOption should have comment or be unexported (revive)
+	QUICOption     = quic.Option
+	^
+..\..\client\h3\export.go:23:2: exported: exported type QUICTransport should have comment or be unexported (revive)
+	QUICTransport  = quic.Transport
+	^
+..\..\client\h3\export.go:24:2: exported: exported type QUICConnection should have comment or be unexported (revive)
+	QUICConnection = quic.Conn
+	^
+..\..\client\h3\export.go:27:5: exported: exported var QUICWithDatagrams should have comment or be unexported (revive)
+var QUICWithDatagrams = quic.WithDatagrams
+    ^
+..\..\proto\compress\brotli.go:66:1: exported: exported function WriteUnbrotliLimit should have comment or be unexported (revive)
+func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
+^
+..\..\proto\compress\compress.go:76:1: exported: exported function AcquireStacklessGzipWriter should have comment or be unexported (revive)
+func AcquireStacklessGzipWriter(w io.Writer, level int) stackless.Writer {
+^
+..\..\proto\compress\compress.go:93:1: exported: exported function ReleaseStacklessGzipWriter should have comment or be unexported (revive)
+func ReleaseStacklessGzipWriter(sw stackless.Writer, level int) {
+^
+..\..\proto\compress\compress.go:231:1: exported: exported function WriteGunzipLimit should have comment or be unexported (revive)
+func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
+^
+..\..\proto\compress\compress.go:350:1: exported: exported function WriteInflateLimit should have comment or be unexported (revive)
+func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
+^
+..\..\proto\compress\compress.go:414:1: exported: exported function AcquireStacklessDeflateWriter should have comment or be unexported (revive)
+func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
+^
+..\..\proto\compress\compress.go:431:1: exported: exported function ReleaseStacklessDeflateWriter should have comment or be unexported (revive)
+func ReleaseStacklessDeflateWriter(sw stackless.Writer, level int) {
+^
+..\..\proto\compress\zstd.go:17:2: exported: exported const CompressZstdSpeedNotSet should have comment (or a comment on this block) or be unexported (revive)
+	CompressZstdSpeedNotSet = iota
+	^
+..\..\proto\compress\zstd.go:63:1: exported: exported function WriteUnzstdLimit should have comment or be unexported (revive)
+func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
+^
+..\..\proto\h2\errors.go:61:2: exported: exported var ErrServerSupport should have comment or be unexported (revive)
+	ErrServerSupport      = errors.New("h2engine: server does not support HTTP/2")
+	^
+..\..\proto\h2\frames.go:17:1: exported: exported method Continuation.Type should have comment or be unexported (revive)
+func (c *Continuation) Type() FrameType { return FrameContinuation }
+^
+..\..\proto\h2\frames.go:19:1: exported: exported method Continuation.Reset should have comment or be unexported (revive)
+func (c *Continuation) Reset() {
+^
+..\..\proto\h2\frames.go:24:1: exported: exported method Continuation.Headers should have comment or be unexported (revive)
+func (c *Continuation) Headers() []byte             { return c.rawHeaders }
+^
+..\..\proto\h2\frames.go:25:1: exported: exported method Continuation.SetEndHeaders should have comment or be unexported (revive)
+func (c *Continuation) SetEndHeaders(v bool)        { c.endHeaders = v }
+^
+..\..\proto\h2\frames.go:26:1: exported: exported method Continuation.EndHeaders should have comment or be unexported (revive)
+func (c *Continuation) EndHeaders() bool            { return c.endHeaders }
+^
+..\..\proto\h2\frames.go:27:1: exported: exported method Continuation.SetHeader should have comment or be unexported (revive)
+func (c *Continuation) SetHeader(b []byte)          { c.rawHeaders = append(c.rawHeaders[:0], b...) }
+^
+..\..\proto\h2\frames.go:28:1: exported: exported method Continuation.AppendHeader should have comment or be unexported (revive)
+func (c *Continuation) AppendHeader(b []byte)       { c.rawHeaders = append(c.rawHeaders, b...) }
+^
+..\..\proto\h2\frames.go:31:1: exported: exported method Continuation.Deserialize should have comment or be unexported (revive)
+func (c *Continuation) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:42:1: exported: exported method Continuation.Serialize should have comment or be unexported (revive)
+func (c *Continuation) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:57:1: exported: exported method Data.Type should have comment or be unexported (revive)
+func (d *Data) Type() FrameType             { return FrameData }
+^
+..\..\proto\h2\frames.go:58:1: exported: exported method Data.Reset should have comment or be unexported (revive)
+func (d *Data) Reset()                      { d.endStream = false; d.hasPadding = false; d.b = d.b[:0] }
+^
+..\..\proto\h2\frames.go:59:1: exported: exported method Data.SetEndStream should have comment or be unexported (revive)
+func (d *Data) SetEndStream(v bool)         { d.endStream = v }
+^
+..\..\proto\h2\frames.go:60:1: exported: exported method Data.EndStream should have comment or be unexported (revive)
+func (d *Data) EndStream() bool             { return d.endStream }
+^
+..\..\proto\h2\frames.go:61:1: exported: exported method Data.Data should have comment or be unexported (revive)
+func (d *Data) Data() []byte                { return d.b }
+^
+..\..\proto\h2\frames.go:62:1: exported: exported method Data.SetData should have comment or be unexported (revive)
+func (d *Data) SetData(b []byte)            { d.b = append(d.b[:0], b...) }
+^
+..\..\proto\h2\frames.go:63:1: exported: exported method Data.Padding should have comment or be unexported (revive)
+func (d *Data) Padding() bool               { return d.hasPadding }
+^
+..\..\proto\h2\frames.go:64:1: exported: exported method Data.SetPadding should have comment or be unexported (revive)
+func (d *Data) SetPadding(v bool)           { d.hasPadding = v }
+^
+..\..\proto\h2\frames.go:65:1: exported: exported method Data.Append should have comment or be unexported (revive)
+func (d *Data) Append(b []byte)             { d.b = append(d.b, b...) }
+^
+..\..\proto\h2\frames.go:66:1: exported: exported method Data.Len should have comment or be unexported (revive)
+func (d *Data) Len() int                    { return len(d.b) }
+^
+..\..\proto\h2\frames.go:69:1: exported: exported method Data.Deserialize should have comment or be unexported (revive)
+func (d *Data) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:91:1: exported: exported method Data.Serialize should have comment or be unexported (revive)
+func (d *Data) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:120:1: exported: exported method GoAway.Type should have comment or be unexported (revive)
+func (ga *GoAway) Type() FrameType         { return FrameGoAway }
+^
+..\..\proto\h2\frames.go:121:1: exported: exported method GoAway.Reset should have comment or be unexported (revive)
+func (ga *GoAway) Reset()                  { ga.stream = 0; ga.code = 0; ga.data = ga.data[:0] }
+^
+..\..\proto\h2\frames.go:122:1: exported: exported method GoAway.Code should have comment or be unexported (revive)
+func (ga *GoAway) Code() ErrorCode         { return ga.code }
+^
+..\..\proto\h2\frames.go:123:1: exported: exported method GoAway.SetCode should have comment or be unexported (revive)
+func (ga *GoAway) SetCode(code ErrorCode)  { ga.code = code & (1<<31 - 1) }
+^
+..\..\proto\h2\frames.go:124:1: exported: exported method GoAway.Stream should have comment or be unexported (revive)
+func (ga *GoAway) Stream() uint32          { return ga.stream }
+^
+..\..\proto\h2\frames.go:125:1: exported: exported method GoAway.SetStream should have comment or be unexported (revive)
+func (ga *GoAway) SetStream(stream uint32) { ga.stream = stream & (1<<31 - 1) }
+^
+..\..\proto\h2\frames.go:126:1: exported: exported method GoAway.Data should have comment or be unexported (revive)
+func (ga *GoAway) Data() []byte            { return ga.data }
+^
+..\..\proto\h2\frames.go:127:1: exported: exported method GoAway.SetData should have comment or be unexported (revive)
+func (ga *GoAway) SetData(b []byte)        { ga.data = append(ga.data[:0], b...) }
+^
+..\..\proto\h2\frames.go:132:1: exported: exported method GoAway.Deserialize should have comment or be unexported (revive)
+func (ga *GoAway) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:151:1: exported: exported method GoAway.Serialize should have comment or be unexported (revive)
+func (ga *GoAway) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:169:1: exported: exported method Headers.Type should have comment or be unexported (revive)
+func (h *Headers) Type() FrameType           { return FrameHeaders }
+^
+..\..\proto\h2\frames.go:170:1: exported: exported method Headers.Headers should have comment or be unexported (revive)
+func (h *Headers) Headers() []byte           { return h.rawHeaders }
+^
+..\..\proto\h2\frames.go:171:1: exported: exported method Headers.SetHeaders should have comment or be unexported (revive)
+func (h *Headers) SetHeaders(b []byte)       { h.rawHeaders = append(h.rawHeaders[:0], b...) }
+^
+..\..\proto\h2\frames.go:172:1: exported: exported method Headers.AppendRawHeaders should have comment or be unexported (revive)
+func (h *Headers) AppendRawHeaders(b []byte) { h.rawHeaders = append(h.rawHeaders, b...) }
+^
+..\..\proto\h2\frames.go:173:1: exported: exported method Headers.EndStream should have comment or be unexported (revive)
+func (h *Headers) EndStream() bool           { return h.endStream }
+^
+..\..\proto\h2\frames.go:174:1: exported: exported method Headers.SetEndStream should have comment or be unexported (revive)
+func (h *Headers) SetEndStream(v bool)       { h.endStream = v }
+^
+..\..\proto\h2\frames.go:175:1: exported: exported method Headers.EndHeaders should have comment or be unexported (revive)
+func (h *Headers) EndHeaders() bool          { return h.endHeaders }
+^
+..\..\proto\h2\frames.go:176:1: exported: exported method Headers.SetEndHeaders should have comment or be unexported (revive)
+func (h *Headers) SetEndHeaders(v bool)      { h.endHeaders = v }
+^
+..\..\proto\h2\frames.go:177:1: exported: exported method Headers.Stream should have comment or be unexported (revive)
+func (h *Headers) Stream() uint32            { return h.stream }
+^
+..\..\proto\h2\frames.go:178:1: exported: exported method Headers.SetStream should have comment or be unexported (revive)
+func (h *Headers) SetStream(stream uint32)   { h.stream = stream }
+^
+..\..\proto\h2\frames.go:179:1: exported: exported method Headers.Weight should have comment or be unexported (revive)
+func (h *Headers) Weight() byte              { return h.weight }
+^
+..\..\proto\h2\frames.go:180:1: exported: exported method Headers.SetWeight should have comment or be unexported (revive)
+func (h *Headers) SetWeight(w byte)          { h.weight = w }
+^
+..\..\proto\h2\frames.go:181:1: exported: exported method Headers.Exclusive should have comment or be unexported (revive)
+func (h *Headers) Exclusive() bool           { return h.exclusive }
+^
+..\..\proto\h2\frames.go:182:1: exported: exported method Headers.SetExclusive should have comment or be unexported (revive)
+func (h *Headers) SetExclusive(v bool)       { h.exclusive = v }
+^
+..\..\proto\h2\frames.go:183:1: exported: exported method Headers.Padding should have comment or be unexported (revive)
+func (h *Headers) Padding() bool             { return h.hasPadding }
+^
+..\..\proto\h2\frames.go:184:1: exported: exported method Headers.SetPadding should have comment or be unexported (revive)
+func (h *Headers) SetPadding(v bool)         { h.hasPadding = v }
+^
+..\..\proto\h2\frames.go:186:1: exported: exported method Headers.Reset should have comment or be unexported (revive)
+func (h *Headers) Reset() {
+^
+..\..\proto\h2\frames.go:197:1: exported: exported method Headers.Deserialize should have comment or be unexported (revive)
+func (h *Headers) Deserialize(frh *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:238:1: exported: exported method Headers.Serialize should have comment or be unexported (revive)
+func (h *Headers) Serialize(frh *FrameHeader) {
+^
+..\..\proto\h2\frames.go:295:1: exported: exported method Ping.Type should have comment or be unexported (revive)
+func (p *Ping) Type() FrameType             { return FramePing }
+^
+..\..\proto\h2\frames.go:296:1: exported: exported method Ping.IsAck should have comment or be unexported (revive)
+func (p *Ping) IsAck() bool                 { return p.ack }
+^
+..\..\proto\h2\frames.go:297:1: exported: exported method Ping.SetAck should have comment or be unexported (revive)
+func (p *Ping) SetAck(ack bool)             { p.ack = ack }
+^
+..\..\proto\h2\frames.go:298:1: exported: exported method Ping.Reset should have comment or be unexported (revive)
+func (p *Ping) Reset()                      { p.ack = false }
+^
+..\..\proto\h2\frames.go:299:1: exported: exported method Ping.Data should have comment or be unexported (revive)
+func (p *Ping) Data() []byte                { return p.data[:] }
+^
+..\..\proto\h2\frames.go:300:1: exported: exported method Ping.SetData should have comment or be unexported (revive)
+func (p *Ping) SetData(b []byte)            { copy(p.data[:], b) }
+^
+..\..\proto\h2\frames.go:303:1: exported: exported method Ping.Deserialize should have comment or be unexported (revive)
+func (p *Ping) Deserialize(frh *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:318:1: exported: exported method Ping.Serialize should have comment or be unexported (revive)
+func (p *Ping) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:333:1: exported: exported method Priority.Type should have comment or be unexported (revive)
+func (pry *Priority) Type() FrameType         { return FramePriority }
+^
+..\..\proto\h2\frames.go:334:1: exported: exported method Priority.Reset should have comment or be unexported (revive)
+func (pry *Priority) Reset()                  { pry.exclusive = false; pry.stream = 0; pry.weight = 0 }
+^
+..\..\proto\h2\frames.go:335:1: exported: exported method Priority.Stream should have comment or be unexported (revive)
+func (pry *Priority) Stream() uint32          { return pry.stream }
+^
+..\..\proto\h2\frames.go:336:1: exported: exported method Priority.SetStream should have comment or be unexported (revive)
+func (pry *Priority) SetStream(stream uint32) { pry.stream = stream & (1<<31 - 1) }
+^
+..\..\proto\h2\frames.go:337:1: exported: exported method Priority.Weight should have comment or be unexported (revive)
+func (pry *Priority) Weight() byte            { return pry.weight }
+^
+..\..\proto\h2\frames.go:338:1: exported: exported method Priority.SetWeight should have comment or be unexported (revive)
+func (pry *Priority) SetWeight(w byte)        { pry.weight = w }
+^
+..\..\proto\h2\frames.go:339:1: exported: exported method Priority.Exclusive should have comment or be unexported (revive)
+func (pry *Priority) Exclusive() bool         { return pry.exclusive }
+^
+..\..\proto\h2\frames.go:340:1: exported: exported method Priority.SetExclusive should have comment or be unexported (revive)
+func (pry *Priority) SetExclusive(v bool)     { pry.exclusive = v }
+^
+..\..\proto\h2\frames.go:342:1: exported: exported method Priority.Deserialize should have comment or be unexported (revive)
+func (pry *Priority) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:363:1: exported: exported method Priority.Serialize should have comment or be unexported (revive)
+func (pry *Priority) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:380:1: exported: exported method PushPromise.Type should have comment or be unexported (revive)
+func (pp *PushPromise) Type() FrameType        { return FramePushPromise }
+^
+..\..\proto\h2\frames.go:381:1: exported: exported method PushPromise.PromisedStream should have comment or be unexported (revive)
+func (pp *PushPromise) PromisedStream() uint32 { return pp.stream }
+^
+..\..\proto\h2\frames.go:382:1: exported: exported method PushPromise.Headers should have comment or be unexported (revive)
+func (pp *PushPromise) Headers() []byte        { return pp.header }
+^
+..\..\proto\h2\frames.go:384:1: exported: exported method PushPromise.Reset should have comment or be unexported (revive)
+func (pp *PushPromise) Reset() {
+^
+..\..\proto\h2\frames.go:391:1: exported: exported method PushPromise.SetHeader should have comment or be unexported (revive)
+func (pp *PushPromise) SetHeader(h []byte) { pp.header = append(pp.header[:0], h...) }
+^
+..\..\proto\h2\frames.go:397:1: exported: exported method PushPromise.Deserialize should have comment or be unexported (revive)
+func (pp *PushPromise) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:424:1: exported: exported method PushPromise.Serialize should have comment or be unexported (revive)
+func (pp *PushPromise) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:434:1: exported: exported method RstStream.Type should have comment or be unexported (revive)
+func (rst *RstStream) Type() FrameType        { return FrameResetStream }
+^
+..\..\proto\h2\frames.go:435:1: exported: exported method RstStream.Code should have comment or be unexported (revive)
+func (rst *RstStream) Code() ErrorCode        { return rst.code }
+^
+..\..\proto\h2\frames.go:436:1: exported: exported method RstStream.SetCode should have comment or be unexported (revive)
+func (rst *RstStream) SetCode(code ErrorCode) { rst.code = code }
+^
+..\..\proto\h2\frames.go:437:1: exported: exported method RstStream.Reset should have comment or be unexported (revive)
+func (rst *RstStream) Reset()                 { rst.code = 0 }
+^
+..\..\proto\h2\frames.go:440:1: exported: exported method RstStream.Deserialize should have comment or be unexported (revive)
+func (rst *RstStream) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:454:1: exported: exported method RstStream.Serialize should have comment or be unexported (revive)
+func (rst *RstStream) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\frames.go:464:1: exported: exported method WindowUpdate.Type should have comment or be unexported (revive)
+func (wu *WindowUpdate) Type() FrameType      { return FrameWindowUpdate }
+^
+..\..\proto\h2\frames.go:465:1: exported: exported method WindowUpdate.Reset should have comment or be unexported (revive)
+func (wu *WindowUpdate) Reset()               { wu.increment = 0 }
+^
+..\..\proto\h2\frames.go:466:1: exported: exported method WindowUpdate.Increment should have comment or be unexported (revive)
+func (wu *WindowUpdate) Increment() int       { return wu.increment }
+^
+..\..\proto\h2\frames.go:467:1: exported: exported method WindowUpdate.SetIncrement should have comment or be unexported (revive)
+func (wu *WindowUpdate) SetIncrement(inc int) { wu.increment = inc }
+^
+..\..\proto\h2\frames.go:469:1: exported: exported method WindowUpdate.Deserialize should have comment or be unexported (revive)
+func (wu *WindowUpdate) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\frames.go:488:1: exported: exported method WindowUpdate.Serialize should have comment or be unexported (revive)
+func (wu *WindowUpdate) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\header.go:90:1: exported: exported method FrameHeader.Type should have comment or be unexported (revive)
+func (f *FrameHeader) Type() FrameType           { return f.kind }
+^
+..\..\proto\h2\header.go:91:1: exported: exported method FrameHeader.Flags should have comment or be unexported (revive)
+func (f *FrameHeader) Flags() FrameFlags         { return f.flags }
+^
+..\..\proto\h2\header.go:92:1: exported: exported method FrameHeader.SetFlags should have comment or be unexported (revive)
+func (f *FrameHeader) SetFlags(flags FrameFlags) { f.flags = flags }
+^
+..\..\proto\h2\header.go:93:1: exported: exported method FrameHeader.Stream should have comment or be unexported (revive)
+func (f *FrameHeader) Stream() uint32            { return f.stream }
+^
+..\..\proto\h2\header.go:94:1: exported: exported method FrameHeader.SetStream should have comment or be unexported (revive)
+func (f *FrameHeader) SetStream(stream uint32)   { f.stream = stream }
+^
+..\..\proto\h2\header.go:95:1: exported: exported method FrameHeader.Len should have comment or be unexported (revive)
+func (f *FrameHeader) Len() int                  { return f.length }
+^
+..\..\proto\h2\header.go:96:1: exported: exported method FrameHeader.MaxLen should have comment or be unexported (revive)
+func (f *FrameHeader) MaxLen() uint32            { return f.maxLen }
+^
+..\..\proto\h2\header.go:269:1: exported: exported method FrameHeader.Body should have comment or be unexported (revive)
+func (f *FrameHeader) Body() Frame { return f.fr }
+^
+..\..\proto\h2\header.go:271:1: exported: exported method FrameHeader.SetBody should have comment or be unexported (revive)
+func (f *FrameHeader) SetBody(fr Frame) {
+^
+..\..\proto\h2\header.go:292:1: exported: exported method Headers.AppendHeaderField should have comment or be unexported (revive)
+func (h *Headers) AppendHeaderField(hp *hpack.HPACK, hf *hpack.HeaderField, store bool) {
+^
+..\..\proto\h2\settings.go:62:1: exported: exported method Settings.Type should have comment or be unexported (revive)
+func (st *Settings) Type() FrameType { return FrameSettings }
+^
+..\..\proto\h2\settings.go:64:1: exported: exported method Settings.Reset should have comment or be unexported (revive)
+func (st *Settings) Reset() {
+^
+..\..\proto\h2\settings.go:76:1: exported: exported method Settings.CopyTo should have comment or be unexported (revive)
+func (st *Settings) CopyTo(dst *Settings) {
+^
+..\..\proto\h2\settings.go:88:1: exported: exported method Settings.SetHeaderTableSize should have comment or be unexported (revive)
+func (st *Settings) SetHeaderTableSize(size uint32)   { st.tableSize = size }
+^
+..\..\proto\h2\settings.go:89:1: exported: exported method Settings.HeaderTableSize should have comment or be unexported (revive)
+func (st *Settings) HeaderTableSize() uint32          { return st.tableSize }
+^
+..\..\proto\h2\settings.go:90:1: exported: exported method Settings.SetPush should have comment or be unexported (revive)
+func (st *Settings) SetPush(enabled bool)             { st.enablePush = enabled }
+^
+..\..\proto\h2\settings.go:91:1: exported: exported method Settings.Push should have comment or be unexported (revive)
+func (st *Settings) Push() bool                       { return st.enablePush }
+^
+..\..\proto\h2\settings.go:92:1: exported: exported method Settings.SetMaxConcurrentStreams should have comment or be unexported (revive)
+func (st *Settings) SetMaxConcurrentStreams(m uint32) { st.MaxStreams = m }
+^
+..\..\proto\h2\settings.go:93:1: exported: exported method Settings.MaxConcurrentStreams should have comment or be unexported (revive)
+func (st *Settings) MaxConcurrentStreams() uint32     { return st.MaxStreams }
+^
+..\..\proto\h2\settings.go:94:1: exported: exported method Settings.SetMaxWindowSize should have comment or be unexported (revive)
+func (st *Settings) SetMaxWindowSize(size uint32)     { st.windowSize = size }
+^
+..\..\proto\h2\settings.go:95:1: exported: exported method Settings.MaxWindowSize should have comment or be unexported (revive)
+func (st *Settings) MaxWindowSize() uint32            { return st.windowSize }
+^
+..\..\proto\h2\settings.go:96:1: exported: exported method Settings.SetMaxFrameSize should have comment or be unexported (revive)
+func (st *Settings) SetMaxFrameSize(size uint32)      { st.frameSize = size }
+^
+..\..\proto\h2\settings.go:97:1: exported: exported method Settings.MaxFrameSize should have comment or be unexported (revive)
+func (st *Settings) MaxFrameSize() uint32             { return st.frameSize }
+^
+..\..\proto\h2\settings.go:98:1: exported: exported method Settings.SetMaxHeaderListSize should have comment or be unexported (revive)
+func (st *Settings) SetMaxHeaderListSize(size uint32) { st.headerSize = size }
+^
+..\..\proto\h2\settings.go:99:1: exported: exported method Settings.MaxHeaderListSize should have comment or be unexported (revive)
+func (st *Settings) MaxHeaderListSize() uint32        { return st.headerSize }
+^
+..\..\proto\h2\settings.go:100:1: exported: exported method Settings.SetEnableConnect should have comment or be unexported (revive)
+func (st *Settings) SetEnableConnect(enabled bool)    { st.enableConnect = enabled }
+^
+..\..\proto\h2\settings.go:101:1: exported: exported method Settings.EnableConnect should have comment or be unexported (revive)
+func (st *Settings) EnableConnect() bool              { return st.enableConnect }
+^
+..\..\proto\h2\settings.go:102:1: exported: exported method Settings.IsAck should have comment or be unexported (revive)
+func (st *Settings) IsAck() bool                      { return st.ack }
+^
+..\..\proto\h2\settings.go:103:1: exported: exported method Settings.SetAck should have comment or be unexported (revive)
+func (st *Settings) SetAck(ack bool)                  { st.ack = ack }
+^
+..\..\proto\h2\settings.go:166:1: exported: exported method Settings.Encode should have comment or be unexported (revive)
+func (st *Settings) Encode() {
+^
+..\..\proto\h2\settings.go:192:1: exported: exported method Settings.Deserialize should have comment or be unexported (revive)
+func (st *Settings) Deserialize(fr *FrameHeader) error {
+^
+..\..\proto\h2\settings.go:211:1: exported: exported method Settings.Serialize should have comment or be unexported (revive)
+func (st *Settings) Serialize(fr *FrameHeader) {
+^
+..\..\proto\h2\utils.go:26:2: exported: comment on exported var StringPath should be of the form "StringPath ..." (revive)
+	// HTTP/2 Request & Response Pseudo-Headers (RFC 9113 §8.3, §8.3.1 & §8.3.2)
+	^
+..\..\proto\h2\utils.go:28:2: exported: exported var StringStatus should have comment or be unexported (revive)
+	StringStatus        = []byte(":status")
+	^
+..\..\proto\h3\errors.go:110:2: exported: exported var ErrMissingMethodOrPath should have comment or be unexported (revive)
+	ErrMissingMethodOrPath = errors.New("h3: missing :method or :path pseudo-header (RFC 9114 Sec 4.1.2)")
+	^
+..\..\proto\h3\frames.go:14:5: exported: exported var ErrH3SettingsError should have comment or be unexported (revive)
+var ErrH3SettingsError = errors.New("aoni/h3engine: reserved H2 setting ID in H3 SETTINGS frame (RFC 9114 §7.2.4.1)")
+    ^
+..\..\proto\h3\frames.go:212:1: exported: exported function AppendHeadersHeader should have comment or be unexported (revive)
+func AppendHeadersHeader(b []byte, length uint64) []byte {
+^
+..\..\proto\h3\frames.go:217:1: exported: exported function AppendDataHeader should have comment or be unexported (revive)
+func AppendDataHeader(b []byte, length uint64) []byte {
+^
+..\..\proto\h3\qpack.go:39:1: exported: exported method QPACKStreamError.Is should have comment or be unexported (revive)
+func (e *QPACKStreamError) Is(target error) bool {
+^
+..\..\proto\h3\qpack.go:141:1: exported: exported method QPACKCodec.Decoder should have comment or be unexported (revive)
+func (q *QPACKCodec) Decoder() *qpack.Decoder {
+^
+..\..\proto\h3\qpack.go:145:1: exported: exported method QPACKCodec.Encoder should have comment or be unexported (revive)
+func (q *QPACKCodec) Encoder() *qpack.Encoder {
+^
+..\..\proto\h3\qpack.go:407:1: exported: exported method QPACKCodec.DecodeResponseHeaders should have comment or be unexported (revive)
+func (q *QPACKCodec) DecodeResponseHeaders(
+^
+..\..\proto\h3\qpack.go:462:1: exported: exported method QPACKCodec.DecodeResponseTrailers should have comment or be unexported (revive)
+func (q *QPACKCodec) DecodeResponseTrailers(
+^
+..\..\proto\h3\qpack.go:598:1: exported: exported method QPACKCodec.DecodeRequestHeaders should have comment or be unexported (revive)
+func (q *QPACKCodec) DecodeRequestHeaders(
+^
+..\..\proto\h3\qpack.go:656:1: exported: exported method QPACKCodec.EncodeResponseHeaders should have comment or be unexported (revive)
+func (q *QPACKCodec) EncodeResponseHeaders(
+^
+..\..\proto\http\header.go:142:2: exported: exported var ErrBadTrailer should have comment or be unexported (revive)
+	ErrBadTrailer                    = errors.New("mach: contain forbidden trailer")
+	^
+..\..\proto\http\header_response.go:1283:1: exported: exported method ResponseHeader.SetDisableNormalizing should have comment or be unexported (revive)
+func (h *ResponseHeader) SetDisableNormalizing(disable bool) {
+^
+..\..\proto\http\headers.go:12:2: exported: exported const HeaderAccept should have comment (or a comment on this block) or be unexported (revive)
+	HeaderAccept                          = fheader.Accept
+	^
+..\..\proto\http\http.go:38:6: exported: exported type ReadCloserWithError should have comment or be unexported (revive)
+type ReadCloserWithError interface {
+     ^
+..\..\proto\http\http.go:48:1: exported: exported function NewCloseReaderWithError should have comment or be unexported (revive)
+func NewCloseReaderWithError(r io.Reader, closeFunc func(err error) error) ReadCloserWithError {
+^
+..\..\proto\http\http.go:153:5: exported: exported var ErrContentEncodingUnsupported should have comment or be unexported (revive)
+var ErrContentEncodingUnsupported = errors.New("mach: unsupported content-encoding")
+    ^
+..\..\proto\http\http.go:155:1: exported: exported function SwapRequestBody should have comment or be unexported (revive)
+func SwapRequestBody(a, b *Request) {
+^
+..\..\proto\http\http.go:169:1: exported: exported function SwapResponseBody should have comment or be unexported (revive)
+func SwapResponseBody(a, b *Response) {
+^
+..\..\proto\http\request.go:178:1: exported: exported method Request.CloseBodyStream should have comment or be unexported (revive)
+func (req *Request) CloseBodyStream() error {
+^
+..\..\proto\http\request.go:211:1: exported: exported method Request.BodyBuffer should have comment or be unexported (revive)
+func (req *Request) BodyBuffer() *bytesconv.ByteBuffer {
+^
+..\..\proto\http\request.go:272:1: exported: exported method Request.RequestBodyStream should have comment or be unexported (revive)
+func (req *Request) RequestBodyStream() io.Reader {
+^
+..\..\proto\http\request.go:276:1: exported: exported method Request.BodyUnzstd should have comment or be unexported (revive)
+func (req *Request) BodyUnzstd() ([]byte, error) {
+^
+..\..\proto\http\request.go:492:1: exported: exported method Request.CopyToSkipBody should have comment or be unexported (revive)
+func (req *Request) CopyToSkipBody(dst *Request) {
+^
+..\..\proto\http\request.go:528:1: exported: exported method Request.ParseURI should have comment or be unexported (revive)
+func (req *Request) ParseURI() error {
+^
+..\..\proto\http\response.go:172:1: exported: exported method Response.CloseBodyStream should have comment or be unexported (revive)
+func (resp *Response) CloseBodyStream() error {
+^
+..\..\proto\http\response.go:176:1: exported: exported method Response.ParseNetConn should have comment or be unexported (revive)
+func (resp *Response) ParseNetConn(conn net.Conn) {
+^
+..\..\proto\http\response.go:228:1: exported: exported method Response.BodyBuffer should have comment or be unexported (revive)
+func (resp *Response) BodyBuffer() *bytesconv.ByteBuffer {
+^
+..\..\proto\http\response.go:289:1: exported: exported method Response.BodyUnzstd should have comment or be unexported (revive)
+func (resp *Response) BodyUnzstd() ([]byte, error) {
+^
+..\..\proto\http\response.go:477:1: exported: exported method Response.CopyToSkipBody should have comment or be unexported (revive)
+func (resp *Response) CopyToSkipBody(dst *Response) {
+^
+..\..\proto\http\streaming.go:22:6: exported: exported type RequestStream should have comment or be unexported (revive)
+type RequestStream struct {
+     ^
+..\..\proto\http\streaming.go:110:1: exported: exported function AcquireRequestStream should have comment or be unexported (revive)
+func AcquireRequestStream(b *bytesconv.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *RequestStream {
+^
+..\..\proto\http\streaming.go:119:1: exported: exported function ReleaseRequestStream should have comment or be unexported (revive)
+func ReleaseRequestStream(rs *RequestStream) {
+^
+..\..\proto\http\streaming.go:128:5: exported: exported var RequestStreamPool should have comment or be unexported (revive)
+var RequestStreamPool = sync.Pool{
+    ^
+..\..\server\h1\chunked.go:18:2: exported: exported var ErrInvalidChunkSize should have comment or be unexported (revive)
+	ErrInvalidChunkSize   = errors.New("h1: invalid chunk size in chunked encoding")
+	^
+..\..\server\h1\errors.go:11:5: exported: exported var ErrServerClosed should have comment or be unexported (revive)
+var ErrServerClosed = errors.New("h1: server is closed")
+    ^
+..\..\server\h1\header.go:10:2: exported: exported type Headers should have comment or be unexported (revive)
+	Headers     = coreheaders.Headers
+	^
+..\..\server\h1\header.go:11:2: exported: exported type HeaderEntry should have comment or be unexported (revive)
+	HeaderEntry = coreheaders.HeaderEntry
+	^
+..\..\server\h1\header.go:14:5: exported: exported var NewHeadersWithCapacity should have comment or be unexported (revive)
+var NewHeadersWithCapacity = coreheaders.NewWithCapacity
+    ^
+..\..\server\h1\request.go:26:2: exported: exported var ErrMalformedRequestLine should have comment or be unexported (revive)
+	ErrMalformedRequestLine        = errors.New("h1: malformed request line (RFC 9112 §3)")
+	^
+212 issues:
+* revive: 212

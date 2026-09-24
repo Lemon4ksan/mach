@@ -9,7 +9,7 @@ import (
 	"mime/multipart"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 

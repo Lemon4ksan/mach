@@ -12,7 +12,7 @@ import (
 	"net/http"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/headkit"
+	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"

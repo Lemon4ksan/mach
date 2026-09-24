@@ -9,7 +9,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/lemon4ksan/foundation/net/qpack"
+	"github.com/lemon4ksan/mach/qpack"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/http"
