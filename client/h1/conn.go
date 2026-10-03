@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package h1 provides high-performance, zero-allocation HTTP/1.1 client transport
-// primitives adhering to RFC 9112 and RFC 9110 specifications.
 package h1
 
 import (

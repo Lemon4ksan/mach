@@ -34,7 +34,7 @@ func init() {
 	for code := 100; code < 600; code++ {
 		text := status.Message(code)
 		if text != "" {
-			statusLines[code] = []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", code, text))
+			statusLines[code] = fmt.Appendf(nil, "HTTP/1.1 %d %s\r\n", code, text)
 		}
 	}
 

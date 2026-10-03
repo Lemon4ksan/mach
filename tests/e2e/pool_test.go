@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+	"github.com/lemon4ksan/mach/proto/http/status"
 
 	"github.com/lemon4ksan/mach/client"
 	h1client "github.com/lemon4ksan/mach/client/h1"

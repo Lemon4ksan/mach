@@ -341,4 +341,3 @@ func (w *h2WindowUpdateConn) Write(b []byte) (int, error) {
 
 	return w.Conn.Write(b)
 }
-
