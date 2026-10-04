@@ -14,7 +14,7 @@ import (
 	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/proto/http/stackless"
+	"github.com/lemon4ksan/mach/internal/stackless"
 )
 
 func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
