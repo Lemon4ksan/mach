@@ -9,21 +9,13 @@ COVER_OUT ?= $(TMP_DIR)/coverage.out
 CYAN  := \033[0;36m
 RESET := \033[0m
 
-.PHONY: test race cover cover-clean cover-html lint format clean check-tls-spec update-browsers update-browsers-apply lib lib-static test-lib help
+.PHONY: test race cover cover-clean cover-html lint format fix alloc clean help
 
-lib: ## Build C-Shared dynamic library (bin/libaoni.so)
-	@printf "$(CYAN)Building libaoni dynamic shared library...$(RESET)\n"
-	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=1 go build -buildmode=c-shared -o $(BIN_DIR)/libaoni.so ./cmd/libaoni
-
-lib-static: ## Build C-Archive static library (bin/libaoni.a)
-	@printf "$(CYAN)Building libaoni static library archive...$(RESET)\n"
-	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=1 go build -buildmode=c-archive -o $(BIN_DIR)/libaoni.a ./cmd/libaoni
-
-test-lib: lib ## Build and execute C fast client harness against libaoni
-	@printf "$(CYAN)Building and running C client test harness...$(RESET)\n"
-	$(MAKE) -C examples/c_fast_client clean run
+fix: ## Run go fix and vortex fix automated modernizations
+	@printf "$(CYAN)Running go fix...$(RESET)\n"
+	go fix ./...
+	@printf "$(CYAN)Running vortex fix...$(RESET)\n"
+	vortex fix -w ./...
 
 test: ## Run quick unit tests
 	@printf "$(CYAN)Running unit tests...$(RESET)\n"
@@ -33,8 +25,12 @@ race: ## Run unit tests with race detector enabled
 	@printf "$(CYAN)Running tests with race detector...$(RESET)\n"
 	go test -race -timeout 60s $(PKG)
 
+alloc: ## Run zero-allocation budget tests
+	@printf "$(CYAN)Running zero-allocation budget verification...$(RESET)\n"
+	go test -v -run=TestAlloc ./...
+
 bench: ## Run silicon hardware inspection and microsecond benchmark suite
-	@printf "$(CYAN)Running aoni silicon benchmark...$(RESET)\n"
+	@printf "$(CYAN)Running mach silicon benchmark...$(RESET)\n"
 	vortex bench
 
 fuzz: ## Run continuous automated fuzz testing across all wire parsers

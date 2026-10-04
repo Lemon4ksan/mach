@@ -1012,29 +1012,28 @@ func TestDecoder_StreamReset_ZeroMaxCapacity_NoCancellation(t *testing.T) {
 
 func TestDecoder_RFC_EdgeCases(t *testing.T) {
 	cases := []struct {
-		name       string
-		data       []byte
-		errCode    uint64
+		name    string
+		data    []byte
+		errCode uint64
 	}{
 		{
-			name:       "truncated prefix",
-			data:       []byte{0x00},
-			errCode:    uint64(QPACK_DECOMPRESSION_FAILED),
+			name:    "truncated prefix",
+			data:    []byte{0x00},
+			errCode: uint64(QPACK_DECOMPRESSION_FAILED),
 		},
 		{
-			name:       "invalid huffman",
-			data:       []byte{0x00, 0x00, 0x82, 0xff, 0xff},
-			errCode:    uint64(QPACK_DECOMPRESSION_FAILED),
+			name:    "invalid huffman",
+			data:    []byte{0x00, 0x00, 0x82, 0xff, 0xff},
+			errCode: uint64(QPACK_DECOMPRESSION_FAILED),
 		},
 		{
-			name:       "malformed varint",
-			data:       []byte{0x00, 0x00, 0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-			errCode:    uint64(QPACK_DECOMPRESSION_FAILED),
+			name:    "malformed varint",
+			data:    []byte{0x00, 0x00, 0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+			errCode: uint64(QPACK_DECOMPRESSION_FAILED),
 		},
 	}
-	
+
 	for _, tc := range cases {
-		tc := tc // capture
 		t.Run(tc.name, func(t *testing.T) {
 			runDecoderTest(t, func(t *testing.T, f *qpackDecoderTestFixture) {
 				f.DecodeHeaderBlock(tc.data)

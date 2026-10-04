@@ -739,13 +739,12 @@ func TestRoundtrip_RFC_EdgeCases(t *testing.T) {
 	cases := []struct {
 		name string
 	}{
-		{ name: "smuggling headers" },
-		{ name: "arbitrary chunk slicing" },
-		{ name: "out of order completions" },
+		{name: "smuggling headers"},
+		{name: "arbitrary chunk slicing"},
+		{name: "out of order completions"},
 	}
-	
+
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			h := newRoundtripHarness(t, 4096, 5, modeImmediate)
 			headers := []HeaderField{

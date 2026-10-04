@@ -963,18 +963,17 @@ func TestEncoder_RFC_EdgeCases(t *testing.T) {
 	cases := []struct {
 		name string
 	}{
-		{ name: "dynamic limits boundary" },
-		{ name: "stream cancellation storm" },
+		{name: "dynamic limits boundary"},
+		{name: "stream cancellation storm"},
 	}
-	
+
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			encoder := NewEncoder(nil, HuffmanEncodingEnabled, CookieCrumblingEnabled)
 			assert.NotNil(t, encoder)
 			encoder.SetMaximumDynamicTableCapacity(4096)
 			encoder.SetMaximumBlockedStreams(100)
-			
+
 			// perform some basic encoding to simulate edge case
 			_ = encoder.EncodeHeaderList(1, []HeaderField{{Name: "x-adversarial", Value: "test"}}, nil)
 		})
