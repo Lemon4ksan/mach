@@ -26,9 +26,8 @@ func BenchmarkRequest_ReadRequest(b *testing.B) {
 	var req h1.Request
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req.Reset()
 		br.Reset(bytes.NewReader(raw))
 
@@ -49,9 +48,8 @@ func BenchmarkResponse_WriteTo(b *testing.B) {
 	defer bytesconv.ReleaseByteBuffer(bw)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bw.Reset()
 
 		if err := res.WriteTo(bw, true, false); err != nil {
@@ -85,9 +83,8 @@ func BenchmarkConnHandler_ServeConn_Pipeline(b *testing.B) {
 	var respBuf [256]byte
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := clientConn.Write(reqData); err != nil {
 			b.Fatal(err)
 		}

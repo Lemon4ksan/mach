@@ -24,7 +24,7 @@ func BenchmarkHeaderFields_All(b *testing.B) {
 	b.ReportAllocs()
 
 	var totalLen int
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for name, value := range fields.All() {
 			totalLen += len(name) + len(value)
 		}
@@ -45,7 +45,7 @@ func BenchmarkHeaderFields_Values(b *testing.B) {
 	b.ReportAllocs()
 
 	var totalLen int
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for hf := range fields.Values() {
 			totalLen += len(hf.Name) + len(hf.Value)
 		}
@@ -63,7 +63,7 @@ func BenchmarkIndexSet_All(b *testing.B) {
 	b.ReportAllocs()
 
 	var sum uint64
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for idx := range set.All() {
 			sum += idx
 		}
@@ -83,7 +83,7 @@ func BenchmarkEncoderHeaderTable_Entries(b *testing.B) {
 	b.ReportAllocs()
 
 	var sum uint64
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for idx, entry := range table.Entries() {
 			sum += idx + uint64(len(entry.Name))
 		}
@@ -103,7 +103,7 @@ func BenchmarkDecoderHeaderTable_Entries(b *testing.B) {
 	b.ReportAllocs()
 
 	var sum uint64
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for idx, entry := range table.Entries() {
 			sum += idx + uint64(len(entry.Name))
 		}
@@ -122,7 +122,7 @@ func BenchmarkBlockingManager_BlockedStreams(b *testing.B) {
 	b.ReportAllocs()
 
 	var sum uint64
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for streamID := range bm.BlockedStreams() {
 			sum += streamID
 		}

@@ -52,8 +52,7 @@ func TestDoAllocations(t *testing.T) {
 func BenchmarkConnectionSetup(b *testing.B) {
 	m := &mockConn{Buffer: bytes.NewBuffer(nil)}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		conn := h2.NewConn(m, h2.ConnOpts{})
 		_ = conn
 	}

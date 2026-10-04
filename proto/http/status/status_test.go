@@ -259,7 +259,7 @@ func TestFormatLine(t *testing.T) {
 
 func BenchmarkMessage(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = status.Message(status.OK)
 		_ = status.Message(status.NotFound)
 		_ = status.Message(status.InternalServerError)
@@ -269,16 +269,15 @@ func BenchmarkMessage(b *testing.B) {
 func BenchmarkFormatLine(b *testing.B) {
 	protocol := []byte("HTTP/1.1")
 	dst := make([]byte, 0, 64)
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = status.FormatLine(dst[:0], protocol, status.OK, nil)
 	}
 }
 
 func BenchmarkPredicates(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = status.IsInformational(100)
 		_ = status.IsSuccess(200)
 		_ = status.IsRedirect(301)

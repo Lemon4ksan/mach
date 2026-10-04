@@ -15,10 +15,9 @@ func BenchmarkParseHeaderBlockSWAR(b *testing.B) {
 
 	h := NewWithCapacity(16)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		h.ParseHeaderBlockSWAR(rawHeaders)
 	}
 }
@@ -31,10 +30,9 @@ func BenchmarkHeaderGet_PerfectHash(b *testing.B) {
 	h := NewWithCapacity(16)
 	h.ParseHeaderBlockSWAR(rawHeaders)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = h.Get("Host")
 	}
 }
@@ -47,10 +45,9 @@ func BenchmarkHeaderGet_PackedScan(b *testing.B) {
 	h := NewWithCapacity(16)
 	h.ParseHeaderBlockSWAR(rawHeaders)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = h.Get("X-Custom-Header")
 	}
 }

@@ -16,8 +16,7 @@ func BenchmarkArgsPeek(b *testing.B) {
 	key := []byte("key1")
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = args.PeekBytes(key)
 	}
 }
@@ -30,8 +29,7 @@ func BenchmarkArgsAdd(b *testing.B) {
 	args.AddBytesKV(key, val) // warm up capacity
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		args.Reset()
 		args.AddBytesKV(key, val)
 	}
@@ -44,8 +42,7 @@ func BenchmarkArgsParse(b *testing.B) {
 	args.ParseBytes(query) // warm up capacity
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		args.Reset()
 		args.ParseBytes(query)
 	}
@@ -60,8 +57,7 @@ func BenchmarkCookieParseBytes(b *testing.B) {
 	_ = c.ParseBytes(raw) // warm up buffers
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := c.ParseBytes(raw); err != nil {
 			b.Fatal(err)
 		}
@@ -82,8 +78,7 @@ func BenchmarkCookieAppendBytes(b *testing.B) {
 
 	dst := make([]byte, 0, 256)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = c.AppendBytes(dst[:0])
 	}
 }
@@ -95,8 +90,7 @@ func BenchmarkURIParse(b *testing.B) {
 	_ = u.Parse(nil, raw) // warm up buffers
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := u.Parse(nil, raw); err != nil {
 			b.Fatal(err)
 		}
@@ -108,8 +102,7 @@ func BenchmarkNormalizePath(b *testing.B) {
 	dst := make([]byte, 0, len(src)+1)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = NormalizePath(dst, src)
 	}
 }
@@ -118,8 +111,7 @@ func BenchmarkAppendUint(b *testing.B) {
 	dst := make([]byte, 0, 32)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = AppendUint(dst[:0], 123456789)
 	}
 }
@@ -129,8 +121,7 @@ func BenchmarkCaseInsensitiveCompare(b *testing.B) {
 	c := []byte("content-type")
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = CaseInsensitiveCompare(a, c)
 	}
 }
@@ -138,8 +129,7 @@ func BenchmarkCaseInsensitiveCompare(b *testing.B) {
 func BenchmarkNormalizeHeaderKey(b *testing.B) {
 	header := []byte("content-type")
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		NormalizeHeaderKey(header, false)
 	}
 }
@@ -147,8 +137,7 @@ func BenchmarkNormalizeHeaderKey(b *testing.B) {
 func BenchmarkFormatHexUint(b *testing.B) {
 	var buf [16]byte
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = FormatHexUint(&buf, 0x1A2B3C)
 	}
 }

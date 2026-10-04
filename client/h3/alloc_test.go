@@ -43,8 +43,7 @@ func TestDoAllocations(t *testing.T) {
 func BenchmarkConnectionSetup(b *testing.B) {
 	var qconn *quic.Conn
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		func() {
 			defer func() { recover() }()
 			conn, _ := h3.NewClientConn(qconn, nil)

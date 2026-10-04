@@ -382,9 +382,8 @@ func TestClampMSSInPlace_OptionsEdgeCases(t *testing.T) {
 
 func BenchmarkClampMSSInPlace_IPv4_Clamped(b *testing.B) {
 	pkt := makeIPv4TCPPacket(0x02, 1460, nil, 0)
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Reset MSS before each clamp
 		binary.BigEndian.PutUint16(pkt[42:44], 1460)
 		tcp.ClampMSSInPlace(pkt, 1300)
@@ -393,18 +392,16 @@ func BenchmarkClampMSSInPlace_IPv4_Clamped(b *testing.B) {
 
 func BenchmarkClampMSSInPlace_IPv4_Unchanged(b *testing.B) {
 	pkt := makeIPv4TCPPacket(0x02, 1200, nil, 0)
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tcp.ClampMSSInPlace(pkt, 1300)
 	}
 }
 
 func BenchmarkClampMSSInPlace_IPv6_Clamped(b *testing.B) {
 	pkt := makeIPv6TCPPacket(0x02, 1440, nil, 0)
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		binary.BigEndian.PutUint16(pkt[62:64], 1440)
 		tcp.ClampMSSInPlace(pkt, 1400)
 	}
@@ -412,9 +409,8 @@ func BenchmarkClampMSSInPlace_IPv6_Clamped(b *testing.B) {
 
 func BenchmarkClampMSSInPlace_IPv6_Unchanged(b *testing.B) {
 	pkt := makeIPv6TCPPacket(0x02, 1200, nil, 0)
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tcp.ClampMSSInPlace(pkt, 1400)
 	}
 }
@@ -428,9 +424,8 @@ func BenchmarkClampMSSInPlace_WithOptions(b *testing.B) {
 		2, 4, 0x05, 0xb4, // MSS 1460
 	}
 	pkt := makeIPv4TCPPacket(0x02, 0, options, 0)
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		binary.BigEndian.PutUint16(pkt[56:58], 1460)
 		tcp.ClampMSSInPlace(pkt, 1300)
 	}

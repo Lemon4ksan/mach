@@ -58,7 +58,7 @@ func BenchmarkLegacyStructDecode(b *testing.B) {
 		payloadLen int
 	)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		frame := DecodeLegacy(raw)
 		id = frame.StreamID
 		flags = frame.Flags
@@ -88,7 +88,7 @@ func BenchmarkInSituOverlay(b *testing.B) {
 		payloadLen int
 	)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		frame := Frame(raw)
 		if !frame.IsValid() {
 			continue

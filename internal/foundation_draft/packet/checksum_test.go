@@ -239,9 +239,8 @@ func BenchmarkCalculateInternetChecksum_20B(b *testing.B) {
 	for i := range data {
 		data[i] = byte(i)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = packet.CalculateInternetChecksum(data)
 	}
 }
@@ -251,9 +250,8 @@ func BenchmarkCalculateInternetChecksum_64B(b *testing.B) {
 	for i := range data {
 		data[i] = byte(i)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = packet.CalculateInternetChecksum(data)
 	}
 }
@@ -263,9 +261,8 @@ func BenchmarkCalculateInternetChecksum_1500B(b *testing.B) {
 	for i := range data {
 		data[i] = byte(i)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = packet.CalculateInternetChecksum(data)
 	}
 }
@@ -275,9 +272,8 @@ func BenchmarkCalculateInternetChecksum_9000B(b *testing.B) {
 	for i := range data {
 		data[i] = byte(i)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = packet.CalculateInternetChecksum(data)
 	}
 }
@@ -289,9 +285,8 @@ func BenchmarkCalculateICMPv6Checksum_48B(b *testing.B) {
 	for i := range msg {
 		msg[i] = byte(i)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = packet.CalculateICMPv6Checksum(src, dst, msg)
 	}
 }
@@ -303,9 +298,8 @@ func BenchmarkCalculateICMPv6Checksum_1280B(b *testing.B) {
 	for i := range msg {
 		msg[i] = byte(i)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = packet.CalculateICMPv6Checksum(src, dst, msg)
 	}
 }

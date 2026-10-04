@@ -182,9 +182,8 @@ func TestHeaderIterators(t *testing.T) {
 func BenchmarkDirectives(b *testing.B) {
 	raw := "public, max-age=3600, must-revalidate, stale-while-revalidate=60"
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		count := 0
 		for k, v := range headkit.Directives(raw) {
 			if k != "" || v != "" {
@@ -197,9 +196,8 @@ func BenchmarkDirectives(b *testing.B) {
 func BenchmarkCanonicalKey_FastPath(b *testing.B) {
 	key := "Content-Type"
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = headkit.CanonicalKey(key)
 	}
 }

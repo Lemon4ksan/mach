@@ -272,9 +272,8 @@ func BenchmarkBuildPacketTooBig4_Small(b *testing.B) {
 	copy(ip[12:16], []byte{192, 168, 1, 10})
 	copy(ip[16:20], []byte{192, 168, 1, 20})
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = icmp.BuildPacketTooBig4(ip, 1400)
 	}
 }
@@ -286,9 +285,8 @@ func BenchmarkBuildPacketTooBig4_Large(b *testing.B) {
 	copy(ip[12:16], []byte{192, 168, 1, 10})
 	copy(ip[16:20], []byte{192, 168, 1, 20})
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = icmp.BuildPacketTooBig4(ip, 1400)
 	}
 }
@@ -303,9 +301,8 @@ func BenchmarkBuildPacketTooBig6_Small(b *testing.B) {
 	copy(ip6[8:24], srcB[:])
 	copy(ip6[24:40], dstB[:])
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = icmp.BuildPacketTooBig6(ip6, 1280)
 	}
 }
@@ -320,9 +317,8 @@ func BenchmarkBuildPacketTooBig6_Large(b *testing.B) {
 	copy(ip6[8:24], srcB[:])
 	copy(ip6[24:40], dstB[:])
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = icmp.BuildPacketTooBig6(ip6, 1280)
 	}
 }

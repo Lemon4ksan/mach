@@ -82,7 +82,7 @@ func BenchmarkBatch_SoA_Vs_AoS(b *testing.B) {
 		b.ReportAllocs()
 
 		indices := make([]int, 0, batchSize)
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			indices = soa.FilterByProtocol(6, indices)
 		}
 	})
@@ -91,7 +91,7 @@ func BenchmarkBatch_SoA_Vs_AoS(b *testing.B) {
 		b.ReportAllocs()
 
 		indices := make([]int, 0, batchSize)
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			indices = indices[:0]
 			for idx, item := range aos {
 				if item.Protocol == 6 {
