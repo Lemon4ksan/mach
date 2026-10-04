@@ -367,7 +367,7 @@ func TestDecoder_AlternatingHuffmanNonHuffman(t *testing.T) {
 		assert.False(t, f.handler.errorDetected)
 		assert.True(t, f.handler.decodingCompleted)
 		require.Equal(t, 4, len(f.handler.headers))
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			assert.Equal(t, "custom-key", f.handler.headers[i].Name)
 			assert.Equal(t, "custom-value", f.handler.headers[i].Value)
 		}
@@ -1004,4 +1004,42 @@ func TestDecoder_StreamReset_ZeroMaxCapacity_NoCancellation(t *testing.T) {
 	decoder.FlushDecoderStream()
 
 	assert.Equal(t, 0, len(sender.writes))
+}
+
+// -----------------------------------------------------------------------------
+// RFC Edge Cases (Ported from adversarial tests)
+// -----------------------------------------------------------------------------
+
+func TestDecoder_RFC_EdgeCases(t *testing.T) {
+	cases := []struct {
+		name       string
+		data       []byte
+		errCode    uint64
+	}{
+		{
+			name:       "truncated prefix",
+			data:       []byte{0x00},
+			errCode:    uint64(QPACK_DECOMPRESSION_FAILED),
+		},
+		{
+			name:       "invalid huffman",
+			data:       []byte{0x00, 0x00, 0x82, 0xff, 0xff},
+			errCode:    uint64(QPACK_DECOMPRESSION_FAILED),
+		},
+		{
+			name:       "malformed varint",
+			data:       []byte{0x00, 0x00, 0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+			errCode:    uint64(QPACK_DECOMPRESSION_FAILED),
+		},
+	}
+	
+	for _, tc := range cases {
+		tc := tc // capture
+		t.Run(tc.name, func(t *testing.T) {
+			runDecoderTest(t, func(t *testing.T, f *qpackDecoderTestFixture) {
+				f.DecodeHeaderBlock(tc.data)
+				assert.True(t, f.handler.errorDetected)
+			})
+		})
+	}
 }

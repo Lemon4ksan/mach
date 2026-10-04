@@ -8,66 +8,36 @@ import (
 	"github.com/lemon4ksan/mach/hpack"
 )
 
-// Event is yielded by the state machine.
-type Event any
-
-// StreamDataEvent indicates that a stream has received data.
-type StreamDataEvent struct {
-	StreamID uint32
-	Payload  []byte
-}
-
-// HeadersReadyEvent indicates that headers are available.
-type HeadersReadyEvent struct {
-	StreamID  uint32
-	EndStream bool
-}
-
-// StreamClosedEvent indicates a stream was closed.
-type StreamClosedEvent struct {
-	StreamID uint32
-	Err      error
-}
-
-// WriteEvent instructs the outer orchestrator to flush bytes to the socket.
-type WriteEvent struct {
-	Payload []byte
+// EventHandler receives protocol events from the state machine.
+// Implementing this interface avoids interface{} allocations on the hot path.
+type EventHandler interface {
+	OnStreamData(streamID uint32, payload []byte)
+	OnHeadersReady(streamID uint32, endStream bool)
+	OnStreamClosed(streamID uint32, err error)
+	OnWrite(payload []byte)
 }
 
 // StateMachine is a Sans-IO (I/O-free) HTTP/2 finite state machine.
 // It manages the protocol state, HPACK decoding, and multiplexing without allocating
 // goroutines or blocking on sockets.
 type StateMachine struct {
-	dec *hpack.HPACK
-	enc *hpack.HPACK
-
-	// internal matrices and queues for events
-	events []Event
+	dec     *hpack.HPACK
+	enc     *hpack.HPACK
+	handler EventHandler
 }
 
 // NewStateMachine initializes a zero-allocation Sans-IO H2 FSM.
-func NewStateMachine() *StateMachine {
+func NewStateMachine(handler EventHandler) *StateMachine {
 	return &StateMachine{
-		dec: hpack.AcquireHPACK(),
-		enc: hpack.AcquireHPACK(),
+		dec:     hpack.AcquireHPACK(),
+		enc:     hpack.AcquireHPACK(),
+		handler: handler,
 	}
 }
 
 // Feed consumes raw bytes from the network socket and advances the internal state.
+// It will invoke methods on the registered EventHandler synchronously.
 func (sm *StateMachine) Feed(data []byte) error {
-	// Parse frames and populate events slice
+	// Parse frames and trigger handler methods
 	return nil
-}
-
-// NextEvent yields the next protocol event to the engine orchestrator.
-// Returns nil if no more events are available until more data is fed.
-func (sm *StateMachine) NextEvent() Event {
-	if len(sm.events) == 0 {
-		return nil
-	}
-
-	e := sm.events[0]
-	sm.events = sm.events[1:]
-
-	return e
 }

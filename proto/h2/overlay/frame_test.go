@@ -186,7 +186,7 @@ func TestInSituOverlay_ValidFrames(t *testing.T) {
 
 func TestInSituOverlay_TruncatedFrames(t *testing.T) {
 	// Sub-9 byte slices
-	for length := 0; length < 9; length++ {
+	for length := range 9 {
 		f := Frame(make([]byte, length))
 		if f.IsValid() {
 			t.Errorf("expected slice of length %d to be invalid", length)

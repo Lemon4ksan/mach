@@ -144,7 +144,7 @@ func (f *instructionDecoderTestFixture) decodeInstruction(data []byte) {
 		assert.True(f.t, f.decoder.AtInstructionBoundary())
 	} else {
 		// OctetByOctet
-		for i := 0; i < len(data); i++ {
+		for i := range data {
 			success := f.decoder.Decode(data[i : i+1])
 			if f.decoder == nil {
 				assert.False(f.t, success)
@@ -314,7 +314,7 @@ func TestInstructionDecoder_DelegateSignalsError(t *testing.T) {
 			assert.Equal(t, 2, callCount)
 		} else {
 			var success bool
-			for i := 0; i < len(encodedData); i++ {
+			for i := range encodedData {
 				success = f.decoder.Decode(encodedData[i : i+1])
 				if !success {
 					break
@@ -501,7 +501,7 @@ func TestInstruction_CodecRoundTripAllInstructions(t *testing.T) {
 								ok := decoder.Decode(encoded)
 								require.True(t, ok)
 							} else {
-								for i := 0; i < len(encoded); i++ {
+								for i := range encoded {
 									ok := decoder.Decode(encoded[i : i+1])
 									require.True(t, ok)
 								}

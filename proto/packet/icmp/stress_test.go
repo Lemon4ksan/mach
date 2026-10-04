@@ -16,7 +16,7 @@ import (
 
 func TestStressBuildPacketTooBig4_MalformedHeaders(t *testing.T) {
 	// 1. Packets with lengths from 0 to 19 bytes
-	for l := 0; l < 20; l++ {
+	for l := range 20 {
 		b := make([]byte, l)
 		if l > 0 {
 			b[0] = 0x45
@@ -41,7 +41,7 @@ func TestStressBuildPacketTooBig4_MalformedHeaders(t *testing.T) {
 	}
 
 	// 3. Packets with IHL < 5 (header length < 20)
-	for ihl := 0; ihl < 5; ihl++ {
+	for ihl := range 5 {
 		b := make([]byte, 40)
 		b[0] = 0x40 | byte(ihl)
 		_, err := icmp.BuildPacketTooBig4(b, 1400)
@@ -69,7 +69,7 @@ func TestStressBuildPacketTooBig4_MTUBoundaries(t *testing.T) {
 	pkt[0] = 0x45
 
 	// Reject MTU 0 to 67
-	for mtu := uint16(0); mtu < 68; mtu++ {
+	for mtu := range uint16(68) {
 		_, err := icmp.BuildPacketTooBig4(pkt, mtu)
 		if !errors.Is(err, icmp.ErrMTUTooSmall) {
 			t.Fatalf("MTU %d: got err %v, want ErrMTUTooSmall", mtu, err)
@@ -133,7 +133,7 @@ func TestStressBuildPacketTooBig4_PayloadLengthsAndChecksums(t *testing.T) {
 
 func TestStressBuildPacketTooBig6_MalformedHeadersAndMTU(t *testing.T) {
 	// Length < 40
-	for l := 0; l < 40; l++ {
+	for l := range 40 {
 		b := make([]byte, l)
 		if l > 0 {
 			b[0] = 0x60

@@ -17,11 +17,11 @@ func TestStressClampMSSInPlace_OptionsTorture(t *testing.T) {
 	// Construct options with all permutations of NOPs, malformed lengths, and MSS options
 	r := rand.New(rand.NewPCG(42, 42)) //nolint:gosec
 
-	for trial := 0; trial < 200; trial++ {
+	for range 200 {
 		var optBuf []byte
 		// Prepend 0..10 NOPs
 		nopCount := r.IntN(10)
-		for i := 0; i < nopCount; i++ {
+		for range nopCount {
 			optBuf = append(optBuf, 1)
 		}
 
@@ -90,10 +90,10 @@ func TestStressClampMSSInPlace_Parallel(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(workers)
 
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		go func(workerID int) {
 			defer wg.Done()
-			for i := 0; i < iters; i++ {
+			for i := range iters {
 				pkt := makeIPv4TCPPacket(0x02, 1460, nil, (workerID+i)%5)
 				tcp.ClampMSSInPlace(pkt, 1300)
 				if mss := binary.BigEndian.Uint16(pkt[42:44]); mss != 1260 {

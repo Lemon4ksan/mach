@@ -135,7 +135,7 @@ func TestH2_Tier1_MultiStreamMultiplexing(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, numStreams)
 
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -370,7 +370,7 @@ func TestH2_Tier2_StreamIDSaturation(t *testing.T) {
 	defer cancel()
 
 	// Execute 3 sequential requests and verify client stream ID increments (1, 3, 5) per RFC 9113 §5.1.1
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		req := machhttp.AcquireRequest()
 		resp := machhttp.AcquireResponse()
 
@@ -451,7 +451,7 @@ func TestH2_Tier2_ConsecutiveControlFrameLimit(t *testing.T) {
 	completeH2RawHandshake(t, bw, br)
 
 	// Send 20 rapid PING frames to verify server handles control frame burst without panic
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		pingFr := coreh2.AcquireFrameHeader()
 		pingBody := coreh2.AcquireFrame(coreh2.FramePing).(*coreh2.Ping)
 		var pingData [8]byte
@@ -466,7 +466,7 @@ func TestH2_Tier2_ConsecutiveControlFrameLimit(t *testing.T) {
 	require.NoError(t, bw.Flush())
 
 	// Read back PING ACKs
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		ackFr, rErr := coreh2.ReadFrameFrom(br)
 		require.NoError(t, rErr)
 		assert.Equal(t, coreh2.FramePing, ackFr.Type())
@@ -589,7 +589,7 @@ func TestH2_Tier3_MultiplexingWithConcurrentResets(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -666,7 +666,7 @@ func TestH2_Tier3_LargeDataStreamingWithDynamicWindowUpdate(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, numStreams)
 
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -748,9 +748,7 @@ func TestH2_Tier3_AbruptConnectionDisconnectDuringInflight(t *testing.T) {
 	client, rawConn := dialH2Client(t, addr, h2client.ConnOpts{})
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -766,7 +764,7 @@ func TestH2_Tier3_AbruptConnectionDisconnectDuringInflight(t *testing.T) {
 
 		// This call should be unblocked with an error when rawConn is closed abruptly
 		_ = client.Do(ctx, req, resp)
-	}()
+	})
 
 	// Abruptly sever the connection while request is in-flight
 	time.Sleep(50 * time.Millisecond)
@@ -799,7 +797,7 @@ func TestH2_Tier4_HighConcurrencyBurst(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -859,7 +857,7 @@ func TestH2_Tier4_ParallelLargePayloadTransfers(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, numWorkers)
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

@@ -13,7 +13,7 @@ var sinkCount int
 
 func BenchmarkHeaderFields_All(b *testing.B) {
 	fields := make(HeaderFields, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fields[i] = HeaderField{
 			Name:  "header-" + strconv.Itoa(i),
 			Value: "value-" + strconv.Itoa(i),
@@ -34,7 +34,7 @@ func BenchmarkHeaderFields_All(b *testing.B) {
 
 func BenchmarkHeaderFields_Values(b *testing.B) {
 	fields := make(HeaderFields, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fields[i] = HeaderField{
 			Name:  "header-" + strconv.Itoa(i),
 			Value: "value-" + strconv.Itoa(i),
@@ -55,7 +55,7 @@ func BenchmarkHeaderFields_Values(b *testing.B) {
 
 func BenchmarkIndexSet_All(b *testing.B) {
 	set := NewIndexSet()
-	for i := uint64(0); i < 10; i++ {
+	for i := range uint64(10) {
 		set.Insert(i)
 	}
 
@@ -75,7 +75,7 @@ func BenchmarkEncoderHeaderTable_Entries(b *testing.B) {
 	table := NewEncoderHeaderTable()
 	table.SetMaximumDynamicTableCapacity(4096)
 	table.SetDynamicTableCapacity(4096)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		table.InsertEntry("header-"+strconv.Itoa(i), "value-"+strconv.Itoa(i))
 	}
 
@@ -95,7 +95,7 @@ func BenchmarkDecoderHeaderTable_Entries(b *testing.B) {
 	table := NewDecoderHeaderTable()
 	table.SetMaximumDynamicTableCapacity(4096)
 	table.SetDynamicTableCapacity(4096)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		table.InsertEntry("header-"+strconv.Itoa(i), "value-"+strconv.Itoa(i))
 	}
 

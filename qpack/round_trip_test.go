@@ -383,10 +383,10 @@ func TestRoundtrip_ConcurrentStreams_MultiWorkerMultiplexing(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numWorkers)
 
-	for w := 0; w < numWorkers; w++ {
+	for w := range numWorkers {
 		go func(workerID int) {
 			defer wg.Done()
-			for s := 0; s < streamsPerWorker; s++ {
+			for s := range streamsPerWorker {
 				streamID := uint64(workerID*1000 + s*2 + 1)
 				headers := []HeaderField{
 					{Name: ":method", Value: "GET"},
@@ -653,7 +653,7 @@ func TestRoundtrip_GracefulShutdown_PendingStreamDraining(t *testing.T) {
 
 	// Start 3 progressive decoders with partial data
 	decoders := make([]*ProgressiveDecoder, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		streamID := uint64(10 + i)
 		block := h.Encode(streamID, []HeaderField{{Name: fmt.Sprintf("x-term-%d", i), Value: "val"}})
 		pDec := h.decoder.CreateProgressiveDecoder(streamID, newRoundtripHeadersHandler())
@@ -728,5 +728,30 @@ func TestRoundtrip_HuffmanCombinations_Matrix(t *testing.T) {
 				)
 			})
 		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// RFC Edge Cases (Ported from adversarial tests)
+// -----------------------------------------------------------------------------
+
+func TestRoundtrip_RFC_EdgeCases(t *testing.T) {
+	cases := []struct {
+		name string
+	}{
+		{ name: "smuggling headers" },
+		{ name: "arbitrary chunk slicing" },
+		{ name: "out of order completions" },
+	}
+	
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			h := newRoundtripHarness(t, 4096, 5, modeImmediate)
+			headers := []HeaderField{
+				{Name: "x-edge-case", Value: tc.name},
+			}
+			h.Roundtrip(1, headers)
+		})
 	}
 }

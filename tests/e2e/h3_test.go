@@ -137,7 +137,7 @@ func TestH3_Tier1_MultiStreamMultiplexing(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, numStreams)
 
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -535,7 +535,7 @@ func TestH3_Tier2_OversizedHeaders(t *testing.T) {
 
 	// 15 headers each with 200 chars (~3KB)
 	pad := bytes.Repeat([]byte("h"), 200)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		req.Header.Set(fmt.Sprintf("X-H3-Pad-%02d", i), string(pad))
 	}
 
@@ -662,7 +662,7 @@ func TestH3_Tier3_ConcurrentStreamsWithTrailers(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -873,7 +873,7 @@ func TestH3_Tier4_HighConcurrencyBurst(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

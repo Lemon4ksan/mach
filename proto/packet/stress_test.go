@@ -37,7 +37,7 @@ func TestStressInternetChecksum_OddLengthEquivalence(t *testing.T) {
 func TestStressInternetChecksum_RFC1071ByteSwapping(t *testing.T) {
 	// RFC 1071 §4.1: If bytes in each 16-bit word are swapped, the checksum is swapped.
 	r := rand.New(rand.NewPCG(1234, 5678)) //nolint:gosec
-	for trial := 0; trial < 100; trial++ {
+	for trial := range 100 {
 		length := (r.IntN(50) + 1) * 2 // even length
 		orig := make([]byte, length)
 		swapped := make([]byte, length)
@@ -108,7 +108,7 @@ func TestStressInternetChecksum_SingleBitCorruption(t *testing.T) {
 		}
 
 		// Test every single bit flipped in checksum field
-		for bit := 0; bit < 16; bit++ {
+		for bit := range 16 {
 			corruptPkt := append([]byte(nil), pkt...)
 			corruptPkt[10+(bit/8)] ^= (1 << (bit % 8))
 			if packet.ValidateInternetChecksum(corruptPkt) {
@@ -117,7 +117,7 @@ func TestStressInternetChecksum_SingleBitCorruption(t *testing.T) {
 		}
 
 		// Test 20 random byte corruptions
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			corruptPkt := append([]byte(nil), pkt...)
 			corruptIdx := r.IntN(length)
 			corruptPkt[corruptIdx] ^= byte(r.IntN(255) + 1)

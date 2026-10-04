@@ -49,7 +49,7 @@ func makeIPv4TCPPacket(flags byte, currentMSS uint16, extraOptions []byte, paylo
 		binary.BigEndian.PutUint16(tcpHdr[22:24], currentMSS)
 	}
 
-	for i := 0; i < payloadLen; i++ {
+	for i := range payloadLen {
 		pkt[20+tcpHdrLen+i] = byte(i + 1)
 	}
 
@@ -92,7 +92,7 @@ func makeIPv6TCPPacket(flags byte, currentMSS uint16, extraOptions []byte, paylo
 		binary.BigEndian.PutUint16(tcpHdr[22:24], currentMSS)
 	}
 
-	for i := 0; i < payloadLen; i++ {
+	for i := range payloadLen {
 		pkt[40+tcpHdrLen+i] = byte(i + 1)
 	}
 

@@ -114,7 +114,7 @@ func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) 
 	numOrdered := min(len(orderedKeys), 64)
 	keys := orderedKeys[:numOrdered]
 
-	for i := 0; i < numOrdered; i++ {
+	for i := range numOrdered {
 		key := keys[i]
 		val := req.Header.Peek(key)
 
@@ -135,7 +135,7 @@ func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) 
 		}
 
 		skip := false
-		for i := 0; i < numOrdered; i++ {
+		for i := range numOrdered {
 			if (visitedBits&(1<<i)) != 0 && bytesconv.EqualFoldASCII(kStr, keys[i]) {
 				skip = true
 				break

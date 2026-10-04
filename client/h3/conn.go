@@ -67,8 +67,7 @@ func NewClientConn(conn *quic.Conn, settings *coreh3.Settings) (*ClientConn, err
 	}
 
 	cc.qpack.SetErrorHandler(func(err error) {
-		var qErr *coreh3.QPACKStreamError
-		if errors.As(err, &qErr) {
+		if qErr, ok := errors.AsType[*coreh3.QPACKStreamError](err); ok {
 			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(qErr.Code), qErr.Message)
 		} else {
 			_ = cc.conn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3GeneralProtocolError), err.Error())

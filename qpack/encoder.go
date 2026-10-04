@@ -375,10 +375,7 @@ func (e *Encoder) firstPassEncode(
 
 	knownReceivedCount := e.blockingManager.KnownReceivedCount()
 
-	smallestNonEvictableIndex := e.blockingManager.SmallestBlockingIndex()
-	if knownReceivedCount < smallestNonEvictableIndex {
-		smallestNonEvictableIndex = knownReceivedCount
-	}
+	smallestNonEvictableIndex := min(knownReceivedCount, e.blockingManager.SmallestBlockingIndex())
 
 	drainingIndex := e.headerTable.DrainingIndex(kDrainingFraction)
 	blockingAllowed := e.blockingManager.BlockingAllowedOnStream(streamID, e.maximumBlockedStreams)
@@ -429,10 +426,7 @@ func (e *Encoder) firstPassEncode(
 				// Entry is draining. Try duplicate instead if possible.
 				entrySize := EntrySize(name, value)
 
-				limitIndex := smallestNonEvictableIndex
-				if matchResult.Index < limitIndex {
-					limitIndex = matchResult.Index
-				}
+				limitIndex := min(matchResult.Index, smallestNonEvictableIndex)
 
 				if blockingAllowed &&
 					entrySize <= e.headerTable.MaxInsertSizeWithoutEvictingGivenEntry(limitIndex) &&
@@ -503,10 +497,7 @@ func (e *Encoder) firstPassEncode(
 			// Dynamic name match
 			entrySize := EntrySize(name, value)
 
-			limitIndex := smallestNonEvictableIndex
-			if matchResult.Index < limitIndex {
-				limitIndex = matchResult.Index
-			}
+			limitIndex := min(matchResult.Index, smallestNonEvictableIndex)
 
 			if blockingAllowed &&
 				entrySize <= e.headerTable.MaxInsertSizeWithoutEvictingGivenEntry(limitIndex) &&

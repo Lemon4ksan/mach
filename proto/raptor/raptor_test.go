@@ -5,7 +5,6 @@
 package raptor_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -44,8 +43,7 @@ func TestEncoder_Encode(t *testing.T) {
 func TestDecoder_ProcessAsync(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	decoder := raptor.NewDecoder()
 	decoder.ProcessAsync(ctx)
