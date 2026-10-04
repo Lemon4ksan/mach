@@ -12,7 +12,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/mach/proto/dns/svcb"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/dns/svcb"
 )
 
 func TestRFC9460_QueryNameConstruction(t *testing.T) {

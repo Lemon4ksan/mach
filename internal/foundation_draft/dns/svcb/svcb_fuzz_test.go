@@ -7,7 +7,7 @@ package svcb_test
 import (
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/dns/svcb"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/dns/svcb"
 )
 
 func FuzzSVCBWireParse(f *testing.F) {

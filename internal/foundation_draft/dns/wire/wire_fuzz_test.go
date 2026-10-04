@@ -7,7 +7,7 @@ package wire_test
 import (
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/dns/wire"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/dns/wire"
 )
 
 func FuzzDNSWireMessage(f *testing.F) {
