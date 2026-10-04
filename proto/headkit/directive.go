@@ -133,7 +133,7 @@ func DirectivesBytes(b []byte) iter.Seq2[[]byte, []byte] {
 
 			k, v, ok := bytes.Cut(token, []byte{'='})
 
-			k = bytes.ToLower(bytes.TrimSpace(k))
+			k = toLowerBytesZeroAlloc(bytes.TrimSpace(k))
 			if ok {
 				v = bytes.TrimSpace(v)
 				if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
@@ -308,3 +308,22 @@ func (d DirectivesMap) All() iter.Seq2[string, string] {
 		}
 	}
 }
+
+func toLowerBytesZeroAlloc(b []byte) []byte {
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			res := make([]byte, len(b))
+			copy(res, b[:i])
+			for j := i; j < len(b); j++ {
+				ch := b[j]
+				if ch >= 'A' && ch <= 'Z' {
+					ch += 'a' - 'A'
+				}
+				res[j] = ch
+			}
+			return res
+		}
+	}
+	return b
+}
+
