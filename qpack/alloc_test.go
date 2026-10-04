@@ -8,7 +8,8 @@ import (
 
 type mockDelegate struct{}
 
-func (mockDelegate) OnInstructionDecoded(inst *qpack.Instruction) bool                             { return true }
+func (mockDelegate) OnInstructionDecoded(inst *qpack.Instruction) bool { return true }
+
 func (mockDelegate) OnInstructionDecodingError(code qpack.InstructionDecoderErrorCode, msg string) {}
 
 func TestAlloc(t *testing.T) {

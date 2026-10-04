@@ -31,27 +31,30 @@ Named after the Mach number and aerodynamic concept of **Zero Drag**, `mach` eli
 
 ```text
 mach/
-├── proto/                    # RFC-conforming wire mechanics (client/server agnostic)
-│   ├── http/                 # HTTP/1.1 wire parser, SIMD scanner, zero-alloc Request/Response
-│   │   └── stackless/        # Goroutine-free async I/O dispatch
-│   ├── h2/                   # HTTP/2 framing (RFC 9113), priority trees, flow control
-│   │   └── overlay/          # Sub-nanosecond In-Situ binary frame overlay
-│   ├── h3/                   # HTTP/3 framing (RFC 9114), QPACK (RFC 9204), datagrams, capsules
-│   └── compress/             # Streaming Brotli, Gzip, Deflate, Zstd decompressors
 ├── client/                   # Client protocol engines (optimized for `aoni`)
 │   ├── h1/                   # HTTP/1.1 Client Engine. Connection reuse, chunked transfers
 │   ├── h2/                   # HTTP/2 Client Engine. Concurrent stream multiplexing
 │   └── h3/                   # HTTP/3 Client Engine. QUIC stream lifecycle, 0-RTT transactions
+├── fsm/                      # Finite State Machines
+│   └── h2/                   # Strict RFC 9113 §5.1 HTTP/2 stream transition verifier
+├── hpack/                    # HPACK (RFC 7541) header compression codec
+├── proto/                    # RFC-conforming wire mechanics (client/server agnostic)
+│   ├── compress/             # Streaming Brotli, Gzip, Deflate, Zstd decompressors
+│   ├── h2/                   # HTTP/2 framing (RFC 9113), priority trees, flow control
+│   │   └── overlay/          # Sub-nanosecond In-Situ binary frame overlay
+│   ├── h3/                   # HTTP/3 framing (RFC 9114), datagrams, capsules
+│   ├── http/                 # HTTP/1.1 wire parser, SIMD scanner, zero-alloc Request/Response
+│   │   └── stackless/        # Goroutine-free async I/O dispatch
+│   ├── packet/               # L3/L4 packet parsers (ICMP, TCP)
+│   └── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
+├── qpack/                    # QPACK (RFC 9204) header compression codec
+├── scripts/                  # CI & Fuzzing suites
+│   └── fuzz_all.go           # Heavy automated fuzz harness
 ├── server/                   # Server protocol engines (optimized for `sein`)
 │   ├── h1/                   # HTTP/1.1 Server Engine. High-throughput edge listener
 │   ├── h2/                   # HTTP/2 Server Engine. Prioritized stream dispatch
 │   └── h3/                   # HTTP/3 Server Engine. Connection ID routing
-├── fsm/                      # Finite State Machines
-│   └── h2/                   # Strict RFC 9113 §5.1 HTTP/2 stream transition verifier
-├── scripts/                  # CI & Fuzzing suites
-│   └── fuzz_all.go           # Heavy automated fuzz harness (8/8 protocol targets)
-└── x/                        # Experimental extensions
-    └── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
+└── tests/                    # Integration and E2E tests
 ```
 
 ## Honest Benchmarks

@@ -38,7 +38,9 @@ func TestDoAllocations(t *testing.T) {
 
 	allocs := testing.AllocsPerRun(100, func() {
 		// Mocking a full H2 interaction is complex.
-		_ = conn.Do(context.Background(), req, res)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		defer cancel()
+		_ = conn.Do(ctx, req, res)
 	})
 
 	// Just a check to not fail immediately on the benchmark
