@@ -11,6 +11,7 @@ package weblink
 
 import (
 	"errors"
+	"iter"
 	"net/http"
 	"net/url"
 	"slices"
@@ -342,6 +343,65 @@ func (g Group) String() string {
 	return sb.String()
 }
 
+// All returns an iterator over parsed Web Links according to RFC 8288 without accumulating a slice.
+func All(header string) iter.Seq2[Link, error] {
+	return func(yield func(Link, error) bool) {
+		header = strings.TrimSpace(header)
+		if header == "" {
+			yield(Link{}, ErrEmptyHeader)
+			return
+		}
+
+		start := 0
+		inQuote := false
+		inAngle := false
+		found := false
+
+		for i := 0; i < len(header); i++ {
+			c := header[i]
+			if c == '\\' && inQuote && i+1 < len(header) {
+				i++
+				continue
+			}
+			if c == '<' && !inQuote {
+				inAngle = true
+			} else if c == '>' && !inQuote {
+				inAngle = false
+			} else if c == '"' && !inAngle {
+				inQuote = !inQuote
+			} else if c == ',' && !inQuote && !inAngle {
+				candidate := strings.TrimSpace(header[start:i])
+				if candidate != "" {
+					found = true
+					link, err := parseLinkValue(candidate)
+					if err == nil {
+						if !yield(link, nil) {
+							return
+						}
+					}
+				}
+				start = i + 1
+			}
+		}
+
+		if start < len(header) {
+			candidate := strings.TrimSpace(header[start:])
+			if candidate != "" {
+				found = true
+				link, err := parseLinkValue(candidate)
+				if err == nil {
+					yield(link, nil)
+					return
+				}
+			}
+		}
+
+		if !found {
+			yield(Link{}, ErrInvalidHeader)
+		}
+	}
+}
+
 // Parse extracts Web Links from a Link HTTP header string according to RFC 8288 Appendix B algorithms.
 func Parse(header string) (Group, error) {
 	header = strings.TrimSpace(header)
@@ -350,19 +410,11 @@ func Parse(header string) (Group, error) {
 	}
 
 	var links Group
-
-	rawLinks := splitHeaderLinks(header)
-	if len(rawLinks) == 0 {
-		return nil, ErrInvalidHeader
-	}
-
-	for _, raw := range rawLinks {
-		l, err := parseLinkValue(raw)
+	for link, err := range All(header) {
 		if err != nil {
-			continue
+			return nil, err
 		}
-
-		links = append(links, l)
+		links = append(links, link)
 	}
 
 	if len(links) == 0 {
