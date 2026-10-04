@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/packet/tcp"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/packet/tcp"
 )
 
 func TestStressClampMSSInPlace_OptionsTorture(t *testing.T) {

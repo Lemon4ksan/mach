@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/mach/proto/vectored"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/vectored"
 )
 
 func TestBufferQueue_Basic(t *testing.T) {

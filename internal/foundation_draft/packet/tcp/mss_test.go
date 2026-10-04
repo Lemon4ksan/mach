@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/packet/tcp"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/packet/tcp"
 )
 
 func makeIPv4TCPPacket(flags byte, currentMSS uint16, extraOptions []byte, payloadLen int) []byte {

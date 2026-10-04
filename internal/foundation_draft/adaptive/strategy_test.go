@@ -9,7 +9,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/testing/assert"
 
-	"github.com/lemon4ksan/mach/proto/adaptive"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/adaptive"
 )
 
 func TestAdaptiveStrategy_Increments(t *testing.T) {

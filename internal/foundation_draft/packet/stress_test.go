@@ -10,7 +10,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/packet"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/packet"
 )
 
 func TestStressInternetChecksum_OddLengthEquivalence(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"errors"
 	"net/netip"
 
-	"github.com/lemon4ksan/mach/proto/packet"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/packet"
 )
 
 const (

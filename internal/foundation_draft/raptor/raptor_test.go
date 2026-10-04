@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/mach/proto/raptor"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/raptor"
 )
 
 func TestEncoder_Encode(t *testing.T) {

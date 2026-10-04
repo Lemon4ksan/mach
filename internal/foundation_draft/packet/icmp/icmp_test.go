@@ -10,8 +10,8 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/packet"
-	"github.com/lemon4ksan/mach/proto/packet/icmp"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/packet"
+	"github.com/lemon4ksan/mach/internal/foundation_draft/packet/icmp"
 )
 
 func TestBuildPacketTooBig4(t *testing.T) {
