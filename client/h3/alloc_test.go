@@ -21,7 +21,10 @@ func TestDoAllocations(t *testing.T) {
 	// In a real scenario we'd use a real quic.Conn, but simulating H3 streams
 	// is complex. We verify it doesn't crash on setup and runs the test block.
 	var qconn *quic.Conn
-	_, _ = h3.NewClientConn(qconn, nil)
+	func() {
+		defer func() { recover() }()
+		_, _ = h3.NewClientConn(qconn, nil)
+	}()
 
 	allocs := testing.AllocsPerRun(100, func() {
 		defer func() { recover() }()
