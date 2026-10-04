@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sys/cpu"
 
 	"github.com/lemon4ksan/mach/hpack"
+	fsm "github.com/lemon4ksan/mach/fsm/h2"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
@@ -73,8 +74,10 @@ type ServerResponse struct {
 // are pooled via Per-P storage (foundation/silicon/pool) with zero allocations on hot paths.
 type ServerConn struct {
 	conn      net.Conn
-	br        *bufio.Reader
-	bw        *bufio.Writer
+		bw        *bufio.Writer
+	sm        fsm.StateMachine
+	readBuf   []byte
+	muBuf     []byte
 	handler   ServerHandlerFunc
 	hpackDec  *hpack.HPACK
 	hpackEnc  *hpack.HPACK
@@ -100,8 +103,9 @@ type ServerConn struct {
 
 var serverConnStorage = pool.NewPerPStorage(func() *ServerConn {
 	return &ServerConn{
-		br:               bufio.NewReaderSize(nil, 4096),
-		bw:               bufio.NewWriterSize(nil, 4096),
+				bw:               bufio.NewWriterSize(nil, 4096),
+		readBuf:          make([]byte, 32768),
+		muBuf:            make([]byte, 0, 32768),
 		hpackDec:         hpack.AcquireHPACK(),
 		hpackEnc:         hpack.AcquireHPACK(),
 		streams:          make(map[uint32]*serverStream, 64),
@@ -119,17 +123,13 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc := serverConnStorage.Get()
 
 	sc.conn = netConn
-	if sc.br == nil {
-		sc.br = bufio.NewReaderSize(netConn, 4096)
-	} else {
-		sc.br.Reset(netConn)
-	}
 
 	if sc.bw == nil {
 		sc.bw = bufio.NewWriterSize(netConn, 4096)
 	} else {
 		sc.bw.Reset(netConn)
 	}
+	sc.muBuf = sc.muBuf[:0]
 
 	sc.handler = handler
 	sc.isClosed.Store(false)
@@ -140,6 +140,7 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc.connSendWindow.Store(65535)
 
 	sc.ctx, sc.cancelFn = context.WithCancel(context.Background())
+	sc.sm.Handler = sc
 
 	sc.hpackDec.Reset()
 	sc.hpackEnc.Reset()
@@ -171,7 +172,7 @@ func (sc *ServerConn) Serve() error {
 	}()
 
 	// 1. Read and verify 24-byte client connection preface (RFC 9113 §3.4)
-	if !coreh2.ReadPreface(sc.br) {
+	if !coreh2.ReadPreface(sc.conn) {
 		return errors.New("h2: invalid connection preface")
 	}
 
@@ -240,9 +241,6 @@ func (sc *ServerConn) Release() {
 	clear(sc.streams)
 	sc.streamsMu.Unlock()
 
-	if sc.br != nil {
-		sc.br.Reset(nil)
-	}
 
 	if sc.bw != nil {
 		sc.bw.Reset(nil)

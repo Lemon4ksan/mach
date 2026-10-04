@@ -1,7 +1,3 @@
-// Copyright (c) 2026 Lemon4ksan All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package h2
 
 import (
@@ -13,70 +9,194 @@ import (
 )
 
 func (sc *ServerConn) readLoop() error {
+	var buffered int
+
 	for {
 		if sc.isClosed.Load() {
 			return sc.closeErr
 		}
 
-		fr, err := coreh2.ReadFrameFrom(sc.br)
+		if buffered == len(sc.readBuf) {
+			// Grow buffer if we have an incomplete frame larger than 32KB
+			newBuf := make([]byte, len(sc.readBuf)*2)
+			copy(newBuf, sc.readBuf[:buffered])
+			sc.readBuf = newBuf
+		}
+
+		n, err := sc.conn.Read(sc.readBuf[buffered:])
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return nil
 			}
+			return err
+		}
+		buffered += n
 
+		consumed, err := sc.sm.Feed(sc.readBuf[:buffered])
+		if err != nil {
 			return err
 		}
 
-		switch fr.Type() {
-		case coreh2.FrameSettings:
-			if err := sc.handleSettings(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
+		if consumed > 0 {
+			buffered -= consumed
+			if buffered > 0 {
+				copy(sc.readBuf, sc.readBuf[consumed:consumed+buffered])
 			}
-
-		case coreh2.FramePing:
-			if err := sc.handlePing(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameHeaders:
-			if err := sc.handleHeaders(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameContinuation:
-			if err := sc.handleContinuation(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameData:
-			if err := sc.handleData(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameWindowUpdate:
-			if err := sc.handleWindowUpdate(fr); err != nil {
-				coreh2.ReleaseFrameHeader(fr)
-				return err
-			}
-
-		case coreh2.FrameResetStream:
-			sc.handleResetStream(fr)
-
-		case coreh2.FrameGoAway:
-			coreh2.ReleaseFrameHeader(fr)
-			return nil
-
-		default:
-			coreh2.ReleaseFrameHeader(fr)
 		}
 	}
 }
 
+// EventHandler implementation
+
+func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bool) {
+	sc.streamsMu.RLock()
+	st, ok := sc.streams[streamID]
+	sc.streamsMu.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	st.body.Write(payload)
+
+	if len(payload) > 0 {
+		sc.replenishReceiveWindow(streamID, len(payload))
+	}
+
+	if endStream {
+		st.endStream = true
+		sc.startStream(st)
+	}
+}
+
+func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, endStream bool) {
+	// RFC 9113 §5.1.1: Client-initiated streams MUST use non-zero, odd-numbered stream identifiers
+	if streamID == 0 || (streamID%2) == 0 {
+		sc.closeErr = coreh2.ProtocolError
+		sc.isClosed.Store(true)
+		return
+	}
+
+	st := sc.newServerStream(streamID, endHeaders, endStream)
+	st.headerBlock.Write(payload)
+
+	sc.streamsMu.Lock()
+	sc.streams[streamID] = st
+	sc.streamsMu.Unlock()
+
+	if endHeaders {
+		if err := sc.finishHeaderBlock(st); err != nil {
+			sc.closeErr = err
+			sc.isClosed.Store(true)
+		}
+	}
+}
+
+func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders bool) {
+	sc.streamsMu.RLock()
+	st, ok := sc.streams[streamID]
+	sc.streamsMu.RUnlock()
+
+	if !ok {
+		sc.closeErr = errors.New("h2: CONTINUATION on unknown stream")
+		sc.isClosed.Store(true)
+		return
+	}
+
+	st.headerBlock.Write(payload)
+
+	if endHeaders {
+		st.endHeaders = true
+		if err := sc.finishHeaderBlock(st); err != nil {
+			sc.closeErr = err
+			sc.isClosed.Store(true)
+		}
+	}
+}
+
+func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
+	if ack {
+		return
+	}
+
+	for i := 0; i+6 <= len(payload); i += 6 {
+		id := uint16(payload[i])<<8 | uint16(payload[i+1])
+		val := uint32(payload[i+2])<<24 | uint32(payload[i+3])<<16 | uint32(payload[i+4])<<8 | uint32(payload[i+5])
+
+		switch id {
+		case 5: // MAX_FRAME_SIZE
+			if val >= 16384 && val <= 16777215 {
+				sc.peerMaxFrameSize = val
+			}
+		case 4: // INITIAL_WINDOW_SIZE
+			if val > 0 && val <= 0x7fffffff {
+				sc.peerInitialWin = int32(val)
+			}
+		}
+	}
+
+	if err := sc.sendSettings(nil, true); err != nil {
+		sc.closeErr = err
+		sc.isClosed.Store(true)
+	}
+}
+
+func (sc *ServerConn) OnPing(payload []byte, ack bool) {
+	if ack {
+		return
+	}
+	if err := sc.writePingAck(payload); err != nil {
+		sc.closeErr = err
+		sc.isClosed.Store(true)
+	}
+}
+
+func (sc *ServerConn) OnWindowUpdate(streamID uint32, increment uint32) {
+	if increment == 0 || increment > 0x7fffffff {
+		sc.closeErr = coreh2.ProtocolError
+		sc.isClosed.Store(true)
+		return
+	}
+
+	if streamID == 0 {
+		if err := sc.updateConnSendWindow(int32(increment)); err != nil {
+			sc.closeErr = err
+			sc.isClosed.Store(true)
+		}
+		return
+	}
+
+	sc.streamsMu.RLock()
+	st, ok := sc.streams[streamID]
+	sc.streamsMu.RUnlock()
+
+	if ok {
+		if err := sc.updateStreamSendWindow(st, int32(increment)); err != nil {
+			sc.closeErr = err
+			sc.isClosed.Store(true)
+		}
+	}
+}
+
+func (sc *ServerConn) OnStreamReset(streamID uint32, errorCode uint32) {
+	sc.streamsMu.Lock()
+	if st, ok := sc.streams[streamID]; ok {
+		if st.cancel != nil {
+			st.cancel()
+		}
+		delete(sc.streams, streamID)
+	}
+	sc.streamsMu.Unlock()
+}
+
+func (sc *ServerConn) OnGoAway(lastStreamID uint32, errorCode uint32) {
+	sc.closeErr = nil
+	sc.isClosed.Store(true)
+}
+
+func (sc *ServerConn) OnWrite(payload []byte) {
+	// Not used
+}
 func (sc *ServerConn) sendSettings(st *coreh2.Settings, ack bool) error {
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
@@ -99,139 +219,4 @@ func (sc *ServerConn) sendSettings(st *coreh2.Settings, ack bool) error {
 	}
 
 	return sc.bw.Flush()
-}
-
-func (sc *ServerConn) handleSettings(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	if fr.Flags().Has(coreh2.FlagAck) {
-		// Client ACKed our settings (RFC 9113 §6.5.3)
-		return nil
-	}
-
-	// Apply peer settings
-	if body := fr.Body(); body != nil {
-		if st, ok := body.(*coreh2.Settings); ok {
-			if mfs := st.MaxFrameSize(); mfs >= 16384 && mfs <= 16777215 {
-				sc.peerMaxFrameSize = mfs
-			}
-
-			if iws := st.MaxWindowSize(); iws > 0 && iws <= 0x7fffffff {
-				sc.peerInitialWin = int32(iws) //nolint:gosec // bounds checked
-			}
-		}
-	}
-
-	// Send Settings ACK
-	return sc.sendSettings(nil, true)
-}
-
-func (sc *ServerConn) handlePing(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	if fr.Flags().Has(coreh2.FlagAck) {
-		return nil
-	}
-
-	ping := fr.Body().(*coreh2.Ping)
-
-	return sc.writePingAck(ping.Data())
-}
-
-func (sc *ServerConn) handleHeaders(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-	// RFC 9113 §5.1.1: Client-initiated streams MUST use non-zero, odd-numbered stream identifiers
-	if streamID == 0 || (streamID%2) == 0 {
-		return coreh2.ProtocolError
-	}
-
-	hFrame := fr.Body().(*coreh2.Headers)
-	endHeaders := fr.Flags().Has(coreh2.FlagEndHeaders)
-	endStream := fr.Flags().Has(coreh2.FlagEndStream)
-
-	st := sc.newServerStream(streamID, endHeaders, endStream)
-	st.headerBlock.Write(hFrame.Headers())
-
-	sc.streamsMu.Lock()
-	sc.streams[streamID] = st
-	sc.streamsMu.Unlock()
-
-	if endHeaders {
-		return sc.finishHeaderBlock(st)
-	}
-
-	return nil
-}
-
-func (sc *ServerConn) handleContinuation(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
-	if !ok {
-		return errors.New("h2: CONTINUATION on unknown stream (RFC 9113 §6.10)")
-	}
-
-	cFrame := fr.Body().(*coreh2.Continuation)
-	st.headerBlock.Write(cFrame.Headers())
-
-	if fr.Flags().Has(coreh2.FlagEndHeaders) {
-		st.endHeaders = true
-		return sc.finishHeaderBlock(st)
-	}
-
-	return nil
-}
-
-func (sc *ServerConn) handleData(fr *coreh2.FrameHeader) error {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
-	if !ok {
-		return nil
-	}
-
-	dFrame := fr.Body().(*coreh2.Data)
-	data := dFrame.Data()
-	st.body.Write(data)
-
-	// Flow control replenishment (RFC 9113 §6.9)
-	if len(data) > 0 {
-		sc.replenishReceiveWindow(streamID, len(data))
-	}
-
-	if fr.Flags().Has(coreh2.FlagEndStream) {
-		st.endStream = true
-		sc.startStream(st)
-	}
-
-	return nil
-}
-
-func (sc *ServerConn) handleResetStream(fr *coreh2.FrameHeader) {
-	defer coreh2.ReleaseFrameHeader(fr)
-
-	streamID := fr.Stream()
-
-	sc.streamsMu.Lock()
-	if st, ok := sc.streams[streamID]; ok {
-		if st.cancel != nil {
-			st.cancel()
-		}
-
-		delete(sc.streams, streamID)
-	}
-
-	sc.streamsMu.Unlock()
 }
