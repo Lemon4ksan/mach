@@ -118,47 +118,39 @@ func (d *Decoder) CreateProgressiveDecoderWithMaxBufferedData(
 	)
 }
 
-type collectedHeadersHandler struct {
-	headers []HeaderField
-	err     error
+type seqHeadersHandler struct {
+	yield   func(HeaderField, error) bool
+	stopped bool
 }
 
-func (h *collectedHeadersHandler) OnHeaderDecoded(name, value string) {
-	h.headers = append(h.headers, HeaderField{Name: name, Value: value})
-}
-
-func (h *collectedHeadersHandler) OnDecodingCompleted() {
-	_ = h
-}
-
-func (h *collectedHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
-	h.err = NewError(ErrorCode(errorCode), errorMessage)
-}
-
-// DecodeHeaderBlock decodes a complete header block and returns the decoded header fields.
-// If decoding fails, it returns an error unwrappable via errors.Is.
-func (d *Decoder) DecodeHeaderBlock(streamID uint64, block []byte) ([]HeaderField, error) {
-	handler := &collectedHeadersHandler{headers: make([]HeaderField, 0, 16)}
-	progDec := d.CreateProgressiveDecoder(streamID, handler)
-	progDec.Decode(block)
-	progDec.EndHeaderBlock()
-
-	if handler.err != nil {
-		return nil, handler.err
+func (h *seqHeadersHandler) OnHeaderDecoded(name, value string) {
+	if h.stopped {
+		return
 	}
-
-	return handler.headers, nil
+	if !h.yield(HeaderField{Name: name, Value: value}, nil) {
+		h.stopped = true
+	}
 }
 
-// DecodeHeaderBlockSeq decodes a complete header block and returns an iterator over (name, value) pairs.
-// If decoding fails, it returns an error.
-func (d *Decoder) DecodeHeaderBlockSeq(streamID uint64, block []byte) (iter.Seq2[string, string], error) {
-	fields, err := d.DecodeHeaderBlock(streamID, block)
-	if err != nil {
-		return nil, err
-	}
+func (h *seqHeadersHandler) OnDecodingCompleted() {}
 
-	return HeaderFields(fields).All(), nil
+func (h *seqHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	if h.stopped {
+		return
+	}
+	h.yield(HeaderField{}, NewError(ErrorCode(errorCode), errorMessage))
+	h.stopped = true
+}
+
+// DecodeHeaderBlock decodes a complete header block and yields the decoded header fields.
+// This is a convenience method for synchronous decoding.
+func (d *Decoder) DecodeHeaderBlock(streamID uint64, block []byte) iter.Seq2[HeaderField, error] {
+	return func(yield func(HeaderField, error) bool) {
+		handler := seqHeadersHandler{yield: yield}
+		progDec := d.CreateProgressiveDecoder(streamID, &handler)
+		progDec.Decode(block)
+		progDec.EndHeaderBlock()
+	}
 }
 
 // InsertWithNameReference handles RFC 9204 §4.3.1 on encoder stream.

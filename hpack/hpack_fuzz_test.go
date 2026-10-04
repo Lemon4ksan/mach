@@ -72,12 +72,12 @@ func FuzzHPACKDecode(f *testing.F) {
 		hp := hpack.AcquireHPACK()
 		defer hpack.ReleaseHPACK(hp)
 
-		var fields []*hpack.HeaderField
-		fields, err := hp.DecodeAll(fields, data)
-		for _, hf := range fields {
+		for hf, err := range hp.Decode(data) {
+			if err != nil {
+				break
+			}
 			hpack.ReleaseHeaderField(hf)
 		}
-		_ = err
 	})
 }
 
@@ -106,7 +106,14 @@ func FuzzHPACKEncodeDecodeRoundtrip(f *testing.F) {
 		defer hpack.ReleaseHPACK(hpDec)
 
 		var fields []*hpack.HeaderField
-		fields, err := hpDec.DecodeAll(fields, encoded)
+		var err error
+		for f, e := range hpDec.Decode(encoded) {
+			if e != nil {
+				err = e
+				break
+			}
+			fields = append(fields, f)
+		}
 		defer func() {
 			for _, f := range fields {
 				hpack.ReleaseHeaderField(f)

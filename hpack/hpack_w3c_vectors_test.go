@@ -24,6 +24,17 @@ func hexToBytes(s string) []byte {
 	return b
 }
 
+func decodeAll(hp *hpack.HPACK, encoded []byte) ([]*hpack.HeaderField, error) {
+	var fields []*hpack.HeaderField
+	for f, err := range hp.Decode(encoded) {
+		if err != nil {
+			return fields, err
+		}
+		fields = append(fields, f)
+	}
+	return fields, nil
+}
+
 func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 	t.Parallel()
 
@@ -35,7 +46,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		hp := hpack.AcquireHPACK()
 		defer hpack.ReleaseHPACK(hp)
 
-		fields, err := hp.DecodeAll(nil, encoded)
+		fields, err := decodeAll(hp, encoded)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(fields))
 		assert.Equal(t, "custom-key", fields[0].Key())
@@ -50,7 +61,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		hp := hpack.AcquireHPACK()
 		defer hpack.ReleaseHPACK(hp)
 
-		fields, err := hp.DecodeAll(nil, encoded)
+		fields, err := decodeAll(hp, encoded)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(fields))
 		assert.Equal(t, ":path", fields[0].Key())
@@ -65,7 +76,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		hp := hpack.AcquireHPACK()
 		defer hpack.ReleaseHPACK(hp)
 
-		fields, err := hp.DecodeAll(nil, encoded)
+		fields, err := decodeAll(hp, encoded)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(fields))
 		assert.Equal(t, ":method", fields[0].Key())
@@ -83,7 +94,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		// :path: /
 		// :authority: www.example.com
 		req1Bytes := hexToBytes("828684418cf1e3c2e5f23a6ba0ab90f4ff")
-		fields1, err := hp.DecodeAll(nil, req1Bytes)
+		fields1, err := decodeAll(hp, req1Bytes)
 		assert.NoError(t, err)
 		assert.Equal(t, 4, len(fields1))
 		assert.Equal(t, "GET", fields1[0].Value())
@@ -98,7 +109,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		// :authority: www.example.com
 		// cache-control: no-cache
 		req2Bytes := hexToBytes("828684be5886a8eb10649cbf")
-		fields2, err := hp.DecodeAll(nil, req2Bytes)
+		fields2, err := decodeAll(hp, req2Bytes)
 		assert.NoError(t, err)
 		assert.Equal(t, 5, len(fields2))
 		assert.Equal(t, "GET", fields2[0].Value())
@@ -111,7 +122,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		// :authority: www.example.com
 		// custom-key: custom-value
 		req3Bytes := hexToBytes("828785bf408825a849e95ba97d7f8925a849e95bb8e8b4bf")
-		fields3, err := hp.DecodeAll(nil, req3Bytes)
+		fields3, err := decodeAll(hp, req3Bytes)
 		assert.NoError(t, err)
 		assert.Equal(t, 5, len(fields3))
 		assert.Equal(t, "GET", fields3[0].Value())
@@ -135,7 +146,7 @@ func TestHPACK_W3C_RFC7541_AppendixC(t *testing.T) {
 		resp1Bytes := hexToBytes(
 			"488264025885aec3771a4b6196d07abe941054d444a8200595040b8166e082a62d1bff6e919d29ad171863c78f0b97c8e9ae82ae43d3",
 		)
-		fields, err := hp.DecodeAll(nil, resp1Bytes)
+		fields, err := decodeAll(hp, resp1Bytes)
 		assert.NoError(t, err)
 		assert.Equal(t, 4, len(fields))
 		assert.Equal(t, ":status", fields[0].Key())

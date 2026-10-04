@@ -165,6 +165,8 @@ func BenchmarkDecoder_DecodeHeaderBlock(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = decoder.DecodeHeaderBlock(uint64(i+1), block)
+		for _, err := range decoder.DecodeHeaderBlock(uint64(i+1), block) {
+			_ = err
+		}
 	}
 }

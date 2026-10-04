@@ -13,6 +13,22 @@ import (
 	"testing"
 )
 
+type collectedHeadersHandler struct {
+	headers []HeaderField
+	err     error
+}
+
+func (h *collectedHeadersHandler) OnHeaderDecoded(name, value string) {
+	h.headers = append(h.headers, HeaderField{Name: name, Value: value})
+}
+
+func (h *collectedHeadersHandler) OnDecodingCompleted() {
+}
+
+func (h *collectedHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
+	h.err = NewError(ErrorCode(errorCode), errorMessage)
+}
+
 func TestModern_HeaderFields_Iterators(t *testing.T) {
 	fields := HeaderFields{
 		{Name: ":status", Value: "200"},
@@ -159,7 +175,15 @@ func TestModern_Decoder_DecodeHeaderBlock(t *testing.T) {
 	block := encoder.EncodeHeaderList(1, fields, nil)
 
 	// Single-call DecodeHeaderBlock
-	decoded, err := decoder.DecodeHeaderBlock(1, block)
+	var decoded []HeaderField
+	var err error
+	for hf, e := range decoder.DecodeHeaderBlock(1, block) {
+		if e != nil {
+			err = e
+			break
+		}
+		decoded = append(decoded, hf)
+	}
 	if err != nil {
 		t.Fatalf("DecodeHeaderBlock failed: %v", err)
 	}
@@ -170,29 +194,6 @@ func TestModern_Decoder_DecodeHeaderBlock(t *testing.T) {
 		if decoded[i].Name != fields[i].Name || decoded[i].Value != fields[i].Value {
 			t.Errorf("field %d mismatch: got %v, want %v", i, decoded[i], fields[i])
 		}
-	}
-
-	// Single-call DecodeHeaderBlockSeq
-	seq, err := decoder.DecodeHeaderBlockSeq(1, block)
-	if err != nil {
-		t.Fatalf("DecodeHeaderBlockSeq failed: %v", err)
-	}
-	idx := 0
-	for name, value := range seq {
-		if name != fields[idx].Name || value != fields[idx].Value {
-			t.Errorf(
-				"seq field %d mismatch: got (%s, %s), want (%s, %s)",
-				idx,
-				name,
-				value,
-				fields[idx].Name,
-				fields[idx].Value,
-			)
-		}
-		idx++
-	}
-	if idx != len(fields) {
-		t.Errorf("expected %d fields from seq, got %d", len(fields), idx)
 	}
 }
 
@@ -801,13 +802,15 @@ func TestModern_Decoder_Comprehensive(t *testing.T) {
 	}
 
 	// Error path: DecodeHeaderBlock on invalid / corrupted block
-	_, err := d.DecodeHeaderBlock(99, []byte{0xff, 0xff, 0xff})
+	var err error
+	for _, e := range d.DecodeHeaderBlock(99, []byte{0xff, 0xff, 0xff}) {
+		if e != nil {
+			err = e
+			break
+		}
+	}
 	if err == nil {
 		t.Errorf("expected error decoding corrupted block")
-	}
-	_, err = d.DecodeHeaderBlockSeq(99, []byte{0xff, 0xff, 0xff})
-	if err == nil {
-		t.Errorf("expected error from DecodeHeaderBlockSeq on corrupted block")
 	}
 
 	// InsertWithNameReference errors
