@@ -273,8 +273,8 @@ func TestModern_StreamWriter(t *testing.T) {
 		t.Errorf("expected 0 buffered bytes, got %d", delegate.NumBytesBuffered())
 	}
 	delegate.WriteStreamData([]byte("hello qpack"))
-	if buf.String() != "hello qpack" {
-		t.Errorf("expected 'hello qpack', got %q", buf.String())
+	if string(buf.Bytes()) != "hello qpack" {
+		t.Errorf("expected 'hello qpack', got %q", string(buf.Bytes()))
 	}
 }
 

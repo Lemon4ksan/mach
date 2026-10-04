@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
-
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
@@ -332,8 +331,8 @@ func TestArgsSortingAndSerialization(t *testing.T) {
 
 	var buf bytes.Buffer
 	n, err := a.WriteTo(&buf)
-	if err != nil || n != int64(len("ant=2&zebra=1")) || buf.String() != "ant=2&zebra=1" {
-		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, buf.String())
+	if err != nil || n != int64(len("ant=2&zebra=1")) || string(buf.Bytes()) != "ant=2&zebra=1" {
+		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, string(buf.Bytes()))
 	}
 
 	// Serialization with NoValue

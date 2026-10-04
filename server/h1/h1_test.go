@@ -141,7 +141,7 @@ func TestResponseSerialization(t *testing.T) {
 
 	_ = bw.Flush()
 
-	out := buf.String()
+	out := string(buf.Bytes())
 	if !bytes.Contains([]byte(out), []byte("HTTP/1.1 201 Created\r\n")) {
 		t.Errorf("missing status line in response: %s", out)
 	}
@@ -827,4 +827,3 @@ func TestAdversarial_H1_Smuggling_PerPStorage_NoCrossContamination(t *testing.T)
 		assert.NotEqual(t, "close", resp.Header.Get("Connection"), "unexpected Connection: close header")
 	}
 }
-

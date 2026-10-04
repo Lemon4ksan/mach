@@ -218,8 +218,8 @@ func TestCookieSerialization(t *testing.T) {
 	// WriteTo
 	var buf bytes.Buffer
 	n, err := c.WriteTo(&buf)
-	if err != nil || n != int64(len("token=12345")) || buf.String() != "token=12345" {
-		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, buf.String())
+	if err != nil || n != int64(len("token=12345")) || string(buf.Bytes()) != "token=12345" {
+		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, string(buf.Bytes()))
 	}
 
 	// 2. Cookie with value only (no key)

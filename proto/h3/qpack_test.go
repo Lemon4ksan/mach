@@ -10,6 +10,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
@@ -126,7 +127,8 @@ func TestQPACKDecodeResponseHeaders(t *testing.T) {
 
 	codec := NewQPACKCodec()
 
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 
 	headers := []qpack.HeaderField{
 		{Name: ":status", Value: "201"},
@@ -160,7 +162,8 @@ func TestQPACKDecodeResponseMissingStatus(t *testing.T) {
 
 	codec := NewQPACKCodec()
 
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 
 	headers := []qpack.HeaderField{
 		{Name: "content-type", Value: "text/plain"},
@@ -422,7 +425,8 @@ func BenchmarkQPACKEncodeRequestHeaders(b *testing.B) {
 func BenchmarkQPACKDecodeResponseHeaders(b *testing.B) {
 	codec := NewQPACKCodec()
 
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 
 	headers := []qpack.HeaderField{
 		{Name: ":status", Value: "200"},

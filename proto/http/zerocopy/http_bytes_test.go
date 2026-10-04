@@ -326,8 +326,8 @@ func TestHexIntReadWriteAndFormat(t *testing.T) {
 		t.Fatalf("WriteHexInt failed: %v", err)
 	}
 	_ = w.Flush()
-	if b.String() != "ff" {
-		t.Fatalf("WriteHexInt = %s, want ff", b.String())
+	if string(b.Bytes()) != "ff" {
+		t.Fatalf("WriteHexInt = %s, want ff", string(b.Bytes()))
 	}
 
 	// Panic on negative WriteHexInt

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
@@ -257,7 +258,8 @@ func TestReadResponse_Informational100Continue(t *testing.T) {
 	var streamBuf bytes.Buffer
 
 	// 1. Informational 100 Continue HEADERS frame
-	var qpackBuf100 bytes.Buffer
+	qpackBuf100 := bufkit.NewChain()
+	defer qpackBuf100.Release()
 
 	headers := []qpack.HeaderField{
 		{Name: ":status", Value: "100"},
@@ -269,7 +271,8 @@ func TestReadResponse_Informational100Continue(t *testing.T) {
 	streamBuf.Write(hBlock100)
 
 	// 2. Final 200 OK HEADERS frame
-	var qpackBuf200 bytes.Buffer
+	qpackBuf200 := bufkit.NewChain()
+	defer qpackBuf200.Release()
 
 	headers = []qpack.HeaderField{
 		{Name: ":status", Value: "200"},
@@ -336,7 +339,8 @@ func TestReadResponse_UnknownFrameDiscarded(t *testing.T) {
 	streamBuf.Write([]byte("abcd"))
 
 	// 2. HEADERS frame
-	var qpackBuf bytes.Buffer
+	qpackBuf := bufkit.NewChain()
+	defer qpackBuf.Release()
 
 	headers := []qpack.HeaderField{
 		{Name: ":status", Value: "204"},

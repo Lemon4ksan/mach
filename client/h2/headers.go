@@ -11,8 +11,8 @@ import (
 	"net/http/httptrace"
 	"net/textproto"
 	"strconv"
-	"strings"
 
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
@@ -139,7 +139,8 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 }
 
 func getFastHTTPCookieHeader(req *h1.Request) []byte {
-	var sb strings.Builder
+	sb := bufkit.NewChain()
+	defer sb.Release()
 
 	for key, value := range req.Header.Cookies() {
 		if sb.Len() > 0 {
@@ -152,7 +153,7 @@ func getFastHTTPCookieHeader(req *h1.Request) []byte {
 	}
 
 	if sb.Len() > 0 {
-		return bytesconv.S2B(sb.String())
+		return bytesconv.S2B(string(sb.Bytes()))
 	}
 
 	if raw := req.Header.Peek("Cookie"); len(raw) > 0 {

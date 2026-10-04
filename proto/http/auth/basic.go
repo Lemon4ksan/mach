@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
@@ -25,7 +26,8 @@ type BasicChallenge struct {
 
 // String formats the Challenge as a standard WWW-Authenticate header value (RFC 7617 §2).
 func (c BasicChallenge) String() string {
-	var sb strings.Builder
+	sb := bufkit.NewChain()
+	defer sb.Release()
 	sb.WriteString("Basic realm=\"")
 	sb.WriteString(c.Realm)
 	sb.WriteByte('"')
@@ -36,7 +38,7 @@ func (c BasicChallenge) String() string {
 		sb.WriteByte('"')
 	}
 
-	return sb.String()
+	return string(sb.Bytes())
 }
 
 // FormatBasic constructs a standard "Authorization: Basic <credentials>" header value (RFC 7617 §2).

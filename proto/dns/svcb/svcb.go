@@ -19,6 +19,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/lemon4ksan/foundation/bufkit"
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // Standard DNS Resource Record Types defined in RFC 9460 §14.1 & §14.2.
@@ -369,10 +372,7 @@ func (r *Record) MarshalRDATA() ([]byte, error) {
 	buf.Write(domainBytes)
 
 	// Sort keys in strictly increasing numerical order per RFC 9460 §2.2
-	keys := make([]SvcParamKey, 0, len(r.Params))
-	for k := range r.Params {
-		keys = append(keys, k)
-	}
+	keys := generic.Keys(r.Params)
 
 	slices.Sort(keys)
 
@@ -415,7 +415,8 @@ func BuildSVCBQueryName(scheme, service string, port uint16) string {
 
 // EncodeALPN encodes a list of ALPN protocol names into the wire-format SvcParamValue (RFC 9460 §7.1.1).
 func EncodeALPN(alpns []string) []byte {
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 	for _, a := range alpns {
 		if len(a) > 255 || len(a) == 0 {
 			continue
@@ -438,7 +439,8 @@ func EncodePort(port uint16) []byte {
 
 // EncodeIPv4Hints encodes a slice of IPv4 addresses into the wire-format SvcParamValue (RFC 9460 §7.3).
 func EncodeIPv4Hints(ips []net.IP) []byte {
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 	for _, ip := range ips {
 		if v4 := ip.To4(); len(v4) == 4 {
 			buf.Write(v4)
@@ -450,7 +452,8 @@ func EncodeIPv4Hints(ips []net.IP) []byte {
 
 // EncodeIPv6Hints encodes a slice of IPv6 addresses into the wire-format SvcParamValue (RFC 9460 §7.3).
 func EncodeIPv6Hints(ips []net.IP) []byte {
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 	for _, ip := range ips {
 		if v6 := ip.To16(); len(v6) == 16 && ip.To4() == nil {
 			buf.Write(v6)
@@ -508,7 +511,8 @@ func encodeDomainName(domain string) ([]byte, error) {
 		return []byte{0}, nil
 	}
 
-	var buf bytes.Buffer
+	buf := bufkit.NewChain()
+	defer buf.Release()
 	for label := range strings.SplitSeq(strings.TrimSuffix(domain, "."), ".") {
 		if len(label) == 0 || len(label) > 63 {
 			return nil, fmt.Errorf("svcb: invalid domain label %q: %w", label, ErrMalformedDomain)

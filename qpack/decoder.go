@@ -4,7 +4,11 @@
 
 package qpack
 
-import "iter"
+import (
+	"iter"
+
+	"github.com/lemon4ksan/foundation/generic"
+)
 
 // EncoderStreamErrorHandler receives notifications of fatal errors on the encoder stream.
 type EncoderStreamErrorHandler func(errorCode uint64, errorMessage string)
@@ -36,7 +40,7 @@ func NewDecoder(
 		encoderStreamErrorHandler: encoderStreamErrorHandler,
 		decoderStreamSender:       NewDecoderStreamSender(nil),
 		headerTable:               NewDecoderHeaderTable(),
-		blockedStreams:            make(map[uint64]struct{}),
+		blockedStreams:            generic.NewSet[uint64](),
 		maximumBlockedStreams:     maximumBlockedStreams,
 		knownReceivedCount:        0,
 	}

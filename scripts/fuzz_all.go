@@ -67,7 +67,7 @@ func main() {
 		if err != nil {
 			fmt.Printf("FAILED (%s)\n", elapsed)
 			fmt.Println("----------------- OUTPUT -----------------")
-			fmt.Println(strings.TrimSpace(outBuf.String()))
+			fmt.Println(strings.TrimSpace(string(outBuf.Bytes())))
 			fmt.Println("------------------------------------------")
 
 			failed = append(failed, fmt.Sprintf("%s :: %s", tgt.pkg, tgt.name))

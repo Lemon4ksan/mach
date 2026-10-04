@@ -7,6 +7,8 @@ package qpack
 import (
 	"io"
 	"math"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // HeadersHandlerInterface receives decoded header block fields from the progressive decoder.
@@ -279,7 +281,7 @@ func (d *ProgressiveDecoder) doPrefixInstruction() bool {
 	sign := d.prefixDecoder.SBit()
 	deltaBase := d.prefixDecoder.Varint2()
 
-	base, ok := d.deltaBaseToBase(sign, deltaBase)
+	base, ok := d.deltaBaseToBase(sign, deltaBase).Value()
 	if !ok {
 		d.onError(QPACK_DECOMPRESSION_FAILED, "Error calculating Base.")
 		return false
@@ -482,20 +484,20 @@ func (d *ProgressiveDecoder) onError(errorCode uint64, errorMessage string) {
 	d.handler.OnDecodingErrorDetected(errorCode, errorMessage)
 }
 
-func (d *ProgressiveDecoder) deltaBaseToBase(sign bool, deltaBase uint64) (uint64, bool) {
+func (d *ProgressiveDecoder) deltaBaseToBase(sign bool, deltaBase uint64) generic.Optional[uint64] {
 	if sign {
 		if deltaBase == math.MaxUint64 || d.requiredInsertCount < deltaBase+1 {
-			return 0, false
+			return generic.None[uint64]()
 		}
 
-		return d.requiredInsertCount - deltaBase - 1, true
+		return generic.Some(d.requiredInsertCount - deltaBase - 1)
 	}
 
 	if deltaBase > math.MaxUint64-d.requiredInsertCount {
-		return 0, false
+		return generic.None[uint64]()
 	}
 
-	return d.requiredInsertCount + deltaBase, true
+	return generic.Some(d.requiredInsertCount + deltaBase)
 }
 
 // Interface compliance assertions

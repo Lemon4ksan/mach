@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 )
@@ -96,7 +97,8 @@ func TestParseDNSResponse_ValidRecords(t *testing.T) {
 	t.Run("parse_a_and_aaaa_records_with_ttl", func(t *testing.T) {
 		t.Parallel()
 
-		var buf bytes.Buffer
+		buf := bufkit.NewChain()
+		defer buf.Release()
 		buf.Write(buildMockDNSHeader(0x1234, 0x8100, 1, 2, 0, 0))
 
 		// Question section: "example.com", TypeA, ClassIN
@@ -220,7 +222,8 @@ func TestExtractECHFromHTTPSResponse(t *testing.T) {
 	t.Run("successful_ech_extraction_from_https_record", func(t *testing.T) {
 		t.Parallel()
 
-		var buf bytes.Buffer
+		buf := bufkit.NewChain()
+		defer buf.Release()
 		buf.Write(buildMockDNSHeader(0x4321, 0x8100, 1, 1, 0, 0))
 
 		buf.Write([]byte{7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0})
@@ -267,7 +270,8 @@ func TestExtractECHFromHTTPSResponse(t *testing.T) {
 	t.Run("returns_err_ech_config_not_found_if_no_https_record_present", func(t *testing.T) {
 		t.Parallel()
 
-		var buf bytes.Buffer
+		buf := bufkit.NewChain()
+		defer buf.Release()
 		buf.Write(buildMockDNSHeader(0x4321, 0x8100, 0, 0, 0, 0))
 
 		_, err := ExtractECHFromHTTPSResponse(buf.Bytes(), 0x4321)

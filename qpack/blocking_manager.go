@@ -7,6 +7,8 @@ package qpack
 import (
 	"iter"
 	"math"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // IndexSet tracks the minimum and maximum dynamic table indices referenced in a header block (RFC 9204).
@@ -194,7 +196,7 @@ func NewBlockingManager(maxBlockedStreams ...uint64) *BlockingManager {
 
 	return &BlockingManager{
 		streamMap:             make(map[uint64][]HeaderData),
-		blockedStreams:        make(map[uint64]struct{}),
+		blockedStreams:        generic.NewSet[uint64](),
 		minIndexRefCounts:     make(map[uint64]uint64),
 		smallestBlockingIndex: math.MaxUint64,
 		knownReceivedCount:    0,

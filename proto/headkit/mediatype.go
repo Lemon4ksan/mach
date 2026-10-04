@@ -7,6 +7,8 @@ package headkit
 import (
 	"errors"
 	"strings"
+
+	"github.com/lemon4ksan/foundation/bufkit"
 )
 
 // ErrInvalidMediaType is returned when a Content-Type value cannot be parsed.
@@ -99,7 +101,8 @@ func FormatMediaType(mediaType string, params map[string]string) string {
 		return strings.ToLower(strings.TrimSpace(mediaType))
 	}
 
-	var sb strings.Builder
+	sb := bufkit.NewChain()
+	defer sb.Release()
 	sb.WriteString(strings.ToLower(strings.TrimSpace(mediaType)))
 
 	for k, v := range params {
@@ -114,7 +117,7 @@ func FormatMediaType(mediaType string, params map[string]string) string {
 		}
 	}
 
-	return sb.String()
+	return string(sb.Bytes())
 }
 
 func strconvQuote(s string) string {

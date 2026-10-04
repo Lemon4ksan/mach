@@ -9,10 +9,10 @@ package contentdisposition
 import (
 	"mime"
 	"net/url"
-	"path"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/lemon4ksan/foundation/pathkit"
 	"github.com/lemon4ksan/foundation/text/encoding/htmlindex"
 )
 
@@ -59,7 +59,7 @@ func FileName(filename string) string {
 		cleaned = cleaned[2:]
 	}
 
-	filename = path.Base(path.Clean(strings.TrimSpace(cleaned)))
+	filename = pathkit.New(pathkit.Clean(strings.TrimSpace(cleaned))).Base()
 
 	for strings.HasPrefix(filename, "..") || strings.HasPrefix(filename, ".") {
 		filename = strings.TrimPrefix(filename, "..")

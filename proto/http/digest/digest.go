@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/mach/proto/http/auth"
 )
 
@@ -452,7 +453,8 @@ func (dc *digestCredentials) String() string {
 }
 
 func encodeRFC8187Simple(s string) string {
-	var sb strings.Builder
+	sb := bufkit.NewChain()
+	defer sb.Release()
 
 	const hexChars = "0123456789ABCDEF"
 
@@ -467,7 +469,7 @@ func encodeRFC8187Simple(s string) string {
 		}
 	}
 
-	return sb.String()
+	return string(sb.Bytes())
 }
 
 func newHashFunc(algorithm string) hash.Hash {
