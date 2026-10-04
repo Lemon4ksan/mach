@@ -39,6 +39,9 @@ var (
 	// ErrInvalidFrame is returned when the gRPC-Web frame is malformed.
 	ErrInvalidFrame = errors.New("grpcweb: invalid frame format")
 
+	// ErrBufferTooSmall is returned when the destination buffer cannot fit the frame payload.
+	ErrBufferTooSmall = errors.New("grpcweb: destination buffer too small")
+
 	// ErrStatusError is returned when grpc-status trailer indicates a non-zero error code.
 	ErrStatusError = errors.New("grpcweb: non-zero grpc-status received")
 )
@@ -76,6 +79,7 @@ func (e *GRPCWebError) Unwrap() error {
 // [1 byte flags][4 bytes length (BigEndian)][payload bytes].
 type Framer struct {
 	MaxPayloadSize uint32
+	headerBuf      [5]byte
 }
 
 // NewFramer initializes a [Framer]. If maxPayloadSize is 0, default 16MB cap is applied.
@@ -115,6 +119,88 @@ func (f *Framer) ReadFrame(r io.Reader) (flags byte, payload []byte, err error) 
 	}
 
 	return flags, payload, nil
+}
+
+// ReadFrameTo reads a 5-byte header and streams the payload into dst without heap allocation.
+// Returns the frame flags and the number of payload bytes read into dst.
+func (f *Framer) ReadFrameTo(r io.Reader, dst []byte) (flags byte, n int, err error) {
+	if _, err := io.ReadFull(r, f.headerBuf[:]); err != nil {
+		if errors.Is(err, io.EOF) {
+			return 0, 0, err
+		}
+
+		return 0, 0, ErrTruncatedHeader
+	}
+
+	flags = f.headerBuf[0]
+	length := binary.BigEndian.Uint32(f.headerBuf[1:5])
+
+	if f.MaxPayloadSize > 0 && length > f.MaxPayloadSize {
+		return 0, 0, ErrPayloadTooLarge
+	}
+
+	if length == 0 {
+		return flags, 0, nil
+	}
+
+	if uint32(len(dst)) < length {
+		return 0, 0, ErrBufferTooSmall
+	}
+
+	if _, err := io.ReadFull(r, dst[:length]); err != nil {
+		return 0, 0, ErrTruncatedPayload
+	}
+
+	return flags, int(length), nil
+}
+
+// AppendFrame appends a 5-byte gRPC-Web header [flags + uint32 length] and payload to dst, returning the extended buffer.
+func AppendFrame(dst []byte, flags byte, payload []byte) []byte {
+	length := uint32(len(payload))
+	var header [5]byte
+	header[0] = flags
+	binary.BigEndian.PutUint32(header[1:5], length)
+
+	dst = append(dst, header[:]...)
+	return append(dst, payload...)
+}
+
+// Frame represents an in-situ zero-allocation view over a raw gRPC-Web frame buffer:
+// [1 byte flags][4 bytes length (BigEndian)][payload bytes].
+type Frame []byte
+
+// Flags returns the raw 8-bit frame flags.
+func (f Frame) Flags() byte {
+	return f[0]
+}
+
+// IsCompressed reports whether the compressed flag (0x01) is set.
+func (f Frame) IsCompressed() bool {
+	return f[0]&FlagCompressed != 0
+}
+
+// IsTrailer reports whether the trailer flag (0x80) is set.
+func (f Frame) IsTrailer() bool {
+	return f[0]&FlagTrailer != 0
+}
+
+// Length returns the 32-bit payload length using Bounds Check Elimination (BCE).
+func (f Frame) Length() uint32 {
+	_ = f[4] // BCE hint
+	return binary.BigEndian.Uint32(f[1:5])
+}
+
+// Payload returns the raw payload slice without allocation or copying.
+func (f Frame) Payload() []byte {
+	return f[5 : 5+f.Length()]
+}
+
+// IsValid reports whether the buffer contains a complete, uncorrupted gRPC-Web frame.
+func (f Frame) IsValid() bool {
+	if len(f) < 5 {
+		return false
+	}
+	return len(f) >= int(5+f.Length())
 }
 
 // WriteFrame encodes and writes a 5-byte header [flags + uint32 length] and payload to w.
