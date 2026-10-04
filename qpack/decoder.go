@@ -127,6 +127,7 @@ func (h *seqHeadersHandler) OnHeaderDecoded(name, value string) {
 	if h.stopped {
 		return
 	}
+
 	if !h.yield(HeaderField{Name: name, Value: value}, nil) {
 		h.stopped = true
 	}
@@ -138,6 +139,7 @@ func (h *seqHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessa
 	if h.stopped {
 		return
 	}
+
 	h.yield(HeaderField{}, NewError(ErrorCode(errorCode), errorMessage))
 	h.stopped = true
 }

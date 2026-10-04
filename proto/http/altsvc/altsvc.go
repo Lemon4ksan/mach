@@ -29,9 +29,11 @@ func All(header string) iter.Seq[Service] {
 				continue
 			}
 
-			var firstPart string
-			var hasFirst bool
-			var svc Service
+			var (
+				firstPart string
+				hasFirst  bool
+				svc       Service
+			)
 
 			for param := range strings.SplitSeq(part, ";") {
 				param = strings.TrimSpace(param)
@@ -68,6 +70,7 @@ func All(header string) iter.Seq[Service] {
 						Port:       p,
 						MaxAge:     86400 * time.Second,
 					}
+
 					continue
 				}
 
@@ -96,9 +99,10 @@ func All(header string) iter.Seq[Service] {
 // Parse parses an Alt-Svc header value into a slice of services.
 func Parse(header string) []Service {
 	var services []Service
+
 	for svc := range All(header) {
 		services = append(services, svc)
 	}
+
 	return services
 }
-

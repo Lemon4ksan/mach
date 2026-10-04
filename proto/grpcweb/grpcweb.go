@@ -157,11 +157,14 @@ func (f *Framer) ReadFrameTo(r io.Reader, dst []byte) (flags byte, n int, err er
 // AppendFrame appends a 5-byte gRPC-Web header [flags + uint32 length] and payload to dst, returning the extended buffer.
 func AppendFrame(dst []byte, flags byte, payload []byte) []byte {
 	length := uint32(len(payload))
+
 	var header [5]byte
+
 	header[0] = flags
 	binary.BigEndian.PutUint32(header[1:5], length)
 
 	dst = append(dst, header[:]...)
+
 	return append(dst, payload...)
 }
 
@@ -200,6 +203,7 @@ func (f Frame) IsValid() bool {
 	if len(f) < 5 {
 		return false
 	}
+
 	return len(f) >= int(5+f.Length())
 }
 

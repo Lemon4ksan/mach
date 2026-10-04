@@ -76,11 +76,12 @@ func New(urgency int, incremental bool) Priority {
 // AppendFormat serializes the [Priority] into an RFC 9218 string and appends it to dst without heap allocations.
 func (p Priority) AppendFormat(dst []byte) []byte {
 	urg := min(max(p.Urgency, 0), 7)
-	dst = append(dst, 'u', '=')
-	dst = append(dst, byte('0'+urg))
+
+	dst = append(dst, 'u', '=', byte('0'+urg))
 	if p.Incremental {
 		dst = append(dst, ',', ' ', 'i')
 	}
+
 	return dst
 }
 

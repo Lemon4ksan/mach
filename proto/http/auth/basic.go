@@ -28,14 +28,15 @@ type BasicChallenge struct {
 func (c BasicChallenge) String() string {
 	sb := bufkit.NewChain()
 	defer sb.Release()
-	sb.WriteString("Basic realm=\"")
-	sb.WriteString(c.Realm)
-	sb.WriteByte('"')
+
+	_, _ = sb.WriteString("Basic realm=\"")
+	_, _ = sb.WriteString(c.Realm)
+	_ = sb.WriteByte('"')
 
 	if c.Charset != "" {
-		sb.WriteString(", charset=\"")
-		sb.WriteString(c.Charset)
-		sb.WriteByte('"')
+		_, _ = sb.WriteString(", charset=\"")
+		_, _ = sb.WriteString(c.Charset)
+		_ = sb.WriteByte('"')
 	}
 
 	return string(sb.Bytes())

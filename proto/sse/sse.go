@@ -198,6 +198,7 @@ func parseSSELine(line []byte, ev *Event) {
 			ev.Data += "\n" + string(value)
 			return
 		}
+
 		ev.Data = string(value)
 
 	case bytes.Equal(key, []byte("event")):

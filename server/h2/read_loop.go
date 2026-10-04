@@ -28,8 +28,10 @@ func (sc *ServerConn) readLoop() error {
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return nil
 			}
+
 			return err
 		}
+
 		buffered += n
 
 		consumed, err := sc.sm.Feed(sc.readBuf[:buffered])
@@ -128,6 +130,7 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 			if val >= 16384 && val <= 16777215 {
 				sc.peerMaxFrameSize = val
 			}
+
 		case 4: // INITIAL_WINDOW_SIZE
 			if val > 0 && val <= 0x7fffffff {
 				sc.peerInitialWin = int32(val)
@@ -145,13 +148,14 @@ func (sc *ServerConn) OnPing(payload []byte, ack bool) {
 	if ack {
 		return
 	}
+
 	if err := sc.writePingAck(payload); err != nil {
 		sc.closeErr = err
 		sc.isClosed.Store(true)
 	}
 }
 
-func (sc *ServerConn) OnWindowUpdate(streamID uint32, increment uint32) {
+func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 	if increment == 0 || increment > 0x7fffffff {
 		sc.closeErr = coreh2.ProtocolError
 		sc.isClosed.Store(true)
@@ -163,6 +167,7 @@ func (sc *ServerConn) OnWindowUpdate(streamID uint32, increment uint32) {
 			sc.closeErr = err
 			sc.isClosed.Store(true)
 		}
+
 		return
 	}
 
@@ -178,18 +183,20 @@ func (sc *ServerConn) OnWindowUpdate(streamID uint32, increment uint32) {
 	}
 }
 
-func (sc *ServerConn) OnStreamReset(streamID uint32, errorCode uint32) {
+func (sc *ServerConn) OnStreamReset(streamID, errorCode uint32) {
 	sc.streamsMu.Lock()
 	if st, ok := sc.streams[streamID]; ok {
 		if st.cancel != nil {
 			st.cancel()
 		}
+
 		delete(sc.streams, streamID)
 	}
+
 	sc.streamsMu.Unlock()
 }
 
-func (sc *ServerConn) OnGoAway(lastStreamID uint32, errorCode uint32) {
+func (sc *ServerConn) OnGoAway(lastStreamID, errorCode uint32) {
 	sc.closeErr = nil
 	sc.isClosed.Store(true)
 }
@@ -197,6 +204,7 @@ func (sc *ServerConn) OnGoAway(lastStreamID uint32, errorCode uint32) {
 func (sc *ServerConn) OnWrite(payload []byte) {
 	// Not used
 }
+
 func (sc *ServerConn) sendSettings(st *coreh2.Settings, ack bool) error {
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()

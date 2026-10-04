@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/lemon4ksan/foundation/bufkit"
+
 	"github.com/lemon4ksan/mach/proto/http/auth"
 )
 
@@ -461,11 +462,11 @@ func encodeRFC8187Simple(s string) string {
 	for i := 0; i < len(s); i++ {
 		b := s[i]
 		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') {
-			sb.WriteByte(b)
+			_ = sb.WriteByte(b)
 		} else {
-			sb.WriteByte('%')
-			sb.WriteByte(hexChars[b>>4])
-			sb.WriteByte(hexChars[b&0x0F])
+			_ = sb.WriteByte('%')
+			_ = sb.WriteByte(hexChars[b>>4])
+			_ = sb.WriteByte(hexChars[b&0x0F])
 		}
 	}
 

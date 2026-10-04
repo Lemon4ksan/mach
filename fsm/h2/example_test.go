@@ -8,14 +8,14 @@ import (
 
 type exampleHandler struct{}
 
-func (h *exampleHandler) OnStreamData(streamID uint32, payload []byte, endStream bool) {}
+func (h *exampleHandler) OnStreamData(streamID uint32, payload []byte, endStream bool)          {}
 func (h *exampleHandler) OnHeaders(streamID uint32, payload []byte, endHeaders, endStream bool) {}
-func (h *exampleHandler) OnContinuation(streamID uint32, payload []byte, endHeaders bool) {}
-func (h *exampleHandler) OnSettings(payload []byte, ack bool) {}
-func (h *exampleHandler) OnPing(payload []byte, ack bool) {}
-func (h *exampleHandler) OnWindowUpdate(streamID uint32, increment uint32) {}
-func (h *exampleHandler) OnStreamReset(streamID uint32, errorCode uint32) {}
-func (h *exampleHandler) OnGoAway(lastStreamID uint32, errorCode uint32) {}
+func (h *exampleHandler) OnContinuation(streamID uint32, payload []byte, endHeaders bool)       {}
+func (h *exampleHandler) OnSettings(payload []byte, ack bool)                                   {}
+func (h *exampleHandler) OnPing(payload []byte, ack bool)                                       {}
+func (h *exampleHandler) OnWindowUpdate(streamID, increment uint32)                             {}
+func (h *exampleHandler) OnStreamReset(streamID, errorCode uint32)                              {}
+func (h *exampleHandler) OnGoAway(lastStreamID, errorCode uint32)                               {}
 func (h *exampleHandler) OnWrite(payload []byte) {
 	fmt.Printf("write: %d bytes\n", len(payload))
 }

@@ -363,16 +363,19 @@ func All(header string) iter.Seq2[Link, error] {
 				i++
 				continue
 			}
-			if c == '<' && !inQuote {
+
+			switch {
+			case c == '<' && !inQuote:
 				inAngle = true
-			} else if c == '>' && !inQuote {
+			case c == '>' && !inQuote:
 				inAngle = false
-			} else if c == '"' && !inAngle {
+			case c == '"' && !inAngle:
 				inQuote = !inQuote
-			} else if c == ',' && !inQuote && !inAngle {
+			case c == ',' && !inQuote && !inAngle:
 				candidate := strings.TrimSpace(header[start:i])
 				if candidate != "" {
 					found = true
+
 					link, err := parseLinkValue(candidate)
 					if err == nil {
 						if !yield(link, nil) {
@@ -380,6 +383,7 @@ func All(header string) iter.Seq2[Link, error] {
 						}
 					}
 				}
+
 				start = i + 1
 			}
 		}
@@ -387,10 +391,10 @@ func All(header string) iter.Seq2[Link, error] {
 		if start < len(header) {
 			candidate := strings.TrimSpace(header[start:])
 			if candidate != "" {
-				found = true
 				link, err := parseLinkValue(candidate)
 				if err == nil {
 					yield(link, nil)
+
 					return
 				}
 			}
@@ -414,6 +418,7 @@ func Parse(header string) (Group, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		links = append(links, link)
 	}
 
@@ -455,47 +460,6 @@ func ParseHeader(h http.Header) (Group, error) {
 	}
 
 	return allLinks, nil
-}
-
-func splitHeaderLinks(header string) []string {
-	var links []string
-
-	start := 0
-	inQuotes := false
-	inAngle := false
-
-	for i := 0; i < len(header); i++ {
-		c := header[i]
-		if c == '\\' && inQuotes && i+1 < len(header) {
-			i++
-			continue
-		}
-
-		switch {
-		case c == '"' && !inAngle:
-			inQuotes = !inQuotes
-		case c == '<' && !inQuotes:
-			inAngle = true
-		case c == '>' && !inQuotes:
-			inAngle = false
-		case c == ',' && !inQuotes && !inAngle:
-			item := strings.TrimSpace(header[start:i])
-			if item != "" {
-				links = append(links, item)
-			}
-
-			start = i + 1
-		}
-	}
-
-	if start < len(header) {
-		item := strings.TrimSpace(header[start:])
-		if item != "" {
-			links = append(links, item)
-		}
-	}
-
-	return links
 }
 
 func parseLinkValue(raw string) (Link, error) {

@@ -417,13 +417,14 @@ func BuildSVCBQueryName(scheme, service string, port uint16) string {
 func EncodeALPN(alpns []string) []byte {
 	buf := bufkit.NewChain()
 	defer buf.Release()
+
 	for _, a := range alpns {
 		if len(a) > 255 || len(a) == 0 {
 			continue
 		}
 
-		buf.WriteByte(byte(len(a)))
-		buf.WriteString(a)
+		_ = buf.WriteByte(byte(len(a)))
+		_, _ = buf.WriteString(a)
 	}
 
 	return buf.Bytes()
@@ -441,9 +442,10 @@ func EncodePort(port uint16) []byte {
 func EncodeIPv4Hints(ips []net.IP) []byte {
 	buf := bufkit.NewChain()
 	defer buf.Release()
+
 	for _, ip := range ips {
 		if v4 := ip.To4(); len(v4) == 4 {
-			buf.Write(v4)
+			_, _ = buf.Write(v4)
 		}
 	}
 
@@ -454,9 +456,10 @@ func EncodeIPv4Hints(ips []net.IP) []byte {
 func EncodeIPv6Hints(ips []net.IP) []byte {
 	buf := bufkit.NewChain()
 	defer buf.Release()
+
 	for _, ip := range ips {
 		if v6 := ip.To16(); len(v6) == 16 && ip.To4() == nil {
-			buf.Write(v6)
+			_, _ = buf.Write(v6)
 		}
 	}
 
@@ -513,16 +516,17 @@ func encodeDomainName(domain string) ([]byte, error) {
 
 	buf := bufkit.NewChain()
 	defer buf.Release()
+
 	for label := range strings.SplitSeq(strings.TrimSuffix(domain, "."), ".") {
 		if len(label) == 0 || len(label) > 63 {
 			return nil, fmt.Errorf("svcb: invalid domain label %q: %w", label, ErrMalformedDomain)
 		}
 
-		buf.WriteByte(byte(len(label)))
-		buf.WriteString(label)
+		_ = buf.WriteByte(byte(len(label)))
+		_, _ = buf.WriteString(label)
 	}
 
-	buf.WriteByte(0)
+	_ = buf.WriteByte(0)
 
 	return buf.Bytes(), nil
 }

@@ -31,7 +31,11 @@ func TestBufferQueue_Basic(t *testing.T) {
 	n, err := q.WriteTo(&buf)
 	require.NoError(t, err)
 	assert.Equal(t, int64(68), n)
-	assert.Equal(t, "POST /v1/chat HTTP/1.1\r\nHost: api.example.com\r\n\r\n{\"message\":\"hello\"}", string(buf.Bytes()))
+	assert.Equal(
+		t,
+		"POST /v1/chat HTTP/1.1\r\nHost: api.example.com\r\n\r\n{\"message\":\"hello\"}",
+		string(buf.Bytes()),
+	)
 
 	// Queue should be reset after WriteTo
 	assert.Equal(t, 0, q.SlicesCount())

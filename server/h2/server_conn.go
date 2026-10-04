@@ -16,8 +16,8 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 	"golang.org/x/sys/cpu"
 
-	"github.com/lemon4ksan/mach/hpack"
 	fsm "github.com/lemon4ksan/mach/fsm/h2"
+	"github.com/lemon4ksan/mach/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
@@ -74,7 +74,7 @@ type ServerResponse struct {
 // are pooled via Per-P storage (foundation/silicon/pool) with zero allocations on hot paths.
 type ServerConn struct {
 	conn      net.Conn
-		bw        *bufio.Writer
+	bw        *bufio.Writer
 	sm        fsm.StateMachine
 	readBuf   []byte
 	muBuf     []byte
@@ -103,7 +103,7 @@ type ServerConn struct {
 
 var serverConnStorage = pool.NewPerPStorage(func() *ServerConn {
 	return &ServerConn{
-				bw:               bufio.NewWriterSize(nil, 4096),
+		bw:               bufio.NewWriterSize(nil, 4096),
 		readBuf:          make([]byte, 32768),
 		muBuf:            make([]byte, 0, 32768),
 		hpackDec:         hpack.AcquireHPACK(),
@@ -129,6 +129,7 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	} else {
 		sc.bw.Reset(netConn)
 	}
+
 	sc.muBuf = sc.muBuf[:0]
 
 	sc.handler = handler
@@ -240,7 +241,6 @@ func (sc *ServerConn) Release() {
 	sc.streamsMu.Lock()
 	clear(sc.streams)
 	sc.streamsMu.Unlock()
-
 
 	if sc.bw != nil {
 		sc.bw.Reset(nil)

@@ -314,16 +314,19 @@ func toLowerBytesZeroAlloc(b []byte) []byte {
 		if c >= 'A' && c <= 'Z' {
 			res := make([]byte, len(b))
 			copy(res, b[:i])
+
 			for j := i; j < len(b); j++ {
 				ch := b[j]
 				if ch >= 'A' && ch <= 'Z' {
 					ch += 'a' - 'A'
 				}
+
 				res[j] = ch
 			}
+
 			return res
 		}
 	}
+
 	return b
 }
-

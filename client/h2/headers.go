@@ -144,12 +144,12 @@ func getFastHTTPCookieHeader(req *h1.Request) []byte {
 
 	for key, value := range req.Header.Cookies() {
 		if sb.Len() > 0 {
-			sb.WriteString("; ")
+			_, _ = sb.WriteString("; ")
 		}
 
-		sb.Write(key)
-		sb.WriteByte('=')
-		sb.Write(value)
+		_, _ = sb.Write(key)
+		_ = sb.WriteByte('=')
+		_, _ = sb.Write(value)
 	}
 
 	if sb.Len() > 0 {

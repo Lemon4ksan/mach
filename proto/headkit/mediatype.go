@@ -103,17 +103,18 @@ func FormatMediaType(mediaType string, params map[string]string) string {
 
 	sb := bufkit.NewChain()
 	defer sb.Release()
-	sb.WriteString(strings.ToLower(strings.TrimSpace(mediaType)))
+
+	_, _ = sb.WriteString(strings.ToLower(strings.TrimSpace(mediaType)))
 
 	for k, v := range params {
-		sb.WriteString("; ")
-		sb.WriteString(strings.ToLower(strings.TrimSpace(k)))
-		sb.WriteString("=")
+		_, _ = sb.WriteString("; ")
+		_, _ = sb.WriteString(strings.ToLower(strings.TrimSpace(k)))
+		_, _ = sb.WriteString("=")
 
 		if strings.ContainsAny(v, " ;\"=(),/") {
-			sb.WriteString(strconvQuote(v))
+			_, _ = sb.WriteString(strconvQuote(v))
 		} else {
-			sb.WriteString(v)
+			_, _ = sb.WriteString(v)
 		}
 	}
 

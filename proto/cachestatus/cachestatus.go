@@ -247,19 +247,23 @@ func All(header string) iter.Seq2[Entry, error] {
 			c := header[i]
 			if c == '\\' && inQuote && i+1 < len(header) {
 				i++
+
 				continue
 			}
+
 			if c == '"' {
 				inQuote = !inQuote
 			} else if c == ',' && !inQuote {
 				member := strings.TrimSpace(header[start:i])
 				if member != "" {
 					found = true
+
 					entry, err := parseEntry(member)
 					if !yield(entry, err) || err != nil {
 						return
 					}
 				}
+
 				start = i + 1
 			}
 		}
@@ -267,9 +271,10 @@ func All(header string) iter.Seq2[Entry, error] {
 		if start < len(header) {
 			member := strings.TrimSpace(header[start:])
 			if member != "" {
-				found = true
 				entry, err := parseEntry(member)
+
 				yield(entry, err)
+
 				return
 			}
 		}
@@ -283,15 +288,19 @@ func All(header string) iter.Seq2[Entry, error] {
 // Parse extracts and parses all cache status entries from a Cache-Status HTTP header string (RFC 9211 §2).
 func Parse(header string) (Chain, error) {
 	var chain Chain
+
 	for entry, err := range All(header) {
 		if err != nil {
 			return nil, err
 		}
+
 		chain = append(chain, entry)
 	}
+
 	if len(chain) == 0 {
 		return nil, ErrEmptyHeader
 	}
+
 	return chain, nil
 }
 
@@ -323,41 +332,6 @@ func ParseHeader(h http.Header) (Chain, error) {
 	}
 
 	return chain, nil
-}
-
-func splitMembers(header string) []string {
-	var members []string
-
-	start := 0
-	inQuote := false
-
-	for i := 0; i < len(header); i++ {
-		c := header[i]
-		if c == '\\' && inQuote && i+1 < len(header) {
-			i++
-			continue
-		}
-
-		if c == '"' {
-			inQuote = !inQuote
-		} else if c == ',' && !inQuote {
-			m := strings.TrimSpace(header[start:i])
-			if m != "" {
-				members = append(members, m)
-			}
-
-			start = i + 1
-		}
-	}
-
-	if start < len(header) {
-		m := strings.TrimSpace(header[start:])
-		if m != "" {
-			members = append(members, m)
-		}
-	}
-
-	return members
 }
 
 func parseEntry(s string) (Entry, error) {

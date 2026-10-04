@@ -422,10 +422,8 @@ func (hp *HPACK) Decode(b []byte) iter.Seq2[*HeaderField, error] {
 
 			if hf.Empty() {
 				ReleaseHeaderField(hf)
-			} else {
-				if !yield(hf, nil) {
-					return
-				}
+			} else if !yield(hf, nil) {
+				return
 			}
 
 			b = rem
