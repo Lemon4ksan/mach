@@ -192,20 +192,21 @@ func parseSSELine(line []byte, ev *Event) {
 		key = line
 	}
 
-	switch string(key) {
-	case "event":
-		ev.Event = string(value)
-	case "data":
+	switch {
+	case bytes.Equal(key, []byte("data")):
 		if ev.Data != "" {
 			ev.Data += "\n" + string(value)
 			return
 		}
-
 		ev.Data = string(value)
 
-	case "id":
+	case bytes.Equal(key, []byte("event")):
+		ev.Event = string(value)
+
+	case bytes.Equal(key, []byte("id")):
 		ev.ID = string(value)
-	case "retry":
+
+	case bytes.Equal(key, []byte("retry")):
 		if r, err := strconv.Atoi(string(bytes.TrimSpace(value))); err == nil {
 			ev.Retry = r
 		}
