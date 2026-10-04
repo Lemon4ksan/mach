@@ -10,6 +10,7 @@ package cachestatus
 
 import (
 	"errors"
+	"iter"
 	"net/http"
 	"strconv"
 	"strings"
@@ -229,29 +230,68 @@ func (c Chain) String() string {
 	return sb.String()
 }
 
+// All returns an iterator over parsed Cache-Status entries without accumulating a slice.
+func All(header string) iter.Seq2[Entry, error] {
+	return func(yield func(Entry, error) bool) {
+		header = strings.TrimSpace(header)
+		if header == "" {
+			yield(Entry{}, ErrEmptyHeader)
+			return
+		}
+
+		start := 0
+		inQuote := false
+		found := false
+
+		for i := 0; i < len(header); i++ {
+			c := header[i]
+			if c == '\\' && inQuote && i+1 < len(header) {
+				i++
+				continue
+			}
+			if c == '"' {
+				inQuote = !inQuote
+			} else if c == ',' && !inQuote {
+				member := strings.TrimSpace(header[start:i])
+				if member != "" {
+					found = true
+					entry, err := parseEntry(member)
+					if !yield(entry, err) || err != nil {
+						return
+					}
+				}
+				start = i + 1
+			}
+		}
+
+		if start < len(header) {
+			member := strings.TrimSpace(header[start:])
+			if member != "" {
+				found = true
+				entry, err := parseEntry(member)
+				yield(entry, err)
+				return
+			}
+		}
+
+		if !found {
+			yield(Entry{}, ErrInvalidHeader)
+		}
+	}
+}
+
 // Parse extracts and parses all cache status entries from a Cache-Status HTTP header string (RFC 9211 §2).
 func Parse(header string) (Chain, error) {
-	header = strings.TrimSpace(header)
-	if header == "" {
-		return nil, ErrEmptyHeader
-	}
-
 	var chain Chain
-	// Split by comma outside quoted strings
-	members := splitMembers(header)
-	if len(members) == 0 {
-		return nil, ErrInvalidHeader
-	}
-
-	for _, member := range members {
-		entry, err := parseEntry(member)
+	for entry, err := range All(header) {
 		if err != nil {
 			return nil, err
 		}
-
 		chain = append(chain, entry)
 	}
-
+	if len(chain) == 0 {
+		return nil, ErrEmptyHeader
+	}
 	return chain, nil
 }
 
