@@ -60,12 +60,14 @@ func NewClientConn(conn *quic.Conn, settings *coreh3.Settings) (*ClientConn, err
 		settings = &coreh3.Settings{
 			MaxFieldSectionSize: 262144,
 			EnableDatagrams:     true,
+			QpackMaxTableCap:    4096,
+			QpackBlockedStreams: 100,
 		}
 	}
 
 	cc := &ClientConn{
 		conn:     conn,
-		qpack:    coreh3.NewQPACKCodec(),
+		qpack:    coreh3.NewQPACKCodecWithOptions(settings.QpackMaxTableCap, settings.QpackBlockedStreams, nil),
 		settings: *settings,
 		closed:   make(chan struct{}),
 	}

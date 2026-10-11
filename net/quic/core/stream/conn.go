@@ -691,6 +691,11 @@ func (c *Conn) GetReceiveStream(id StreamID) (*ReceiveStream, bool) {
 
 // MaybeGetConnWindowUpdate checks if a MAX_DATA frame should be sent, auto-tuning the connection receive window.
 func (c *Conn) MaybeGetConnWindowUpdate() (newWindow uint64, ok bool) {
-	return c.connFlowController.MaybeGetWindowUpdate()
+	return c.connFlowController.GetWindowUpdate()
+}
+
+// GetDataBlockedFrame retrieves the queued DATA_BLOCKED limit if one is pending.
+func (c *Conn) GetDataBlockedFrame() (offset uint64, ok bool) {
+	return c.connFlowController.GetDataBlockedFrame()
 }
 

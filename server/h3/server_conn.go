@@ -44,6 +44,14 @@ func NewServerConn(quicConn *quic.Conn, handler ServerHandlerFunc) *ServerConn {
 
 // Serve initializes control streams and handles incoming bidirectional request streams (RFC 9114 §6.2.1, §6.1).
 func (sc *ServerConn) Serve() error {
+	sc.qpack.SetErrorHandler(func(err error) {
+		if qErr, ok := errors.AsType[*coreh3.QPACKStreamError](err); ok {
+			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(qErr.Code), qErr.Message)
+		} else {
+			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3GeneralProtocolError), err.Error())
+		}
+	})
+
 	ctx := sc.quicConn.Context()
 
 	// 1. Open and initialize server unidirectional control stream (RFC 9114 §6.2.1)

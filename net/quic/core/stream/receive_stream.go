@@ -436,12 +436,12 @@ func (s *ReceiveStream) signalDataReady() {
 
 func (s *ReceiveStream) maybeTriggerWindowUpdate() {
 	streamUpdate := false
-	if _, ok := s.flowController.MaybeGetWindowUpdate(); ok {
+	if _, ok := s.flowController.CheckAndQueueWindowUpdate(); ok {
 		streamUpdate = true
 	}
 	connUpdate := false
 	if s.flowController.connection != nil {
-		if _, ok := s.flowController.connection.MaybeGetWindowUpdate(); ok {
+		if _, ok := s.flowController.connection.CheckAndQueueWindowUpdate(); ok {
 			connUpdate = true
 		}
 	}
@@ -452,7 +452,7 @@ func (s *ReceiveStream) maybeTriggerWindowUpdate() {
 
 // GetWindowUpdate retrieves the new MAX_STREAM_DATA limit if one is pending.
 func (s *ReceiveStream) GetWindowUpdate() (newOffset uint64, ok bool) {
-	return s.flowController.MaybeGetWindowUpdate()
+	return s.flowController.GetWindowUpdate()
 }
 
 // GetStopSendingFrame retrieves the STOP_SENDING parameters if queued.

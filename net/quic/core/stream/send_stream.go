@@ -357,7 +357,15 @@ func (s *SendStream) CancelWrite(code StreamErrorCode) {
 	s.state = SendStateResetSent
 	s.resetQueued = true
 	s.resetCode = code
-	s.resetFinalPos = s.writeOffset
+	s.resetFinalPos = s.sentOffset // RFC 9000 §4.5: Final size is the exact number of bytes sent on the wire
+
+	// Reclaim flow control credits for unsent buffered data
+	if s.writeOffset > s.sentOffset {
+		unsent := s.writeOffset - s.sentOffset
+		s.flowController.ReclaimBytesSent(unsent)
+	}
+	s.writeBuffer = nil
+
 	s.resetErr = &StreamError{
 		StreamID:  s.streamID,
 		ErrorCode: code,
@@ -386,7 +394,15 @@ func (s *SendStream) HandleStopSending(code StreamErrorCode) {
 	s.state = SendStateResetSent
 	s.resetQueued = true
 	s.resetCode = code
-	s.resetFinalPos = s.writeOffset
+	s.resetFinalPos = s.sentOffset // RFC 9000 §4.5: Final size is the exact number of bytes sent on the wire
+
+	// Reclaim flow control credits for unsent buffered data
+	if s.writeOffset > s.sentOffset {
+		unsent := s.writeOffset - s.sentOffset
+		s.flowController.ReclaimBytesSent(unsent)
+	}
+	s.writeBuffer = nil
+
 	s.resetErr = &StreamError{
 		StreamID:  s.streamID,
 		ErrorCode: code,
@@ -498,6 +514,11 @@ func (s *SendStream) GetResetStreamFrame() (code StreamErrorCode, finalSize uint
 		return s.resetCode, s.resetFinalPos, true
 	}
 	return 0, 0, false
+}
+
+// GetStreamDataBlockedFrame retrieves the queued STREAM_DATA_BLOCKED limit if pending.
+func (s *SendStream) GetStreamDataBlockedFrame() (offset uint64, ok bool) {
+	return s.flowController.GetStreamDataBlockedFrame()
 }
 
 // State returns the current RFC 9000 §3.1 SendState.

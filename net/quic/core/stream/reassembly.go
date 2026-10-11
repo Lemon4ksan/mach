@@ -5,6 +5,7 @@
 package stream
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -135,13 +136,13 @@ func (b *ReassemblyBuffer) Push(offset uint64, data []byte, fin bool) error {
 		return nil
 	}
 
-	b.insertChunk(offset, data)
-	return nil
+	return b.insertChunk(offset, data)
 }
 
 // insertChunk incorporates [offset, offset+len(data)] into the sorted disjoint chunks list.
 // Overlapping or touching chunks are merged into a single contiguous chunk.
-func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) {
+// RFC 9000 §2.2: If divergent data is detected in overlapping segments, ProtocolViolation is returned.
+func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 	end := offset + uint64(len(data))
 	n := len(b.chunks)
 
@@ -151,14 +152,14 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) {
 			offset: offset,
 			data:   append([]byte(nil), data...),
 		})
-		return
+		return nil
 	}
 
 	last := &b.chunks[n-1]
 	if offset == last.end() {
 		// Exactly contiguous with last chunk: extend it.
 		last.data = append(last.data, data...)
-		return
+		return nil
 	}
 	if offset > last.end() {
 		// Disjoint gap after last chunk.
@@ -166,7 +167,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) {
 			offset: offset,
 			data:   append([]byte(nil), data...),
 		})
-		return
+		return nil
 	}
 
 	// Find the range of chunks that touch or overlap with [offset, end].
@@ -199,15 +200,36 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) {
 			offset: offset,
 			data:   append([]byte(nil), data...),
 		}
-		return
+		return nil
+	}
+
+	// RFC 9000 §2.2: If an endpoint detects that a peer has sent different data at the
+	// same offset on the same stream, it MUST close the connection with PROTOCOL_VIOLATION.
+	for i := firstOverlap; i <= lastOverlap; i++ {
+		c := &b.chunks[i]
+		overlapStart := max(offset, c.offset)
+		overlapEnd := min(end, c.end())
+		if overlapEnd > overlapStart {
+			existingPart := c.data[overlapStart-c.offset : overlapEnd-c.offset]
+			newPart := data[overlapStart-offset : overlapEnd-offset]
+			if !bytes.Equal(existingPart, newPart) {
+				return &TransportError{
+					ErrorCode: ProtocolViolation,
+					ErrorMessage: fmt.Sprintf(
+						"stream frame divergent data in overlapping range [%d, %d)",
+						overlapStart, overlapEnd,
+					),
+				}
+			}
+		}
 	}
 
 	// Check if new data is completely contained within an existing single chunk.
 	if firstOverlap == lastOverlap {
 		c := &b.chunks[firstOverlap]
 		if c.offset <= offset && c.end() >= end {
-			// Redundant duplicate: already fully contained.
-			return
+			// Redundant duplicate: already fully contained and verified identical.
+			return nil
 		}
 	}
 
@@ -241,6 +263,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) {
 		}
 		b.chunks = b.chunks[:newLen]
 	}
+	return nil
 }
 
 // Read copies contiguous buffered data into p, advancing the read offset.

@@ -44,6 +44,7 @@ type ConnectionFlowController struct {
 	sendWindow         uint64
 	lastBlockedOffset  uint64
 	dataBlockedQueued  bool
+	hasSentBlocked     bool
 	sendBlockedWaiters []chan struct{}
 
 	// Receive side
@@ -52,6 +53,8 @@ type ConnectionFlowController struct {
 	receiveWindow        uint64
 	receiveWindowSize    uint64
 	maxReceiveWindowSize uint64
+	windowUpdateQueued   bool
+	queuedWindowUpdate   uint64
 
 	// Auto-tuning
 	epochStartTime   time.Time
@@ -113,6 +116,7 @@ func (c *ConnectionFlowController) UpdateSendWindow(newLimit uint64) {
 	c.mu.Lock()
 	if newLimit > c.sendWindow {
 		c.sendWindow = newLimit
+		c.hasSentBlocked = false
 		// Unblock all waiting writers
 		for _, ch := range c.sendBlockedWaiters {
 			close(ch)
@@ -137,7 +141,8 @@ func (c *ConnectionFlowController) CheckAndQueueDataBlocked() (offset uint64, sh
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.bytesSent >= c.sendWindow && (!c.dataBlockedQueued || c.sendWindow > c.lastBlockedOffset) {
+	if c.bytesSent >= c.sendWindow && !c.hasSentBlocked {
+		c.hasSentBlocked = true
 		c.dataBlockedQueued = true
 		c.lastBlockedOffset = c.sendWindow
 		return c.sendWindow, true
@@ -171,10 +176,52 @@ func (c *ConnectionFlowController) AddBytesRead(n uint64) {
 	c.bytesRead += n
 }
 
+// CheckAndQueueWindowUpdate checks if a MAX_DATA frame should be sent, auto-tuning the window if needed,
+// and queues the update for transmission.
+func (c *ConnectionFlowController) CheckAndQueueWindowUpdate() (newWindow uint64, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var bytesRemaining uint64
+	if c.receiveWindow > c.bytesRead {
+		bytesRemaining = c.receiveWindow - c.bytesRead
+	}
+	threshold := uint64(float64(c.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
+	if bytesRemaining > threshold {
+		if c.windowUpdateQueued {
+			return c.queuedWindowUpdate, true
+		}
+		return 0, false
+	}
+
+	c.maybeAdjustWindowSize(time.Now())
+	c.receiveWindow = c.bytesRead + c.receiveWindowSize
+	c.queuedWindowUpdate = c.receiveWindow
+	c.windowUpdateQueued = true
+	return c.receiveWindow, true
+}
+
+// GetWindowUpdate retrieves the queued MAX_DATA limit if one is pending, clearing the queued flag.
+func (c *ConnectionFlowController) GetWindowUpdate() (newWindow uint64, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.windowUpdateQueued {
+		c.windowUpdateQueued = false
+		return c.queuedWindowUpdate, true
+	}
+	return 0, false
+}
+
 // MaybeGetWindowUpdate checks if a MAX_DATA frame should be sent, auto-tuning the window if needed.
 func (c *ConnectionFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if c.windowUpdateQueued {
+		c.windowUpdateQueued = false
+		return c.queuedWindowUpdate, true
+	}
 
 	var bytesRemaining uint64
 	if c.receiveWindow > c.bytesRead {
@@ -188,6 +235,38 @@ func (c *ConnectionFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok 
 	c.maybeAdjustWindowSize(time.Now())
 	c.receiveWindow = c.bytesRead + c.receiveWindowSize
 	return c.receiveWindow, true
+}
+
+// GetDataBlockedFrame retrieves the queued DATA_BLOCKED limit if pending, clearing the queued flag.
+func (c *ConnectionFlowController) GetDataBlockedFrame() (offset uint64, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.dataBlockedQueued {
+		c.dataBlockedQueued = false
+		c.hasSentBlocked = true
+		return c.lastBlockedOffset, true
+	}
+
+	if c.bytesSent >= c.sendWindow && !c.hasSentBlocked {
+		c.hasSentBlocked = true
+		c.lastBlockedOffset = c.sendWindow
+		return c.sendWindow, true
+	}
+
+	return 0, false
+}
+
+// ReclaimBytesSent reduces connection bytesSent by n when buffered data is discarded on stream reset.
+func (c *ConnectionFlowController) ReclaimBytesSent(n uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.bytesSent >= n {
+		c.bytesSent -= n
+	} else {
+		c.bytesSent = 0
+	}
 }
 
 func (c *ConnectionFlowController) maybeAdjustWindowSize(now time.Time) {
@@ -227,6 +306,7 @@ type StreamFlowController struct {
 	sendWindow               uint64
 	lastBlockedOffset        uint64
 	streamDataBlockedQueued  bool
+	hasSentBlocked           bool
 	sendBlockedWaiters       []chan struct{}
 
 	// Receive side
@@ -235,6 +315,8 @@ type StreamFlowController struct {
 	receiveWindow        uint64
 	receiveWindowSize    uint64
 	maxReceiveWindowSize uint64
+	windowUpdateQueued   bool
+	queuedWindowUpdate   uint64
 
 	// Auto-tuning
 	epochStartTime   time.Time
@@ -312,6 +394,7 @@ func (s *StreamFlowController) UpdateSendWindow(newLimit uint64) {
 	s.mu.Lock()
 	if newLimit > s.sendWindow {
 		s.sendWindow = newLimit
+		s.hasSentBlocked = false
 		for _, ch := range s.sendBlockedWaiters {
 			close(ch)
 		}
@@ -335,7 +418,8 @@ func (s *StreamFlowController) CheckAndQueueStreamDataBlocked() (offset uint64, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.bytesSent >= s.sendWindow && (!s.streamDataBlockedQueued || s.sendWindow > s.lastBlockedOffset) {
+	if s.bytesSent >= s.sendWindow && !s.hasSentBlocked {
+		s.hasSentBlocked = true
 		s.streamDataBlockedQueued = true
 		s.lastBlockedOffset = s.sendWindow
 		return s.sendWindow, true
@@ -382,10 +466,52 @@ func (s *StreamFlowController) AddBytesRead(n uint64) {
 	}
 }
 
+// CheckAndQueueWindowUpdate checks if a MAX_STREAM_DATA frame should be sent, auto-tuning the window if needed,
+// and queues the update for transmission.
+func (s *StreamFlowController) CheckAndQueueWindowUpdate() (newWindow uint64, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var bytesRemaining uint64
+	if s.receiveWindow > s.bytesRead {
+		bytesRemaining = s.receiveWindow - s.bytesRead
+	}
+	threshold := uint64(float64(s.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
+	if bytesRemaining > threshold {
+		if s.windowUpdateQueued {
+			return s.queuedWindowUpdate, true
+		}
+		return 0, false
+	}
+
+	s.maybeAdjustWindowSize(time.Now())
+	s.receiveWindow = s.bytesRead + s.receiveWindowSize
+	s.queuedWindowUpdate = s.receiveWindow
+	s.windowUpdateQueued = true
+	return s.receiveWindow, true
+}
+
+// GetWindowUpdate retrieves the queued MAX_STREAM_DATA limit if one is pending, clearing the queued flag.
+func (s *StreamFlowController) GetWindowUpdate() (newOffset uint64, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.windowUpdateQueued {
+		s.windowUpdateQueued = false
+		return s.queuedWindowUpdate, true
+	}
+	return 0, false
+}
+
 // MaybeGetWindowUpdate checks if a MAX_STREAM_DATA frame should be sent, auto-tuning the window if needed.
 func (s *StreamFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.windowUpdateQueued {
+		s.windowUpdateQueued = false
+		return s.queuedWindowUpdate, true
+	}
 
 	var bytesRemaining uint64
 	if s.receiveWindow > s.bytesRead {
@@ -399,6 +525,41 @@ func (s *StreamFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool
 	s.maybeAdjustWindowSize(time.Now())
 	s.receiveWindow = s.bytesRead + s.receiveWindowSize
 	return s.receiveWindow, true
+}
+
+// GetStreamDataBlockedFrame retrieves the queued STREAM_DATA_BLOCKED limit if pending, clearing the queued flag.
+func (s *StreamFlowController) GetStreamDataBlockedFrame() (offset uint64, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.streamDataBlockedQueued {
+		s.streamDataBlockedQueued = false
+		s.hasSentBlocked = true
+		return s.lastBlockedOffset, true
+	}
+
+	if s.bytesSent >= s.sendWindow && !s.hasSentBlocked {
+		s.hasSentBlocked = true
+		s.lastBlockedOffset = s.sendWindow
+		return s.sendWindow, true
+	}
+
+	return 0, false
+}
+
+// ReclaimBytesSent reduces bytesSent by n when buffered data is discarded on stream reset.
+func (s *StreamFlowController) ReclaimBytesSent(n uint64) {
+	s.mu.Lock()
+	if s.bytesSent >= n {
+		s.bytesSent -= n
+	} else {
+		s.bytesSent = 0
+	}
+	s.mu.Unlock()
+
+	if s.connection != nil {
+		s.connection.ReclaimBytesSent(n)
+	}
 }
 
 func (s *StreamFlowController) maybeAdjustWindowSize(now time.Time) {

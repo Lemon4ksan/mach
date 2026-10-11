@@ -5,7 +5,9 @@
 package h3
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/lemon4ksan/foundation/generic"
@@ -148,4 +150,87 @@ func (q *QPACKCodec) Decoder() *qpack.Decoder {
 // Callers may use the encoder to inspect header table capacity or encode raw header lists.
 func (q *QPACKCodec) Encoder() *qpack.Encoder {
 	return q.encoder
+}
+
+// ApplySettings updates the encoder's maximum dynamic table capacity and blocked streams with mutex protection (RFC 9204 §5).
+func (q *QPACKCodec) ApplySettings(maxDynamicTableCapacity, maxBlockedStreams uint64) {
+	q.encMu.Lock()
+	defer q.encMu.Unlock()
+
+	q.encoder.SetMaximumDynamicTableCapacity(maxDynamicTableCapacity)
+	q.encoder.SetMaximumBlockedStreams(maxBlockedStreams)
+}
+
+// ReadEncoderStream reads and processes encoder stream instructions until EOF (RFC 9204 §4.3).
+func (q *QPACKCodec) ReadEncoderStream(r io.Reader) (int64, error) {
+	buf := make([]byte, 4096)
+	var total int64
+	receiver := q.decoder.EncoderStreamReceiver()
+
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			q.decMu.Lock()
+			receiver.Decode(buf[:n])
+			q.decMu.Unlock()
+
+			total += int64(n)
+			if q.Err() != nil {
+				return total, q.Err()
+			}
+		}
+
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				q.decMu.Lock()
+				receiver.EndDecoding()
+				q.decMu.Unlock()
+
+				if q.Err() != nil {
+					return total, q.Err()
+				}
+
+				return total, nil
+			}
+
+			return total, err
+		}
+	}
+}
+
+// ReadDecoderStream reads and processes decoder stream instructions until EOF (RFC 9204 §4.4).
+func (q *QPACKCodec) ReadDecoderStream(r io.Reader) (int64, error) {
+	buf := make([]byte, 4096)
+	var total int64
+	receiver := q.encoder.DecoderStreamReceiver()
+
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			q.encMu.Lock()
+			receiver.Decode(buf[:n])
+			q.encMu.Unlock()
+
+			total += int64(n)
+			if q.Err() != nil {
+				return total, q.Err()
+			}
+		}
+
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				q.encMu.Lock()
+				receiver.EndDecoding()
+				q.encMu.Unlock()
+
+				if q.Err() != nil {
+					return total, q.Err()
+				}
+
+				return total, nil
+			}
+
+			return total, err
+		}
+	}
 }
