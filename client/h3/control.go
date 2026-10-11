@@ -83,8 +83,8 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 			return
 		}
 
-		_, err := io.Copy(io.Discard, str)
-		if err == nil || errors.Is(err, io.EOF) {
+		_, err := cc.qpack.ReadEncoderStream(str)
+		if cc.qpack.Err() == nil && (err == nil || errors.Is(err, io.EOF)) {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3ClosedCriticalStream),
 				"QPACK encoder stream closed (RFC 9114 §6.2.1 & RFC 9204 §4.2)",
@@ -101,8 +101,8 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 			return
 		}
 
-		_, err := io.Copy(io.Discard, str)
-		if err == nil || errors.Is(err, io.EOF) {
+		_, err := cc.qpack.ReadDecoderStream(str)
+		if cc.qpack.Err() == nil && (err == nil || errors.Is(err, io.EOF)) {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3ClosedCriticalStream),
 				"QPACK decoder stream closed (RFC 9114 §6.2.1 & RFC 9204 §4.2)",
@@ -177,6 +177,7 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 			}
 
 			cc.settings = *st
+			cc.qpack.ApplySettings(st.QpackMaxTableCap, st.QpackBlockedStreams)
 
 		case coreh3.FrameTypeGoAway:
 			if err := cc.handleGoAway(r, payloadLen); err != nil {

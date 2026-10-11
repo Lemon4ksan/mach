@@ -203,7 +203,7 @@ func (b *CoreSessionBridge) CloseWithError(code ApplicationErrorCode, reason str
 		h.IsLong = false
 		h.Type = wire.PacketType1RTT
 		h.DestConnID = b.destConnID.Bytes()
-		h.PacketNumber = b.nextPacketNumber.Add(1) - 1
+		h.PacketNumber = b.Next1RTTPacketNumber()
 		h.PacketNumberLen = 4
 		if pkt, err := b.oneRTTProtector.SealPacket(nil, &h, payload); err == nil {
 			_, _ = b.packetConn.WriteTo(pkt, b.remoteAddr)
@@ -251,7 +251,7 @@ func (b *CoreSessionBridge) SendDatagram(payload []byte) error {
 	h.IsLong = false
 	h.Type = wire.PacketType1RTT
 	h.DestConnID = b.destConnID.Bytes()
-	h.PacketNumber = b.nextPacketNumber.Add(1) - 1
+	h.PacketNumber = b.Next1RTTPacketNumber()
 	h.PacketNumberLen = 4
 
 	pkt, err := b.oneRTTProtector.SealPacket(nil, &h, framePayload)
