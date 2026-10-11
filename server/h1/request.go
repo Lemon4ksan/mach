@@ -43,14 +43,7 @@ var (
 	ErrHijackNotSupported = errors.New("h1: hijacking not supported on this connection")
 )
 
-// Request holds parsed HTTP/1.1 request data without net/http wrapping (RFC 9112, RFC 9110).
-//
-// Concurrency:
-//   - A Request instance is owned by a single connection goroutine and is NOT safe for concurrent use.
-//
-// Memory Lifecycle:
-//   - Acquired from Per-P storage before read and returned after connection termination or handler completion.
-//   - Callers must not retain references to Request or its Body across calls.
+// Request holds parsed HTTP/1.1 request data (RFC 9112, RFC 9110).
 type Request struct {
 	Conn            net.Conn
 	Method          string
@@ -77,7 +70,7 @@ func (r *Request) WriteEarlyHints(h http.Header) error {
 	return nil
 }
 
-// Reset clears the request structure for recycling into Per-P storage.
+// Reset clears the request structure for reuse.
 func (r *Request) Reset() {
 	r.EarlyHintsFn = nil
 	r.Method = ""

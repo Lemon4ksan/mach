@@ -352,7 +352,7 @@ func (h *Headers) Has(key string) bool {
 
 func (h *Headers) Del(key string) {
 	// Clear from packed
-	for i := 0; i < h.count; i++ {
+	for i := range h.count {
 		p := h.packed[i]
 		if p == 0 {
 			continue
@@ -378,7 +378,7 @@ func (h *Headers) Del(key string) {
 // All returns an iterator over all headers.
 func (h *Headers) All() iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
-		for i := 0; i < h.count; i++ {
+		for i := range h.count {
 			p := h.packed[i]
 			if p != 0 {
 				if !yield(h.getKey(p), h.getVal(p)) {
@@ -387,7 +387,7 @@ func (h *Headers) All() iter.Seq2[string, string] {
 			}
 		}
 
-		for i := 0; i < len(h.dynamic); i++ {
+		for i := range h.dynamic {
 			if !yield(h.dynamic[i].Key, h.dynamic[i].Value) {
 				return
 			}
@@ -402,7 +402,7 @@ var (
 
 // WriteTo writes headers directly into bufio.Writer without closures (0 allocs)
 func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
-	for i := 0; i < h.count; i++ {
+	for i := range h.count {
 		p := h.packed[i]
 		if p != 0 {
 			_, _ = bw.WriteString(h.getKey(p))
@@ -412,7 +412,7 @@ func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
 		}
 	}
 
-	for i := 0; i < len(h.dynamic); i++ {
+	for i := range h.dynamic {
 		_, _ = bw.WriteString(h.dynamic[i].Key)
 		_, _ = bw.Write(hdrColonSpace)
 		_, _ = bw.WriteString(h.dynamic[i].Value)

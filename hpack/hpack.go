@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"math"
 
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
@@ -29,7 +30,18 @@ const (
 	maxIndex = 62
 )
 
-var headerStorage = pool.NewPerPStorage(func() *HeaderField {
+var (
+	// ErrIntegerTruncated indicates variable-length integer buffer ended before completion (RFC 7541 §5.1).
+	ErrIntegerTruncated = errors.New("hpack: truncated integer (RFC 7541 §5.1)")
+
+	// ErrIntegerOverflow indicates variable-length integer exceeds implementation limits (RFC 7541 §5.1).
+	ErrIntegerOverflow = errors.New("hpack: integer representation exceeds implementation limits (RFC 7541 §5.1)")
+
+	// ErrIndexZero indicates forbidden index value 0 (RFC 7541 §6.1).
+	ErrIndexZero = errors.New("hpack: index value of 0 is forbidden (RFC 7541 §6.1)")
+)
+
+var headerStorage = pool.NewPerCorePool(func() *HeaderField {
 	return &HeaderField{}
 })
 
@@ -43,12 +55,12 @@ type HeaderField struct {
 	static   bool
 }
 
-// AcquireHeaderField retrieves a recycled HeaderField from memory pools.
+// AcquireHeaderField returns a HeaderField from the pool.
 func AcquireHeaderField() *HeaderField {
 	return headerStorage.Get()
 }
 
-// ReleaseHeaderField clears and returns a HeaderField to memory pools.
+// ReleaseHeaderField clears and returns hf to the pool.
 func ReleaseHeaderField(hf *HeaderField) {
 	if hf != nil && !hf.static {
 		hf.Reset()
@@ -156,7 +168,7 @@ func (hf *HeaderField) AppendBytes(dst []byte) []byte {
 	return dst
 }
 
-var hpackStorage = pool.NewPerPStorage(func() *HPACK {
+var hpackStorage = pool.NewPerCorePool(func() *HPACK {
 	return &HPACK{
 		maxTableSize: 4096,
 		MaxCapacity:  4096,
@@ -174,7 +186,7 @@ type HPACK struct {
 	MaxCapacity         uint32
 }
 
-// AcquireHPACK retrieves an initialized HPACK context from memory pools.
+// AcquireHPACK returns an HPACK context from the pool.
 func AcquireHPACK() *HPACK {
 	hp := hpackStorage.Get()
 	hp.Reset()
@@ -182,7 +194,7 @@ func AcquireHPACK() *HPACK {
 	return hp
 }
 
-// ReleaseHPACK returns an HPACK context to memory pools after clearing dynamic state.
+// ReleaseHPACK returns hp to the pool after clearing dynamic state.
 func ReleaseHPACK(hp *HPACK) {
 	if hp != nil {
 		hpackStorage.Put(hp)
@@ -248,7 +260,12 @@ func (hp *HPACK) shrink() {
 	var n int
 
 	for n = 0; n < len(hp.dynamic) && hp.dynamicSize > hp.maxTableSize; n++ {
-		hp.dynamicSize -= hp.dynamic[n].Size()
+		entrySize := hp.dynamic[n].Size()
+		if hp.dynamicSize > entrySize {
+			hp.dynamicSize -= entrySize
+		} else {
+			hp.dynamicSize = 0
+		}
 	}
 
 	if n != 0 {
@@ -263,19 +280,24 @@ func (hp *HPACK) shrink() {
 // peek resolves an 1-based index against the unified index address space (RFC 7541 §2.3.3: static 1..61, dynamic 62+).
 func (hp *HPACK) peek(n uint64) *HeaderField {
 	if n < maxIndex {
+		if n == 0 {
+			return nil
+		}
+
 		idx := int(n - 1)
-		if idx < 0 || idx >= len(staticTable) {
+		if idx >= len(staticTable) {
 			return nil
 		}
 
 		return staticTable[idx]
 	}
 
-	idx := len(hp.dynamic) - int(n-maxIndex) - 1 //nolint:gosec
-	if idx < 0 || idx >= len(hp.dynamic) {
+	dynOffset := n - maxIndex
+	if dynOffset >= uint64(len(hp.dynamic)) {
 		return nil
 	}
 
+	idx := len(hp.dynamic) - int(dynOffset) - 1
 	return hp.dynamic[idx]
 }
 
@@ -420,6 +442,12 @@ func (hp *HPACK) Decode(b []byte) iter.Seq2[*HeaderField, error] {
 				return
 			}
 
+			if len(rem) >= len(b) {
+				ReleaseHeaderField(hf)
+				yield(nil, errors.New("hpack: decoder failed to make progress"))
+				return
+			}
+
 			if hf.Empty() {
 				ReleaseHeaderField(hf)
 			} else if !yield(hf, nil) {
@@ -451,9 +479,15 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 			return hp.decodeLiteralNoIndex(hf, b)
 		case c&32 == 32:
 			// RFC 7541 §6.3: Dynamic Table Size Update ('001' 3-bit prefix)
-			var n uint64
+			var (
+				n   uint64
+				err error
+			)
 
-			b, n = readInt(5, b)
+			b, n, err = readInt(5, b)
+			if err != nil {
+				return b, err
+			}
 			if uint32(n) > hp.MaxCapacity {
 				return b, errors.New("hpack: dynamic table size update exceeds maximum capacity")
 			}
@@ -468,11 +502,14 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 
 // decodeIndexed decodes an indexed header field representation (RFC 7541 §6.1).
 func (hp *HPACK) decodeIndexed(hf *HeaderField, b []byte) ([]byte, error) {
-	b, n := readInt(7, b)
+	b, n, err := readInt(7, b)
+	if err != nil {
+		return b, err
+	}
 
 	if n == 0 {
 		// RFC 7541 §6.1: Index value of 0 is not used and MUST be treated as a decoding error.
-		return b, errors.New("index value of 0 is forbidden (RFC 7541 §6.1)")
+		return b, ErrIndexZero
 	}
 
 	hf2 := hp.peek(n)
@@ -497,7 +534,10 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 	var stackBuf [512]byte
 
 	if c != 64 {
-		b, n = readInt(6, b)
+		b, n, err = readInt(6, b)
+		if err != nil {
+			return b, err
+		}
 
 		hf2 := hp.peek(n)
 		if hf2 == nil {
@@ -542,7 +582,10 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 	var stackBuf [512]byte
 
 	if c&15 != 0 {
-		b, n = readInt(4, b)
+		b, n, err = readInt(4, b)
+		if err != nil {
+			return b, err
+		}
 
 		hf2 := hp.peek(n)
 		if hf2 == nil {
@@ -622,46 +665,64 @@ func (hp *HPACK) AppendHeader(dst []byte, hf *HeaderField, store bool) []byte {
 	return dst
 }
 
-var byteStorage = pool.NewPerPStorage(func() *[]byte {
+var byteStorage = pool.NewPerCorePool(func() *[]byte {
 	b := make([]byte, 0, 512)
 	return &b
 })
 
 // readInt decodes an unsigned variable-length integer with an N-bit prefix (RFC 7541 §5.1).
-func readInt(n int, b []byte) ([]byte, uint64) {
+func readInt(n int, b []byte) ([]byte, uint64, error) {
 	return readIntFallback(n, b)
 }
 
-func readIntFallback(n int, b []byte) ([]byte, uint64) {
+func readIntFallback(n int, b []byte) ([]byte, uint64, error) {
 	if len(b) == 0 {
-		return b, 0
+		return b, 0, ErrIntegerTruncated
 	}
 
 	b0 := byte(1<<n - 1)
 	if b0&b[0] != b0 {
-		return b[1:], uint64(b[0] & b0)
+		return b[1:], uint64(b[0] & b0), nil
+	}
+
+	if len(b) == 1 {
+		return b, 0, ErrIntegerTruncated
 	}
 
 	var nn uint64
-
+	var shift uint
 	i := 1
 
 	for i < len(b) {
 		c := b[i]
-		if i > 10 {
-			// RFC 7541 §5.1 & §7.4: Integer encodings that exceed implementation limits MUST be bounded.
-			break
-		}
-
-		nn |= uint64(c&127) << ((i - 1) * 7)
 		i++
 
-		if c&128 != 128 {
-			break
+		if shift > 63 || (shift == 63 && (c&127) > 1) {
+			return b[i:], 0, ErrIntegerOverflow
+		}
+
+		val := uint64(c & 127)
+		added := val << shift
+		if nn > math.MaxUint64-added {
+			return b[i:], 0, ErrIntegerOverflow
+		}
+		nn += added
+
+		if c&128 == 0 {
+			maxPrefix := uint64(b0)
+			if nn > math.MaxUint64-maxPrefix {
+				return b[i:], 0, ErrIntegerOverflow
+			}
+			return b[i:], nn + maxPrefix, nil
+		}
+
+		shift += 7
+		if shift > 63 {
+			return b[i:], 0, ErrIntegerOverflow
 		}
 	}
 
-	return b[i:], nn + uint64(b0)
+	return b, 0, ErrIntegerTruncated
 }
 
 // AppendInt encodes an unsigned variable-length integer index using an N-bit prefix into dst (RFC 7541 §5.1).
@@ -671,7 +732,8 @@ func AppendInt(dst []byte, bits uint8, index uint64) []byte {
 
 // ReadInt decodes an unsigned variable-length integer from b using an N-bit prefix (RFC 7541 §5.1).
 func ReadInt(n int, b []byte) ([]byte, uint64) {
-	return readInt(n, b)
+	rem, val, _ := readInt(n, b)
+	return rem, val
 }
 
 // appendInt encodes an unsigned variable-length integer index using an N-bit prefix into dst (RFC 7541 §5.1).
@@ -708,7 +770,14 @@ func readString(dst, b []byte) ([]byte, []byte, error) {
 
 	mustDecode := b[0]&128 == 128
 
-	b, n := readInt(7, b)
+	var (
+		n   uint64
+		err error
+	)
+	b, n, err = readInt(7, b)
+	if err != nil {
+		return b, dst, err
+	}
 	if uint64(len(b)) < n {
 		return b, dst, errors.New("hpack: unexpected size")
 	}

@@ -5,10 +5,11 @@
 package h3
 
 import (
+	"errors"
 	"io"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/mach/net/quic"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
@@ -34,12 +35,11 @@ func (sc *ServerConn) acceptUniStreams() {
 // connection; receipt of a duplicate stream results in connection termination with H3_STREAM_CREATION_ERROR.
 // Unknown stream types are gracefully drained and ignored per RFC 9114 §6.2.
 func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
-	defer stream.CancelRead(0)
-
 	qr := varint.NewReader(stream)
 
 	streamType, err := varint.Read(qr)
 	if err != nil {
+		stream.CancelRead(0)
 		return
 	}
 
@@ -55,26 +55,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 			return
 		}
 
-		// Read peer settings frame (RFC 9114 §6.2.1 & §7.2.4)
-		frameType, err := varint.Read(qr)
-		if err != nil || frameType != coreh3.FrameTypeSettings {
-			_ = sc.quicConn.CloseWithError(
-				quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
-				"missing SETTINGS on control stream (RFC 9114 §6.2.1)",
-			)
-
-			return
-		}
-
-		frameLen, err := varint.Read(qr)
-		if err != nil {
-			return
-		}
-
-		if frameLen > 0 {
-			lr := io.LimitReader(stream, int64(frameLen)) //nolint:gosec // bounds checked
-			_, _ = io.Copy(io.Discard, lr)
-		}
+		sc.handleControlStream(stream, qr)
 
 	case coreh3.StreamTypeQPACKEncoder:
 		if sc.hasQPACKEncoder.Swap(true) {
@@ -102,6 +83,67 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 
 	default:
 		// RFC 9114 §6.2: Unknown unidirectional stream types MUST either be discarded or cancelled
+		defer stream.CancelRead(0)
 		_, _ = io.Copy(io.Discard, stream)
+	}
+}
+
+func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.Reader) {
+	firstFrame := true
+
+	for {
+		frameType, payloadLen, err := coreh3.ReadFrameHeader(qr)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				_ = sc.quicConn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3ClosedCriticalStream),
+					"control stream closed unexpectedly (RFC 9114 §6.2.1)",
+				)
+			}
+
+			return
+		}
+
+		if firstFrame {
+			if frameType != coreh3.FrameTypeSettings {
+				_ = sc.quicConn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
+					"missing SETTINGS on control stream (RFC 9114 §6.2.1)",
+				)
+
+				return
+			}
+
+			firstFrame = false
+		} else if frameType == coreh3.FrameTypeSettings {
+			// RFC 9114 §7.2.4: A second SETTINGS frame MUST cause H3_FRAME_UNEXPECTED
+			_ = sc.quicConn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+				"second SETTINGS frame received on control stream (RFC 9114 §7.2.4)",
+			)
+
+			return
+		}
+
+		switch frameType {
+		case coreh3.FrameTypeSettings:
+			if payloadLen > 0 {
+				lr := io.LimitReader(stream, int64(payloadLen)) //nolint:gosec
+				_, _ = io.Copy(io.Discard, lr)
+			}
+
+		case coreh3.FrameTypeGoAway:
+			if payloadLen > 0 {
+				_, _ = varint.Read(qr)
+			}
+
+			return
+
+		default:
+			if payloadLen > 0 {
+				lr := io.LimitReader(stream, int64(payloadLen)) //nolint:gosec
+				_, _ = io.Copy(io.Discard, lr)
+			}
+		}
 	}
 }

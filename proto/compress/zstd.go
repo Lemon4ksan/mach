@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/foundation/codec/compress"
-	"github.com/lemon4ksan/foundation/codec/compress/zstd"
+	"github.com/lemon4ksan/seal/codec/compress"
+	"github.com/lemon4ksan/seal/codec/compress/zstd"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -35,13 +35,17 @@ func releaseZstdReader(zr *zstd.Decoder) {
 	compress.ReleaseZstdReader(zr)
 }
 
-// AppendZstdBytesLevel appends src to dst.
+// AppendZstdBytesLevel compresses src using Zstandard at the specified level and appends the result to dst (RFC 8878).
 func AppendZstdBytesLevel(dst, src []byte, level int) []byte {
-	res, _ := compress.CompressZstd(src, dst, level)
-	return res
+	if len(dst) == 0 {
+		res, _ := compress.CompressZstd(src, dst, level)
+		return res
+	}
+	res, _ := compress.CompressZstd(src, nil, level)
+	return append(dst, res...)
 }
 
-// WriteZstdLevel writes p to w.
+// WriteZstdLevel compresses p using Zstandard at the specified level and writes it to w.
 func WriteZstdLevel(w io.Writer, p []byte, level int) (int, error) {
 	res, err := compress.CompressZstd(p, nil, level)
 	if err != nil {
@@ -51,17 +55,17 @@ func WriteZstdLevel(w io.Writer, p []byte, level int) (int, error) {
 	return w.Write(res)
 }
 
-// WriteZstd writes p to w.
+// WriteZstd compresses p using default Zstandard compression and writes it to w.
 func WriteZstd(w io.Writer, p []byte) (int, error) {
 	return WriteZstdLevel(w, p, CompressZstdDefault)
 }
 
-// AppendZstdBytes appends src to dst.
+// AppendZstdBytes compresses src using default Zstandard compression and appends the result to dst.
 func AppendZstdBytes(dst, src []byte) []byte {
 	return AppendZstdBytesLevel(dst, src, CompressZstdDefault)
 }
 
-// WriteUnzstd writes unzstd p to w and returns the number of uncompressed bytes written to w.
+// WriteUnzstd decompresses Zstandard payload p and writes the uncompressed data to w.
 func WriteUnzstd(w io.Writer, p []byte) (int, error) {
 	return WriteUnzstdLimit(w, p, 0)
 }
@@ -70,7 +74,6 @@ func WriteUnzstd(w io.Writer, p []byte) (int, error) {
 //
 // If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
 // more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
-// Concurrency: Thread-safe; utilizes pooled zstd decoders.
 func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	r := &byteSliceReader{b: p}
 
@@ -78,10 +81,9 @@ func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer releaseZstdReader(zr)
 
 	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
-	releaseZstdReader(zr)
-
 	nn := int(n)
 	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data unzstd: %d", n)
@@ -90,7 +92,14 @@ func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendUnzstdBytes appends unzstd src to dst and returns the resulting dst.
+// AppendUnzstdBytes decompresses Zstandard payload src and appends the uncompressed data to dst.
 func AppendUnzstdBytes(dst, src []byte) ([]byte, error) {
-	return compress.Unzstd(src, dst)
+	if len(dst) == 0 {
+		return compress.Unzstd(src, dst)
+	}
+	res, err := compress.Unzstd(src, nil)
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, res...), nil
 }

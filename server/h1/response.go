@@ -17,12 +17,6 @@ import (
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire (RFC 9112 §2.1, RFC 9110 §15).
-//
-// Concurrency:
-//   - Not safe for concurrent use across multiple goroutines.
-//
-// Memory Lifecycle:
-//   - Acquired from Per-P storage per request and recycled after WriteTo completes.
 type Response struct {
 	// StatusCode is the HTTP response status code (RFC 9110 §15). Defaults to 200 OK.
 	StatusCode int
@@ -36,25 +30,25 @@ type Response struct {
 	StreamWriter func(w io.Writer) error
 }
 
-// Reset clears the response for recycling into Per-P storage.
-func (res *Response) Reset() {
-	res.StatusCode = status.OK
-	res.Headers.Reset()
-	res.Cookies = res.Cookies[:0]
+// Reset clears the response for reuse.
+func (r *Response) Reset() {
+	r.StatusCode = status.OK
+	r.Headers.Reset()
+	r.Cookies = r.Cookies[:0]
 
-	if cap(res.Body) > 64*1024 {
-		res.Body = make([]byte, 0, 1024)
+	if cap(r.Body) > 64*1024 {
+		r.Body = make([]byte, 0, 1024)
 	} else {
-		res.Body = res.Body[:0]
+		r.Body = r.Body[:0]
 	}
 
-	res.StreamWriter = nil
+	r.StreamWriter = nil
 }
 
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to bw (RFC 9112 §2.1, RFC 9110 §15).
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
-func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
-	code := res.StatusCode
+func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
+	code := r.StatusCode
 	if code == 0 {
 		code = status.OK
 	}
@@ -78,7 +72,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 	}
 
 	// 2. Atomic Cached Date Header
-	if res.Headers.Get(header.Date) == "" {
+	if r.Headers.Get(header.Date) == "" {
 		dateBytes := cachedDateHeader.Load()
 		if dateBytes != nil {
 			_, _ = bw.Write(*dateBytes)
@@ -87,7 +81,7 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 
 	// 3. Connection Header
 	if keepAlive {
-		if res.Headers.Get(header.Connection) == "" {
+		if r.Headers.Get(header.Connection) == "" {
 			_, _ = bw.Write(hdrConnectionKeepAlive)
 		}
 	} else {
@@ -95,25 +89,25 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 	}
 
 	// 4. Transfer-Encoding or Content-Length
-	if res.StreamWriter != nil {
-		if res.Headers.Get(header.TransferEncoding) == "" {
+	if r.StreamWriter != nil {
+		if r.Headers.Get(header.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
 	} else if code != status.NoContent && code != status.NotModified {
-		if res.Headers.Get(header.ContentLength) == "" && res.Headers.Get(header.TransferEncoding) == "" {
+		if r.Headers.Get(header.ContentLength) == "" && r.Headers.Get(header.TransferEncoding) == "" {
 			var clBuf [24]byte
 
 			_, _ = bw.Write(hdrContentLengthPrefix)
-			_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(len(res.Body)), 10))
+			_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(len(r.Body)), 10))
 			_, _ = bw.Write(hdrCRLF)
 		}
 	}
 
 	// 5. User Headers
-	res.Headers.WriteTo(bw)
+	r.Headers.WriteTo(bw)
 
 	// 6. Cookies
-	for _, c := range res.Cookies {
+	for _, c := range r.Cookies {
 		if c != nil {
 			_, _ = bw.Write(hdrSetCookiePrefix)
 			bw.B = c.AppendBytes(bw.B)
@@ -125,12 +119,12 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 	_, _ = bw.Write(hdrCRLF)
 
 	// 7. Streaming Body or Static Body
-	if res.StreamWriter != nil {
-		return res.writeStreamBody(bw)
+	if r.StreamWriter != nil {
+		return r.writeStreamBody(bw)
 	}
 
-	if len(res.Body) > 0 && code != status.NoContent && code != status.NotModified {
-		_, _ = bw.Write(res.Body)
+	if len(r.Body) > 0 && code != status.NoContent && code != status.NotModified {
+		_, _ = bw.Write(r.Body)
 	}
 
 	if flush {
@@ -141,9 +135,9 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 }
 
 //go:noinline
-func (res *Response) writeStreamBody(bw *bytesconv.ByteBuffer) error {
+func (r *Response) writeStreamBody(bw *bytesconv.ByteBuffer) error {
 	cw := NewChunkedWriter(bw)
-	err := res.StreamWriter(cw)
+	err := r.StreamWriter(cw)
 	closeErr := cw.Close()
 
 	if err != nil {

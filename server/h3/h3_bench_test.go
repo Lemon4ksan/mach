@@ -46,8 +46,6 @@ func BenchmarkQPACK_DecodeRequestHeaders(b *testing.B) {
 
 	var reqHeaders headkit.Headers
 
-	b.ResetTimer()
-
 	for b.Loop() {
 		_, _, _, _, _ = codec.DecodeRequestHeaders(0, raw, &reqHeaders)
 	}

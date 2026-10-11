@@ -12,7 +12,7 @@ import (
 	"net/http"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/mach/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
@@ -21,16 +21,10 @@ import (
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming H3 stream request (RFC 9114 §4.1).
-//
-// Concurrency: Invoked concurrently across independent goroutines handling separate request streams.
-// Lifecycle: The req and res pointers are pooled and must not be accessed after the handler returns.
+// The req and res pointers are pooled and must not be retained after the handler returns.
 type ServerHandlerFunc func(req *ServerRequest, res *ServerResponse) error
 
 // ServerRequest represents a parsed incoming HTTP/3 request over QUIC (RFC 9114 §4.1, RFC 9204).
-//
-// Concurrency:
-// A ServerRequest instance is owned by a single request stream goroutine and is not safe
-// for concurrent access without external synchronization.
 type ServerRequest struct {
 	StreamID   uint64          // StreamID is the client-initiated bidirectional stream ID (RFC 9000 §2.1, RFC 9114 §6.1).
 	Method     string          // Method is the :method pseudo-header (RFC 9114 §4.1.2).
@@ -43,7 +37,7 @@ type ServerRequest struct {
 	Ctx        context.Context // Ctx is the stream context.
 }
 
-// Reset clears the ServerRequest structure for reuse in Per-P storage pools.
+// Reset clears the ServerRequest structure for reuse.
 func (r *ServerRequest) Reset() {
 	r.StreamID = 0
 	r.Method = ""
@@ -63,50 +57,47 @@ func (r *ServerRequest) Reset() {
 }
 
 // ServerResponse represents an outgoing HTTP/3 response (RFC 9114 §4.1.2).
-//
-// Concurrency:
-// ServerResponse is populated by the stream handler and serialized directly to the QUIC stream.
 type ServerResponse struct {
 	StatusCode int             // StatusCode is the HTTP response status code (RFC 9114 §4.1.2 :status).
 	Headers    headkit.Headers // Headers contains outgoing headers to be QPACK encoded (RFC 9204).
 	Body       []byte          // Body contains response payload framed into DATA frames (RFC 9114 §7.2.1).
 }
 
-// Reset clears the ServerResponse structure for reuse in Per-P storage pools.
-func (res *ServerResponse) Reset() {
-	res.StatusCode = http.StatusOK
-	res.Headers.Reset()
+// Reset clears the ServerResponse structure for reuse.
+func (r *ServerResponse) Reset() {
+	r.StatusCode = http.StatusOK
+	r.Headers.Reset()
 
-	if cap(res.Body) > 64*1024 {
-		res.Body = nil
+	if cap(r.Body) > 64*1024 {
+		r.Body = nil
 	} else {
-		res.Body = res.Body[:0]
+		r.Body = r.Body[:0]
 	}
 }
 
 var (
-	serverReqStorage = pool.NewPerPStorage(func() *ServerRequest {
+	serverReqStorage = pool.NewPerCorePool(func() *ServerRequest {
 		return &ServerRequest{
 			Headers: headkit.NewWithCapacity(16),
 		}
 	})
 
-	serverResStorage = pool.NewPerPStorage(func() *ServerResponse {
+	serverResStorage = pool.NewPerCorePool(func() *ServerResponse {
 		return &ServerResponse{
 			Headers: headkit.NewWithCapacity(16),
 		}
 	})
 
-	h3HeaderBlockStorage = pool.NewPerPStorage(func() *[]byte {
+	h3HeaderBlockStorage = pool.NewPerCorePool(func() *[]byte {
 		b := make([]byte, 0, 16384)
 		return &b
 	})
 
-	h3ReaderStorage = pool.NewPerPStorage(func() *bufio.Reader {
+	h3ReaderStorage = pool.NewPerCorePool(func() *bufio.Reader {
 		return bufio.NewReaderSize(nil, 4096)
 	})
 
-	h3BodyBufferStorage = pool.NewPerPStorage(func() *bytesconv.ByteBuffer {
+	h3BodyBufferStorage = pool.NewPerCorePool(func() *bytesconv.ByteBuffer {
 		return &bytesconv.ByteBuffer{}
 	})
 )
@@ -168,6 +159,15 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 				_ = sc.quicConn.CloseWithError(
 					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
 					"frame after trailing headers (RFC 9114 §4.1)",
+				)
+
+				return
+			}
+
+			if frameLen > 16*1024*1024 {
+				_ = sc.quicConn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3ExcessiveLoad),
+					"HEADERS frame payload too large (RFC 9114 §4.2)",
 				)
 
 				return

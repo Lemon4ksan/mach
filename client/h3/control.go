@@ -10,7 +10,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/mach/net/quic"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
@@ -128,6 +128,13 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 			}
 
 			firstFrame = false
+		} else if frameType == coreh3.FrameTypeSettings {
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+				"H3_FRAME_UNEXPECTED: second SETTINGS frame on control stream (RFC 9114 §7.2.4)",
+			)
+
+			return
 		}
 
 		switch frameType {

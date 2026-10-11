@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/mach/hpack"
 )
 
-var huffmanDecStorage = pool.NewPerPStorage(func() *[]byte {
+var huffmanDecStorage = pool.NewPerCorePool(func() *[]byte {
 	b := make([]byte, 0, 512)
 	return &b
 })

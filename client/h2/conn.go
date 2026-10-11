@@ -71,7 +71,7 @@ type Conn struct {
 
 	writeMu  sync.Mutex
 	inMu     sync.Mutex
-	windowMu spinlock.SpinLock
+	windowMu spinlock.Lock
 
 	// Hot atomic counters isolated on their own 64-byte cache lines
 	serverWindow             atomic.Int32

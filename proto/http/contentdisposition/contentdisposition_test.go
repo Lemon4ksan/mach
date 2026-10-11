@@ -47,3 +47,17 @@ func TestContentDisposition_RFC6266_And_RFC8187(t *testing.T) {
 	assert.Equal(t, "de", lang)
 	assert.Equal(t, "letztes Kapitel", val)
 }
+
+func TestContentDisposition_Hardening(t *testing.T) {
+	t.Parallel()
+
+	// 1. ISO-8859-1 conversion with multi-byte and high-order octets
+	// Ensure no bytes are skipped (such as \xC2\xA0 which form valid UTF-8 if parsed as runes)
+	rawISO := "\xC2\xA0\xE9\xFC"
+	converted := contentdisposition.ISO88591ToUTF8(rawISO)
+	assert.Equal(t, "\u00C2\u00A0\u00E9\u00FC", converted)
+
+	// 2. NTFS Alternate Data Streams (ADS) colon sanitization
+	assert.Equal(t, "test.txt__$DATA", contentdisposition.FileName("test.txt::$DATA"))
+	assert.Equal(t, "malicious.exe_payload", contentdisposition.FileName("malicious.exe:payload"))
+}

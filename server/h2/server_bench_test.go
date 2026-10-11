@@ -35,7 +35,6 @@ func BenchmarkServerConn_WriteResponse(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		sc.bw.Reset(conn)

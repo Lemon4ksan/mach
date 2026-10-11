@@ -80,14 +80,14 @@ func TestH2_Varint_Adversarial(t *testing.T) {
 		}
 	}
 
-	// Truncated buffer test (must not panic)
+	// Truncated buffer test (must not panic, truncated varints return unconsumed buffer and 0)
 	for _, n := range prefixes {
 		var b [1]byte
 
 		b[0] = (1 << n) - 1
 		rem, decoded := hpack.ReadInt(int(n), b[:])
-		assert.Equal(t, 0, len(rem))
-		assert.Equal(t, uint64(b[0]), decoded)
+		assert.Equal(t, 1, len(rem))
+		assert.Equal(t, uint64(0), decoded)
 	}
 
 	// Fuzzing decode with random byte streams

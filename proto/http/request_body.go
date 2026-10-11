@@ -6,9 +6,10 @@ package http
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/lemon4ksan/foundation/borrow"
-	"github.com/lemon4ksan/foundation/codec/compress"
+	"github.com/lemon4ksan/seal/codec/compress"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -85,9 +86,7 @@ func (req *Request) bodyBytes() []byte {
 }
 
 // BodyBuffer returns the underlying ByteBuffer storing the in-memory request body.
-// If no buffer is currently allocated, one is acquired from the per-P request body pool.
-//
-// Thread-safe: No.
+// If no buffer is currently allocated, one is acquired from the request body pool.
 func (req *Request) BodyBuffer() *bytesconv.ByteBuffer {
 	if req.body == nil {
 		req.body = requestBodyPool.Get()
@@ -307,9 +306,13 @@ func (req *Request) BodyUncompressed() ([]byte, error) {
 
 // BodyUncompressedWithLimit decompresses the request body according to Content-Encoding up to maxBodySize bytes.
 func (req *Request) BodyUncompressedWithLimit(maxBodySize int) ([]byte, error) {
-	enc := string(req.Header.ContentEncoding())
-	if enc == "" {
-		return req.Body(), nil
+	enc := strings.ToLower(strings.TrimSpace(string(req.Header.ContentEncoding())))
+	if enc == "" || enc == "identity" {
+		body := req.Body()
+		if maxBodySize > 0 && len(body) > maxBodySize {
+			return nil, ErrBodyTooLarge
+		}
+		return body, nil
 	}
 
 	if maxBodySize <= 0 {
@@ -328,7 +331,7 @@ func (req *Request) BodyUncompressedWithLimit(maxBodySize int) ([]byte, error) {
 	switch enc {
 	case "deflate":
 		return req.BodyInflateWithLimit(maxBodySize)
-	case "gzip":
+	case "gzip", "x-gzip":
 		return req.BodyGunzipWithLimit(maxBodySize)
 	case "br":
 		return req.BodyUnbrotliWithLimit(maxBodySize)

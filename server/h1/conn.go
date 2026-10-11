@@ -21,19 +21,19 @@ import (
 )
 
 var (
-	readerStorage = pool.NewPerPStorage(func() *bufio.Reader {
+	readerStorage = pool.NewPerCorePool(func() *bufio.Reader {
 		return bufio.NewReaderSize(nil, 4096)
 	})
-	writerStorage = pool.NewPerPStorage(func() *bytesconv.ByteBuffer {
+	writerStorage = pool.NewPerCorePool(func() *bytesconv.ByteBuffer {
 		return &bytesconv.ByteBuffer{}
 	})
-	reqStorage = pool.NewPerPStorage(func() *Request {
+	reqStorage = pool.NewPerCorePool(func() *Request {
 		return &Request{
 			Body:    make([]byte, 0, 1024),
 			Headers: headkit.NewWithCapacity(16),
 		}
 	})
-	resStorage = pool.NewPerPStorage(func() *Response {
+	resStorage = pool.NewPerCorePool(func() *Response {
 		return &Response{
 			Body: make([]byte, 0, 1024),
 		}
@@ -41,10 +41,7 @@ var (
 )
 
 // HandlerFunc is the core callback for dispatching an incoming H1 request to the server router (RFC 9110 §3).
-//
-// Lifecycle:
-//   - Both req and res are recycled into Per-P storage after the handler returns.
-//   - Handlers MUST NOT retain references to req, res, or their buffers beyond the return of HandlerFunc.
+// Handlers must not retain references to req, res, or their buffers after HandlerFunc returns.
 type HandlerFunc func(req *Request, res *Response) error
 
 // ConnHandler manages the lifecycle of a single incoming TCP or TLS connection (RFC 9112 §9).

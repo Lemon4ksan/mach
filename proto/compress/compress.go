@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"sync"
 
-	"github.com/lemon4ksan/foundation/codec/compress/flate"
+	"github.com/lemon4ksan/seal/codec/compress/flate"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 

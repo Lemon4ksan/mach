@@ -21,32 +21,22 @@ const (
 	ArgsHasValue = false
 )
 
-var argsStorage = pool.NewPerPStorage(func() *Args {
+var argsStorage = pool.NewPerCorePool(func() *Args {
 	return &Args{}
 })
 
-// AcquireArgs returns an empty Args object from the pool.
-//
-// The returned Args may be returned to the pool with ReleaseArgs
-// when no longer needed. This allows reducing GC load.
+// AcquireArgs returns an empty Args from the pool.
 func AcquireArgs() *Args {
 	return argsStorage.Get()
 }
 
-// ReleaseArgs returns the object acquired via AcquireArgs to the pool.
-//
-// Do not access the released Args object, otherwise data races may occur.
+// ReleaseArgs clears and returns a to the pool.
 func ReleaseArgs(a *Args) {
 	a.Reset()
 	argsStorage.Put(a)
 }
 
 // Args represents query arguments.
-//
-// It is forbidden copying Args instances. Create new instances instead
-// and use CopyTo().
-//
-// Args instance MUST NOT be used from concurrently running goroutines.
 type Args struct {
 	noCopy NoCopy
 
@@ -63,6 +53,11 @@ type ArgsKV struct {
 // Reset clears query args.
 func (a *Args) Reset() {
 	a.args = a.args[:0]
+	if cap(a.buf) > 64*1024 {
+		a.buf = nil
+	} else {
+		a.buf = a.buf[:0]
+	}
 }
 
 // CopyTo copies all args to dst.
@@ -517,9 +512,8 @@ func ReleaseArg(h []ArgsKV) []ArgsKV {
 }
 
 func hasArg(h []ArgsKV, key string) bool {
-	for i, n := 0, len(h); i < n; i++ {
-		kv := &h[i]
-		if key == string(kv.Key) {
+	for i := range h {
+		if key == string(h[i].Key) {
 			return true
 		}
 	}
@@ -528,10 +522,9 @@ func hasArg(h []ArgsKV, key string) bool {
 }
 
 func PeekArgBytes(h []ArgsKV, k []byte) []byte {
-	for i, n := 0, len(h); i < n; i++ {
-		kv := &h[i]
-		if bytes.Equal(kv.Key, k) {
-			return kv.Value
+	for i := range h {
+		if bytes.Equal(h[i].Key, k) {
+			return h[i].Value
 		}
 	}
 

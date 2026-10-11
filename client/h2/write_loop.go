@@ -74,7 +74,7 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 		} else {
 			var bufs [][]byte
 
-			for i := 0; i < n; i++ {
+			for i := range n {
 				_, _ = batch[i].WriteTo(c.bw)
 				coreh2.ReleaseFrameHeader(batch[i])
 			}

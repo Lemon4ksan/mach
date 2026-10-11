@@ -24,26 +24,22 @@ func (hf HeaderField) IsPseudo() bool {
 // HeaderFields represents an ordered slice of HTTP/3 header fields.
 type HeaderFields []HeaderField
 
-// All returns a push iterator over header field (name, value) pairs in sequence.
-// Supports early termination when the yield function returns false.
-// It executes with zero heap allocations.
-func (hfs HeaderFields) All() iter.Seq2[string, string] {
+// All returns an iterator over header field (name, value) pairs in sequence.
+func (h HeaderFields) All() iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
-		for i := range hfs {
-			if !yield(hfs[i].Name, hfs[i].Value) {
+		for i := range h {
+			if !yield(h[i].Name, h[i].Value) {
 				return
 			}
 		}
 	}
 }
 
-// Values returns a push iterator over HeaderField values in sequence.
-// Supports early termination when the yield function returns false.
-// It executes with zero heap allocations.
-func (hfs HeaderFields) Values() iter.Seq[HeaderField] {
+// Values returns an iterator over HeaderField values in sequence.
+func (h HeaderFields) Values() iter.Seq[HeaderField] {
 	return func(yield func(HeaderField) bool) {
-		for i := range hfs {
-			if !yield(hfs[i]) {
+		for i := range h {
+			if !yield(h[i]) {
 				return
 			}
 		}
@@ -52,11 +48,10 @@ func (hfs HeaderFields) Values() iter.Seq[HeaderField] {
 
 // Get returns the first value associated with the given header name.
 // Header name matching is case-insensitive for non-pseudo headers and exact for pseudo-headers.
-// Returns ("", false) if the header is not present.
-func (hfs HeaderFields) Get(name string) (string, bool) {
-	for i := range hfs {
-		if strings.EqualFold(hfs[i].Name, name) {
-			return hfs[i].Value, true
+func (h HeaderFields) Get(name string) (string, bool) {
+	for i := range h {
+		if strings.EqualFold(h[i].Name, name) {
+			return h[i].Value, true
 		}
 	}
 

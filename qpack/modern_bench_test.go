@@ -20,7 +20,6 @@ func BenchmarkHeaderFields_All(b *testing.B) {
 		}
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var totalLen int
@@ -41,7 +40,6 @@ func BenchmarkHeaderFields_Values(b *testing.B) {
 		}
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var totalLen int
@@ -59,7 +57,6 @@ func BenchmarkIndexSet_All(b *testing.B) {
 		set.Insert(i)
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var sum uint64
@@ -79,7 +76,6 @@ func BenchmarkEncoderHeaderTable_Entries(b *testing.B) {
 		table.InsertEntry("header-"+strconv.Itoa(i), "value-"+strconv.Itoa(i))
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var sum uint64
@@ -99,7 +95,6 @@ func BenchmarkDecoderHeaderTable_Entries(b *testing.B) {
 		table.InsertEntry("header-"+strconv.Itoa(i), "value-"+strconv.Itoa(i))
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var sum uint64
@@ -118,7 +113,6 @@ func BenchmarkBlockingManager_BlockedStreams(b *testing.B) {
 		bm.OnHeaderBlockSent(i, []uint64{0})
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	var sum uint64
@@ -142,11 +136,12 @@ func BenchmarkEncoder_EncodeHeaderList_StaticOnly(b *testing.B) {
 		{Name: "accept-encoding", Value: "gzip, deflate, br"},
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		_ = encoder.EncodeHeaderList(uint64(i), fields, nil)
+	var streamID uint64
+	for b.Loop() {
+		streamID++
+		_ = encoder.EncodeHeaderList(streamID, fields, nil)
 	}
 }
 
@@ -161,11 +156,12 @@ func BenchmarkDecoder_DecodeHeaderBlock(b *testing.B) {
 	}
 	block := encoder.EncodeHeaderList(1, fields, nil)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		for _, err := range decoder.DecodeHeaderBlock(uint64(i+1), block) {
+	var streamID uint64
+	for b.Loop() {
+		streamID++
+		for _, err := range decoder.DecodeHeaderBlock(streamID, block) {
 			_ = err
 		}
 	}

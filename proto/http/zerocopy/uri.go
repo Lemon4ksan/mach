@@ -17,33 +17,22 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 )
 
-var uriStorage = pool.NewPerPStorage(func() *URI {
+var uriStorage = pool.NewPerCorePool(func() *URI {
 	return &URI{}
 })
 
-// AcquireURI returns an empty URI instance from the pool.
-//
-// Release the URI with ReleaseURI after the URI is no longer needed.
-// This allows reducing GC load.
+// AcquireURI returns an empty URI from the pool.
 func AcquireURI() *URI {
 	return uriStorage.Get()
 }
 
-// ReleaseURI releases the URI acquired via AcquireURI.
-//
-// The released URI mustn't be used after releasing it, otherwise data races
-// may occur.
+// ReleaseURI clears and returns u to the pool.
 func ReleaseURI(u *URI) {
 	u.Reset()
 	uriStorage.Put(u)
 }
 
-// URI represents URI :) .
-//
-// It is forbidden copying URI instances. Create new instance and use CopyTo
-// instead.
-//
-// URI instance MUST NOT be used from concurrently running goroutines.
+// URI represents a Uniform Resource Identifier (RFC 3986).
 type URI struct {
 	noCopy NoCopy
 
@@ -247,11 +236,16 @@ func (u *URI) Reset() {
 	u.parsedQueryArgs = false
 	u.DisablePathNormalizing = false
 
-	// There is no need in u.fullURI = u.fullURI[:0], since full uri
-	// is calculated on each call to FullURI().
-
-	// There is no need in u.requestURI = u.requestURI[:0], since requestURI
-	// is calculated on each call to RequestURI().
+	if cap(u.fullURI) > 64*1024 {
+		u.fullURI = nil
+	} else {
+		u.fullURI = u.fullURI[:0]
+	}
+	if cap(u.requestURI) > 64*1024 {
+		u.requestURI = nil
+	} else {
+		u.requestURI = u.requestURI[:0]
+	}
 }
 
 // Host returns host part, i.e. aaa.com of http://aaa.com/foo/bar?baz=123#qwe .

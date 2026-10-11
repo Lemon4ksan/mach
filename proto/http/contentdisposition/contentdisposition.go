@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/lemon4ksan/foundation/pathkit"
-	"github.com/lemon4ksan/foundation/text/encoding/htmlindex"
+	"github.com/lemon4ksan/seal/text/encoding/htmlindex"
 )
 
 // Standard Content-Disposition disposition types per RFC 6266 §4.2 and RFC 7578.
@@ -46,7 +46,7 @@ func FileName(filename string) string {
 	var sb strings.Builder
 	sb.Grow(len(filename))
 
-	for i := 0; i < len(filename); i++ {
+	for i := range len(filename) {
 		b := filename[i]
 		if b >= 32 && b != 127 {
 			sb.WriteByte(b)
@@ -66,6 +66,7 @@ func FileName(filename string) string {
 		filename = strings.TrimPrefix(filename, ".")
 	}
 
+	filename = strings.ReplaceAll(filename, ":", "_")
 	filename = strings.TrimSpace(filename)
 
 	if IsWindowsReservedName(filename) || filename == "" || filename == "." || filename == "/" ||
@@ -142,7 +143,7 @@ func FormatContentDisposition(dispType, filename string) string {
 	}
 
 	isPureASCII := true
-	for i := 0; i < len(filename); i++ {
+	for i := range len(filename) {
 		if filename[i] > 127 || filename[i] == '"' || filename[i] == '\\' {
 			isPureASCII = false
 			break
@@ -158,7 +159,7 @@ func FormatContentDisposition(dispType, filename string) string {
 	var asciiFallback strings.Builder
 	asciiFallback.Grow(len(filename))
 
-	for i := 0; i < len(filename); i++ {
+	for i := range len(filename) {
 		b := filename[i]
 		if b >= 32 && b <= 126 && b != '"' && b != '\\' && b != '%' {
 			asciiFallback.WriteByte(b)
@@ -195,7 +196,7 @@ func EncodeRFC8187(value, language string) string {
 	sb.WriteString(language)
 	sb.WriteByte('\'')
 
-	for i := 0; i < len(value); i++ {
+	for i := range len(value) {
 		b := value[i]
 		if IsRFC8187AttrChar(b) {
 			sb.WriteByte(b)
@@ -274,7 +275,7 @@ func ISO88591ToUTF8(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s) * 2)
 
-	for i := range s {
+	for i := range len(s) {
 		buf.WriteRune(rune(s[i]))
 	}
 

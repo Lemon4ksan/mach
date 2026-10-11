@@ -268,7 +268,7 @@ func (w *statsWriter) WriteString(s string) (int, error) {
 	return n, err
 }
 
-var statsWriterStorage = pool.NewPerPStorage(func() *statsWriter {
+var statsWriterStorage = pool.NewPerCorePool(func() *statsWriter {
 	return &statsWriter{}
 })
 
@@ -288,7 +288,7 @@ func releaseStatsWriter(sw *statsWriter) {
 	}
 }
 
-var bufioWriterStorage = pool.NewPerPStorage(func() *bufio.Writer {
+var bufioWriterStorage = pool.NewPerCorePool(func() *bufio.Writer {
 	return bufio.NewWriter(nil)
 })
 

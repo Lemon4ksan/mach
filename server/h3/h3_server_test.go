@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/mach/net/quic"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
@@ -233,3 +233,105 @@ func (h *testHeadersHandler) OnDecodingCompleted() {}
 func (h *testHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
 	h.err = errors.New(errorMessage)
 }
+
+func TestH3Server_ExcessiveHeadersPayloadRejected(t *testing.T) {
+	serverTLS, clientTLS := generateTestTLSConfig(t)
+
+	listener, err := quic.ListenAddr("127.0.0.1:0", serverTLS, quic.WithDatagrams(true))
+	require.NoError(t, err)
+	defer listener.Close()
+
+	addr := listener.Addr().String()
+
+	go func() {
+		conn, err := listener.Accept(context.Background())
+		if err != nil {
+			return
+		}
+		sc := h3.NewServerConn(conn, func(req *h3.ServerRequest, res *h3.ServerResponse) error {
+			return nil
+		})
+		_ = sc.Serve()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientConn, err := quic.DialAddr(ctx, addr, clientTLS, quic.WithDatagrams(true))
+	require.NoError(t, err)
+	defer clientConn.CloseWithError(0, "")
+
+	// Open request stream and send a HEADERS frame with 32MB payload length without payload bytes
+	reqStream, err := clientConn.OpenStreamSync(ctx)
+	require.NoError(t, err)
+
+	var frameHdr [16]byte
+	hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+	hdrBytes = varint.Append(hdrBytes, 32*1024*1024)
+
+	_, err = reqStream.Write(hdrBytes)
+	require.NoError(t, err)
+
+	// Wait for server to close connection with ErrCodeH3ExcessiveLoad
+	select {
+	case <-clientConn.Context().Done():
+		// Verify context is done indicating closed connection
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected connection to be closed due to excessive HEADERS frame length")
+	}
+}
+
+func TestH3Server_DuplicateSettingsOnControlStream(t *testing.T) {
+	serverTLS, clientTLS := generateTestTLSConfig(t)
+
+	listener, err := quic.ListenAddr("127.0.0.1:0", serverTLS, quic.WithDatagrams(true))
+	require.NoError(t, err)
+	defer listener.Close()
+
+	addr := listener.Addr().String()
+
+	go func() {
+		conn, err := listener.Accept(context.Background())
+		if err != nil {
+			return
+		}
+		sc := h3.NewServerConn(conn, func(req *h3.ServerRequest, res *h3.ServerResponse) error {
+			return nil
+		})
+		_ = sc.Serve()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientConn, err := quic.DialAddr(ctx, addr, clientTLS, quic.WithDatagrams(true))
+	require.NoError(t, err)
+	defer clientConn.CloseWithError(0, "")
+
+	ctrlStream, err := clientConn.OpenUniStreamSync(ctx)
+	require.NoError(t, err)
+
+	// Send control stream type
+	var typeBuf [8]byte
+	n := varint.Append(typeBuf[:0], coreh3.StreamTypeControl)
+	_, err = ctrlStream.Write(n)
+	require.NoError(t, err)
+
+	// Send first SETTINGS frame
+	st := &coreh3.Settings{MaxFieldSectionSize: 4096}
+	_, err = ctrlStream.Write(st.Encode())
+	require.NoError(t, err)
+
+	// Send second SETTINGS frame (violates RFC 9114 §7.2.4)
+	_, err = ctrlStream.Write(st.Encode())
+	require.NoError(t, err)
+
+	// Wait for server to close connection with H3_FRAME_UNEXPECTED
+	select {
+	case <-clientConn.Context().Done():
+		// Connection closed
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected connection to be closed due to duplicate SETTINGS frame on control stream")
+	}
+}
+

@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/mach/net/quic"
 	h1client "github.com/lemon4ksan/mach/client/h1"
 	h2client "github.com/lemon4ksan/mach/client/h2"
 	h3client "github.com/lemon4ksan/mach/client/h3"

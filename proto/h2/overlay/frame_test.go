@@ -50,7 +50,6 @@ func BenchmarkLegacyStructDecode(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var (
 		id         uint32
@@ -80,7 +79,6 @@ func BenchmarkInSituOverlay(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var (
 		id         uint32

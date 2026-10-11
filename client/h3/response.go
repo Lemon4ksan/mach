@@ -12,8 +12,8 @@ import (
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
-	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
+	"github.com/lemon4ksan/mach/net/quic"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
@@ -25,7 +25,7 @@ var (
 		return &b
 	})
 
-	h3HeaderBlockStorage = pool.NewPerPStorage(func() *[]byte {
+	h3HeaderBlockStorage = pool.NewPerCorePool(func() *[]byte {
 		b := make([]byte, 0, 16384)
 		return &b
 	})

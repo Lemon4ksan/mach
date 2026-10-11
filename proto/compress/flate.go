@@ -11,7 +11,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lemon4ksan/foundation/codec/compress"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/internal/stackless"
@@ -30,6 +29,7 @@ func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
 
 	zr := v.(io.ReadCloser) //nolint:forcetypeassert
 	if err := resetFlateReader(zr, r); err != nil {
+		_ = zr.Close()
 		return nil, err
 	}
 
@@ -138,8 +138,6 @@ var (
 //   - CompressBestCompression
 //   - CompressDefaultCompression
 //   - CompressHuffmanOnly
-//
-// Concurrency: Thread-safe.
 func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 	w := &byteSliceWriter{b: dst}
 	_, _ = WriteDeflateLevel(w, src, level)
@@ -157,8 +155,6 @@ func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 //   - CompressBestCompression
 //   - CompressDefaultCompression
 //   - CompressHuffmanOnly
-//
-// Concurrency: Thread-safe.
 func WriteDeflateLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
@@ -206,20 +202,17 @@ func nonblockingWriteDeflate(ctxv any) {
 
 // WriteDeflate writes deflated p to w using default compression level and returns the number of compressed
 // bytes written to w (RFC 1951).
-// Concurrency: Thread-safe.
 func WriteDeflate(w io.Writer, p []byte) (int, error) {
 	return WriteDeflateLevel(w, p, CompressDefaultCompression)
 }
 
 // AppendDeflateBytes appends deflated src to dst using default compression level and returns the resulting dst (RFC 1951).
-// Concurrency: Thread-safe.
 func AppendDeflateBytes(dst, src []byte) []byte {
 	return AppendDeflateBytesLevel(dst, src, CompressDefaultCompression)
 }
 
 // WriteInflate writes inflated p to w and returns the number of uncompressed
 // bytes written to w (RFC 1951).
-// Concurrency: Thread-safe.
 func WriteInflate(w io.Writer, p []byte) (int, error) {
 	return WriteInflateLimit(w, p, 0)
 }
@@ -228,7 +221,6 @@ func WriteInflate(w io.Writer, p []byte) (int, error) {
 //
 // If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
 // more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
-// Concurrency: Thread-safe; utilizes pooled zlib readers.
 func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	r := &byteSliceReader{b: p}
 
@@ -236,10 +228,9 @@ func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer releaseFlateReader(zr)
 
 	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
-	releaseFlateReader(zr)
-
 	nn := int(n)
 	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data inflated: %d", n)
@@ -249,7 +240,8 @@ func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 }
 
 // AppendInflateBytes appends inflated src to dst and returns the resulting dst (RFC 1951).
-// Concurrency: Thread-safe.
 func AppendInflateBytes(dst, src []byte) ([]byte, error) {
-	return compress.Inflate(src, dst)
+	w := &byteSliceWriter{b: dst}
+	_, err := WriteInflate(w, src)
+	return w.b, err
 }

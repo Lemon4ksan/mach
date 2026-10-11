@@ -3,7 +3,7 @@ package h3_test
 import (
 	"fmt"
 
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/mach/net/quic"
 
 	"github.com/lemon4ksan/mach/server/h3"
 )

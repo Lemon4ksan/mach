@@ -88,7 +88,7 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 		v := string(hf.ValueBytes())
 
 		// RFC 9113 §8.2: All field names MUST be lowercase ASCII
-		for i := 0; i < len(k); i++ {
+		for i := range len(k) {
 			if k[i] >= 'A' && k[i] <= 'Z' {
 				return coreh2.ProtocolError
 			}

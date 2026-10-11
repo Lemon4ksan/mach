@@ -10,8 +10,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lemon4ksan/foundation/codec/compress"
-	"github.com/lemon4ksan/foundation/codec/compress/gzip"
+	"github.com/lemon4ksan/seal/codec/compress"
+	"github.com/lemon4ksan/seal/codec/compress/gzip"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/internal/stackless"
@@ -107,12 +107,16 @@ var (
 // Supported compression levels are:
 //
 //   - CompressNoCompression
+// AppendGzipBytesLevel appends gzipped src to dst using the given
+// compression level and returns the resulting dst (RFC 1952).
+//
+// Supported compression levels are:
+//
+//   - CompressNoCompression
 //   - CompressBestSpeed
 //   - CompressBestCompression
 //   - CompressDefaultCompression
 //   - CompressHuffmanOnly
-//
-// Concurrency: Thread-safe.
 func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 	w := &byteSliceWriter{b: dst}
 	_, _ = WriteGzipLevel(w, src, level)
@@ -130,8 +134,6 @@ func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 //   - CompressBestCompression
 //   - CompressDefaultCompression
 //   - CompressHuffmanOnly
-//
-// Concurrency: Thread-safe.
 func WriteGzipLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
@@ -179,20 +181,17 @@ func nonblockingWriteGzip(ctxv any) {
 
 // WriteGzip writes gzipped p to w using default compression level and returns the number of compressed
 // bytes written to w (RFC 1952).
-// Concurrency: Thread-safe.
 func WriteGzip(w io.Writer, p []byte) (int, error) {
 	return WriteGzipLevel(w, p, CompressDefaultCompression)
 }
 
 // AppendGzipBytes appends gzipped src to dst using default compression and returns the resulting dst (RFC 1952).
-// Concurrency: Thread-safe.
 func AppendGzipBytes(dst, src []byte) []byte {
 	return AppendGzipBytesLevel(dst, src, CompressDefaultCompression)
 }
 
 // WriteGunzip writes ungzipped p to w and returns the number of uncompressed
 // bytes written to w (RFC 1952).
-// Concurrency: Thread-safe.
 func WriteGunzip(w io.Writer, p []byte) (int, error) {
 	return WriteGunzipLimit(w, p, 0)
 }
@@ -201,7 +200,6 @@ func WriteGunzip(w io.Writer, p []byte) (int, error) {
 //
 // If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
 // more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
-// Concurrency: Thread-safe; utilizes pooled gzip readers.
 func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	r := &byteSliceReader{b: p}
 
@@ -209,10 +207,9 @@ func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer releaseGzipReader(zr)
 
 	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
-	releaseGzipReader(zr)
-
 	nn := int(n)
 	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data gunzipped: %d", n)
@@ -222,7 +219,13 @@ func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 }
 
 // AppendGunzipBytes appends gunzipped src to dst and returns the resulting dst (RFC 1952).
-// Concurrency: Thread-safe.
 func AppendGunzipBytes(dst, src []byte) ([]byte, error) {
-	return compress.Gunzip(src, dst)
+	if len(dst) == 0 {
+		return compress.Gunzip(src, dst)
+	}
+	res, err := compress.Gunzip(src, nil)
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, res...), nil
 }

@@ -44,32 +44,22 @@ const (
 	CookieSameSiteNoneMode // third-party cookies are phasing out, use Partitioned cookies instead
 )
 
-var cookieStorage = pool.NewPerPStorage(func() *Cookie {
+var cookieStorage = pool.NewPerCorePool(func() *Cookie {
 	return &Cookie{}
 })
 
-// AcquireCookie returns an empty Cookie object from the pool.
-//
-// The returned object may be returned back to the pool with ReleaseCookie.
-// This allows reducing GC load.
+// AcquireCookie returns an empty Cookie from the pool.
 func AcquireCookie() *Cookie {
 	return cookieStorage.Get()
 }
 
-// ReleaseCookie returns the Cookie object acquired with AcquireCookie back
-// to the pool.
-//
-// Do not access released Cookie object, otherwise data races may occur.
+// ReleaseCookie clears and returns c to the pool.
 func ReleaseCookie(c *Cookie) {
 	c.Reset()
 	cookieStorage.Put(c)
 }
 
-// Cookie represents HTTP response cookie.
-//
-// Do not copy Cookie objects. Create new object and use CopyTo instead.
-//
-// Cookie instance MUST NOT be used from concurrently running goroutines.
+// Cookie represents an HTTP response cookie.
 type Cookie struct {
 	noCopy NoCopy
 
@@ -290,6 +280,17 @@ func (c *Cookie) Reset() {
 	c.secure = false
 	c.sameSite = CookieSameSiteDisabled
 	c.partitioned = false
+
+	if cap(c.bufK) > 64*1024 {
+		c.bufK = nil
+	} else {
+		c.bufK = c.bufK[:0]
+	}
+	if cap(c.bufV) > 64*1024 {
+		c.bufV = nil
+	} else {
+		c.bufV = c.bufV[:0]
+	}
 }
 
 // AppendBytes appends cookie representation to dst and returns

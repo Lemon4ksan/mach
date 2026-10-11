@@ -65,7 +65,7 @@ func (rb *qpackRingBuffer) pushBack(entry *Entry) {
 		newCap := len(rb.entries) * 2
 
 		newEntries := make([]*Entry, newCap)
-		for i := 0; i < rb.count; i++ {
+		for i := range rb.count {
 			newEntries[i] = rb.entries[(rb.head+i)%len(rb.entries)]
 		}
 
@@ -362,7 +362,7 @@ func (t *EncoderHeaderTable) FindHeaderName(name string) MatchResult {
 
 func (rb *qpackRingBuffer) Entries() iter.Seq[*Entry] {
 	return func(yield func(*Entry) bool) {
-		for i := 0; i < rb.count; i++ {
+		for i := range rb.count {
 			if !yield(rb.entries[(rb.head+i)%len(rb.entries)]) {
 				return
 			}

@@ -7,7 +7,6 @@ package h1_test
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -246,11 +245,10 @@ func BenchmarkClientConn_RoundTrip(b *testing.B) {
 	req.Header.SetHost(ln.Addr().String())
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := cc.Do(ctx, req, resp); err != nil {
-			b.Fatal(fmt.Errorf("Do failed at iteration %d: %w", i, err))
+			b.Fatal(err)
 		}
 	}
 }

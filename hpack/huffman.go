@@ -197,23 +197,24 @@ type huffmanNode struct {
 	sym     byte
 }
 
-func (node *huffmanNode) add(sym byte, code uint32, length uint8) {
+func (n *huffmanNode) add(sym byte, code uint32, length uint8) {
+	curr := n
 	for length > 8 {
 		length -= 8
 		i := uint8(code >> length) //nolint:gosec
 
-		if node.sub[i] == nil {
-			node.sub[i] = &huffmanNode{sub: make([]*huffmanNode, 256)}
+		if curr.sub[i] == nil {
+			curr.sub[i] = &huffmanNode{sub: make([]*huffmanNode, 256)}
 		}
 
-		node = node.sub[i]
+		curr = curr.sub[i]
 	}
 
-	n := 8 - length
-	start, end := int(uint8(code<<n)), 1<<n
+	shift := 8 - length
+	start, end := int(uint8(code<<shift)), 1<<shift
 
 	for i := start; i < start+end; i++ {
-		node.sub[i] = &huffmanNode{sym: sym, codeLen: length}
+		curr.sub[i] = &huffmanNode{sym: sym, codeLen: length}
 	}
 }
 

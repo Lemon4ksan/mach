@@ -32,7 +32,7 @@ func encodeRFC8187(value, language string) string {
 	sb.WriteString(language)
 	sb.WriteByte('\'')
 
-	for i := 0; i < len(value); i++ {
+	for i := range len(value) {
 		b := value[i]
 		if isRFC8187AttrChar(b) {
 			sb.WriteByte(b)

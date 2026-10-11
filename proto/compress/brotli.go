@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/foundation/codec/compress"
-	"github.com/lemon4ksan/foundation/codec/compress/brotli"
+	"github.com/lemon4ksan/seal/codec/compress"
+	"github.com/lemon4ksan/seal/codec/compress/brotli"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -30,7 +30,7 @@ func releaseBrotliReader(zr *brotli.Reader) {
 	compress.ReleaseBrotliReader(zr)
 }
 
-// AppendBrotliBytesLevel appends brotlied src to dst.
+// AppendBrotliBytesLevel appends Brotli-compressed src to dst using the specified compression level (RFC 7932).
 func AppendBrotliBytesLevel(dst, src []byte, level int) []byte {
 	var buf bytes.Buffer
 	buf.Write(dst)
@@ -42,23 +42,23 @@ func AppendBrotliBytesLevel(dst, src []byte, level int) []byte {
 	return buf.Bytes()
 }
 
-// WriteBrotliLevel writes p to w.
+// WriteBrotliLevel compresses p with Brotli at the given level and writes it to w.
 func WriteBrotliLevel(w io.Writer, p []byte, level int) (int, error) {
 	b := AppendBrotliBytesLevel(nil, p, level)
 	return w.Write(b)
 }
 
-// WriteBrotli writes p to w.
+// WriteBrotli compresses p with default Brotli compression and writes it to w.
 func WriteBrotli(w io.Writer, p []byte) (int, error) {
 	return WriteBrotliLevel(w, p, CompressBrotliDefaultCompression)
 }
 
-// AppendBrotliBytes appends src to dst.
+// AppendBrotliBytes appends Brotli-compressed src to dst using default compression.
 func AppendBrotliBytes(dst, src []byte) []byte {
 	return AppendBrotliBytesLevel(dst, src, CompressBrotliDefaultCompression)
 }
 
-// WriteUnbrotli writes unbrotlied p to w and returns the number of uncompressed bytes written to w.
+// WriteUnbrotli decompresses Brotli payload p and writes the uncompressed data to w.
 func WriteUnbrotli(w io.Writer, p []byte) (int, error) {
 	return WriteUnbrotliLimit(w, p, 0)
 }
@@ -67,7 +67,6 @@ func WriteUnbrotli(w io.Writer, p []byte) (int, error) {
 //
 // If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
 // more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
-// Concurrency: Thread-safe; utilizes pooled brotli readers.
 func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	r := &byteSliceReader{b: p}
 
@@ -75,10 +74,9 @@ func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer releaseBrotliReader(zr)
 
 	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
-	releaseBrotliReader(zr)
-
 	nn := int(n)
 	if int64(nn) != n {
 		return 0, fmt.Errorf("too much data unbrotlied: %d", n)
@@ -87,7 +85,14 @@ func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendUnbrotliBytes appends unbrotlied src to dst and returns the resulting dst.
+// AppendUnbrotliBytes decompresses Brotli payload src and appends the uncompressed data to dst.
 func AppendUnbrotliBytes(dst, src []byte) ([]byte, error) {
-	return compress.Unbrotli(src, dst)
+	if len(dst) == 0 {
+		return compress.Unbrotli(src, dst)
+	}
+	res, err := compress.Unbrotli(src, nil)
+	if err != nil {
+		return dst, err
+	}
+	return append(dst, res...), nil
 }

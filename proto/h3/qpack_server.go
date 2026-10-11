@@ -31,7 +31,7 @@ func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
 		return
 	}
 
-	for i := 0; i < len(k); i++ {
+	for i := range len(k) {
 		c := k[i]
 		if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
 			h.malformed = true
@@ -39,7 +39,7 @@ func (h *requestHeaderHandler) OnHeaderDecoded(k, v string) {
 		}
 	}
 
-	for i := 0; i < len(v); i++ {
+	for i := range len(v) {
 		if v[i] == 0 {
 			h.malformed = true
 			return
