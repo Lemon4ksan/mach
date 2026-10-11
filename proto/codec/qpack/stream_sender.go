@@ -143,20 +143,20 @@ func (s *DecoderStreamSender) SetDelegate(delegate StreamSenderDelegate) {
 
 // SendSectionAcknowledgement encodes a Section Acknowledgment instruction.
 // RFC 9204 §4.4.1.
-func (s *DecoderStreamSender) SendSectionAcknowledgement(streamId uint64) {
-	instruction := InstructionWithValuesHeaderAcknowledgement(streamId)
+func (s *DecoderStreamSender) SendSectionAcknowledgement(streamID uint64) {
+	instruction := InstructionWithValuesHeaderAcknowledgement(streamID)
 	s.instructionEncoder.EncodeTo(instruction, &s.buffer)
 }
 
 // SendHeaderAcknowledgement is an alias for SendSectionAcknowledgement matching Chromium C++ naming.
-func (s *DecoderStreamSender) SendHeaderAcknowledgement(streamId uint64) {
-	s.SendSectionAcknowledgement(streamId)
+func (s *DecoderStreamSender) SendHeaderAcknowledgement(streamID uint64) {
+	s.SendSectionAcknowledgement(streamID)
 }
 
 // SendStreamCancellation encodes a Stream Cancellation instruction.
 // RFC 9204 §4.4.2.
-func (s *DecoderStreamSender) SendStreamCancellation(streamId uint64) {
-	instruction := InstructionWithValuesStreamCancellation(streamId)
+func (s *DecoderStreamSender) SendStreamCancellation(streamID uint64) {
+	instruction := InstructionWithValuesStreamCancellation(streamID)
 	s.instructionEncoder.EncodeTo(instruction, &s.buffer)
 }
 

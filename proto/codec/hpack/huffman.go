@@ -4,13 +4,29 @@
 
 package hpack
 
-// HuffmanEncode encodes src using the static HPACK Huffman code table (RFC 7541 §5.2 & Appendix B) and appends the result to dst.
-func HuffmanEncode(dst, src []byte) []byte {
+import (
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+)
+
+func bytesOrString[S ~string | ~[]byte](s S) []byte {
+	switch v := any(s).(type) {
+	case []byte:
+		return v
+	case string:
+		return bytesconv.S2B(v)
+	default:
+		return []byte(s)
+	}
+}
+
+// HuffmanEncode encodes src ([string] or [[]byte]) using the static HPACK Huffman code table (RFC 7541 §5.2 & Appendix B) and appends the result to dst.
+func HuffmanEncode[S ~string | ~[]byte](dst []byte, src S) []byte {
+	b := bytesOrString(src)
 	if hasVectorHuffman {
-		return vectorHuffmanEncode(dst, src)
+		return vectorHuffmanEncode(dst, b)
 	}
 
-	return huffmanEncodeFallback(dst, src)
+	return huffmanEncodeFallback(dst, b)
 }
 
 func huffmanEncodeFallback(dst, src []byte) []byte {
@@ -53,35 +69,37 @@ func huffmanEncodeFallback(dst, src []byte) []byte {
 	return dst
 }
 
-// HuffmanEncodeLength returns the exact byte count required to store src when Huffman encoded.
-func HuffmanEncodeLength(src []byte) int {
+// HuffmanEncodeLength returns the exact byte count required to store src ([string] or [[]byte]) when Huffman encoded.
+func HuffmanEncodeLength[S ~string | ~[]byte](src S) int {
+	b := bytesOrString(src)
 	if hasVectorHuffman {
-		return vectorHuffmanEncodeLength(src)
+		return vectorHuffmanEncodeLength(b)
 	}
 
 	var bits uint64
-	for _, b := range src {
-		bits += uint64(huffmanCodeLen[b])
+	for _, c := range b {
+		bits += uint64(huffmanCodeLen[c])
 	}
 
 	return int((bits + 7) / 8)
 }
 
-// AppendHuffmanDecode decodes HPACK Huffman encoded data from src into dst (RFC 7541 §5.2 & Appendix B).
+// AppendHuffmanDecode decodes HPACK Huffman encoded data from src ([string] or [[]byte]) into dst (RFC 7541 §5.2 & Appendix B).
 // It returns ErrInvalidHuffman if src contains malformed Huffman codes, explicit EOS,
 // or invalid padding (strictly longer than 7 bits, or not consisting of all 1s).
-func AppendHuffmanDecode(dst, src []byte) ([]byte, error) {
+func AppendHuffmanDecode[S ~string | ~[]byte](dst []byte, src S) ([]byte, error) {
+	b := bytesOrString(src)
 	if hasVectorHuffman {
-		return vectorAppendHuffmanDecode(dst, src)
+		return vectorAppendHuffmanDecode(dst, b)
 	}
 
-	return appendHuffmanDecodeFallback(dst, src)
+	return appendHuffmanDecodeFallback(dst, b)
 }
 
-// HuffmanDecodeToString decodes HPACK Huffman encoded data in src into a string (RFC 7541 §5.2).
+// HuffmanDecodeToString decodes HPACK Huffman encoded data in src ([string] or [[]byte]) into a string (RFC 7541 §5.2).
 // It returns ErrInvalidHuffman if src contains malformed Huffman codes, explicit EOS,
 // or invalid padding (strictly longer than 7 bits, or not consisting of all 1s).
-func HuffmanDecodeToString(src []byte) (string, error) {
+func HuffmanDecodeToString[S ~string | ~[]byte](src S) (string, error) {
 	bufPtr := byteStorage.Get()
 	defer byteStorage.Put(bufPtr)
 
@@ -95,18 +113,13 @@ func HuffmanDecodeToString(src []byte) (string, error) {
 	return string(dst), nil
 }
 
-// HuffmanDecode decodes HPACK Huffman encoded data from src into dst (RFC 7541 §5.2 & Appendix B).
+// HuffmanDecode decodes HPACK Huffman encoded data from src ([string] or [[]byte]) into dst (RFC 7541 §5.2 & Appendix B).
 // For strict RFC compliance and error handling, use [AppendHuffmanDecode].
-func HuffmanDecode(dst, src []byte) []byte {
+func HuffmanDecode[S ~string | ~[]byte](dst []byte, src S) []byte {
 	res, _ := AppendHuffmanDecode(dst, src)
 	return res
 }
 
-//nolint:unused
-func huffmanDecodeFallback(dst, src []byte) []byte {
-	res, _ := appendHuffmanDecodeFallback(dst, src)
-	return res
-}
 
 func appendHuffmanDecodeFallback(dst, src []byte) ([]byte, error) {
 	nSrc := len(src)

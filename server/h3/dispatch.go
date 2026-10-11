@@ -151,8 +151,10 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 		case coreh3.FrameTypeSettings:
 			_, err := coreh3.DecodeSettings(qr, payloadLen)
 			if err != nil {
-				code := coreh3.ErrCodeH3SettingsError
-				msg := "invalid SETTINGS payload (RFC 9114 §7.2.4)"
+				var (
+					msg  string
+					code = coreh3.ErrCodeH3SettingsError
+				)
 				if errors.Is(err, coreh3.ErrH3SettingsError) {
 					msg = "reserved H2 setting ID in SETTINGS (RFC 9114 §7.2.4.1)"
 				} else {

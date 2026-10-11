@@ -20,6 +20,3 @@ func NewQPACKCodec() *QPACKCodec { return coreh3.NewQPACKCodec() }
 // FrameTypeHeaders identifies the HTTP/3 HEADERS frame type (0x01) (RFC 9114 §7.2.2).
 const FrameTypeHeaders = coreh3.FrameTypeHeaders
 
-// ReadFrameHeader parses an HTTP/3 frame type and payload length from a varint reader (RFC 9114 §7.1).
-var ReadFrameHeader = coreh3.ReadFrameHeader
-

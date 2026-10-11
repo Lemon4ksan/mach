@@ -23,7 +23,6 @@ type HeaderScanner struct {
 	BlockEnd    int
 	KeyVal      []byte
 	ValVal      []byte
-	KeyWithSp   bool
 	ScanErr     error
 	Initialized bool
 }
@@ -40,7 +39,6 @@ func (s *HeaderScanner) Reset(b []byte) {
 	s.BlockEnd = 0
 	s.KeyVal = nil
 	s.ValVal = nil
-	s.KeyWithSp = false
 	s.ScanErr = nil
 	s.Initialized = false
 }
@@ -53,11 +51,6 @@ func (s *HeaderScanner) Key() []byte {
 // Value returns the last scanned header value.
 func (s *HeaderScanner) Value() []byte {
 	return s.ValVal
-}
-
-// KeyHasSpace reports whether the last scanned key contained spaces.
-func (s *HeaderScanner) KeyHasSpace() bool {
-	return s.KeyWithSp
 }
 
 // Err returns the scanner error, if any.
@@ -106,13 +99,11 @@ func (s *HeaderScanner) Next() bool {
 	k, v := kv[:colon], kv[colon+1:]
 
 	// RFC 9112 §5.1: Field name validation (no whitespace before colon, valid token characters).
-	valid, innerSpace := isValidHeaderKey(k)
-	if !valid {
+	if !isValidHeaderKey(k) {
 		s.ScanErr = fmt.Errorf("malformed mime header line: %q", kv)
 		return false
 	}
 
-	s.KeyWithSp = innerSpace
 	s.KeyVal = k
 	s.ValVal = TrimLeadingSpace(v)
 
@@ -191,22 +182,18 @@ func isASCIILetter(b byte) bool {
 	return 'a' <= b && b <= 'z'
 }
 
-func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
+func isValidHeaderKey(a []byte) bool {
 	if len(a) == 0 {
-		return false, false
-	}
-
-	if a[len(a)-1] == ' ' || a[len(a)-1] == '\t' {
-		return false, false
+		return false
 	}
 
 	for _, c := range a {
 		if c >= 128 || validTokenTable[c] == 0 {
-			return false, false
+			return false
 		}
 	}
 
-	return true, false
+	return true
 }
 
 var validTokenTable = [128]byte{

@@ -46,11 +46,16 @@ func TestContentDisposition_RFC6266_And_RFC8187(t *testing.T) {
 	encoded := contentdisposition.EncodeRFC8187("letztes Kapitel", "de")
 	assert.Equal(t, "UTF-8'de'letztes%20Kapitel", encoded)
 
-	charset, lang, val, err := contentdisposition.DecodeRFC8187(encoded)
-	assert.NoError(t, err)
+	charset, lang, val := contentdisposition.DecodeRFC8187(encoded)
 	assert.Equal(t, "utf-8", charset)
 	assert.Equal(t, "de", lang)
 	assert.Equal(t, "letztes Kapitel", val)
+
+	// Byte slice decoding
+	charsetBytes, langBytes, valBytes := contentdisposition.DecodeRFC8187([]byte(encoded))
+	assert.Equal(t, "utf-8", charsetBytes)
+	assert.Equal(t, "de", langBytes)
+	assert.Equal(t, "letztes Kapitel", valBytes)
 }
 
 func TestContentDisposition_Hardening(t *testing.T) {

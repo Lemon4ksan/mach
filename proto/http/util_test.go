@@ -10,13 +10,9 @@ import (
 	"io"
 	"os"
 	"testing"
-)
 
-func TestNoCopyLockUnlock(t *testing.T) {
-	var nc NoCopy
-	nc.Lock()
-	nc.Unlock()
-}
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+)
 
 type shortWriter struct{}
 
@@ -145,21 +141,21 @@ func TestCopyZeroAllocWithLimit(t *testing.T) {
 
 	// 1. Within limit
 	var dst1 bytes.Buffer
-	n1, err := CopyZeroAllocWithLimit(&dst1, bytes.NewReader(data), len(data))
+	n1, err := bytesconv.CopyZeroAllocWithLimit(&dst1, bytes.NewReader(data), len(data))
 	if err != nil || n1 != int64(len(data)) || !bytes.Equal(dst1.Bytes(), data) {
 		t.Fatalf("CopyZeroAllocWithLimit within limit failed: %d, %v", n1, err)
 	}
 
 	// 2. Exceeding limit
 	var dst2 bytes.Buffer
-	_, err = CopyZeroAllocWithLimit(&dst2, bytes.NewReader(data), 10)
+	_, err = bytesconv.CopyZeroAllocWithLimit(&dst2, bytes.NewReader(data), 10)
 	if !errors.Is(err, ErrBodyTooLarge) {
 		t.Fatalf("expected ErrBodyTooLarge, got %v", err)
 	}
 
 	// 3. Non-positive limit (unlimited)
 	var dst3 bytes.Buffer
-	n3, err := CopyZeroAllocWithLimit(&dst3, bytes.NewReader(data), 0)
+	n3, err := bytesconv.CopyZeroAllocWithLimit(&dst3, bytes.NewReader(data), 0)
 	if err != nil || n3 != int64(len(data)) {
 		t.Fatalf("CopyZeroAllocWithLimit with limit <= 0 failed: %d, %v", n3, err)
 	}

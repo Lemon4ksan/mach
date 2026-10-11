@@ -67,12 +67,6 @@ func vectorHuffmanEncodeLength(src []byte) int {
 	))
 }
 
-//nolint:unused
-func vectorHuffmanDecode(dst, src []byte) []byte {
-	out, _ := vectorAppendHuffmanDecode(dst, src)
-	return out
-}
-
 func vectorAppendHuffmanDecode(dst, src []byte) ([]byte, error) {
 	nSrc := len(src)
 	if nSrc == 0 {

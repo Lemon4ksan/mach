@@ -6,7 +6,6 @@ package cookie
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"io"
 	"time"
@@ -30,30 +29,6 @@ var (
 	strCookieSameSiteNone   = []byte("None")
 	strCookiePartitioned    = []byte("Partitioned")
 )
-
-func caseInsensitiveCompare(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	i := 0
-	for ; i+8 <= len(a); i += 8 {
-		va := binary.LittleEndian.Uint64(a[i:])
-
-		vb := binary.LittleEndian.Uint64(b[i:])
-		if (va | 0x2020202020202020) != (vb | 0x2020202020202020) {
-			return false
-		}
-	}
-
-	for ; i < len(a); i++ {
-		if a[i]|0x20 != b[i]|0x20 {
-			return false
-		}
-	}
-
-	return true
-}
 
 var zeroTime time.Time
 
@@ -482,7 +457,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 			// Case insensitive switch on first char
 			switch k[0] | 0x20 {
 			case 'm':
-				if caseInsensitiveCompare(strCookieMaxAge, k) {
+				if bytes.EqualFold(strCookieMaxAge, k) {
 					// RFC 6265 §5.2.2: The Max-Age Attribute.
 					// If delta-seconds <= 0, cookie is expired / deleted immediately (maxAge = -1).
 					if len(v) > 0 && v[0] == '-' {
@@ -514,7 +489,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				}
 
 			case 'e': // "expires"
-				if caseInsensitiveCompare(strCookieExpires, k) {
+				if bytes.EqualFold(strCookieExpires, k) {
 					exptime, err := ParseCookieExpires(v)
 					if err != nil {
 						return err
@@ -524,7 +499,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				}
 
 			case 'd': // "domain"
-				if caseInsensitiveCompare(strCookieDomain, k) {
+				if bytes.EqualFold(strCookieDomain, k) {
 					if !ValidCookieValue(v) {
 						return ErrInvalidCookieValue
 					}
@@ -533,7 +508,7 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				}
 
 			case 'p': // "path"
-				if caseInsensitiveCompare(strCookiePath, k) {
+				if bytes.EqualFold(strCookiePath, k) {
 					if !ValidCookiePathValue(v) {
 						return ErrInvalidCookieValue
 					}
@@ -542,22 +517,22 @@ func (c *Cookie) ParseBytes(src []byte) error {
 				}
 
 			case 's': // "samesite"
-				if caseInsensitiveCompare(strCookieSameSite, k) {
+				if bytes.EqualFold(strCookieSameSite, k) {
 					if len(v) > 0 {
 						// Case insensitive switch on first char
 						switch v[0] | 0x20 {
 						case 'l': // "lax"
-							if caseInsensitiveCompare(strCookieSameSiteLax, v) {
+							if bytes.EqualFold(strCookieSameSiteLax, v) {
 								c.sameSite = CookieSameSiteLaxMode
 							}
 
 						case 's': // "strict"
-							if caseInsensitiveCompare(strCookieSameSiteStrict, v) {
+							if bytes.EqualFold(strCookieSameSiteStrict, v) {
 								c.sameSite = CookieSameSiteStrictMode
 							}
 
 						case 'n': // "none"
-							if caseInsensitiveCompare(strCookieSameSiteNone, v) {
+							if bytes.EqualFold(strCookieSameSiteNone, v) {
 								c.sameSite = CookieSameSiteNoneMode
 							}
 						}
@@ -568,19 +543,19 @@ func (c *Cookie) ParseBytes(src []byte) error {
 			// Case insensitive switch on first char
 			switch v[0] | 0x20 {
 			case 'h': // "httponly"
-				if caseInsensitiveCompare(strCookieHTTPOnly, v) {
+				if bytes.EqualFold(strCookieHTTPOnly, v) {
 					c.httpOnly = true
 				}
 
 			case 's': // "secure"
-				if caseInsensitiveCompare(strCookieSecure, v) {
+				if bytes.EqualFold(strCookieSecure, v) {
 					c.secure = true
-				} else if caseInsensitiveCompare(strCookieSameSite, v) {
+				} else if bytes.EqualFold(strCookieSameSite, v) {
 					c.sameSite = CookieSameSiteDefaultMode
 				}
 
 			case 'p': // "partitioned"
-				if caseInsensitiveCompare(strCookiePartitioned, v) {
+				if bytes.EqualFold(strCookiePartitioned, v) {
 					c.partitioned = true
 				}
 			}
@@ -807,7 +782,7 @@ func ValidCookieValue(value []byte) bool {
 	return true
 }
 
-// validCookiePathValue reports whether value is acceptable as a cookie Path.
+// ValidCookiePathValue reports whether value is acceptable as a cookie Path.
 //
 // Unlike validCookieValue it permits '"' and '\', which are legal path
 // characters accepted by SetPath and net/http's Cookie.String. It rejects the
@@ -845,8 +820,6 @@ func TrimCookieArgNoCopy(src []byte, skipQuotes bool) []byte {
 	return src
 }
 
-// caseInsensitiveCompare does a case insensitive equality comparison of
-// two []byte. Assumes only letters need to be matched.
 
 // KeyScoped borrows the cookie key into the given borrow scope.
 func (c *Cookie) KeyScoped(s *borrow.Scope) borrow.Bytes {

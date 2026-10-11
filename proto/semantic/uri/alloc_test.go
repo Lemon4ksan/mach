@@ -73,3 +73,118 @@ func TestParseArgs_ZeroAlloc(t *testing.T) {
 	})
 }
 
+func TestStandaloneArgs_ZeroAlloc(t *testing.T) {
+	kvs := []uri.ArgsKV{
+		{Key: []byte("alpha"), Value: []byte("1")},
+		{Key: []byte("beta"), Value: []byte("2")},
+		{Key: []byte("gamma"), Value: []byte("3")},
+	}
+
+	keyStr := "beta"
+	keyBytes := []byte("beta")
+	valStr := "2_updated"
+	valBytes := []byte("2_updated")
+
+	t.Run("PeekArg_String", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = uri.PeekArg(kvs, keyStr)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("PeekArg_Bytes", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = uri.PeekArg(kvs, keyBytes)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("HasArg_String", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = uri.HasArg(kvs, keyStr)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("HasArg_Bytes", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = uri.HasArg(kvs, keyBytes)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("SetArg_String_Existing", func(t *testing.T) {
+		slice := make([]uri.ArgsKV, len(kvs))
+		copy(slice, kvs)
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = uri.SetArg(slice, keyStr, valStr, false)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("SetArg_Bytes_Existing", func(t *testing.T) {
+		slice := make([]uri.ArgsKV, len(kvs))
+		copy(slice, kvs)
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = uri.SetArg(slice, keyBytes, valBytes, false)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("DelAllArgs_String", func(t *testing.T) {
+		slice := make([]uri.ArgsKV, len(kvs))
+		allocs := testing.AllocsPerRun(1000, func() {
+			copy(slice, kvs)
+			_ = uri.DelAllArgs(slice, keyStr)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("DelAllArgs_Bytes", func(t *testing.T) {
+		slice := make([]uri.ArgsKV, len(kvs))
+		allocs := testing.AllocsPerRun(1000, func() {
+			copy(slice, kvs)
+			_ = uri.DelAllArgs(slice, keyBytes)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("DelAllArgsStable_String", func(t *testing.T) {
+		slice := make([]uri.ArgsKV, len(kvs))
+		allocs := testing.AllocsPerRun(1000, func() {
+			copy(slice, kvs)
+			_ = uri.DelAllArgsStable(slice, keyStr)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("DelAllArgsStable_Bytes", func(t *testing.T) {
+		slice := make([]uri.ArgsKV, len(kvs))
+		allocs := testing.AllocsPerRun(1000, func() {
+			copy(slice, kvs)
+			_ = uri.DelAllArgsStable(slice, keyBytes)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+}
+

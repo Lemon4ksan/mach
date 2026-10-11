@@ -16,4 +16,6 @@ type (
 )
 
 // NewHeadersWithCapacity allocates a new Headers table with preallocated entry capacity (RFC 9110 §6.3).
-var NewHeadersWithCapacity = headkit.NewWithCapacity
+func NewHeadersWithCapacity(cap int) Headers {
+	return headkit.NewWithCapacity(cap)
+}

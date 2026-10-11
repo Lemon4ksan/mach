@@ -475,11 +475,6 @@ func WriteHexInt(w *bufio.Writer, n int) error {
 	return err
 }
 
-const (
-	upperhex = "0123456789ABCDEF"
-	lowerhex = "0123456789abcdef"
-)
-
 // LowercaseBytes converts ASCII bytes in b to lowercase in place.
 func LowercaseBytes(b []byte) {
 	for i := range b {

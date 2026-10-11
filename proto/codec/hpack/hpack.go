@@ -11,10 +11,9 @@ import (
 	"iter"
 	"math"
 
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
-	"github.com/lemon4ksan/mach/proto/http/rodata"
+	"github.com/lemon4ksan/mach/proto/headkit"
 )
 
 const (
@@ -141,7 +140,7 @@ func (hf *HeaderField) SetBytes(k, v []byte) {
 
 // SetKey sets the header field name from a string.
 func (hf *HeaderField) SetKey(key string) {
-	if ik := rodata.InternKey(key); ik != nil {
+	if ik := headkit.InternKey(key); ik != nil {
 		hf.key = ik
 		return
 	}
@@ -152,7 +151,7 @@ func (hf *HeaderField) SetKey(key string) {
 
 // SetValue sets the header field value from a string.
 func (hf *HeaderField) SetValue(value string) {
-	if iv := rodata.InternValue(value); iv != nil {
+	if iv := headkit.InternValue(value); iv != nil {
 		hf.value = iv
 		return
 	}
@@ -163,7 +162,7 @@ func (hf *HeaderField) SetValue(value string) {
 
 // SetKeyBytes sets the header field name from a byte slice.
 func (hf *HeaderField) SetKeyBytes(key []byte) {
-	if ik := rodata.InternKeyBytes(key); ik != nil {
+	if ik := headkit.InternKey(key); ik != nil {
 		hf.key = ik
 		return
 	}
@@ -174,7 +173,7 @@ func (hf *HeaderField) SetKeyBytes(key []byte) {
 
 // SetValueBytes sets the header field value from a byte slice.
 func (hf *HeaderField) SetValueBytes(value []byte) {
-	if iv := rodata.InternValueBytes(value); iv != nil {
+	if iv := headkit.InternValue(value); iv != nil {
 		hf.value = iv
 		return
 	}
@@ -185,14 +184,14 @@ func (hf *HeaderField) SetValueBytes(value []byte) {
 
 // CopyTo copies the key, value, and sensitivity flag to other.
 func (hf *HeaderField) CopyTo(other *HeaderField) {
-	if ik := rodata.InternKeyBytes(hf.key); ik != nil {
+	if ik := headkit.InternKey(hf.key); ik != nil {
 		other.key = ik
 	} else {
 		other.keyBuf = append(other.keyBuf[:0], hf.key...)
 		other.key = other.keyBuf
 	}
 
-	if iv := rodata.InternValueBytes(hf.value); iv != nil {
+	if iv := headkit.InternValue(hf.value); iv != nil {
 		other.value = iv
 	} else {
 		other.valBuf = append(other.valBuf[:0], hf.value...)
@@ -370,97 +369,63 @@ func (hp *HPACK) peek(n uint64) *HeaderField {
 //go:inline
 //go:nosplit
 func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
-	if len(key) == 0 {
+	switch string(key) {
+	case ":authority":
+		return 1, false, true
+	case ":method":
+		switch string(val) {
+		case "GET":
+			return 2, true, true
+		case "POST":
+			return 3, true, true
+		default:
+			return 2, false, true
+		}
+	case ":path":
+		switch string(val) {
+		case "/":
+			return 4, true, true
+		case "/index.html":
+			return 5, true, true
+		default:
+			return 4, false, true
+		}
+	case ":scheme":
+		switch string(val) {
+		case "http":
+			return 6, true, true
+		case "https":
+			return 7, true, true
+		default:
+			return 7, false, true
+		}
+	case ":status":
+		if string(val) == "200" {
+			return 8, true, true
+		}
+		return 8, false, true
+	case "accept-encoding":
+		if string(val) == "gzip, deflate" {
+			return 16, true, true
+		}
+		return 16, false, true
+	case "accept":
+		return 19, false, true
+	case "content-type":
+		return 31, false, true
+	case "cookie":
+		return 32, false, true
+	case "content-length":
+		return 28, false, true
+	case "content-encoding":
+		return 27, false, true
+	case "host":
+		return 38, false, true
+	case "user-agent":
+		return 58, false, true
+	default:
 		return 0, false, false
 	}
-
-	switch key[0] {
-	case ':':
-		switch string(key) {
-		case ":authority":
-			return 1, false, true
-		case ":method":
-			if bytes.Equal(val, []byte("GET")) {
-				return 2, true, true
-			}
-
-			if bytes.Equal(val, []byte("POST")) {
-				return 3, true, true
-			}
-
-			return 2, false, true
-
-		case ":path":
-			if bytes.Equal(val, []byte("/")) {
-				return 4, true, true
-			}
-
-			if bytes.Equal(val, []byte("/index.html")) {
-				return 5, true, true
-			}
-
-			return 4, false, true
-
-		case ":scheme":
-			if bytes.Equal(val, []byte("http")) {
-				return 6, true, true
-			}
-
-			if bytes.Equal(val, []byte("https")) {
-				return 7, true, true
-			}
-
-			return 7, false, true
-
-		case ":status":
-			if bytes.Equal(val, []byte("200")) {
-				return 8, true, true
-			}
-
-			return 8, false, true
-		}
-
-	case 'a':
-		if bytes.Equal(key, []byte("accept-encoding")) {
-			if bytes.Equal(val, []byte("gzip, deflate")) {
-				return 16, true, true
-			}
-
-			return 16, false, true
-		}
-
-		if bytes.Equal(key, []byte("accept")) {
-			return 19, false, true
-		}
-
-	case 'c':
-		if bytes.Equal(key, []byte("content-type")) {
-			return 31, false, true
-		}
-
-		if bytes.Equal(key, []byte("cookie")) {
-			return 32, false, true
-		}
-
-		if bytes.Equal(key, []byte("content-length")) {
-			return 28, false, true
-		}
-
-		if bytes.Equal(key, []byte("content-encoding")) {
-			return 27, false, true
-		}
-
-	case 'h':
-		if bytes.Equal(key, []byte("host")) {
-			return 38, false, true
-		}
-	case 'u':
-		if bytes.Equal(key, []byte("user-agent")) {
-			return 58, false, true
-		}
-	}
-
-	return 0, false, false
 }
 
 func (hp *HPACK) search(hf *HeaderField) (n uint64, fullMatch bool) {
@@ -756,10 +721,6 @@ var byteStorage = pool.NewPerCorePool(func() *[]byte {
 
 // readInt decodes an unsigned variable-length integer with an N-bit prefix (RFC 7541 §5.1).
 func readInt(n int, b []byte) ([]byte, uint64, error) {
-	return readIntFallback(n, b)
-}
-
-func readIntFallback(n int, b []byte) ([]byte, uint64, error) {
 	if len(b) == 0 {
 		return b, 0, ErrIntegerTruncated
 	}
@@ -886,15 +847,11 @@ func readString(dst, b []byte) ([]byte, []byte, error) {
 	return b[n:], dst, nil
 }
 
-// AppendHuffmanString encodes s using static HPACK Huffman coding and appends the result to dst (RFC 7541 §5.2 & Appendix B).
-func AppendHuffmanString(dst []byte, s string) []byte {
-	return HuffmanEncode(dst, bytesconv.S2B(s))
+// AppendHuffman encodes s ([string] or [[]byte]) using static HPACK Huffman coding and appends the result to dst (RFC 7541 §5.2 & Appendix B).
+func AppendHuffman[S ~string | ~[]byte](dst []byte, s S) []byte {
+	return HuffmanEncode(dst, s)
 }
 
-// HuffmanEncodeStringLength returns the byte count required to store s when Huffman encoded (RFC 7541 §5.2).
-func HuffmanEncodeStringLength(s string) uint64 {
-	return uint64(HuffmanEncodeLength(bytesconv.S2B(s)))
-}
 
 // appendString encodes a string literal with optional static Huffman coding and 7-bit length prefix (RFC 7541 §5.2).
 func appendString(dst, src []byte, encode bool) []byte {

@@ -5,10 +5,8 @@
 package http
 
 import (
-	"bytes"
-	"encoding/binary"
-
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
 )
 
 const (
@@ -18,27 +16,7 @@ const (
 
 // CaseInsensitiveCompare reports whether byte slices a and b are equal under ASCII case-insensitivity.
 func CaseInsensitiveCompare(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	i := 0
-	for ; i+8 <= len(a); i += 8 {
-		va := binary.LittleEndian.Uint64(a[i:])
-
-		vb := binary.LittleEndian.Uint64(b[i:])
-		if (va | 0x2020202020202020) != (vb | 0x2020202020202020) {
-			return false
-		}
-	}
-
-	for ; i < len(a); i++ {
-		if a[i]|0x20 != b[i]|0x20 {
-			return false
-		}
-	}
-
-	return true
+	return bytesconv.EqualFoldASCII(bytesconv.B2S(a), bytesconv.B2S(b))
 }
 
 // ValidHeaderFieldByte reports whether c is a valid HTTP header field byte (RFC 9110 §5.1).
@@ -47,26 +25,29 @@ func ValidHeaderFieldByte(c byte) bool {
 }
 
 // InitHeaderKV initializes and normalizes header key and value buffers from strings.
-func InitHeaderKV(bufK, bufV []byte, key, value string, disableNormalizing bool) ([]byte, []byte) {
+func InitHeaderKV[SK, SV ~string | ~[]byte](bufK, bufV []byte, key SK, value SV, disableNormalizing bool) ([]byte, []byte) {
 	bufK = GetHeaderKeyBytes(bufK, key, disableNormalizing)
-	bufV = InitHeaderValueString(bufV, value)
+	bufV = InitHeaderValue(bufV, value)
 	return bufK, bufV
+}
+
+// InitHeaderValue copies value ([string] or [[]byte]) into bufV and sanitizes CR and LF characters.
+func InitHeaderValue[S ~string | ~[]byte](bufV []byte, value S) []byte {
+	return cookie.InitHeaderValue(bufV, value)
 }
 
 // InitHeaderValueString initializes and sanitizes a header value buffer from value string.
 func InitHeaderValueString(bufV []byte, value string) []byte {
-	return InitHeaderValueBytes(bufV, bytesconv.S2B(value))
+	return cookie.InitHeaderValueString(bufV, value)
 }
 
 // InitHeaderValueBytes copies value into bufV and sanitizes CR and LF characters.
 func InitHeaderValueBytes(bufV, value []byte) []byte {
-	bufV = append(bufV[:0], value...)
-	bufV = RemoveNewLines(bufV)
-	return bufV
+	return cookie.InitHeaderValueBytes(bufV, value)
 }
 
 // GetHeaderKeyBytes copies and normalizes key string into bufK.
-func GetHeaderKeyBytes(bufK []byte, key string, disableNormalizing bool) []byte {
+func GetHeaderKeyBytes[S ~string | ~[]byte](bufK []byte, key S, disableNormalizing bool) []byte {
 	bufK = append(bufK[:0], key...)
 	NormalizeHeaderKey(bufK, disableNormalizing)
 	return bufK
@@ -120,32 +101,5 @@ func NormalizeHeaderKeyValidated(b []byte, disableNormalizing bool) {
 
 // RemoveNewLines will replace `\r` and `\n` with an empty space.
 func RemoveNewLines(raw []byte) []byte {
-	foundR := bytes.IndexByte(raw, rChar)
-	foundN := bytes.IndexByte(raw, nChar)
-	start := 0
-
-	switch {
-	case foundN != -1:
-		if foundR > foundN {
-			start = foundN
-		} else if foundR != -1 {
-			start = foundR
-		}
-
-	case foundR != -1:
-		start = foundR
-	default:
-		return raw
-	}
-
-	for i := start; i < len(raw); i++ {
-		switch raw[i] {
-		case rChar, nChar:
-			raw[i] = ' '
-		default:
-			continue
-		}
-	}
-
-	return raw
+	return cookie.RemoveNewLines(raw)
 }

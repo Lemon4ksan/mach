@@ -230,7 +230,7 @@ func TestDecoderStreamSender_InsertCountIncrement(t *testing.T) {
 // TEST_F(DecoderStreamSenderTest, HeaderAcknowledgement)
 func TestDecoderStreamSender_SectionAcknowledgement(t *testing.T) {
 	testCases := []struct {
-		streamId    uint64
+		streamID    uint64
 		expectedHex string
 	}{
 		{0, "80"},
@@ -244,7 +244,7 @@ func TestDecoderStreamSender_SectionAcknowledgement(t *testing.T) {
 		delegate := newMockStreamSenderDelegate()
 		sender := NewDecoderStreamSender(delegate)
 
-		sender.SendSectionAcknowledgement(tc.streamId)
+		sender.SendSectionAcknowledgement(tc.streamID)
 		sender.Flush()
 
 		require.Equal(t, 1, len(delegate.writes))
@@ -254,7 +254,7 @@ func TestDecoderStreamSender_SectionAcknowledgement(t *testing.T) {
 		delegate2 := newMockStreamSenderDelegate()
 		sender2 := NewDecoderStreamSender(delegate2)
 
-		sender2.SendHeaderAcknowledgement(tc.streamId)
+		sender2.SendHeaderAcknowledgement(tc.streamID)
 		sender2.Flush()
 
 		require.Equal(t, 1, len(delegate2.writes))
@@ -265,7 +265,7 @@ func TestDecoderStreamSender_SectionAcknowledgement(t *testing.T) {
 // TEST_F(DecoderStreamSenderTest, StreamCancellation)
 func TestDecoderStreamSender_StreamCancellation(t *testing.T) {
 	testCases := []struct {
-		streamId    uint64
+		streamID    uint64
 		expectedHex string
 	}{
 		{0, "40"},
@@ -278,7 +278,7 @@ func TestDecoderStreamSender_StreamCancellation(t *testing.T) {
 		delegate := newMockStreamSenderDelegate()
 		sender := NewDecoderStreamSender(delegate)
 
-		sender.SendStreamCancellation(tc.streamId)
+		sender.SendStreamCancellation(tc.streamID)
 		sender.Flush()
 
 		require.Equal(t, 1, len(delegate.writes))

@@ -93,7 +93,7 @@ func (resp *Response) ReadBody(r *bufio.Reader, maxBodySize int) (err error) {
 		if resp.StreamBody {
 			resp.bodyStream = AcquireRequestStream(bodyBuf, r, &resp.Header)
 		} else {
-			bodyBuf.B, err = readBodyChunked(r, maxBodySize, bodyBuf.B)
+			bodyBuf.B, err = ReadBodyChunked(r, maxBodySize, bodyBuf.B)
 		}
 
 	default:

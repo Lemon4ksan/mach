@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package rodata provides static read-only byte slices stored in the binary's .rodata segment
-// for zero-allocation HTTP header framing, parsing, and interning.
-package rodata
+package headkit
 
 import (
 	"bytes"
@@ -13,16 +11,17 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// Precompiled HTTP/1.1 and HTTP/2 static pseudo-header keys.
+// Precompiled HTTP/1.1, HTTP/2, and HTTP/3 static pseudo-header keys as byte slices.
 var (
-	PseudoMethod    = []byte(":method")
-	PseudoAuthority = []byte(":authority")
-	PseudoScheme    = []byte(":scheme")
-	PseudoPath      = []byte(":path")
-	PseudoStatus    = []byte(":status")
+	PseudoMethodBytes    = []byte(PseudoMethod)
+	PseudoAuthorityBytes = []byte(PseudoAuthority)
+	PseudoSchemeBytes    = []byte(PseudoScheme)
+	PseudoPathBytes      = []byte(PseudoPath)
+	PseudoStatusBytes    = []byte(PseudoStatus)
+	PseudoProtocolBytes  = []byte(PseudoProtocol)
 )
 
-// Precompiled HTTP header canonical & lower-case keys.
+// Precompiled HTTP header canonical & lower-case keys as byte slices.
 var (
 	KeyContentType             = []byte("content-type")
 	KeyAcceptEncoding          = []byte("accept-encoding")
@@ -49,7 +48,7 @@ var (
 	KeyCacheControl            = []byte("cache-control")
 )
 
-// Precompiled common HTTP header values.
+// Precompiled common HTTP header values as byte slices.
 var (
 	ValApplicationJSON      = []byte("application/json")
 	ValApplicationForm      = []byte("application/x-www-form-urlencoded")
@@ -65,171 +64,172 @@ var (
 )
 
 // InternKey returns a static .rodata byte slice for key if recognized, or nil if not matched.
-// It is case-insensitive for standard ASCII header keys.
-func InternKey(key string) []byte {
-	return InternKeyBytes(bytesconv.S2B(key))
-}
-
-// InternKeyBytes returns a static .rodata byte slice for key if recognized, or nil if not matched.
+// It is case-insensitive for standard ASCII header keys, supporting both string and []byte inputs.
 // Accelerated via O(1) length-dispatch and 64-bit SWAR case-insensitive vector matching.
-func InternKeyBytes(key []byte) []byte {
-	n := len(key)
+func InternKey[S ~string | ~[]byte](key S) []byte {
+	b := stringOrBytesToBytes(key)
+	n := len(b)
 	if n < 4 || n > 25 {
 		return nil
 	}
 
 	switch n {
 	case 4:
-		switch key[0] | 0x20 {
+		switch b[0] | 0x20 {
 		case 'h':
-			if equalFoldSWAR(key, KeyHost) {
+			if equalFoldSWAR(b, KeyHost) {
 				return KeyHost
 			}
 		case 'd':
-			if equalFoldSWAR(key, KeyDate) {
+			if equalFoldSWAR(b, KeyDate) {
 				return KeyDate
 			}
 		}
 	case 5:
-		if bytes.Equal(key, PseudoPath) {
-			return PseudoPath
+		if bytes.Equal(b, PseudoPathBytes) {
+			return PseudoPathBytes
 		}
 	case 6:
-		switch key[0] | 0x20 {
+		switch b[0] | 0x20 {
 		case 'a':
-			if equalFoldSWAR(key, KeyAccept) {
+			if equalFoldSWAR(b, KeyAccept) {
 				return KeyAccept
 			}
 		case 'c':
-			if equalFoldSWAR(key, KeyCookie) {
+			if equalFoldSWAR(b, KeyCookie) {
 				return KeyCookie
 			}
 		case 's':
-			if equalFoldSWAR(key, KeyServer) {
+			if equalFoldSWAR(b, KeyServer) {
 				return KeyServer
 			}
 		}
 	case 7:
-		if key[0] == ':' {
-			switch key[1] {
+		if b[0] == ':' {
+			switch b[1] {
 			case 'm':
-				if bytes.Equal(key, PseudoMethod) {
-					return PseudoMethod
+				if bytes.Equal(b, PseudoMethodBytes) {
+					return PseudoMethodBytes
 				}
 			case 's':
-				switch key[2] {
+				switch b[2] {
 				case 'c':
-					if bytes.Equal(key, PseudoScheme) {
-						return PseudoScheme
+					if bytes.Equal(b, PseudoSchemeBytes) {
+						return PseudoSchemeBytes
 					}
 				case 't':
-					if bytes.Equal(key, PseudoStatus) {
-						return PseudoStatus
+					if bytes.Equal(b, PseudoStatusBytes) {
+						return PseudoStatusBytes
 					}
 				}
 			}
-		} else if (key[0] | 0x20) == 'r' {
-			if equalFoldSWAR(key, KeyReferer) {
+		} else if (b[0] | 0x20) == 'r' {
+			if equalFoldSWAR(b, KeyReferer) {
 				return KeyReferer
 			}
 		}
 	case 8:
-		if (key[0] | 0x20) == 'p' {
-			if equalFoldSWAR(key, KeyPriority) {
+		if (b[0] | 0x20) == 'p' {
+			if equalFoldSWAR(b, KeyPriority) {
 				return KeyPriority
 			}
 		}
 	case 9:
-		if (key[0] | 0x20) == 's' {
-			if equalFoldSWAR(key, KeySecChUa) {
+		switch b[0] | 0x20 {
+		case 's':
+			if equalFoldSWAR(b, KeySecChUa) {
 				return KeySecChUa
+			}
+		case ':':
+			if bytes.Equal(b, PseudoProtocolBytes) {
+				return PseudoProtocolBytes
 			}
 		}
 	case 10:
-		switch key[0] {
+		switch b[0] {
 		case ':':
-			if bytes.Equal(key, PseudoAuthority) {
-				return PseudoAuthority
+			if bytes.Equal(b, PseudoAuthorityBytes) {
+				return PseudoAuthorityBytes
 			}
 		case 'c', 'C':
-			if equalFoldSWAR(key, KeyConnection) {
+			if equalFoldSWAR(b, KeyConnection) {
 				return KeyConnection
 			}
 		case 's', 'S':
-			if equalFoldSWAR(key, KeySetCookie) {
+			if equalFoldSWAR(b, KeySetCookie) {
 				return KeySetCookie
 			}
 		case 'u', 'U':
-			if equalFoldSWAR(key, KeyUserAgent) {
+			if equalFoldSWAR(b, KeyUserAgent) {
 				return KeyUserAgent
 			}
 		}
 	case 12:
-		if (key[0] | 0x20) == 'c' {
-			if equalFoldSWAR(key, KeyContentType) {
+		if (b[0] | 0x20) == 'c' {
+			if equalFoldSWAR(b, KeyContentType) {
 				return KeyContentType
 			}
 		}
 	case 13:
-		if (key[0] | 0x20) == 'c' {
-			if equalFoldSWAR(key, KeyCacheControl) {
+		if (b[0] | 0x20) == 'c' {
+			if equalFoldSWAR(b, KeyCacheControl) {
 				return KeyCacheControl
 			}
 		}
 	case 14:
-		switch key[0] | 0x20 {
+		switch b[0] | 0x20 {
 		case 'c':
-			if equalFoldSWAR(key, KeyContentLength) {
+			if equalFoldSWAR(b, KeyContentLength) {
 				return KeyContentLength
 			}
 		case 's':
-			switch key[10] | 0x20 {
+			switch b[10] | 0x20 {
 			case 'd':
-				if equalFoldSWAR(key, KeySecFetchDest) {
+				if equalFoldSWAR(b, KeySecFetchDest) {
 					return KeySecFetchDest
 				}
 			case 'm':
-				if equalFoldSWAR(key, KeySecFetchMode) {
+				if equalFoldSWAR(b, KeySecFetchMode) {
 					return KeySecFetchMode
 				}
 			case 's':
-				if equalFoldSWAR(key, KeySecFetchSite) {
+				if equalFoldSWAR(b, KeySecFetchSite) {
 					return KeySecFetchSite
 				}
 			case 'u':
-				if equalFoldSWAR(key, KeySecFetchUser) {
+				if equalFoldSWAR(b, KeySecFetchUser) {
 					return KeySecFetchUser
 				}
 			}
 		}
 	case 15:
-		if (key[0] | 0x20) == 'a' {
-			switch key[7] | 0x20 {
+		if (b[0] | 0x20) == 'a' {
+			switch b[7] | 0x20 {
 			case 'e':
-				if equalFoldSWAR(key, KeyAcceptEncoding) {
+				if equalFoldSWAR(b, KeyAcceptEncoding) {
 					return KeyAcceptEncoding
 				}
 			case 'l':
-				if equalFoldSWAR(key, KeyAcceptLanguage) {
+				if equalFoldSWAR(b, KeyAcceptLanguage) {
 					return KeyAcceptLanguage
 				}
 			}
 		}
 	case 16:
-		if (key[0] | 0x20) == 's' {
-			if equalFoldSWAR(key, KeySecChUaMobile) {
+		if (b[0] | 0x20) == 's' {
+			if equalFoldSWAR(b, KeySecChUaMobile) {
 				return KeySecChUaMobile
 			}
 		}
 	case 18:
-		if (key[0] | 0x20) == 's' {
-			if equalFoldSWAR(key, KeySecChUaPlatform) {
+		if (b[0] | 0x20) == 's' {
+			if equalFoldSWAR(b, KeySecChUaPlatform) {
 				return KeySecChUaPlatform
 			}
 		}
 	case 25:
-		if (key[0] | 0x20) == 'u' {
-			if equalFoldSWAR(key, KeyUpgradeInsecureRequests) {
+		if (b[0] | 0x20) == 'u' {
+			if equalFoldSWAR(b, KeyUpgradeInsecureRequests) {
 				return KeyUpgradeInsecureRequests
 			}
 		}
@@ -238,18 +238,15 @@ func InternKeyBytes(key []byte) []byte {
 	return nil
 }
 
-// InternValue returns a static .rodata byte slice for val if recognized, or nil if not matched.
-func InternValue(val string) []byte {
-	return InternValueBytes(bytesconv.S2B(val))
-}
 
-// InternValueBytes returns a static .rodata byte slice for val if recognized, or nil if not matched.
+// InternValue returns a static .rodata byte slice for val if recognized, or nil if not matched.
 // Accelerated via O(1) length-dispatch and zero-allocation slice comparisons.
-func InternValueBytes(val []byte) []byte {
-	switch len(val) {
+func InternValue[S ~string | ~[]byte](val S) []byte {
+	b := stringOrBytesToBytes(val)
+	switch len(b) {
 	case 2:
-		if val[0] == '?' {
-			switch val[1] {
+		if b[0] == '?' {
+			switch b[1] {
 			case '1':
 				return ValSecFetchUserQuestion
 			case '0':
@@ -257,42 +254,54 @@ func InternValueBytes(val []byte) []byte {
 			}
 		}
 	case 4:
-		if bytes.Equal(val, ValSecFetchSiteNone) {
+		if bytes.Equal(b, ValSecFetchSiteNone) {
 			return ValSecFetchSiteNone
 		}
 	case 8:
-		if bytes.Equal(val, ValSecFetchDestDoc) {
+		if bytes.Equal(b, ValSecFetchDestDoc) {
 			return ValSecFetchDestDoc
 		}
-		if bytes.Equal(val, ValSecFetchModeNav) {
+		if bytes.Equal(b, ValSecFetchModeNav) {
 			return ValSecFetchModeNav
 		}
 	case 10:
-		if bytes.Equal(val, ValConnectionKeepAlive) {
+		if bytes.Equal(b, ValConnectionKeepAlive) {
 			return ValConnectionKeepAlive
 		}
-		if bytes.Equal(val, ValSecFetchSiteCross) {
+		if bytes.Equal(b, ValSecFetchSiteCross) {
 			return ValSecFetchSiteCross
 		}
 	case 11:
-		if bytes.Equal(val, ValSecFetchSiteSame) {
+		if bytes.Equal(b, ValSecFetchSiteSame) {
 			return ValSecFetchSiteSame
 		}
 	case 16:
-		if bytes.Equal(val, ValApplicationJSON) {
+		if bytes.Equal(b, ValApplicationJSON) {
 			return ValApplicationJSON
 		}
 	case 23:
-		if bytes.Equal(val, ValAcceptEncodingGzip) {
+		if bytes.Equal(b, ValAcceptEncodingGzip) {
 			return ValAcceptEncodingGzip
 		}
 	case 33:
-		if bytes.Equal(val, ValApplicationForm) {
+		if bytes.Equal(b, ValApplicationForm) {
 			return ValApplicationForm
 		}
 	}
 
 	return nil
+}
+
+
+func stringOrBytesToBytes[S ~string | ~[]byte](s S) []byte {
+	switch v := any(s).(type) {
+	case []byte:
+		return v
+	case string:
+		return bytesconv.S2B(v)
+	default:
+		return []byte(s)
+	}
 }
 
 // equalFoldSWAR compares a and b case-insensitively using 64-bit SWAR vector processing.

@@ -47,6 +47,7 @@ func BenchmarkEncodeRFC8187(b *testing.B) {
 func BenchmarkDecodeRFC8187(b *testing.B) {
 	encoded := "UTF-8'de'letztes%20Kapitel%20f%C3%BCr%20Report%202026"
 	for b.Loop() {
-		_, _, _, _ = contentdisposition.DecodeRFC8187(encoded)
+		_, _, _ = contentdisposition.DecodeRFC8187(encoded)
 	}
 }
+

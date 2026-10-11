@@ -202,16 +202,16 @@ func TestArgsCRUD(t *testing.T) {
 		t.Fatalf("DelAllArgsStable altered order of remaining args")
 	}
 
-	// SetArgBytes, AppendArgBytes, PeekArgBytes
+	// SetArg, AppendArg, PeekArg
 	argsSlice := make([]uri.ArgsKV, 0, 4)
-	argsSlice = uri.SetArgBytes(argsSlice, []byte("alpha"), []byte("1"), uri.ArgsHasValue)
-	argsSlice = uri.AppendArgBytes(argsSlice, []byte("alpha"), []byte("2"), uri.ArgsHasValue)
+	argsSlice = uri.SetArg(argsSlice, []byte("alpha"), []byte("1"), uri.ArgsHasValue)
+	argsSlice = uri.AppendArg(argsSlice, []byte("alpha"), []byte("2"), uri.ArgsHasValue)
 	if len(argsSlice) != 2 {
 		t.Fatalf("expected 2 args in slice, got %d", len(argsSlice))
 	}
-	peeked := uri.PeekArgBytes(argsSlice, []byte("alpha"))
+	peeked := uri.PeekArg(argsSlice, []byte("alpha"))
 	if !bytes.Equal(peeked, []byte("1")) {
-		t.Fatalf("PeekArgBytes failed: %s", peeked)
+		t.Fatalf("PeekArg failed: %s", peeked)
 	}
 
 	// CopyArgs
@@ -344,8 +344,8 @@ func TestArgsSortingAndSerialization(t *testing.T) {
 
 	var buf bytes.Buffer
 	n, err := a.WriteTo(&buf)
-	if err != nil || n != int64(len("ant=2&zebra=1")) || string(buf.Bytes()) != "ant=2&zebra=1" {
-		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, string(buf.Bytes()))
+	if err != nil || n != int64(len("ant=2&zebra=1")) || buf.String() != "ant=2&zebra=1" {
+		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, buf.String())
 	}
 
 	// Serialization with NoValue
@@ -433,5 +433,79 @@ func TestArgsAllEarlyBreak(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected early break at count 2, got %d", count)
+	}
+}
+
+func TestStandaloneArgsGeneric(t *testing.T) {
+	// 1. SetArg and AppendArg with string
+	var s []uri.ArgsKV
+	s = uri.SetArg(s, "foo", "bar", uri.ArgsHasValue)
+	s = uri.AppendArg(s, "foo", "baz", uri.ArgsHasValue)
+	s = uri.SetArg(s, "flag", "", uri.ArgsNoValue)
+
+	if len(s) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(s))
+	}
+	if !uri.HasArg(s, "foo") || !uri.HasArg(s, "flag") || uri.HasArg(s, "missing") {
+		t.Fatal("HasArg string failed")
+	}
+	if !bytes.Equal(uri.PeekArg(s, "foo"), []byte("bar")) {
+		t.Fatalf("PeekArg string failed: %s", uri.PeekArg(s, "foo"))
+	}
+
+	// 2. SetArg and AppendArg with []byte
+	var b []uri.ArgsKV
+	b = uri.SetArg(b, []byte("foo"), []byte("bar"), uri.ArgsHasValue)
+	b = uri.AppendArg(b, []byte("foo"), []byte("baz"), uri.ArgsHasValue)
+	b = uri.SetArg(b, []byte("flag"), []byte(nil), uri.ArgsNoValue)
+
+	if len(b) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(b))
+	}
+	if !uri.HasArg(b, []byte("foo")) || !uri.HasArg(b, []byte("flag")) || uri.HasArg(b, []byte("missing")) {
+		t.Fatal("HasArg bytes failed")
+	}
+	if !bytes.Equal(uri.PeekArg(b, []byte("foo")), []byte("bar")) {
+		t.Fatalf("PeekArg bytes failed: %s", uri.PeekArg(b, []byte("foo")))
+	}
+
+	// Cross-type lookups (string on []byte slice, and vice versa)
+	if !bytes.Equal(uri.PeekArg(s, []byte("foo")), []byte("bar")) {
+		t.Fatal("cross-type PeekArg bytes on string slice failed")
+	}
+	if !bytes.Equal(uri.PeekArg(b, "foo"), []byte("bar")) {
+		t.Fatal("cross-type PeekArg string on bytes slice failed")
+	}
+
+	// 3. DelAllArgs and DelAllArgsStable with string and []byte
+	delStr := uri.DelAllArgs(slices.Clone(s), "foo")
+	if len(delStr) != 1 || uri.HasArg(delStr, "foo") {
+		t.Fatalf("DelAllArgs string failed: %v", delStr)
+	}
+
+	delBytes := uri.DelAllArgs(slices.Clone(b), []byte("foo"))
+	if len(delBytes) != 1 || uri.HasArg(delBytes, []byte("foo")) {
+		t.Fatalf("DelAllArgs bytes failed: %v", delBytes)
+	}
+
+	stableStr := uri.DelAllArgsStable(slices.Clone(s), "foo")
+	if len(stableStr) != 1 || !bytes.Equal(stableStr[0].Key, []byte("flag")) {
+		t.Fatalf("DelAllArgsStable string failed: %v", stableStr)
+	}
+
+	stableBytes := uri.DelAllArgsStable(slices.Clone(b), []byte("foo"))
+	if len(stableBytes) != 1 || !bytes.Equal(stableBytes[0].Key, []byte("flag")) {
+		t.Fatalf("DelAllArgsStable bytes failed: %v", stableBytes)
+	}
+
+	// 4. Canonical generic SetArg, AppendArg, PeekArg
+	var legacy []uri.ArgsKV
+	legacy = uri.SetArg(legacy, []byte("k"), []byte("v"), uri.ArgsHasValue)
+	legacy = uri.AppendArg(legacy, []byte("k"), []byte("v2"), uri.ArgsHasValue)
+	if !bytes.Equal(uri.PeekArg(legacy, []byte("k")), []byte("v")) {
+		t.Fatal("PeekArg bytes failed")
+	}
+	if !bytes.Equal(uri.PeekArg(legacy, "k"), []byte("v")) {
+		t.Fatal("PeekArg string failed")
 	}
 }

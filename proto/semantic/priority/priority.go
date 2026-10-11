@@ -169,13 +169,5 @@ func Parse[S ~string | ~[]byte](s S) (Priority, error) {
 
 
 func equalStr[S ~string | ~[]byte](s S, target string) bool {
-	if len(s) != len(target) {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if s[i] != target[i] {
-			return false
-		}
-	}
-	return true
+	return string(s) == target
 }

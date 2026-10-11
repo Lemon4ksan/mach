@@ -158,8 +158,10 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 		case coreh3.FrameTypeSettings:
 			st, err := coreh3.DecodeSettings(r, payloadLen)
 			if err != nil {
-				msg := "H3_SETTINGS_ERROR: invalid settings payload (RFC 9114 §7.2.4)"
-				code := coreh3.ErrCodeH3SettingsError
+				var (
+					msg  string
+					code = coreh3.ErrCodeH3SettingsError
+				)
 				if errors.Is(err, coreh3.ErrH3SettingsError) {
 					msg = "H3_SETTINGS_ERROR: reserved H2 setting ID (RFC 9114 §7.2.4.1)"
 				} else {

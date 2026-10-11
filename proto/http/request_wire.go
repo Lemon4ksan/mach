@@ -120,7 +120,7 @@ func (req *Request) ReadBody(r *bufio.Reader, contentLength, maxBodySize int) (e
 	case contentLength >= 0:
 		bodyBuf.B, err = readBody(r, contentLength, maxBodySize, bodyBuf.B)
 	case contentLength == -1:
-		bodyBuf.B, err = readBodyChunked(r, maxBodySize, bodyBuf.B)
+		bodyBuf.B, err = ReadBodyChunked(r, maxBodySize, bodyBuf.B)
 		if err == nil && len(bodyBuf.B) == 0 {
 			req.Header.SetContentLength(0)
 		}

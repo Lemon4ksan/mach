@@ -19,9 +19,6 @@ import (
 // dynamic table instead to facilitate prompt eviction of draining entries.
 const DrainingFraction float64 = 0.25
 
-// Deprecated: use [DrainingFraction].
-const kDrainingFraction = DrainingFraction
-
 // DecoderStreamErrorHandler receives notifications of errors on the decoder stream.
 // This MUST be treated as a connection error of type HTTP_QPACK_DECODER_STREAM_ERROR.
 type DecoderStreamErrorHandler func(errorCode uint64, errorMessage string)
@@ -34,13 +31,6 @@ const (
 	CookieCrumblingEnabled CookieCrumbling = iota
 	// CookieCrumblingDisabled disables cookie crumbling.
 	CookieCrumblingDisabled
-)
-
-const (
-	// Deprecated: use [CookieCrumblingEnabled].
-	KCookieCrumblingEnabled = CookieCrumblingEnabled
-	// Deprecated: use [CookieCrumblingDisabled].
-	KCookieCrumblingDisabled = CookieCrumblingDisabled
 )
 
 // Encoder manages dynamic table state, generates encoder stream instructions,
@@ -381,7 +371,7 @@ func (e *Encoder) firstPassEncode(
 
 	smallestNonEvictableIndex := min(knownReceivedCount, e.blockingManager.SmallestBlockingIndex())
 
-	drainingIndex := e.headerTable.DrainingIndex(kDrainingFraction)
+	drainingIndex := e.headerTable.DrainingIndex(DrainingFraction)
 	blockingAllowed := e.blockingManager.BlockingAllowedOnStream(streamID, e.maximumBlockedStreams)
 
 	// Update eviction barrier on header table
@@ -639,37 +629,6 @@ func EncodeLiteralHeaderFieldWithNameReference(
 // EncodeLiteralHeaderField generates a literal header field representation with literal name and value.
 func EncodeLiteralHeaderField(name, value string) *InstructionWithValues {
 	return InstructionWithValuesLiteralHeaderField(name, value)
-}
-
-// -----------------------------------------------------------------------------
-// EncoderPeer for Unit Test Parity
-// -----------------------------------------------------------------------------
-
-// EncoderPeer provides access to internal encoder state for unit tests.
-// The zero value is ready to use.
-//
-// Deprecated: use [Encoder.HeaderTable], [Encoder.MaximumBlockedStreams], or [Encoder.BlockingManager].
-type EncoderPeer struct{}
-
-// EncoderPeerHeaderTable returns encoder's header table.
-//
-// Deprecated: use [Encoder.HeaderTable].
-func EncoderPeerHeaderTable(encoder *Encoder) *EncoderHeaderTable {
-	return encoder.headerTable
-}
-
-// EncoderPeerMaximumBlockedStreams returns encoder's maximum blocked streams limit.
-//
-// Deprecated: use [Encoder.MaximumBlockedStreams].
-func EncoderPeerMaximumBlockedStreams(encoder *Encoder) uint64 {
-	return encoder.maximumBlockedStreams
-}
-
-// EncoderPeerSmallestBlockingIndex returns encoder's smallest blocking index.
-//
-// Deprecated: use [BlockingManager.SmallestBlockingIndex].
-func EncoderPeerSmallestBlockingIndex(encoder *Encoder) uint64 {
-	return encoder.blockingManager.SmallestBlockingIndex()
 }
 
 // Interface compliance assertion

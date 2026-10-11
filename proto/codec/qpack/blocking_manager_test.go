@@ -15,19 +15,10 @@ func TestBlockingManager_Empty(t *testing.T) {
 	if manager.SmallestBlockingIndex() != math.MaxUint64 {
 		t.Errorf("expected SmallestBlockingIndex == MaxUint64, got %d", manager.SmallestBlockingIndex())
 	}
-	if manager.smallest_blocking_index() != math.MaxUint64 {
-		t.Errorf("expected smallest_blocking_index == MaxUint64, got %d", manager.smallest_blocking_index())
-	}
 	if manager.KnownReceivedCount() != 0 {
 		t.Errorf("expected KnownReceivedCount == 0, got %d", manager.KnownReceivedCount())
 	}
-	if manager.known_received_count() != 0 {
-		t.Errorf("expected known_received_count == 0, got %d", manager.known_received_count())
-	}
 	if manager.IsBlocked(0) {
-		t.Errorf("stream 0 should not be blocked")
-	}
-	if manager.is_blocked(0) {
 		t.Errorf("stream 0 should not be blocked")
 	}
 	if manager.IsBlocked(1) {
@@ -36,14 +27,8 @@ func TestBlockingManager_Empty(t *testing.T) {
 	if manager.NumBlockedStreams() != 0 {
 		t.Errorf("expected NumBlockedStreams == 0, got %d", manager.NumBlockedStreams())
 	}
-	if manager.num_blocked_streams() != 0 {
-		t.Errorf("expected num_blocked_streams == 0, got %d", manager.num_blocked_streams())
-	}
 	if !manager.BlockingAllowedOnStream(0, 1) {
 		t.Errorf("expected blocking allowed on stream 0")
-	}
-	if !manager.blocking_allowed_on_stream(0, 1) {
-		t.Errorf("expected blocking_allowed_on_stream on stream 0")
 	}
 }
 

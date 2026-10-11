@@ -48,4 +48,19 @@ func TestAlloc(t *testing.T) {
 			t.Fatalf("expected 0 allocations on cookie generic Parse bytes, got %v", allocs)
 		}
 	})
+
+	t.Run("InitHeaderValue", func(t *testing.T) {
+		buf := make([]byte, 0, 64)
+		valStr := "valid-cookie-value"
+		valBytes := []byte("valid-cookie-value")
+		allocs := testing.AllocsPerRun(1000, func() {
+			b1 := cookie.InitHeaderValue(buf, valStr)
+			b2 := cookie.InitHeaderValue(buf, valBytes)
+			_ = b1
+			_ = b2
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on InitHeaderValue, got %v", allocs)
+		}
+	})
 }

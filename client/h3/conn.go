@@ -134,18 +134,14 @@ func (cc *ClientConn) Close() error {
 
 // readBidirectionalStreams rejects server-initiated bidirectional streams with H3_STREAM_CREATION_ERROR (RFC 9114 §6.1).
 func (cc *ClientConn) readBidirectionalStreams() {
-	for {
-		str, err := cc.conn.AcceptStream(context.Background())
-		if err != nil {
-			return
-		}
-
-		_ = cc.conn.CloseWithError(
-			quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
-			"server-initiated bidirectional stream (RFC 9114 §6.1)",
-		)
-		_ = str.Close()
-
+	str, err := cc.conn.AcceptStream(context.Background())
+	if err != nil {
 		return
 	}
+
+	_ = cc.conn.CloseWithError(
+		quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+		"server-initiated bidirectional stream (RFC 9114 §6.1)",
+	)
+	_ = str.Close()
 }

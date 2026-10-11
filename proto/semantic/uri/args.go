@@ -221,7 +221,7 @@ func (a *Args) Del(key string) {
 
 // DelBytes deletes argument with the given key from query args.
 func (a *Args) DelBytes(key []byte) {
-	a.args = DelAllArgsStable(a.args, bytesconv.B2S(key))
+	a.args = DelAllArgsStable(a.args, key)
 }
 
 // Add adds 'key=value' argument.
@@ -235,21 +235,21 @@ func (a *Args) Add(key, value string) {
 //
 // Multiple values for the same key may be added.
 func (a *Args) AddBytesK(key []byte, value string) {
-	a.args = AppendArg(a.args, bytesconv.B2S(key), value, ArgsHasValue)
+	a.args = AppendArg(a.args, key, value, ArgsHasValue)
 }
 
 // AddBytesV adds 'key=value' argument.
 //
 // Multiple values for the same key may be added.
 func (a *Args) AddBytesV(key string, value []byte) {
-	a.args = AppendArg(a.args, key, bytesconv.B2S(value), ArgsHasValue)
+	a.args = AppendArg(a.args, key, value, ArgsHasValue)
 }
 
 // AddBytesKV adds 'key=value' argument.
 //
 // Multiple values for the same key may be added.
 func (a *Args) AddBytesKV(key, value []byte) {
-	a.args = AppendArg(a.args, bytesconv.B2S(key), bytesconv.B2S(value), ArgsHasValue)
+	a.args = AppendArg(a.args, key, value, ArgsHasValue)
 }
 
 // AddNoValue adds only 'key' as argument without the '='.
@@ -263,7 +263,7 @@ func (a *Args) AddNoValue(key string) {
 //
 // Multiple values for the same key may be added.
 func (a *Args) AddBytesKNoValue(key []byte) {
-	a.args = AppendArg(a.args, bytesconv.B2S(key), "", ArgsNoValue)
+	a.args = AppendArg(a.args, key, []byte(nil), ArgsNoValue)
 }
 
 // Set sets 'key=value' argument.
@@ -273,17 +273,17 @@ func (a *Args) Set(key, value string) {
 
 // SetBytesK sets 'key=value' argument.
 func (a *Args) SetBytesK(key []byte, value string) {
-	a.args = SetArg(a.args, bytesconv.B2S(key), value, ArgsHasValue)
+	a.args = SetArg(a.args, key, value, ArgsHasValue)
 }
 
 // SetBytesV sets 'key=value' argument.
 func (a *Args) SetBytesV(key string, value []byte) {
-	a.args = SetArg(a.args, key, bytesconv.B2S(value), ArgsHasValue)
+	a.args = SetArg(a.args, key, value, ArgsHasValue)
 }
 
 // SetBytesKV sets 'key=value' argument.
 func (a *Args) SetBytesKV(key, value []byte) {
-	a.args = SetArgBytes(a.args, key, value, ArgsHasValue)
+	a.args = SetArg(a.args, key, value, ArgsHasValue)
 }
 
 // SetNoValue sets only 'key' as argument without the '='.
@@ -295,7 +295,7 @@ func (a *Args) SetNoValue(key string) {
 
 // SetBytesKNoValue sets 'key' argument.
 func (a *Args) SetBytesKNoValue(key []byte) {
-	a.args = SetArg(a.args, bytesconv.B2S(key), "", ArgsNoValue)
+	a.args = SetArg(a.args, key, []byte(nil), ArgsNoValue)
 }
 
 // Peek returns query arg value for the given key.
@@ -303,7 +303,7 @@ func (a *Args) SetBytesKNoValue(key []byte) {
 // The returned value is valid until the Args is reused or released (ReleaseArgs).
 // Do not store references to the returned value. Make copies instead.
 func (a *Args) Peek(key string) []byte {
-	return PeekArgStr(a.args, key)
+	return PeekArg(a.args, key)
 }
 
 // PeekBytes returns query arg value for the given key.
@@ -311,7 +311,7 @@ func (a *Args) Peek(key string) []byte {
 // The returned value is valid until the Args is reused or released (ReleaseArgs).
 // Do not store references to the returned value. Make copies instead.
 func (a *Args) PeekBytes(key []byte) []byte {
-	return PeekArgBytes(a.args, key)
+	return PeekArg(a.args, key)
 }
 
 // PeekMulti returns all the arg values for the given key.
@@ -333,12 +333,12 @@ func (a *Args) PeekMultiBytes(key []byte) [][]byte {
 
 // Has returns true if the given key exists in Args.
 func (a *Args) Has(key string) bool {
-	return hasArg(a.args, key)
+	return HasArg(a.args, key)
 }
 
 // HasBytes returns true if the given key exists in Args.
 func (a *Args) HasBytes(key []byte) bool {
-	return hasArg(a.args, bytesconv.B2S(key))
+	return HasArg(a.args, key)
 }
 
 // ErrNoArgValue is returned when Args value with the given key is missing.
@@ -452,11 +452,12 @@ func CopyArgs(dst, src []ArgsKV) []ArgsKV {
 	return dst
 }
 
-// DelAllArgsStable removes all occurrences of key from args preserving entry order.
-func DelAllArgsStable(args []ArgsKV, key string) []ArgsKV {
+// DelAllArgsStable removes all occurrences of key from args preserving entry order ([string] or [[]byte]).
+func DelAllArgsStable[S ~string | ~[]byte](args []ArgsKV, key S) []ArgsKV {
+	kBytes := bytesOrString(key)
 	for i, n := 0, len(args); i < n; i++ {
 		kv := &args[i]
-		if key == string(kv.Key) {
+		if bytes.Equal(kv.Key, kBytes) {
 			tmp := *kv
 
 			copy(args[i:], args[i+1:])
@@ -471,11 +472,12 @@ func DelAllArgsStable(args []ArgsKV, key string) []ArgsKV {
 	return args
 }
 
-// DelAllArgs removes all occurrences of key from args without preserving entry order.
-func DelAllArgs(args []ArgsKV, key string) []ArgsKV {
+// DelAllArgs removes all occurrences of key from args without preserving entry order ([string] or [[]byte]).
+func DelAllArgs[S ~string | ~[]byte](args []ArgsKV, key S) []ArgsKV {
+	kBytes := bytesOrString(key)
 	n := len(args)
 	for i := 0; i < n; i++ {
-		if key == string(args[i].Key) {
+		if bytes.Equal(args[i].Key, kBytes) {
 			args[i], args[n-1] = args[n-1], args[i]
 			n--
 			i--
@@ -485,21 +487,18 @@ func DelAllArgs(args []ArgsKV, key string) []ArgsKV {
 	return args[:n]
 }
 
-// SetArgBytes sets key and value byte slices in h, replacing existing entries.
-func SetArgBytes(h []ArgsKV, key, value []byte, noValue bool) []ArgsKV {
-	return SetArg(h, bytesconv.B2S(key), bytesconv.B2S(value), noValue)
-}
-
-// SetArg sets key and value strings in h, replacing existing entries.
-func SetArg(h []ArgsKV, key, value string, noValue bool) []ArgsKV {
+// SetArg sets key and value in h ([string] or [[]byte]), replacing existing entries.
+func SetArg[SK ~string | ~[]byte, SV ~string | ~[]byte](h []ArgsKV, key SK, value SV, noValue bool) []ArgsKV {
+	kBytes := bytesOrString(key)
 	n := len(h)
 	for i := range n {
 		kv := &h[i]
-		if key == string(kv.Key) {
+		if bytes.Equal(kv.Key, kBytes) {
 			if noValue {
 				kv.Value = kv.Value[:0]
 			} else {
-				kv.Value = append(kv.Value[:0], value...)
+				vBytes := bytesOrString(value)
+				kv.Value = append(kv.Value[:0], vBytes...)
 			}
 
 			kv.NoValue = noValue
@@ -511,22 +510,19 @@ func SetArg(h []ArgsKV, key, value string, noValue bool) []ArgsKV {
 	return AppendArg(h, key, value, noValue)
 }
 
-//nolint:unused
-func AppendArgBytes(h []ArgsKV, key, value []byte, noValue bool) []ArgsKV {
-	return AppendArg(h, bytesconv.B2S(key), bytesconv.B2S(value), noValue)
-}
-
-// AppendArg appends a key-value argument to args.
-func AppendArg(args []ArgsKV, key, value string, noValue bool) []ArgsKV {
+// AppendArg appends a key-value argument ([string] or [[]byte]) to args.
+func AppendArg[SK ~string | ~[]byte, SV ~string | ~[]byte](args []ArgsKV, key SK, value SV, noValue bool) []ArgsKV {
 	var kv *ArgsKV
 
 	args, kv = AllocArg(args)
 
-	kv.Key = append(kv.Key[:0], key...)
+	kBytes := bytesOrString(key)
+	kv.Key = append(kv.Key[:0], kBytes...)
 	if noValue {
 		kv.Value = kv.Value[:0]
 	} else {
-		kv.Value = append(kv.Value[:0], value...)
+		vBytes := bytesOrString(value)
+		kv.Value = append(kv.Value[:0], vBytes...)
 	}
 
 	kv.NoValue = noValue
@@ -553,9 +549,11 @@ func ReleaseArg(h []ArgsKV) []ArgsKV {
 	return h[:len(h)-1]
 }
 
-func hasArg(h []ArgsKV, key string) bool {
+// HasArg reports whether the argument key ([string] or [[]byte]) exists in h.
+func HasArg[S ~string | ~[]byte](h []ArgsKV, key S) bool {
+	kBytes := bytesOrString(key)
 	for i := range h {
-		if key == string(h[i].Key) {
+		if bytes.Equal(h[i].Key, kBytes) {
 			return true
 		}
 	}
@@ -563,10 +561,11 @@ func hasArg(h []ArgsKV, key string) bool {
 	return false
 }
 
-// PeekArgBytes returns the argument value corresponding to k in h.
-func PeekArgBytes(h []ArgsKV, k []byte) []byte {
+// PeekArg returns the argument value corresponding to k ([string] or [[]byte]) in h.
+func PeekArg[S ~string | ~[]byte](h []ArgsKV, k S) []byte {
+	kBytes := bytesOrString(k)
 	for i := range h {
-		if bytes.Equal(h[i].Key, k) {
+		if bytes.Equal(h[i].Key, kBytes) {
 			return h[i].Value
 		}
 	}
@@ -574,16 +573,15 @@ func PeekArgBytes(h []ArgsKV, k []byte) []byte {
 	return nil
 }
 
-// PeekArgStr returns the argument value corresponding to k string in h.
-func PeekArgStr(h []ArgsKV, k string) []byte {
-	for i, n := 0, len(h); i < n; i++ {
-		kv := &h[i]
-		if string(kv.Key) == k {
-			return kv.Value
-		}
+func bytesOrString[S ~string | ~[]byte](s S) []byte {
+	switch v := any(s).(type) {
+	case []byte:
+		return v
+	case string:
+		return bytesconv.S2B(v)
+	default:
+		return []byte(s)
 	}
-
-	return nil
 }
 
 type argsScanner struct {

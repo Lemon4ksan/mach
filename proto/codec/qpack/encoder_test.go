@@ -354,7 +354,7 @@ func TestEncoder_TooLargeInsertCountIncrement(t *testing.T) {
 // TEST_P(EncoderTest, InsertCountIncrementOverflow)
 func TestEncoder_InsertCountIncrementOverflow(t *testing.T) {
 	runEncoderTest(t, func(t *testing.T, f *qpackEncoderTestFixture) {
-		headerTable := EncoderPeerHeaderTable(f.encoder)
+		headerTable := f.encoder.HeaderTable()
 		headerTable.SetMaximumDynamicTableCapacity(4096)
 		headerTable.SetDynamicTableCapacity(4096)
 		headerTable.InsertEntry("foo", "bar")
@@ -633,7 +633,7 @@ func TestEncoder_DynamicTableCapacityLessThanMaximum(t *testing.T) {
 		f.encoder.SetMaximumDynamicTableCapacity(1024)
 		f.encoder.SetDynamicTableCapacity(30)
 
-		headerTable := EncoderPeerHeaderTable(f.encoder)
+		headerTable := f.encoder.HeaderTable()
 		assert.Equal(t, uint64(1024), headerTable.MaximumDynamicTableCapacity())
 		assert.Equal(t, uint64(30), headerTable.DynamicTableCapacity())
 	})
@@ -753,7 +753,7 @@ func TestEncoder_UnackedEntryCannotBeEvicted(t *testing.T) {
 		f.encoder.SetMaximumDynamicTableCapacity(40)
 		f.encoder.SetDynamicTableCapacity(40)
 
-		headerTable := EncoderPeerHeaderTable(f.encoder)
+		headerTable := f.encoder.HeaderTable()
 		assert.Equal(t, uint64(0), headerTable.InsertedEntryCount())
 		assert.Equal(t, uint64(0), headerTable.DroppedEntryCount())
 

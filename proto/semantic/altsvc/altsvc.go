@@ -183,10 +183,6 @@ func stringOrBytesToString[S ~string | ~[]byte](s S) string {
 	}
 }
 
-// specialized for string and []byte via overload
-func init() {
-	// keep compiler type checks happy
-}
 
 func trimSpace(s string) string {
 	start := 0

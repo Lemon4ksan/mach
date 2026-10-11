@@ -267,13 +267,6 @@ const (
 	MatchName = MatchTypeName
 	// MatchNameAndValue is an alias for [MatchTypeNameAndValue].
 	MatchNameAndValue = MatchTypeNameAndValue
-
-	// Deprecated: use [MatchTypeNoMatch].
-	KNoMatch = MatchTypeNoMatch
-	// Deprecated: use [MatchTypeName].
-	KName = MatchTypeName
-	// Deprecated: use [MatchTypeNameAndValue].
-	KNameAndValue = MatchTypeNameAndValue
 )
 
 // MatchResult describes the result of a header table lookup.

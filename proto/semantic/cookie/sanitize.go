@@ -6,8 +6,6 @@ package cookie
 
 import (
 	"bytes"
-
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 const (
@@ -15,41 +13,41 @@ const (
 	nChar = '\n'
 )
 
+// InitHeaderValue copies value ([string] or [[]byte]) into bufV and sanitizes CR and LF characters.
+func InitHeaderValue[S ~string | ~[]byte](bufV []byte, value S) []byte {
+	bufV = append(bufV[:0], value...)
+	return RemoveNewLines(bufV)
+}
+
 // InitHeaderValueString initializes and sanitizes a header value buffer from value string.
 func InitHeaderValueString(bufV []byte, value string) []byte {
-	return InitHeaderValueBytes(bufV, bytesconv.S2B(value))
+	return InitHeaderValue(bufV, value)
 }
 
 // InitHeaderValueBytes copies value into bufV and sanitizes CR and LF characters.
 func InitHeaderValueBytes(bufV, value []byte) []byte {
-	bufV = append(bufV[:0], value...)
-	bufV = RemoveNewLines(bufV)
-	return bufV
+	return InitHeaderValue(bufV, value)
 }
 
 // RemoveNewLines replaces '\r' and '\n' with spaces.
 func RemoveNewLines(raw []byte) []byte {
 	foundR := bytes.IndexByte(raw, rChar)
 	foundN := bytes.IndexByte(raw, nChar)
-	start := 0
+	var start int
 
 	switch {
-	case foundN != -1:
-		if foundR > foundN {
-			start = foundN
-		} else if foundR != -1 {
-			start = foundR
-		}
-
+	case foundR != -1 && foundN != -1:
+		start = min(foundR, foundN)
 	case foundR != -1:
 		start = foundR
+	case foundN != -1:
+		start = foundN
 	default:
 		return raw
 	}
 
 	for i := start; i < len(raw); i++ {
-		switch raw[i] {
-		case rChar, nChar:
+		if raw[i] == rChar || raw[i] == nChar {
 			raw[i] = ' '
 		}
 	}

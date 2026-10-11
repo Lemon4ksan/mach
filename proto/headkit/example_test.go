@@ -34,3 +34,11 @@ func ExampleIsSensitive() {
 	// true
 	// false
 }
+
+func ExampleInternKey() {
+	staticKey := headkit.InternKey("content-type")
+	fmt.Printf("%s\n", staticKey)
+
+	// Output:
+	// content-type
+}

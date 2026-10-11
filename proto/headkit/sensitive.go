@@ -16,12 +16,20 @@ const DefaultRedactedMask = "[REDACTED]"
 
 // IsSensitive reports whether headerName contains authentication credentials,
 // session tokens, or private identity data per RFC 9110 §15.
-func IsSensitive(headerName string) bool {
-	h := strings.TrimSpace(headerName)
-	if len(h) == 0 {
+// Accepts both [string] and [[]byte] with zero heap allocations.
+func IsSensitive[S ~string | ~[]byte](headerName S) bool {
+	b := stringOrBytesToBytes(headerName)
+	for len(b) > 0 && (b[0] == ' ' || b[0] == '\t' || b[0] == '\r' || b[0] == '\n') {
+		b = b[1:]
+	}
+	for len(b) > 0 && (b[len(b)-1] == ' ' || b[len(b)-1] == '\t' || b[len(b)-1] == '\r' || b[len(b)-1] == '\n') {
+		b = b[:len(b)-1]
+	}
+	if len(b) == 0 {
 		return false
 	}
 
+	h := bytesconv.B2S(b)
 	switch len(h) {
 	case 5: // token
 		return bytesconv.EqualFoldASCII(h, "token")
@@ -56,25 +64,21 @@ func IsSensitive(headerName string) bool {
 	}
 }
 
-// IsSensitiveBytes reports whether headerName contains sensitive authentication credentials
-// without allocating strings.
-func IsSensitiveBytes(headerName []byte) bool {
-	if len(headerName) == 0 {
-		return false
-	}
-
-	return IsSensitive(bytesconv.B2S(headerName))
-}
 
 // RedactValue masks the secret value of a sensitive header while preserving recognizable prefix formats
 // (e.g. "Bearer [REDACTED]" or "Basic [REDACTED]").
-func RedactValue(headerName, value string) string {
-	if !IsSensitive(headerName) || value == "" {
-		return value
+func RedactValue[SH, SV ~string | ~[]byte](headerName SH, value SV) string {
+	bVal := stringOrBytesToBytes(value)
+	if len(bVal) == 0 || !IsSensitive(headerName) {
+		return string(bVal)
 	}
 
-	if strings.EqualFold(headerName, "authorization") || strings.EqualFold(headerName, "proxy-authorization") {
-		scheme, _, ok := strings.Cut(value, " ")
+	bHdr := stringOrBytesToBytes(headerName)
+	h := bytesconv.B2S(bHdr)
+	v := bytesconv.B2S(bVal)
+
+	if bytesconv.EqualFoldASCII(h, "authorization") || bytesconv.EqualFoldASCII(h, "proxy-authorization") {
+		scheme, _, ok := strings.Cut(v, " ")
 		if ok && scheme != "" {
 			return scheme + " " + DefaultRedactedMask
 		}

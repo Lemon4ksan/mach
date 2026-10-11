@@ -274,8 +274,8 @@ func TestModern_StreamWriter(t *testing.T) {
 		t.Errorf("expected 0 buffered bytes, got %d", delegate.NumBytesBuffered())
 	}
 	delegate.WriteStreamData([]byte("hello qpack"))
-	if string(buf.Bytes()) != "hello qpack" {
-		t.Errorf("expected 'hello qpack', got %q", string(buf.Bytes()))
+	if buf.String() != "hello qpack" {
+		t.Errorf("expected 'hello qpack', got %q", buf.String())
 	}
 }
 
@@ -491,23 +491,6 @@ func TestModern_BlockingManager_IteratorsAndDeprecations(t *testing.T) {
 	}
 	if len(blockedList) != 1 || blockedList[0] != 1 {
 		t.Errorf("unexpected blocked streams: %v", blockedList)
-	}
-
-	// Test deprecated method parity
-	if bm.smallest_blocking_index() != bm.SmallestBlockingIndex() {
-		t.Errorf("smallest_blocking_index parity error")
-	}
-	if bm.known_received_count() != bm.KnownReceivedCount() {
-		t.Errorf("known_received_count parity error")
-	}
-	if bm.is_blocked(1) != bm.IsBlocked(1) {
-		t.Errorf("is_blocked parity error")
-	}
-	if bm.num_blocked_streams() != bm.NumBlockedStreams() {
-		t.Errorf("num_blocked_streams parity error")
-	}
-	if bm.blocking_allowed_on_stream(1) != bm.BlockingAllowedOnStream(1) {
-		t.Errorf("blocking_allowed_on_stream parity error")
 	}
 }
 
@@ -882,17 +865,6 @@ func TestModern_Encoder_Comprehensive(t *testing.T) {
 		enc.SetDynamicTableCapacity(4096)
 		t.Errorf("expected panic on exceeding capacity")
 	}()
-
-	// EncoderPeer
-	if EncoderPeerMaximumBlockedStreams(enc) != 10 {
-		t.Errorf("expected 10 from EncoderPeerMaximumBlockedStreams")
-	}
-	if EncoderPeerSmallestBlockingIndex(enc) != enc.BlockingManager().SmallestBlockingIndex() {
-		t.Errorf("EncoderPeerSmallestBlockingIndex mismatch")
-	}
-	if EncoderPeerHeaderTable(enc) != enc.HeaderTable() {
-		t.Errorf("EncoderPeerHeaderTable mismatch")
-	}
 }
 
 func TestModern_Errors_Comprehensive(t *testing.T) {

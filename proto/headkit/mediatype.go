@@ -5,6 +5,7 @@
 package headkit
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 
@@ -15,27 +16,28 @@ import (
 var ErrInvalidMediaType = errors.New("headkit: invalid media type")
 
 // BaseMediaType extracts and normalizes the base media type (e.g. "application/json; charset=utf-8" -> "application/json")
-// without allocating parameter maps.
-func BaseMediaType(v string) string {
-	rawType, _, _ := strings.Cut(v, ";")
-	return strings.ToLower(strings.TrimSpace(rawType))
+// without allocating parameter maps. Supports both [string] and [[]byte].
+func BaseMediaType[S ~string | ~[]byte](v S) S {
+	rawType, _, _ := cutDirectives(v, ';')
+	return toLowerDirectives(trimSpaceDirectives(rawType))
 }
 
 // ParseMediaType parses a Content-Type or Content-Disposition value into its base media type
 // and parameter map according to RFC 2045 §5.1 and RFC 9110 §8.3.
-func ParseMediaType(v string) (string, DirectivesMap, error) {
-	if v == "" {
-		return "", DirectivesMap{}, ErrInvalidMediaType
+// Supports both [string] and [[]byte].
+func ParseMediaType[S ~string | ~[]byte](v S) (S, DirectivesMap, error) {
+	if len(v) == 0 {
+		return v[:0], DirectivesMap{}, ErrInvalidMediaType
 	}
 
-	rawType, rest, ok := strings.Cut(v, ";")
+	rawType, rest, ok := cutDirectives(v, ';')
 
-	mediaType := strings.ToLower(strings.TrimSpace(rawType))
-	if mediaType == "" || !strings.Contains(mediaType, "/") {
-		return "", DirectivesMap{}, ErrInvalidMediaType
+	mediaType := toLowerDirectives(trimSpaceDirectives(rawType))
+	if len(mediaType) == 0 || !containsByte(mediaType, '/') {
+		return v[:0], DirectivesMap{}, ErrInvalidMediaType
 	}
 
-	if !ok || strings.TrimSpace(rest) == "" {
+	if !ok || len(trimSpaceDirectives(rest)) == 0 {
 		return mediaType, DirectivesMap{}, nil
 	}
 
@@ -44,9 +46,10 @@ func ParseMediaType(v string) (string, DirectivesMap, error) {
 	return mediaType, params, nil
 }
 
-// ExtractBoundary extracts the multipart boundary parameter from a Content-Type string (RFC 2046 §5.1.1).
-func ExtractBoundary(contentType string) string {
-	if !strings.Contains(contentType, "boundary") {
+// ExtractBoundary extracts the multipart boundary parameter from a Content-Type string or byte slice (RFC 2046 §5.1.1).
+func ExtractBoundary[S ~string | ~[]byte](contentType S) string {
+	b := stringOrBytesToBytes(contentType)
+	if !bytes.Contains(b, []byte("boundary")) {
 		return ""
 	}
 
@@ -58,9 +61,10 @@ func ExtractBoundary(contentType string) string {
 	return params.Get("boundary")
 }
 
-// ExtractCharset extracts the character set parameter from a Content-Type string (RFC 9110 §8.3).
-func ExtractCharset(contentType string) string {
-	if !strings.Contains(contentType, "charset") {
+// ExtractCharset extracts the character set parameter from a Content-Type string or byte slice (RFC 9110 §8.3).
+func ExtractCharset[S ~string | ~[]byte](contentType S) string {
+	b := stringOrBytesToBytes(contentType)
+	if !bytes.Contains(b, []byte("charset")) {
 		return ""
 	}
 
@@ -73,26 +77,44 @@ func ExtractCharset(contentType string) string {
 }
 
 // IsJSON reports whether contentType represents a JSON media type (RFC 8259, RFC 6839).
-func IsJSON(contentType string) bool {
+// Supports both [string] and [[]byte] with zero heap allocations.
+func IsJSON[S ~string | ~[]byte](contentType S) bool {
 	mt := BaseMediaType(contentType)
-	return mt == "application/json" || strings.HasSuffix(mt, "+json")
+	b := stringOrBytesToBytes(mt)
+	return bytes.Equal(b, []byte("application/json")) || bytes.HasSuffix(b, []byte("+json"))
 }
 
 // IsXML reports whether contentType represents an XML media type (RFC 7303, RFC 6839).
-func IsXML(contentType string) bool {
+// Supports both [string] and [[]byte] with zero heap allocations.
+func IsXML[S ~string | ~[]byte](contentType S) bool {
 	mt := BaseMediaType(contentType)
-	return mt == "application/xml" || mt == "text/xml" || strings.HasSuffix(mt, "+xml")
+	b := stringOrBytesToBytes(mt)
+	return bytes.Equal(b, []byte("application/xml")) || bytes.Equal(b, []byte("text/xml")) || bytes.HasSuffix(b, []byte("+xml"))
 }
 
 // IsForm reports whether contentType is standard URL-encoded form data (application/x-www-form-urlencoded).
-func IsForm(contentType string) bool {
-	return BaseMediaType(contentType) == "application/x-www-form-urlencoded"
+// Supports both [string] and [[]byte] with zero heap allocations.
+func IsForm[S ~string | ~[]byte](contentType S) bool {
+	mt := BaseMediaType(contentType)
+	b := stringOrBytesToBytes(mt)
+	return bytes.Equal(b, []byte("application/x-www-form-urlencoded"))
 }
 
 // IsMultipart reports whether contentType is multipart form data (multipart/form-data).
-func IsMultipart(contentType string) bool {
+// Supports both [string] and [[]byte] with zero heap allocations.
+func IsMultipart[S ~string | ~[]byte](contentType S) bool {
 	mt := BaseMediaType(contentType)
-	return mt == "multipart/form-data" || strings.HasPrefix(mt, "multipart/")
+	b := stringOrBytesToBytes(mt)
+	return bytes.Equal(b, []byte("multipart/form-data")) || bytes.HasPrefix(b, []byte("multipart/"))
+}
+
+func containsByte[S ~string | ~[]byte](s S, b byte) bool {
+	for i := range len(s) {
+		if s[i] == b {
+			return true
+		}
+	}
+	return false
 }
 
 // FormatMediaType formats a media type and parameter map into an RFC 2045 formatted string.

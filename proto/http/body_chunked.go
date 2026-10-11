@@ -11,7 +11,8 @@ import (
 	"fmt"
 	"io"
 
-	protoh1 "github.com/lemon4ksan/mach/proto/h1"
+	"github.com/lemon4ksan/foundation/silicon/hexkit"
+	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
 var errChunkedStream = errors.New("chunked stream")
@@ -21,16 +22,6 @@ var errChunkedStream = errors.New("chunked stream")
 // per RFC 9112 Section 7.1.
 type ErrBrokenChunk struct{ error }
 
-// ParseHexUint parses a hex-encoded uint from src per RFC 9112 Section 7.1.1.
-//
-// It returns the parsed integer value, the number of bytes consumed from src,
-// and an error if the hex sequence is malformed, signed, or overflows 15 hex digits.
-// Accelerated via proto/h1 vectorized hexkit implementation.
-//
-// Concurrency: Thread-safe; operates strictly on the provided byte slice without allocations.
-func ParseHexUint(src []byte) (int, int, error) {
-	return protoh1.ParseHexUint(src)
-}
 
 // ReadBodyChunked decodes an HTTP/1.1 chunked transfer coding stream from r into dst
 // in accordance with RFC 9112 Section 7.1.
@@ -42,18 +33,46 @@ func ParseHexUint(src []byte) (int, int, error) {
 //
 // Concurrency: Not thread-safe; caller must own r and dst exclusively during execution.
 func ReadBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, error) {
-	return readBodyChunked(r, maxBodySize, dst)
+	if len(dst) > 0 {
+		panic("BUG: expected zero-length buffer")
+	}
+
+	for {
+		chunkSize, err := parseChunkSize(r)
+		if err != nil {
+			return dst, err
+		}
+
+		if chunkSize == 0 {
+			return dst, err
+		}
+
+		if maxBodySize > 0 && len(dst)+chunkSize > maxBodySize {
+			return dst, ErrBodyTooLarge
+		}
+
+		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(StrCRLF))
+		if err != nil {
+			return dst, err
+		}
+
+		if !bytes.Equal(dst[len(dst)-len(StrCRLF):], StrCRLF) {
+			return dst, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
+		}
+
+		dst = dst[:len(dst)-len(StrCRLF)]
+	}
 }
 
 // FormatChunkHeader formats a hex-encoded chunk size header followed by CRLF (\r\n)
 // into buf per RFC 9112 Section 7.1.
 //
 // buf must have a capacity of at least 24 bytes. Returns the total number of bytes written.
-// Accelerated via proto/h1 vectorized hexkit implementation.
+// Accelerated via foundation/silicon/hexkit implementation.
 //
 // Concurrency: Thread-safe; writes strictly into caller-provided stack or heap buffer.
 func FormatChunkHeader(buf *[24]byte, val int) int {
-	n := protoh1.FormatHexUint((*[16]byte)(buf[:16]), val)
+	n := hexkit.FormatHexUint((*[16]byte)(buf[:16]), val)
 	buf[n] = '\r'
 	buf[n+1] = '\n'
 
@@ -144,7 +163,7 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 func writeChunk(w *bufio.Writer, b []byte) error {
 	n := len(b)
 	var hexBuf [16]byte
-	hexLen := protoh1.FormatHexUint(&hexBuf, n)
+	hexLen := hexkit.FormatHexUint(&hexBuf, n)
 
 	if _, err := w.Write(hexBuf[:hexLen]); err != nil {
 		return err
@@ -165,40 +184,6 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 	}
 
 	return w.Flush()
-}
-
-// readBodyChunked parses a chunked transfer coding body (RFC 9112 Section 7.1).
-// It repeatedly reads chunk sizes and data until the terminating 0-size chunk is found.
-func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, error) {
-	if len(dst) > 0 {
-		panic("BUG: expected zero-length buffer")
-	}
-
-	for {
-		chunkSize, err := parseChunkSize(r)
-		if err != nil {
-			return dst, err
-		}
-
-		if chunkSize == 0 {
-			return dst, err
-		}
-
-		if maxBodySize > 0 && len(dst)+chunkSize > maxBodySize {
-			return dst, ErrBodyTooLarge
-		}
-
-		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(StrCRLF))
-		if err != nil {
-			return dst, err
-		}
-
-		if !bytes.Equal(dst[len(dst)-len(StrCRLF):], StrCRLF) {
-			return dst, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
-		}
-
-		dst = dst[:len(dst)-len(StrCRLF)]
-	}
 }
 
 // parseChunkSize decodes the chunk size hex value and skips optional chunk extensions (RFC 9112 Section 7.1.1).
@@ -226,18 +211,18 @@ func parseChunkSize(r *bufio.Reader) (int, error) {
 	line = line[:len(line)-2]
 
 	// Strip chunk extensions (RFC 9112 §7.1.1)
-	if idx := protoh1.IndexByte(line, ';'); idx != -1 {
+	if idx := bytes.IndexByte(line, ';'); idx != -1 {
 		line = line[:idx]
 	}
 
 	// Strip trailing BWS (RFC 9112 §7.1.1)
-	line = protoh1.TrimTrailingSpace(line)
+	line = simd.TrimTrailingSpaceSWAR(line)
 
 	if len(line) == 0 {
 		return -1, ErrBrokenChunk{error: errors.New("empty chunk size")}
 	}
 
-	chunkSize, consumed, err := protoh1.ParseHexUint(line)
+	chunkSize, consumed, err := hexkit.ParseHexUint(line)
 	if err != nil || chunkSize < 0 || consumed != len(line) {
 		return -1, ErrBrokenChunk{error: fmt.Errorf("invalid chunk size: %w", err)}
 	}

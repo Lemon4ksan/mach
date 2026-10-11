@@ -29,11 +29,8 @@ var (
 	StringAuthority     = []byte(":authority")
 	StringScheme        = []byte(":scheme")
 	StringMethod        = []byte(":method")
-	StringServer        = []byte("server")
 	StringContentLength = []byte("content-length")
-	StringContentType   = []byte("content-type")
 	StringUserAgent     = []byte("user-agent")
-	StringHTTP2         = []byte("HTTP/2")
 )
 
 // ReadPreface verifies the 24-octet connection initialization preface from r (RFC 9113 §3.4).
@@ -176,8 +173,8 @@ func ToLowerCopy(b []byte) []byte {
 	return out
 }
 
-// FasthttpResponseHeaders serializes response status and headers from an HTTP/1.x response ([h1.Response]) into hpack.HPACK-encoded header fields.
-func FasthttpResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
+// ResponseHeaders serializes response status and headers from an HTTP/1.x response ([h1.Response]) into hpack.HPACK-encoded header fields.
+func ResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
 	hf := hpack.AcquireHeaderField()
 	defer hpack.ReleaseHeaderField(hf)
 
@@ -190,14 +187,18 @@ func FasthttpResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
 		res.Header.SetContentLength(len(res.Body()))
 	}
 
-	// RFC 9113 §8.2.2: Connection-specific headers (Connection, Transfer-Encoding) MUST NOT be sent in HTTP/2.
-	res.Header.Del("Connection")
-	res.Header.Del("Transfer-Encoding")
-
 	for k, v := range res.Header.All() {
+		if IsConnectionSpecificHeader(k, v) {
+			continue
+		}
 		hf.SetBytes(ToLowerCopy(k), v)
 		dst.AppendHeaderField(hp, hf, false)
 	}
+}
+
+// FasthttpResponseHeaders aliases ResponseHeaders for backwards compatibility.
+func FasthttpResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
+	ResponseHeaders(dst, hp, res)
 }
 
 // SerializeResponseHeaders serializes response status and headers into hpack.HPACK-encoded header fields.
@@ -217,9 +218,8 @@ func SerializeResponseHeaders(dst *Headers, hp *hpack.HPACK, statusCode int, hea
 
 	for k, vv := range headers {
 		// RFC 9113 §8.2.2: Connection-specific headers MUST NOT be sent in HTTP/2.
-		if strings.EqualFold(k, "Connection") || strings.EqualFold(k, "Transfer-Encoding") ||
-			strings.EqualFold(k, "Keep-Alive") ||
-			strings.EqualFold(k, "Upgrade") {
+		switch strings.ToLower(k) {
+		case "connection", "transfer-encoding", "keep-alive", "upgrade":
 			continue
 		}
 
@@ -271,27 +271,12 @@ func ValidateHeaderValue(v []byte) error {
 // and TE with values other than "trailers") MUST NOT be present in HTTP/2 messages.
 // Any message containing them MUST be treated as malformed (stream error of type PROTOCOL_ERROR per RFC 9113 §8.1.1).
 func IsConnectionSpecificHeader(k, v []byte) bool {
-	switch len(k) {
-	case 2:
-		if bytes.Equal(k, []byte("te")) {
-			return !bytes.Equal(v, []byte("trailers"))
-		}
-	case 7:
-		if bytes.Equal(k, []byte("upgrade")) {
-			return true
-		}
-	case 10:
-		if bytes.Equal(k, []byte("connection")) || bytes.Equal(k, []byte("keep-alive")) {
-			return true
-		}
-	case 16:
-		if bytes.Equal(k, []byte("proxy-connection")) {
-			return true
-		}
-	case 17:
-		if bytes.Equal(k, []byte("transfer-encoding")) {
-			return true
-		}
+	switch string(k) {
+	case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
+		return true
+	case "te":
+		return string(v) != "trailers"
+	default:
+		return false
 	}
-	return false
 }

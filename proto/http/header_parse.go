@@ -226,7 +226,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			return 0, fmt.Errorf("invalid header key %q", s.key)
 		}
 
-		NormalizeHeaderKeyValidated(s.key, h.disableNormalizing || s.keyHasSpace)
+		NormalizeHeaderKeyValidated(s.key, h.disableNormalizing)
 
 		for _, ch := range s.value {
 			if !validHeaderValueByte(ch) {
@@ -658,13 +658,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			return 0, fmt.Errorf("invalid header key %q", s.key)
 		}
 
-		disableNormalizing := h.disableNormalizing
-		if s.keyHasSpace {
-			h.connectionClose = true
-			disableNormalizing = true
-		}
-
-		NormalizeHeaderKeyValidated(s.key, disableNormalizing)
+		NormalizeHeaderKeyValidated(s.key, h.disableNormalizing)
 
 		for _, ch := range s.value {
 			if !validHeaderValueByte(ch) {

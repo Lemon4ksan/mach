@@ -73,4 +73,3 @@ type HandlerFunc func(stream Stream) error
 func (f HandlerFunc) Serve(stream Stream) error {
 	return f(stream)
 }
-

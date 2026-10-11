@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
@@ -116,13 +115,6 @@ var (
 	requestStreamStorage = pool.NewPerCorePool[*RequestStream](func() *RequestStream {
 		return &RequestStream{}
 	})
-
-	// RequestStreamPool remains for backwards compatibility.
-	RequestStreamPool = sync.Pool{
-		New: func() any {
-			return &RequestStream{}
-		},
-	}
 )
 
 // AcquireRequestStream acquires a pooled RequestStream instance initialized with prefetched bytes, reader, and header parser.
@@ -189,13 +181,6 @@ func (req *Request) BodyStream() io.Reader {
 	return req.bodyStream
 }
 
-// RequestBodyStream returns the configured request body reader.
-//
-// Thread-safe: No.
-func (req *Request) RequestBodyStream() io.Reader {
-	return req.bodyStream
-}
-
 // CloseBodyStream closes the active request body stream if it implements io.Closer and returns any error encountered.
 //
 // Thread-safe: No.
@@ -208,15 +193,7 @@ func (req *Request) closeBodyStream() error {
 		return nil
 	}
 
-	var err error
-	if bsc, ok := req.bodyStream.(io.Closer); ok {
-		err = bsc.Close()
-	}
-
-	if rs, ok := req.bodyStream.(*RequestStream); ok {
-		ReleaseRequestStream(rs)
-	}
-
+	err := closeBodyStreamReader(req.bodyStream, nil)
 	req.bodyStream = nil
 
 	return err

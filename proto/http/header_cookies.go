@@ -19,7 +19,7 @@ import (
 // Thread-safe: No.
 func (h *RequestHeader) Cookie(key string) []byte {
 	h.collectCookies()
-	return uri.PeekArgStr(h.cookies, key)
+	return uri.PeekArg(h.cookies, key)
 }
 
 // CookieBytes returns the value of the request cookie identified by key bytes (RFC 6265 Section 5.4).
@@ -27,7 +27,7 @@ func (h *RequestHeader) Cookie(key string) []byte {
 // Thread-safe: No.
 func (h *RequestHeader) CookieBytes(key []byte) []byte {
 	h.collectCookies()
-	return uri.PeekArgBytes(h.cookies, key)
+	return uri.PeekArg(h.cookies, key)
 }
 
 // Cookies returns an iterator yielding cookie name and value byte pairs (RFC 6265 Section 5.4).
@@ -53,7 +53,7 @@ func (h *RequestHeader) SetCookie(key, value string) {
 	h.collectCookies()
 	h.bufK = cookie.InitHeaderValueString(h.bufK, key)
 	h.bufV = cookie.InitHeaderValueString(h.bufV, value)
-	h.cookies = uri.SetArgBytes(h.cookies, h.bufK, h.bufV, uri.ArgsHasValue)
+	h.cookies = uri.SetArg(h.cookies, h.bufK, h.bufV, uri.ArgsHasValue)
 }
 
 // SetCookieBytesK sets a request cookie with byte key and string value (RFC 6265 Section 4.2.1).
@@ -113,7 +113,7 @@ func (h *RequestHeader) collectCookies() {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) Cookie(c *cookie.Cookie) bool {
-	v := uri.PeekArgBytes(h.cookies, c.Key())
+	v := uri.PeekArg(h.cookies, c.Key())
 	if v == nil {
 		return false
 	}
@@ -126,7 +126,7 @@ func (h *ResponseHeader) Cookie(c *cookie.Cookie) bool {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) PeekCookie(key string) []byte {
-	return uri.PeekArgStr(h.cookies, key)
+	return uri.PeekArg(h.cookies, key)
 }
 
 // Cookies returns an iterator yielding cookie name and value byte pairs (RFC 6265 Section 4.1).
@@ -150,7 +150,7 @@ func (h *ResponseHeader) Cookies() iter.Seq2[[]byte, []byte] {
 func (h *ResponseHeader) SetCookie(c *cookie.Cookie) {
 	h.bufK = cookie.InitHeaderValueBytes(h.bufK, c.Key())
 	h.bufV = cookie.InitHeaderValueBytes(h.bufV, c.Cookie())
-	h.cookies = uri.SetArgBytes(h.cookies, h.bufK, h.bufV, uri.ArgsHasValue)
+	h.cookies = uri.SetArg(h.cookies, h.bufK, h.bufV, uri.ArgsHasValue)
 }
 
 // DelClientCookie appends a Set-Cookie directive commanding the user agent to expire and evict the specified cookie (RFC 6265 Section 5.3).

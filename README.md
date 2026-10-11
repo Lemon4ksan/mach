@@ -138,5 +138,3 @@ go test -bench=. -benchmem ./...
 ## License
 
 This project is licensed under the **BSD 3-Clause License**. See the [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2026 Lemon4ksan. All rights reserved.

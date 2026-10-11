@@ -5,6 +5,10 @@
 package h1
 
 import (
+	"bufio"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	protoh1 "github.com/lemon4ksan/mach/proto/h1"
 )
 
@@ -16,23 +20,23 @@ var (
 	ErrChunkBoundaryError = protoh1.ErrChunkBoundaryError
 )
 
-// ParseHexUint parses a hex-encoded uint from src for chunk-size decoding (RFC 9112 §7.1).
-var ParseHexUint = protoh1.ParseHexUint
-
-// FormatHexUint writes the hex representation of val into buf for chunk-size encoding (RFC 9112 §7.1).
-var FormatHexUint = protoh1.FormatHexUint
-
 // ChunkedReader decodes an HTTP/1.1 chunked transfer-encoded byte stream (RFC 9112 §7.1).
 type ChunkedReader = protoh1.ChunkedReader
 
 // NewChunkedReader creates a ChunkedReader wrapping the provided bufio.Reader (RFC 9112 §7.1).
-var NewChunkedReader = protoh1.NewChunkedReader
+func NewChunkedReader(r *bufio.Reader) *ChunkedReader {
+	return protoh1.NewChunkedReader(r)
+}
 
 // ReadAllChunked drains all chunked content into a preallocated byte slice up to maxBodySize (RFC 9112 §7.1, RFC 9110 §8.6).
-var ReadAllChunked = protoh1.ReadAllChunked
+func ReadAllChunked(r *bufio.Reader, maxBodySize int64) ([]byte, error) {
+	return protoh1.ReadAllChunked(r, maxBodySize)
+}
 
 // ChunkedWriter writes data using HTTP/1.1 chunked transfer coding (RFC 9112 §7.1).
 type ChunkedWriter = protoh1.ChunkedWriter
 
 // NewChunkedWriter creates a new ChunkedWriter wrapping w (RFC 9112 §7.1).
-var NewChunkedWriter = protoh1.NewChunkedWriter
+func NewChunkedWriter(w *bytesconv.ByteBuffer) *ChunkedWriter {
+	return protoh1.NewChunkedWriter(w)
+}

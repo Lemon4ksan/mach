@@ -12,6 +12,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 func TestAppendHTMLEscape(t *testing.T) {
@@ -326,8 +328,8 @@ func TestHexIntReadWriteAndFormat(t *testing.T) {
 		t.Fatalf("WriteHexInt failed: %v", err)
 	}
 	_ = w.Flush()
-	if string(b.Bytes()) != "ff" {
-		t.Fatalf("WriteHexInt = %s, want ff", string(b.Bytes()))
+	if b.String() != "ff" {
+		t.Fatalf("WriteHexInt = %s, want ff", b.String())
 	}
 
 	// Panic on negative WriteHexInt
@@ -398,13 +400,13 @@ func TestByteEncodingAndHelpers(t *testing.T) {
 		t.Fatalf("AppendQuotedPath missing %%20: %s", quotedPath)
 	}
 
-	// B2S and S2B from missing.go
+	// bytesconv zero-allocation conversions
 	str := "test-string"
-	bs := S2B(str)
+	bs := bytesconv.S2B(str)
 	if string(bs) != str {
 		t.Fatalf("S2B failed: %s", bs)
 	}
-	backToStr := B2S(bs)
+	backToStr := bytesconv.B2S(bs)
 	if backToStr != str {
 		t.Fatalf("B2S failed: %s", backToStr)
 	}

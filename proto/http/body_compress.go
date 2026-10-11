@@ -147,21 +147,16 @@ func (s *compressedBodyStream) closeOriginal(wErr error) error {
 
 	var err error
 	if !s.originalClosed {
-		if bsc, ok := s.bodyStream.(io.Closer); ok {
-			err = bsc.Close()
-		}
-
+		err = closeBodyStreamReader(s.bodyStream, wErr)
 		s.originalClosed = true
-	}
-
-	if bsc, ok := s.bodyStream.(ReadCloserWithError); ok {
-		if errc := bsc.CloseWithError(wErr); err == nil {
-			err = errc
+	} else {
+		if bsc, ok := s.bodyStream.(ReadCloserWithError); ok {
+			err = bsc.CloseWithError(wErr)
 		}
-	}
 
-	if bsr, ok := s.bodyStream.(*RequestStream); ok {
-		ReleaseRequestStream(bsr)
+		if bsr, ok := s.bodyStream.(*RequestStream); ok {
+			ReleaseRequestStream(bsr)
+		}
 	}
 
 	if err == nil && wErr != nil {

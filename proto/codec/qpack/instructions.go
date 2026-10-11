@@ -271,7 +271,6 @@ func ensureInstructions() {
 	onceInstructions.Do(initInstructions)
 }
 
-// 13 Singleton Instruction Accessors
 func InsertWithNameReferenceInstruction() *Instruction {
 	ensureInstructions()
 	return instInsertWithNameReference
@@ -337,7 +336,6 @@ func LiteralHeaderFieldPostBaseNameReferenceInstruction() *Instruction {
 	return instLiteralHeaderFieldPostBaseNameReference
 }
 
-// 4 Language Accessors
 func EncoderStreamLanguage() *Language {
 	ensureInstructions()
 	return langEncoderStream
@@ -378,7 +376,6 @@ func NewInstructionWithValues(instruction *Instruction) *InstructionWithValues {
 	return &InstructionWithValues{instruction: instruction}
 }
 
-// Accessors
 func (v *InstructionWithValues) Instruction() *Instruction { return v.instruction }
 func (v *InstructionWithValues) SBit() bool                { return v.sBit }
 func (v *InstructionWithValues) Varint() uint64            { return v.varint }
@@ -386,7 +383,6 @@ func (v *InstructionWithValues) Varint2() uint64           { return v.varint2 }
 func (v *InstructionWithValues) Name() string              { return v.name }
 func (v *InstructionWithValues) Value() string             { return v.value }
 
-// Setters
 func (v *InstructionWithValues) SetInstruction(inst *Instruction) { v.instruction = inst }
 func (v *InstructionWithValues) SetSBit(sBit bool)                { v.sBit = sBit }
 func (v *InstructionWithValues) SetVarint(varint uint64)          { v.varint = varint }
@@ -394,7 +390,6 @@ func (v *InstructionWithValues) SetVarint2(varint2 uint64)        { v.varint2 = 
 func (v *InstructionWithValues) SetName(name string)              { v.name = name }
 func (v *InstructionWithValues) SetValue(value string)            { v.value = value }
 
-// Factory functions for creating bound instructions
 func InstructionWithValuesInsertWithNameReference(
 	isStatic bool,
 	nameIndex uint64,

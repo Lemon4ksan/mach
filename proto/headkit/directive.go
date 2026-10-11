@@ -5,9 +5,7 @@
 package headkit
 
 import (
-	"bytes"
 	"iter"
-	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -17,19 +15,29 @@ import (
 
 // Directives yields an iterator traversing comma-separated key=value or flag directives from header.
 // Handles optional quotes (e.g., key="val,ue") and whitespace with zero heap allocations.
+// Supports both [string] and [[]byte].
 //
 // Specification Adherence:
 // Conforms to RFC 9110 §5.6.1 (Lists of Directives) and RFC 9111 §5.2 (Cache-Control Directives).
-func Directives(header string) iter.Seq2[string, string] {
-	return func(yield func(key, value string) bool) {
-		if header == "" {
+func Directives[S ~string | ~[]byte](header S) iter.Seq2[S, S] {
+	return parseDirectivesIter(header, ',')
+}
+// ParamDirectives yields an iterator traversing semicolon-separated key=value directives (e.g., in Alt-Svc or Content-Type)
+// with zero heap allocations. Supports both [string] and [[]byte].
+func ParamDirectives[S ~string | ~[]byte](header S) iter.Seq2[S, S] {
+	return parseDirectivesIter(header, ';')
+}
+
+func parseDirectivesIter[S ~string | ~[]byte](header S, delim byte) iter.Seq2[S, S] {
+	return func(yield func(key, value S) bool) {
+		if len(header) == 0 {
 			return
 		}
 
 		s := header
 		for len(s) > 0 {
-			// Skip leading whitespace and commas
-			s = strings.TrimLeft(s, " ,\t\r\n")
+			// Skip leading whitespace and delimiter
+			s = trimLeftDirectives(s, delim)
 			if len(s) == 0 {
 				break
 			}
@@ -48,94 +56,30 @@ func Directives(header string) iter.Seq2[string, string] {
 
 				if c == '"' {
 					inQuote = !inQuote
-				} else if c == ',' && !inQuote {
+				} else if c == delim && !inQuote {
 					break
 				}
 			}
 
-			var token string
+			var token S
 			if end < len(s) {
 				token = s[:end]
 				s = s[end+1:]
 			} else {
 				token = s
-				s = ""
+				s = s[:0]
 			}
 
-			token = strings.TrimSpace(token)
-			if token == "" {
-				continue
-			}
-
-			k, v, ok := strings.Cut(token, "=")
-
-			k = strings.ToLower(strings.TrimSpace(k))
-			if ok {
-				v = strings.TrimSpace(v)
-				if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
-					v = v[1 : len(v)-1]
-				}
-			}
-
-			if !yield(k, v) {
-				return
-			}
-		}
-	}
-}
-
-// DirectivesBytes yields an iterator traversing comma-separated key=value directives from byte slice b
-// with zero heap allocations.
-func DirectivesBytes(b []byte) iter.Seq2[[]byte, []byte] {
-	return func(yield func(key, value []byte) bool) {
-		if len(b) == 0 {
-			return
-		}
-
-		s := b
-		for len(s) > 0 {
-			s = bytes.TrimLeft(s, " ,\t\r\n")
-			if len(s) == 0 {
-				break
-			}
-
-			var end int
-
-			inQuote := false
-
-			for end = 0; end < len(s); end++ {
-				c := s[end]
-				if inQuote && c == '\\' && end+1 < len(s) {
-					end++
-					continue
-				}
-
-				if c == '"' {
-					inQuote = !inQuote
-				} else if c == ',' && !inQuote {
-					break
-				}
-			}
-
-			var token []byte
-			if end < len(s) {
-				token = s[:end]
-				s = s[end+1:]
-			} else {
-				token = s
-				s = nil
-			}
-
-			token = bytes.TrimSpace(token)
+			token = trimSpaceDirectives(token)
 			if len(token) == 0 {
 				continue
 			}
 
-			k, v, ok := bytes.Cut(token, []byte{'='})
+			k, v, ok := cutDirectives(token, '=')
 
-			k = toLowerBytesZeroAlloc(bytes.TrimSpace(k))
+			k = toLowerDirectives(trimSpaceDirectives(k))
 			if ok {
-				v = bytes.TrimSpace(v)
+				v = trimSpaceDirectives(v)
 				if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
 					v = v[1 : len(v)-1]
 				}
@@ -148,68 +92,65 @@ func DirectivesBytes(b []byte) iter.Seq2[[]byte, []byte] {
 	}
 }
 
-// ParamDirectives yields an iterator traversing semicolon-separated key=value directives (e.g., in Alt-Svc or Content-Type)
-// with zero heap allocations.
-func ParamDirectives(header string) iter.Seq2[string, string] {
-	return func(yield func(key, value string) bool) {
-		if header == "" {
-			return
+func trimLeftDirectives[S ~string | ~[]byte](s S, delim byte) S {
+	start := 0
+	for start < len(s) {
+		c := s[start]
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == delim {
+			start++
+			continue
 		}
+		break
+	}
+	return s[start:]
+}
 
-		s := header
-		for len(s) > 0 {
-			s = strings.TrimLeft(s, " ;\t\r\n")
-			if len(s) == 0 {
-				break
-			}
+func trimSpaceDirectives[S ~string | ~[]byte](s S) S {
+	start := 0
+	for start < len(s) {
+		c := s[start]
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			start++
+			continue
+		}
+		break
+	}
+	end := len(s)
+	for end > start {
+		c := s[end-1]
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			end--
+			continue
+		}
+		break
+	}
+	return s[start:end]
+}
 
-			var end int
+func cutDirectives[S ~string | ~[]byte](s S, sep byte) (before, after S, found bool) {
+	for i := range len(s) {
+		if s[i] == sep {
+			return s[:i], s[i+1:], true
+		}
+	}
+	return s, s[:0], false
+}
 
-			inQuote := false
-
-			for end = 0; end < len(s); end++ {
-				c := s[end]
-				if inQuote && c == '\\' && end+1 < len(s) {
-					end++
-					continue
-				}
-
-				if c == '"' {
-					inQuote = !inQuote
-				} else if c == ';' && !inQuote {
-					break
-				}
-			}
-
-			var token string
-			if end < len(s) {
-				token = s[:end]
-				s = s[end+1:]
-			} else {
-				token = s
-				s = ""
-			}
-
-			token = strings.TrimSpace(token)
-			if token == "" {
-				continue
-			}
-
-			k, v, ok := strings.Cut(token, "=")
-
-			k = strings.ToLower(strings.TrimSpace(k))
-			if ok {
-				v = strings.TrimSpace(v)
-				if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
-					v = v[1 : len(v)-1]
-				}
-			}
-
-			if !yield(k, v) {
-				return
+func toLowerDirectives[S ~string | ~[]byte](s S) S {
+	for i := range len(s) {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			switch v := any(s).(type) {
+			case string:
+				return any(strings.ToLower(v)).(S)
+			case []byte:
+				return any(toLowerBytesZeroAlloc(v)).(S)
+			default:
+				return s
 			}
 		}
 	}
+	return s
 }
 
 // DirectivesMap provides convenient typed lookups over parsed header directives.
@@ -218,15 +159,23 @@ type DirectivesMap struct {
 }
 
 // ParseDirectives eagerly parses comma-separated directives into a [DirectivesMap].
-func ParseDirectives(header string) DirectivesMap {
-	m := maps.Collect(Directives(header))
+// Supports both [string] and [[]byte].
+func ParseDirectives[S ~string | ~[]byte](header S) DirectivesMap {
+	m := make(map[string]string)
+	for k, v := range Directives(header) {
+		m[string(k)] = string(v)
+	}
 
 	return DirectivesMap{m: m}
 }
 
 // ParseParamDirectives eagerly parses semicolon-separated directives into a [DirectivesMap].
-func ParseParamDirectives(header string) DirectivesMap {
-	m := maps.Collect(ParamDirectives(header))
+// Supports both [string] and [[]byte].
+func ParseParamDirectives[S ~string | ~[]byte](header S) DirectivesMap {
+	m := make(map[string]string)
+	for k, v := range ParamDirectives(header) {
+		m[string(k)] = string(v)
+	}
 
 	return DirectivesMap{m: m}
 }

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/hexkit"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
@@ -142,7 +143,7 @@ func TestResponseSerialization(t *testing.T) {
 
 	_ = bw.Flush()
 
-	out := string(buf.Bytes())
+	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("HTTP/1.1 201 Created\r\n")) {
 		t.Errorf("missing status line in response: %s", out)
 	}
@@ -417,12 +418,12 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 	// Test FormatHexUint zero and numbers
 	var hexBuf [16]byte
 
-	n0 := h1.FormatHexUint(&hexBuf, 0)
+	n0 := hexkit.FormatHexUint(&hexBuf, 0)
 	if string(hexBuf[:n0]) != "0" {
 		t.Fatalf("expected 0, got %s", string(hexBuf[:n0]))
 	}
 
-	n255 := h1.FormatHexUint(&hexBuf, 255)
+	n255 := hexkit.FormatHexUint(&hexBuf, 255)
 	if string(hexBuf[:n255]) != "ff" {
 		t.Fatalf("expected ff, got %s", string(hexBuf[:n255]))
 	}

@@ -65,7 +65,7 @@ func WriteMultipartForm(w io.Writer, f *multipart.Form, boundary string) error {
 				return fmt.Errorf("cannot open form file %q (%q): %w", k, fv.Filename, err)
 			}
 
-			if _, err = copyZeroAlloc(vw, fh); err != nil {
+			if _, err = bytesconv.CopyZeroAlloc(vw, fh); err != nil {
 				_ = fh.Close()
 				return fmt.Errorf("error when copying form file %q (%q): %w", k, fv.Filename, err)
 			}

@@ -135,7 +135,7 @@ func (e *InstructionEncoder) doStartString(instWithValues *InstructionWithValues
 		e.stringVal = instWithValues.Value()
 	}
 
-	huffmanLen := hpack.HuffmanEncodeStringLength(e.stringVal)
+	huffmanLen := uint64(hpack.HuffmanEncodeLength(e.stringVal))
 	// Chromium Huffman decision rule: strictly less than unencoded size.
 	if e.huffman == HuffmanEncodingEnabled && huffmanLen < uint64(len(e.stringVal)) {
 		e.useHuffman = true
@@ -176,7 +176,7 @@ func (e *InstructionEncoder) doVarintEncode(instWithValues *InstructionWithValue
 
 func (e *InstructionEncoder) doWriteString(output *[]byte) {
 	if e.useHuffman {
-		*output = hpack.AppendHuffmanString(*output, e.stringVal)
+		*output = hpack.AppendHuffman(*output, e.stringVal)
 	} else {
 		*output = append(*output, e.stringVal...)
 	}

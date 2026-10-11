@@ -103,15 +103,12 @@ func Parse[S ~string | ~[]byte](header S) ContentDisposition {
 		}
 	}
 
-	dispType = strings.ToLower(strings.TrimSpace(dispType))
-	if dispType == "" {
-		dispType = DispositionAttachment
-	}
+	dispType = generic.Coalesce(strings.ToLower(strings.TrimSpace(dispType)), DispositionAttachment)
 
 	var filename string
 	if extFn, ok := params["filename*"]; ok && extFn != "" {
 		// RFC 6266 §4.3: Pick filename* over filename when both are present
-		filename = DecodeRFC8187Value(extFn)
+		_, _, filename = DecodeRFC8187(extFn)
 	} else if stdFn, ok := params["filename"]; ok {
 		filename = stdFn
 	}
@@ -126,12 +123,6 @@ func Parse[S ~string | ~[]byte](header S) ContentDisposition {
 		Filename:   sanitized,
 		Parameters: params,
 	}
-}
-
-// ParseContentDisposition parses a Content-Disposition header ([string] or [[]byte]) per RFC 6266 §4.1–§4.4.
-// Deprecated: use [Parse] instead.
-func ParseContentDisposition[S ~string | ~[]byte](contentDispositionHeader S) ContentDisposition {
-	return Parse(contentDispositionHeader)
 }
 
 // ExtractFilename extracts, RFC 8187-decodes, and cleans the filename parameter
@@ -231,16 +222,16 @@ func EncodeRFC8187(value, language string) string {
 
 // DecodeRFC8187 decodes an RFC 8187 extended parameter value ([string] or [[]byte]) ("charset'language'value-chars")
 // into its constituent charset, language, and decoded value (RFC 8187 §3.2.1).
-func DecodeRFC8187[S ~string | ~[]byte](extValue S) (charset, language, value string, err error) {
+func DecodeRFC8187[S ~string | ~[]byte](extValue S) (charset, language, value string) {
 	raw := stringOrBytes(extValue)
 	firstQuote := strings.IndexByte(raw, '\'')
 	if firstQuote == -1 {
-		return "", "", raw, nil
+		return "", "", raw
 	}
 
 	secondQuote := strings.IndexByte(raw[firstQuote+1:], '\'')
 	if secondQuote == -1 {
-		return "", "", raw, nil
+		return "", "", raw
 	}
 
 	secondQuote += firstQuote + 1
@@ -269,7 +260,7 @@ func DecodeRFC8187[S ~string | ~[]byte](extValue S) (charset, language, value st
 		if enc, getErr := htmlindex.Get(charset); getErr == nil {
 			if decoded, decErr := enc.NewDecoder().String(unescaped); decErr == nil {
 				value = decoded
-				return charset, language, value, nil
+				return charset, language, value
 			}
 		}
 
@@ -280,14 +271,7 @@ func DecodeRFC8187[S ~string | ~[]byte](extValue S) (charset, language, value st
 		}
 	}
 
-	return charset, language, value, nil
-}
-
-// DecodeRFC8187Value decodes an RFC 8187 extended parameter value ([string] or [[]byte]), returning the decoded text value
-// with robust error recovery (RFC 8187 §3.2.1 & §4.2).
-func DecodeRFC8187Value[S ~string | ~[]byte](extValue S) string {
-	_, _, val, _ := DecodeRFC8187(extValue)
-	return val
+	return charset, language, value
 }
 
 // AppendISO88591ToUTF8 converts ISO-8859-1 raw bytes ([string] or [[]byte]) to UTF-8 and appends them to dst.

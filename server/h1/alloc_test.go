@@ -61,7 +61,7 @@ func TestServeConnStreamHandlerAllocations(t *testing.T) {
 	reqData := []byte("GET /stream HTTP/1.1\r\nHost: localhost\r\n\r\n")
 
 	handler := &h1.ConnHandler{
-		StreamHandler: h1_test_streamHandler{},
+		StreamHandler: h1TestStreamHandler{},
 	}
 
 	var conn mockConn
@@ -78,9 +78,9 @@ func TestServeConnStreamHandlerAllocations(t *testing.T) {
 	}
 }
 
-type h1_test_streamHandler struct{}
+type h1TestStreamHandler struct{}
 
-func (h1_test_streamHandler) Serve(stream mach.Stream) error {
+func (h1TestStreamHandler) Serve(stream mach.Stream) error {
 	s := stream.(*h1.ServerStream)
 	s.Response().StatusCode = 200
 	s.Response().Body = append(s.Response().Body[:0], []byte("OK")...)

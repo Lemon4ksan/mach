@@ -109,25 +109,12 @@ func copyBodyStream(w io.Writer, r io.Reader) (int64, error) {
 		return n, err
 	}
 
-	return copyZeroAlloc(w, r)
-}
-
-func copyZeroAlloc(w io.Writer, r io.Reader) (int64, error) {
 	return bytesconv.CopyZeroAlloc(w, r)
 }
 
 // ErrBodyTooLarge is returned if a request or response body exceeds the configured
 // maximum body size limit.
 var ErrBodyTooLarge = bytesconv.ErrBodyTooLarge
-
-// CopyZeroAllocWithLimit copies up to maxBodySize bytes from r to w without heap allocations,
-// using foundation silicon buffer pools.
-//
-// Returns the number of bytes copied and any error encountered during transfer.
-// If the stream contains more than maxBodySize bytes, ErrBodyTooLarge is returned.
-func CopyZeroAllocWithLimit(w io.Writer, r io.Reader, maxBodySize int) (int64, error) {
-	return bytesconv.CopyZeroAllocWithLimit(w, r, maxBodySize)
-}
 
 func readBody(r *bufio.Reader, contentLength, maxBodySize int, dst []byte) ([]byte, error) {
 	if maxBodySize > 0 && contentLength > maxBodySize {

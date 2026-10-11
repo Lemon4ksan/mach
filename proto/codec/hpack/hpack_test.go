@@ -256,3 +256,71 @@ func TestHPACK_MalformedInputs_Robustness(t *testing.T) {
 		}
 	}
 }
+
+func TestHuffmanGenericHarmonization(t *testing.T) {
+	raw := "www.example.com"
+	rawBytes := []byte(raw)
+
+	// 1. HuffmanEncode with string and []byte
+	encStr := HuffmanEncode(nil, raw)
+	encBytes := HuffmanEncode(nil, rawBytes)
+	if !bytes.Equal(encStr, encBytes) {
+		t.Fatalf("HuffmanEncode string and bytes mismatch: %x vs %x", encStr, encBytes)
+	}
+
+	// 2. HuffmanEncodeLength with string and []byte
+	lenStr := HuffmanEncodeLength(raw)
+	lenBytes := HuffmanEncodeLength(rawBytes)
+	if lenStr != lenBytes || lenStr != len(encStr) {
+		t.Fatalf("HuffmanEncodeLength mismatch: str=%d, bytes=%d, actual=%d", lenStr, lenBytes, len(encStr))
+	}
+
+	// 3. AppendHuffman with string and []byte
+	appStr := AppendHuffman(nil, raw)
+	appBytes := AppendHuffman(nil, rawBytes)
+	if !bytes.Equal(appStr, encStr) || !bytes.Equal(appBytes, encBytes) {
+		t.Fatal("AppendHuffman output mismatch")
+	}
+
+	// 4. AppendHuffmanDecode with string and []byte
+	decFromBytes, err := AppendHuffmanDecode(nil, encBytes)
+	if err != nil || string(decFromBytes) != raw {
+		t.Fatalf("AppendHuffmanDecode from bytes failed: %s, %v", decFromBytes, err)
+	}
+
+	decFromStr, err := AppendHuffmanDecode(nil, string(encBytes))
+	if err != nil || string(decFromStr) != raw {
+		t.Fatalf("AppendHuffmanDecode from string failed: %s, %v", decFromStr, err)
+	}
+
+	// 5. HuffmanDecodeToString with string and []byte
+	decStrFromBytes, err := HuffmanDecodeToString(encBytes)
+	if err != nil || decStrFromBytes != raw {
+		t.Fatalf("HuffmanDecodeToString from bytes failed: %s, %v", decStrFromBytes, err)
+	}
+
+	decStrFromStr, err := HuffmanDecodeToString(string(encBytes))
+	if err != nil || decStrFromStr != raw {
+		t.Fatalf("HuffmanDecodeToString from string failed: %s, %v", decStrFromStr, err)
+	}
+
+	// 6. HuffmanDecode with string and []byte
+	decRawBytes := HuffmanDecode(nil, encBytes)
+	if string(decRawBytes) != raw {
+		t.Fatalf("HuffmanDecode bytes failed: %s", decRawBytes)
+	}
+	decRawStr := HuffmanDecode(nil, string(encBytes))
+	if string(decRawStr) != raw {
+		t.Fatalf("HuffmanDecode string failed: %s", decRawStr)
+	}
+
+	// 7. Canonical AppendHuffman and HuffmanEncodeLength with string
+	appEnc := AppendHuffman(nil, raw)
+	if !bytes.Equal(appEnc, encStr) {
+		t.Fatal("AppendHuffman mismatch")
+	}
+	appLen := HuffmanEncodeLength(raw)
+	if appLen != lenStr {
+		t.Fatalf("HuffmanEncodeLength mismatch: %d vs %d", appLen, lenStr)
+	}
+}

@@ -129,6 +129,22 @@ func TestCookieAttributesAndSanitization(t *testing.T) {
 		t.Fatalf("SetPathBytes failed to sanitize: %q", c.Path())
 	}
 
+	// Direct InitHeaderValue and RemoveNewLines tests
+	sanitizedStr := InitHeaderValue(nil, "value\r\nwith\nlines")
+	if bytes.Contains(sanitizedStr, []byte("\r")) || bytes.Contains(sanitizedStr, []byte("\n")) {
+		t.Fatalf("InitHeaderValue failed to sanitize string: %q", sanitizedStr)
+	}
+	sanitizedBytes := InitHeaderValue(nil, []byte("value\r\nwith\nlines"))
+	if !bytes.Equal(sanitizedStr, sanitizedBytes) {
+		t.Fatalf("InitHeaderValue parity failed: %q vs %q", sanitizedStr, sanitizedBytes)
+	}
+
+	rawNL := []byte("hello\rworld\n!")
+	cleanedNL := RemoveNewLines(rawNL)
+	if bytes.Contains(cleanedNL, []byte("\r")) || bytes.Contains(cleanedNL, []byte("\n")) {
+		t.Fatalf("RemoveNewLines failed: %q", cleanedNL)
+	}
+
 	// Flags
 	c.SetHTTPOnly(true)
 	if !c.HTTPOnly() {
@@ -220,8 +236,8 @@ func TestCookieSerialization(t *testing.T) {
 	// WriteTo
 	var buf bytes.Buffer
 	n, err := c.WriteTo(&buf)
-	if err != nil || n != int64(len("token=12345")) || string(buf.Bytes()) != "token=12345" {
-		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, string(buf.Bytes()))
+	if err != nil || n != int64(len("token=12345")) || buf.String() != "token=12345" {
+		t.Fatalf("WriteTo failed: %d, %v, %s", n, err, buf.String())
 	}
 
 	// 2. Cookie with value only (no key)

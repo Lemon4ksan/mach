@@ -210,31 +210,31 @@ func NewBlockingManagerWithMax(maxBlockedStreams uint64) *BlockingManager {
 	return NewBlockingManager(maxBlockedStreams)
 }
 
-// OnHeaderBlockSent is called by the encoder when transmitting a header block on streamId.
-func (m *BlockingManager) OnHeaderBlockSent(streamId uint64, indices []uint64) {
+// OnHeaderBlockSent is called by the encoder when transmitting a header block on streamID.
+func (m *BlockingManager) OnHeaderBlockSent(streamID uint64, indices []uint64) {
 	headerData := NewHeaderData(indices)
-	m.streamMap[streamId] = append(m.streamMap[streamId], headerData)
+	m.streamMap[streamID] = append(m.streamMap[streamID], headerData)
 
 	if headerData.hasMinIndex {
 		m.addMinIndex(headerData.minIndex)
 	}
 
 	if headerData.requiredInsertCount > m.knownReceivedCount {
-		m.blockedStreams[streamId] = struct{}{}
+		m.blockedStreams[streamID] = struct{}{}
 	}
 }
 
 // OnHeaderBlockReceived is called by the decoder when parsing a header block with requiredInsertCount.
-// It returns whether streamId is blocked.
-func (m *BlockingManager) OnHeaderBlockReceived(streamId, requiredInsertCount uint64) bool {
+// It returns whether streamID is blocked.
+func (m *BlockingManager) OnHeaderBlockReceived(streamID, requiredInsertCount uint64) bool {
 	headerData := NewHeaderDataWithRIC(requiredInsertCount)
-	m.streamMap[streamId] = append(m.streamMap[streamId], headerData)
+	m.streamMap[streamID] = append(m.streamMap[streamID], headerData)
 
 	if requiredInsertCount > m.knownReceivedCount {
-		m.blockedStreams[streamId] = struct{}{}
+		m.blockedStreams[streamID] = struct{}{}
 	}
 
-	_, blocked := m.blockedStreams[streamId]
+	_, blocked := m.blockedStreams[streamID]
 
 	return blocked
 }
@@ -253,25 +253,25 @@ func (m *BlockingManager) OnInsertCountIncrement(increment uint64) bool {
 	return true
 }
 
-// OnSectionAck is called when a Section Acknowledgment instruction is received for streamId.
+// OnSectionAck is called when a Section Acknowledgment instruction is received for streamID.
 // It pops the oldest in-flight header block, updates knownReceivedCount, and unblocks streams.
-// Returns false if streamId has no outstanding header blocks.
-func (m *BlockingManager) OnSectionAck(streamId uint64) bool {
-	return m.OnHeaderAcknowledgement(streamId)
+// Returns false if streamID has no outstanding header blocks.
+func (m *BlockingManager) OnSectionAck(streamID uint64) bool {
+	return m.OnHeaderAcknowledgement(streamID)
 }
 
 // OnHeaderAcknowledgement is an alias for OnSectionAck (RFC 9204 §4.4.1).
-func (m *BlockingManager) OnHeaderAcknowledgement(streamId uint64) bool {
-	blocks, ok := m.streamMap[streamId]
+func (m *BlockingManager) OnHeaderAcknowledgement(streamID uint64) bool {
+	blocks, ok := m.streamMap[streamID]
 	if !ok || len(blocks) == 0 {
 		return false
 	}
 
 	popped := blocks[0]
 	if len(blocks) == 1 {
-		delete(m.streamMap, streamId)
+		delete(m.streamMap, streamID)
 	} else {
-		m.streamMap[streamId] = blocks[1:]
+		m.streamMap[streamID] = blocks[1:]
 	}
 
 	if popped.hasMinIndex {
@@ -281,17 +281,17 @@ func (m *BlockingManager) OnHeaderAcknowledgement(streamId uint64) bool {
 	if popped.requiredInsertCount > m.knownReceivedCount {
 		m.knownReceivedCount = popped.requiredInsertCount
 		m.updateBlockedStreams()
-	} else if !m.isStreamBlocked(streamId) {
-		delete(m.blockedStreams, streamId)
+	} else if !m.isStreamBlocked(streamID) {
+		delete(m.blockedStreams, streamID)
 	}
 
 	return true
 }
 
-// OnStreamCancellation is called when a Stream Cancellation instruction is received for streamId.
+// OnStreamCancellation is called when a Stream Cancellation instruction is received for streamID.
 // It removes all outstanding header blocks for the stream without advancing knownReceivedCount.
-func (m *BlockingManager) OnStreamCancellation(streamId uint64) {
-	blocks, ok := m.streamMap[streamId]
+func (m *BlockingManager) OnStreamCancellation(streamID uint64) {
+	blocks, ok := m.streamMap[streamID]
 	if ok {
 		for i := range blocks {
 			if blocks[i].hasMinIndex {
@@ -299,10 +299,10 @@ func (m *BlockingManager) OnStreamCancellation(streamId uint64) {
 			}
 		}
 
-		delete(m.streamMap, streamId)
+		delete(m.streamMap, streamID)
 	}
 
-	delete(m.blockedStreams, streamId)
+	delete(m.blockedStreams, streamID)
 }
 
 // SmallestBlockingIndex returns the minimum index among all unacknowledged dynamic references,
@@ -311,48 +311,20 @@ func (m *BlockingManager) SmallestBlockingIndex() uint64 {
 	return m.smallestBlockingIndex
 }
 
-// smallest_blocking_index provides exact C++ Chromium method naming.
-//
-// Deprecated: use SmallestBlockingIndex.
-func (m *BlockingManager) smallest_blocking_index() uint64 {
-	return m.SmallestBlockingIndex()
-}
-
 // KnownReceivedCount returns the current known dynamic table insert count acknowledged by peer.
 func (m *BlockingManager) KnownReceivedCount() uint64 {
 	return m.knownReceivedCount
 }
 
-// known_received_count provides exact C++ Chromium method naming.
-//
-// Deprecated: use KnownReceivedCount.
-func (m *BlockingManager) known_received_count() uint64 {
-	return m.KnownReceivedCount()
-}
-
-// IsBlocked returns true if streamId has any unacknowledged header blocks requiring RIC > knownReceivedCount.
-func (m *BlockingManager) IsBlocked(streamId uint64) bool {
-	_, blocked := m.blockedStreams[streamId]
+// IsBlocked returns true if streamID has any unacknowledged header blocks requiring RIC > knownReceivedCount.
+func (m *BlockingManager) IsBlocked(streamID uint64) bool {
+	_, blocked := m.blockedStreams[streamID]
 	return blocked
-}
-
-// is_blocked provides exact C++ Chromium method naming.
-//
-// Deprecated: use IsBlocked.
-func (m *BlockingManager) is_blocked(streamId uint64) bool {
-	return m.IsBlocked(streamId)
 }
 
 // NumBlockedStreams returns the number of currently blocked streams.
 func (m *BlockingManager) NumBlockedStreams() uint64 {
 	return uint64(len(m.blockedStreams))
-}
-
-// num_blocked_streams provides exact C++ Chromium method naming.
-//
-// Deprecated: use NumBlockedStreams.
-func (m *BlockingManager) num_blocked_streams() uint64 {
-	return m.NumBlockedStreams()
 }
 
 // BlockedStreams returns a push iterator over all currently blocked stream IDs.
@@ -378,32 +350,25 @@ func (m *BlockingManager) SetMaxBlockedStreams(maxBlockedStreams uint64) {
 	m.maxBlockedStreams = maxBlockedStreams
 }
 
-// BlockingAllowedOnStream returns true if sending blocking references on streamId is permitted.
-// If streamId is already blocked, it is always permitted (blocked streams count does not increase).
+// BlockingAllowedOnStream returns true if sending blocking references on streamID is permitted.
+// If streamID is already blocked, it is always permitted (blocked streams count does not increase).
 // Otherwise, it is permitted if NumBlockedStreams() < maxBlockedStreams.
-func (m *BlockingManager) BlockingAllowedOnStream(streamId uint64, maxBlockedStreams ...uint64) bool {
+func (m *BlockingManager) BlockingAllowedOnStream(streamID uint64, maxBlockedStreams ...uint64) bool {
 	maxBlocked := m.maxBlockedStreams
 	if len(maxBlockedStreams) > 0 {
 		maxBlocked = maxBlockedStreams[0]
 	}
 
-	if m.IsBlocked(streamId) {
+	if m.IsBlocked(streamID) {
 		return true
 	}
 
 	return uint64(len(m.blockedStreams)) < maxBlocked
 }
 
-// blocking_allowed_on_stream provides exact C++ Chromium method naming.
-//
-// Deprecated: use BlockingAllowedOnStream.
-func (m *BlockingManager) blocking_allowed_on_stream(streamId uint64, maxBlockedStreams ...uint64) bool {
-	return m.BlockingAllowedOnStream(streamId, maxBlockedStreams...)
-}
-
-// isStreamBlocked checks whether streamId currently has any block with RIC > knownReceivedCount.
-func (m *BlockingManager) isStreamBlocked(streamId uint64) bool {
-	blocks, ok := m.streamMap[streamId]
+// isStreamBlocked checks whether streamID currently has any block with RIC > knownReceivedCount.
+func (m *BlockingManager) isStreamBlocked(streamID uint64) bool {
+	blocks, ok := m.streamMap[streamID]
 	if !ok || len(blocks) == 0 {
 		return false
 	}
@@ -419,9 +384,9 @@ func (m *BlockingManager) isStreamBlocked(streamId uint64) bool {
 
 // updateBlockedStreams scans all currently blocked streams and removes any whose blocks are now satisfied.
 func (m *BlockingManager) updateBlockedStreams() {
-	for streamId := range m.blockedStreams {
-		if !m.isStreamBlocked(streamId) {
-			delete(m.blockedStreams, streamId)
+	for streamID := range m.blockedStreams {
+		if !m.isStreamBlocked(streamID) {
+			delete(m.blockedStreams, streamID)
 		}
 	}
 }
