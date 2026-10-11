@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 
+	protoh1 "github.com/lemon4ksan/mach/proto/h1"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
@@ -25,10 +26,11 @@ type ErrBrokenChunk struct{ error }
 //
 // It returns the parsed integer value, the number of bytes consumed from src,
 // and an error if the hex sequence is malformed, signed, or overflows 15 hex digits.
+// Accelerated via proto/h1 vectorized hexkit implementation.
 //
 // Concurrency: Thread-safe; operates strictly on the provided byte slice without allocations.
 func ParseHexUint(src []byte) (int, int, error) {
-	return parseHexUintFallback(src)
+	return protoh1.ParseHexUint(src)
 }
 
 // ReadBodyChunked decodes an HTTP/1.1 chunked transfer coding stream from r into dst
@@ -48,46 +50,15 @@ func ReadBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 // into buf per RFC 9112 Section 7.1.
 //
 // buf must have a capacity of at least 24 bytes. Returns the total number of bytes written.
+// Accelerated via proto/h1 vectorized hexkit implementation.
 //
 // Concurrency: Thread-safe; writes strictly into caller-provided stack or heap buffer.
 func FormatChunkHeader(buf *[24]byte, val int) int {
-	n := zerocopy.FormatHexUint((*[16]byte)(buf[:16]), val)
+	n := protoh1.FormatHexUint((*[16]byte)(buf[:16]), val)
 	buf[n] = '\r'
 	buf[n+1] = '\n'
 
 	return n + 2
-}
-
-func parseHexUintFallback(src []byte) (int, int, error) {
-	if len(src) == 0 {
-		return 0, 0, zerocopy.ErrEmptyHexNum
-	}
-
-	var n, i int
-	for i = 0; i < len(src); i++ {
-		c := src[i]
-
-		k := int(zerocopy.Hex2intTable[c])
-		if k == 16 {
-			if i == 0 {
-				return 0, 0, zerocopy.ErrEmptyHexNum
-			}
-
-			return n, i, nil
-		}
-
-		if i >= 15 {
-			return n, i, zerocopy.ErrTooLargeHexNum
-		}
-
-		n = (n << 4) | k
-	}
-
-	if i == 0 {
-		return 0, 0, zerocopy.ErrEmptyHexNum
-	}
-
-	return n, i, nil
 }
 
 type chunkedBodyWriter struct {
@@ -173,7 +144,10 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 
 func writeChunk(w *bufio.Writer, b []byte) error {
 	n := len(b)
-	if err := zerocopy.WriteHexInt(w, n); err != nil {
+	var hexBuf [16]byte
+	hexLen := protoh1.FormatHexUint(&hexBuf, n)
+
+	if _, err := w.Write(hexBuf[:hexLen]); err != nil {
 		return err
 	}
 
@@ -230,65 +204,53 @@ func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 
 // parseChunkSize decodes the chunk size hex value and skips optional chunk extensions (RFC 9112 Section 7.1.1).
 func parseChunkSize(r *bufio.Reader) (int, error) {
-	n, err := zerocopy.ReadHexInt(r)
+	line, err := r.ReadSlice('\n')
 	if err != nil {
-		return -1, err
-	}
-
-	inExt := false
-	for {
-		c, err := r.ReadByte()
-		if err != nil {
-			return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read '\\r' char at the end of chunk size: %w", err)}
+		if errors.Is(err, io.EOF) {
+			return -1, io.EOF
 		}
-
-		if c == '\r' {
-			if err := r.UnreadByte(); err != nil {
-				return -1, ErrBrokenChunk{
-					error: fmt.Errorf("cannot unread '\\r' char at the end of chunk size: %w", err),
-				}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			fullLine, errFull := r.ReadBytes('\n')
+			if errFull != nil {
+				return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read chunk size line: %w", errFull)}
 			}
-
-			break
-		}
-
-		if c == '\n' {
-			return -1, ErrBrokenChunk{error: errors.New("invalid character '\\n' after chunk size")}
-		}
-
-		if inExt {
-			continue
-		}
-
-		switch c {
-		case ' ', '\t':
-			continue
-		case ';':
-			inExt = true
-			continue
-		default:
-			return -1, ErrBrokenChunk{error: fmt.Errorf("invalid character %q after chunk size", c)}
+			line = fullLine
+		} else {
+			return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read chunk size line: %w", err)}
 		}
 	}
 
-	err = readCrLf(r)
-	if err != nil {
-		return -1, err
+	if len(line) < 2 || line[len(line)-2] != '\r' || line[len(line)-1] != '\n' {
+		return -1, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk size")}
 	}
 
-	return n, nil
+	line = line[:len(line)-2]
+
+	// Strip chunk extensions (RFC 9112 §7.1.1)
+	if idx := protoh1.IndexByte(line, ';'); idx != -1 {
+		line = line[:idx]
+	}
+
+	// Strip trailing BWS (RFC 9112 §7.1.1)
+	line = protoh1.TrimTrailingSpace(line)
+
+	if len(line) == 0 {
+		return -1, ErrBrokenChunk{error: errors.New("empty chunk size")}
+	}
+
+	chunkSize, consumed, err := protoh1.ParseHexUint(line)
+	if err != nil || chunkSize < 0 || consumed != len(line) {
+		return -1, ErrBrokenChunk{error: fmt.Errorf("invalid chunk size: %w", err)}
+	}
+
+	return chunkSize, nil
 }
 
 func readCrLf(r *bufio.Reader) error {
-	for _, exp := range []byte{'\r', '\n'} {
-		c, err := r.ReadByte()
-		if err != nil {
-			return ErrBrokenChunk{error: fmt.Errorf("cannot read %q char at the end of chunk size: %w", exp, err)}
-		}
-
-		if c != exp {
-			return ErrBrokenChunk{error: fmt.Errorf("unexpected char %q at the end of chunk size: expected %q", c, exp)}
-		}
+	b1, err1 := r.ReadByte()
+	b2, err2 := r.ReadByte()
+	if err1 != nil || err2 != nil || b1 != '\r' || b2 != '\n' {
+		return ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
 	}
 
 	return nil

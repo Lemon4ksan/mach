@@ -816,3 +816,93 @@ const (
 	// ValueBytes represents the "bytes" Accept-Ranges token.
 	ValueBytes = "bytes"
 )
+
+// ============================================================================
+// 17. Additional Web Platform, Client Hints & Legacy Headers
+// ============================================================================
+
+const (
+	// AcceptCHLifetime specifies persistence duration for Client Hints preferences.
+	AcceptCHLifetime = "Accept-CH-Lifetime"
+
+	// AcceptPatch specifies patch document media types accepted by the server (RFC 5789 §3.1).
+	AcceptPatch = "Accept-Patch"
+
+	// AcceptPushPolicy specifies client preference for HTTP/2 server push.
+	AcceptPushPolicy = "Accept-Push-Policy"
+
+	// ContentDPR indicates device pixel ratio for targeted content representation.
+	ContentDPR = "Content-DPR"
+
+	// Cookie2 contains historic state management information (RFC 2965).
+	Cookie2 = "Cookie2"
+
+	// DPR requests content scaled to client device pixel ratio.
+	DPR = "DPR"
+
+	// FeaturePolicy controls browser features available to document (W3C Feature Policy).
+	FeaturePolicy = "Feature-Policy"
+
+	// Index provides catalog index hints for directory navigation.
+	Index = "Index"
+
+	// LargeAllocation requests larger memory heap allocation for web pages.
+	LargeAllocation = "Large-Allocation"
+
+	// NEL configures Network Error Logging policy (W3C NEL).
+	NEL = "NEL"
+
+	// PingFrom identifies source URL of hyperlinked ping attribute (W3C HTML).
+	PingFrom = "Ping-From"
+
+	// PingTo identifies target URL of hyperlinked ping attribute (W3C HTML).
+	PingTo = "Ping-To"
+
+	// ProxyConnection specifies hop-by-hop connection directives to intermediary proxies.
+	ProxyConnection = "Proxy-Connection"
+
+	// PushPolicy configures server push preferences.
+	PushPolicy = "Push-Policy"
+
+	// ReportTo configures reporting endpoints for browser security violation reports (W3C Reporting API).
+	ReportTo = "Report-To"
+
+	// SaveData communicates client preference for reduced data usage (W3C Save-Data).
+	SaveData = "Save-Data"
+
+	// SignedHeaders lists header names included in message signature verification.
+	SignedHeaders = "Signed-Headers"
+
+	// SourceMap links generated code to its original source map file.
+	SourceMap = "SourceMap"
+
+	// TimingAllowOrigin specifies origins allowed to see detailed resource timing (W3C Resource Timing).
+	TimingAllowOrigin = "Timing-Allow-Origin"
+
+	// Tk indicates tracking status for tracking preference responses (W3C Tracking Protection).
+	Tk = "Tk"
+
+	// ViewportWidth specifies layout viewport width in CSS pixels (Client Hints).
+	ViewportWidth = "Viewport-Width"
+
+	// Width conveys intended display width of image resource in CSS pixels (Client Hints).
+	Width = "Width"
+
+	// XDownloadOptions controls file download and execution behavior in Internet Explorer.
+	XDownloadOptions = "X-Download-Options"
+
+	// XPingback advertises Pingback XML-RPC server URL (Pingback 1.0).
+	XPingback = "X-Pingback"
+
+	// XPoweredBy discloses backend framework or execution platform.
+	XPoweredBy = "X-Powered-By"
+
+	// XRequestedWith identifies Ajax / XMLHttpRequest asynchronous requests.
+	XRequestedWith = "X-Requested-With"
+
+	// XRobotsTag instructs search engine crawlers regarding indexing and snippet generation.
+	XRobotsTag = "X-Robots-Tag"
+
+	// XUACompatible specifies legacy Internet Explorer rendering engine mode.
+	XUACompatible = "X-UA-Compatible"
+)

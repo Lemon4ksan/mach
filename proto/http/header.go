@@ -7,6 +7,8 @@ package http
 import (
 	"errors"
 
+	"github.com/lemon4ksan/foundation/silicon/pool"
+
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
@@ -171,9 +173,9 @@ func (h *header) copyTo(dst *header) {
 	dst.connectionClose = h.connectionClose
 	dst.noDefaultContentType = h.noDefaultContentType
 	dst.contentLength = h.contentLength
-	dst.contentLengthBytes = append(dst.contentLengthBytes, h.contentLengthBytes...)
-	dst.protocol = append(dst.protocol, h.protocol...)
-	dst.contentType = append(dst.contentType, h.contentType...)
+	dst.contentLengthBytes = append(dst.contentLengthBytes[:0], h.contentLengthBytes...)
+	dst.protocol = append(dst.protocol[:0], h.protocol...)
+	dst.contentType = append(dst.contentType[:0], h.contentType...)
 	dst.trailer = copyTrailer(dst.trailer, h.trailer)
 	dst.cookies = zerocopy.CopyArgs(dst.cookies, h.cookies)
 	copyHeaders(&dst.h, &h.h)
@@ -238,12 +240,31 @@ func (h *RequestHeader) resetSkipNormalize() {
 func (h *RequestHeader) CopyTo(dst *RequestHeader) {
 	dst.Reset()
 	h.copyTo(&dst.header)
-	dst.method = append(dst.method, h.method...)
-	dst.requestURI = append(dst.requestURI, h.requestURI...)
-	dst.host = append(dst.host, h.host...)
-	dst.userAgent = append(dst.userAgent, h.userAgent...)
+	dst.method = append(dst.method[:0], h.method...)
+	dst.requestURI = append(dst.requestURI[:0], h.requestURI...)
+	dst.host = append(dst.host[:0], h.host...)
+	dst.userAgent = append(dst.userAgent[:0], h.userAgent...)
 	dst.cookiesCollected = h.cookiesCollected
-	dst.rawHeaders = append(dst.rawHeaders, h.rawHeaders...)
+	dst.rawHeaders = append(dst.rawHeaders[:0], h.rawHeaders...)
+}
+
+// Headkit returns a pointer to the underlying headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe; single-threaded execution required.
+func (h *RequestHeader) Headkit() *headkit.Headers {
+	return &h.h
+}
+
+// SetFromHeadkit populates request headers from a headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe.
+func (h *RequestHeader) SetFromHeadkit(src *headkit.Headers) {
+	if src == nil {
+		return
+	}
+	for k, v := range src.All() {
+		h.Set(k, v)
+	}
 }
 
 // DisableSpecialHeader disables special header processing.
@@ -318,7 +339,76 @@ func (h *ResponseHeader) CopyTo(dst *ResponseHeader) {
 	h.copyTo(&dst.header)
 	dst.noDefaultDate = h.noDefaultDate
 	dst.statusCode = h.statusCode
-	dst.statusMessage = append(dst.statusMessage, h.statusMessage...)
-	dst.contentEncoding = append(dst.contentEncoding, h.contentEncoding...)
-	dst.server = append(dst.server, h.server...)
+	dst.statusMessage = append(dst.statusMessage[:0], h.statusMessage...)
+	dst.contentEncoding = append(dst.contentEncoding[:0], h.contentEncoding...)
+	dst.server = append(dst.server[:0], h.server...)
 }
+
+// Headkit returns a pointer to the underlying headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe; single-threaded execution required.
+func (h *ResponseHeader) Headkit() *headkit.Headers {
+	return &h.h
+}
+
+// SetFromHeadkit populates response headers from a headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe.
+func (h *ResponseHeader) SetFromHeadkit(src *headkit.Headers) {
+	if src == nil {
+		return
+	}
+	for k, v := range src.All() {
+		h.Set(k, v)
+	}
+}
+
+var (
+	requestHeaderStorage = pool.NewPerCorePool[*RequestHeader](func() *RequestHeader {
+		return &RequestHeader{}
+	})
+	responseHeaderStorage = pool.NewPerCorePool[*ResponseHeader](func() *ResponseHeader {
+		return &ResponseHeader{}
+	})
+)
+
+// AcquireRequestHeader returns an empty RequestHeader instance from the PerCorePool.
+//
+// The returned RequestHeader instance may be passed to ReleaseRequestHeader when it is
+// no longer needed. This allows RequestHeader recycling, reduces GC pressure
+// and improves performance on hot paths with 0 allocations.
+func AcquireRequestHeader() *RequestHeader {
+	return requestHeaderStorage.Get()
+}
+
+// ReleaseRequestHeader returns h acquired via AcquireRequestHeader to the request header pool.
+//
+// It is forbidden accessing h and/or its members after returning it to the pool.
+func ReleaseRequestHeader(h *RequestHeader) {
+	if h == nil {
+		return
+	}
+	h.Reset()
+	requestHeaderStorage.Put(h)
+}
+
+// AcquireResponseHeader returns an empty ResponseHeader instance from the PerCorePool.
+//
+// The returned ResponseHeader instance may be passed to ReleaseResponseHeader when it is
+// no longer needed. This allows ResponseHeader recycling, reduces GC pressure
+// and improves performance on hot paths with 0 allocations.
+func AcquireResponseHeader() *ResponseHeader {
+	return responseHeaderStorage.Get()
+}
+
+// ReleaseResponseHeader returns h acquired via AcquireResponseHeader to the response header pool.
+//
+// It is forbidden accessing h and/or its members after returning it to the pool.
+func ReleaseResponseHeader(h *ResponseHeader) {
+	if h == nil {
+		return
+	}
+	h.Reset()
+	responseHeaderStorage.Put(h)
+}
+

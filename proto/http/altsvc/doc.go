@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package altsvc provides parsing and formatting for HTTP Alternative Services (RFC 7838).
-//
-// It enables fast, low-overhead discovery and negotiation of alternative network origins
-// and protocols (such as HTTP/2 and HTTP/3) without unnecessary string allocations.
+// Package altsvc provides backward-compatible forwarders to HTTP Alternative Services (RFC 7838)
+// defined in proto/semantic/altsvc.
 package altsvc

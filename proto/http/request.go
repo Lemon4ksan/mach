@@ -51,10 +51,10 @@ type Request struct {
 	isTLS                 bool
 	UseHostHeader         bool
 
-	// DisableRedirectPathNormalizing disables redirect path normalization when used with DoRedirects.
+	// DisableRedirectPathNormalizing is a legacy fasthttp compatibility flag.
+	// Mach normalizes request-targets canonically according to RFC 9112 Section 3.2.
 	//
-	// By default redirect path values are normalized, i.e.
-	// extra slashes are removed, special characters are encoded.
+	// Deprecated: Maintained for backward-compatible call-sites.
 	DisableRedirectPathNormalizing bool
 }
 

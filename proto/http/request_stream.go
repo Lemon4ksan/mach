@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
@@ -113,35 +114,47 @@ func (rs *RequestStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
+var (
+	requestStreamStorage = pool.NewPerCorePool[*RequestStream](func() *RequestStream {
+		return &RequestStream{}
+	})
+
+	// RequestStreamPool remains for backwards compatibility.
+	RequestStreamPool = sync.Pool{
+		New: func() any {
+			return &RequestStream{}
+		},
+	}
+)
+
 // AcquireRequestStream acquires a pooled RequestStream instance initialized with prefetched bytes, reader, and header parser.
 //
-// Thread-safe: Yes (backed by sync.Pool).
+// Thread-safe: Yes (backed by PerCorePool).
 func AcquireRequestStream(b *bytesconv.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *RequestStream {
-	rs := RequestStreamPool.Get().(*RequestStream) //nolint:forcetypeassert
-	rs.prefetchedBytes = bytes.NewReader(b.B)
+	rs := requestStreamStorage.Get()
+	if rs.prefetchedBytes == nil {
+		rs.prefetchedBytes = bytes.NewReader(b.B)
+	} else {
+		rs.prefetchedBytes.Reset(b.B)
+	}
 	rs.reader = r
 	rs.header = h
 
 	return rs
 }
 
-// ReleaseRequestStream releases a RequestStream instance back to RequestStreamPool after resetting its fields.
+// ReleaseRequestStream releases a RequestStream instance back to the PerCorePool after resetting its fields.
 //
-// Thread-safe: Yes (backed by sync.Pool).
+// Thread-safe: Yes (backed by PerCorePool).
 func ReleaseRequestStream(rs *RequestStream) {
-	rs.prefetchedBytes = nil
+	if rs == nil {
+		return
+	}
 	rs.totalBytesRead = 0
 	rs.chunkLeft = 0
 	rs.reader = nil
 	rs.header = nil
-	RequestStreamPool.Put(rs)
-}
-
-// RequestStreamPool pools RequestStream instances to reduce garbage collection overhead during streaming I/O.
-var RequestStreamPool = sync.Pool{
-	New: func() any {
-		return &RequestStream{}
-	},
+	requestStreamStorage.Put(rs)
 }
 
 // SetBodyStream configures bodyStream as the request entity body reader with an expected length (RFC 9112 Section 7.1).

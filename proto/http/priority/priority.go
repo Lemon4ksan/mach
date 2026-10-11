@@ -2,130 +2,54 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package priority implements RFC 9218 Extensible Priorities for HTTP/2, HTTP/3, and HTTP/1.1
-// aligning request resource scheduling with modern Chromium architecture.
 package priority
 
 import (
-	"strconv"
-	"strings"
+	"github.com/lemon4ksan/mach/proto/semantic/priority"
 )
 
-// HeaderPriority is the standard RFC 9218 §4 header name for extensible HTTP priorities.
-const HeaderPriority = "priority"
+// HeaderPriority forwarded from proto/semantic/priority.
+const HeaderPriority = priority.HeaderPriority
 
-// Standard RFC 9218 §4.1 urgency levels (0 to 7).
+// Standard RFC 9218 urgency levels forwarded from proto/semantic/priority.
 const (
-	// UrgencyUserBlocking (0) represents critical blocking resources (e.g. HTML documents, synchronous scripts).
-	UrgencyUserBlocking = 0
-
-	// UrgencyHigh (1) represents high-priority interactive resources (e.g. API fetch calls, XHR).
-	UrgencyHigh = 1
-
-	// UrgencyMedium (2) represents normal sub-resources.
-	UrgencyMedium = 2
-
-	// UrgencyLow (3) represents lower priority visual assets (e.g. images, icons).
-	UrgencyLow = 3
-
-	// UrgencyVeryLow (4) represents non-blocking assets.
-	UrgencyVeryLow = 4
-
-	// UrgencyBackground (5) represents background operations (e.g. prefetch, telemetry, analytics).
-	UrgencyBackground = 5
-
-	// UrgencyIdle (6) represents speculative or maintenance tasks.
-	UrgencyIdle = 6
-
-	// UrgencyMinimum (7) represents the lowest possible priority.
-	UrgencyMinimum = 7
+	UrgencyUserBlocking = priority.UrgencyUserBlocking
+	UrgencyHigh         = priority.UrgencyHigh
+	UrgencyMedium       = priority.UrgencyMedium
+	UrgencyLow          = priority.UrgencyLow
+	UrgencyVeryLow      = priority.UrgencyVeryLow
+	UrgencyBackground   = priority.UrgencyBackground
+	UrgencyIdle         = priority.UrgencyIdle
+	UrgencyMinimum      = priority.UrgencyMinimum
 )
 
-// Standard predefined [Priority] configurations.
+// Standard predefined configurations forwarded from proto/semantic/priority.
 var (
-	// UserBlocking represents urgency 0 non-incremental priority (HTML / critical).
-	UserBlocking = Priority{Urgency: UrgencyUserBlocking, Incremental: false}
-
-	// Interactive represents urgency 1 incremental priority (API / fetch).
-	Interactive = Priority{Urgency: UrgencyHigh, Incremental: true}
-
-	// Low represents urgency 3 incremental priority (images / media).
-	Low = Priority{Urgency: UrgencyLow, Incremental: true}
-
-	// Background represents urgency 5 non-incremental priority (telemetry / prefetch).
-	Background = Priority{Urgency: UrgencyBackground, Incremental: false}
+	UserBlocking = priority.UserBlocking
+	Interactive  = priority.Interactive
+	Low          = priority.Low
+	Background   = priority.Background
 )
 
-// Priority encapsulates RFC 9218 §4 priority parameters: urgency (0-7, RFC 9218 §4.1) and incremental streaming flag (RFC 9218 §4.2).
-type Priority struct {
-	// Urgency indicates resource priority level from 0 (highest) to 7 (lowest) (RFC 9218 §4.1).
-	Urgency int
+// Priority forwarded from proto/semantic/priority.
+type Priority = priority.Priority
 
-	// Incremental indicates whether the response can be processed incrementally in parallel (RFC 9218 §4.2).
-	Incremental bool
-}
-
-// New constructs a validated [Priority]. Caps urgency to [0, 7].
+// New forwarded from proto/semantic/priority.
 func New(urgency int, incremental bool) Priority {
-	return Priority{
-		Urgency:     min(max(urgency, 0), 7),
-		Incremental: incremental,
-	}
+	return priority.New(urgency, incremental)
 }
 
-// AppendFormat serializes the [Priority] into an RFC 9218 §4 string and appends it to dst without heap allocations.
-func (p Priority) AppendFormat(dst []byte) []byte {
-	urg := min(max(p.Urgency, 0), 7)
-
-	dst = append(dst, 'u', '=', byte('0'+urg))
-	if p.Incremental {
-		dst = append(dst, ',', ' ', 'i')
-	}
-
-	return dst
+// ParsePriority forwarded from proto/semantic/priority.
+func ParsePriority[S ~string | ~[]byte](s S) (Priority, error) {
+	return priority.ParsePriority(s)
 }
 
-// Format serializes the [Priority] into an RFC 9218 §4 Structured Field dictionary string (e.g. "u=1, i").
-func (p Priority) Format() string {
-	var buf [8]byte
-	return string(p.AppendFormat(buf[:0]))
-}
-
-func (p Priority) String() string {
-	return p.Format()
-}
-
-// Parse deserializes an RFC 9218 §4 priority header string (e.g. "u=1, i", "u=3", "i, u=0").
+// Parse forwarded from proto/semantic/priority.
 func Parse(s string) (Priority, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return Priority{Urgency: 3, Incremental: false}, nil
-	}
+	return priority.Parse(s)
+}
 
-	p := Priority{Urgency: 3, Incremental: false}
-	parts := strings.SplitSeq(s, ",")
-
-	for part := range parts {
-		item := strings.TrimSpace(part)
-		if item == "i" || item == "i=?1" {
-			p.Incremental = true
-			continue
-		}
-
-		if item == "i=?0" {
-			p.Incremental = false
-			continue
-		}
-
-		if after, ok := strings.CutPrefix(item, "u="); ok {
-			valStr := after
-
-			val, err := strconv.Atoi(strings.TrimSpace(valStr))
-			if err == nil && val >= 0 && val <= 7 {
-				p.Urgency = val
-			}
-		}
-	}
-
-	return p, nil
+// ParseBytes forwarded from proto/semantic/priority.
+func ParseBytes(b []byte) (Priority, error) {
+	return priority.ParseBytes(b)
 }

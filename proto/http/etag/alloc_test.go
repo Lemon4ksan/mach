@@ -14,6 +14,9 @@ func TestAlloc(t *testing.T) {
 	tagA := `"123456789"`
 	tagB := `W/"123456789"`
 
+	tagABytes := []byte(tagA)
+	tagBBytes := []byte(tagB)
+
 	t.Run("StrongMatch", func(t *testing.T) {
 		allocs := testing.AllocsPerRun(1000, func() {
 			_ = etag.StrongMatch(tagA, tagA)
@@ -23,9 +26,36 @@ func TestAlloc(t *testing.T) {
 		}
 	})
 
+	t.Run("StrongMatchBytes", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = etag.StrongMatch(tagABytes, tagABytes)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
 	t.Run("WeakMatch", func(t *testing.T) {
 		allocs := testing.AllocsPerRun(1000, func() {
 			_ = etag.WeakMatch(tagA, tagB)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("WeakMatchBytes", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = etag.WeakMatch(tagABytes, tagBBytes)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("Normalize", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = etag.Normalize(tagB)
 		})
 		if allocs != 0 {
 			t.Errorf("expected 0 allocs, got %v", allocs)

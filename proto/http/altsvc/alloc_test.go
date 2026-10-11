@@ -13,21 +13,36 @@ import (
 func TestAlloc(t *testing.T) {
 	header := `h3=":443"; ma=2592000, h2="alt.example.com:443"; persist=1`
 
-	t.Run("AllIterator", func(t *testing.T) {
+	t.Run("ForEach", func(t *testing.T) {
 		allocs := testing.AllocsPerRun(1000, func() {
 			count := 0
-			for svc := range altsvc.All(header) {
+			altsvc.ForEach(header, func(svc altsvc.Service) bool {
 				if svc.ProtocolID == "" || svc.Port == 0 {
 					t.Fatal("invalid service")
 				}
 				count++
-			}
+				return true
+			})
 			if count != 2 {
 				t.Fatalf("expected 2 services, got %d", count)
 			}
 		})
-		if allocs > 15 {
-			t.Errorf("expected minimal allocs, got %v", allocs)
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for ForEach, got %v", allocs)
+		}
+	})
+
+	t.Run("AppendFormat", func(t *testing.T) {
+		services := []altsvc.Service{
+			{ProtocolID: "h3", Host: "", Port: 443},
+			{ProtocolID: "h2", Host: "alt.example.com", Port: 8443, Persist: true},
+		}
+		var buf [128]byte
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = altsvc.AppendFormat(buf[:0], services...)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for AppendFormat, got %v", allocs)
 		}
 	})
 }

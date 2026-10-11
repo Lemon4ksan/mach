@@ -19,7 +19,7 @@ func TestAlloc(t *testing.T) {
 			_ = p.AppendFormat(buf[:0])
 		})
 		if allocs != 0 {
-			t.Errorf("expected 0 allocs, got %v", allocs)
+			t.Errorf("expected 0 allocs for AppendFormat, got %v", allocs)
 		}
 	})
 
@@ -28,9 +28,18 @@ func TestAlloc(t *testing.T) {
 		allocs := testing.AllocsPerRun(1000, func() {
 			_, _ = priority.Parse(raw)
 		})
-		// strings.SplitSeq with minimal allocations
-		if allocs > 5 {
-			t.Errorf("expected minimal allocs, got %v", allocs)
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for Parse, got %v", allocs)
+		}
+	})
+
+	t.Run("ParseBytes", func(t *testing.T) {
+		raw := []byte("u=1, i")
+		allocs := testing.AllocsPerRun(1000, func() {
+			_, _ = priority.ParseBytes(raw)
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for ParseBytes, got %v", allocs)
 		}
 	})
 }

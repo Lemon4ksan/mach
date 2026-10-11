@@ -437,8 +437,8 @@ func (h *RequestHeader) Len() int {
 // Thread-safe: No.
 func (h *RequestHeader) All() iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
-		for _, e := range h.h.Entries() {
-			if !yield(bytesconv.S2B(e.Key), bytesconv.S2B(e.Value)) {
+		for k, v := range h.h.All() {
+			if !yield(bytesconv.S2B(k), bytesconv.S2B(v)) {
 				return
 			}
 		}
@@ -496,8 +496,8 @@ func (h *RequestHeader) All() iter.Seq2[[]byte, []byte] {
 // Thread-safe: No.
 func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
-		for _, e := range h.h.Entries() {
-			if !yield(bytesconv.S2B(e.Key), bytesconv.S2B(e.Value)) {
+		for k, v := range h.h.All() {
+			if !yield(bytesconv.S2B(k), bytesconv.S2B(v)) {
 				return
 			}
 		}
@@ -508,21 +508,7 @@ func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
 //
 // Thread-safe: No.
 func (h *RequestHeader) Del(key string) {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
-	h.del(h.bufK)
-}
-
-// DelBytes deletes header with the given key bytes (RFC 9110 Section 5).
-//
-// Thread-safe: No.
-func (h *RequestHeader) DelBytes(key []byte) {
-	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
-	h.del(h.bufK)
-}
-
-func (h *RequestHeader) del(key []byte) {
-	switch string(key) {
+	switch key {
 	case HeaderHost:
 		h.host = h.host[:0]
 	case HeaderContentType:
@@ -540,7 +526,39 @@ func (h *RequestHeader) del(key []byte) {
 		h.trailer = h.trailer[:0]
 	}
 
-	h.h.Del(bytesconv.B2S(key))
+	h.h.Del(key)
+}
+
+// DelBytes deletes header with the given key bytes (RFC 9110 Section 5).
+//
+// Thread-safe: No.
+func (h *RequestHeader) DelBytes(key []byte) {
+	h.bufK = append(h.bufK[:0], key...)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	h.del(h.bufK)
+}
+
+func (h *RequestHeader) del(key []byte) {
+	k := bytesconv.B2S(key)
+	switch k {
+	case HeaderHost:
+		h.host = h.host[:0]
+	case HeaderContentType:
+		h.contentType = h.contentType[:0]
+	case HeaderUserAgent:
+		h.userAgent = h.userAgent[:0]
+	case HeaderCookie:
+		h.cookies = h.cookies[:0]
+	case HeaderContentLength:
+		h.contentLength = 0
+		h.contentLengthBytes = h.contentLengthBytes[:0]
+	case HeaderConnection:
+		h.connectionClose = false
+	case HeaderTrailer:
+		h.trailer = h.trailer[:0]
+	}
+
+	h.h.Del(k)
 }
 
 func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
@@ -606,7 +624,12 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 //
 // Thread-safe: No.
 func (h *RequestHeader) Add(key, value string) {
-	h.AddBytesKV(bytesconv.S2B(key), bytesconv.S2B(value))
+	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	if h.setSpecialHeader(h.bufK, h.bufV) {
+		return
+	}
+
+	h.h.Add(key, value)
 }
 
 // AddBytesK adds the given 'Key: value' header (RFC 9110 Section 5.2).
@@ -647,7 +670,11 @@ func (h *RequestHeader) AddBytesKV(key, value []byte) {
 // Thread-safe: No.
 func (h *RequestHeader) Set(key, value string) {
 	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
-	h.SetCanonical(h.bufK, h.bufV)
+	if h.setSpecialHeader(h.bufK, h.bufV) {
+		return
+	}
+
+	h.h.Set(key, value)
 }
 
 // SetBytesK sets the given 'Key: value' header (RFC 9110 Section 5.1).
@@ -713,7 +740,8 @@ func (h *RequestHeader) PeekCanonical(key []byte) []byte {
 }
 
 func (h *RequestHeader) peek(key []byte) []byte {
-	switch string(key) {
+	k := bytesconv.B2S(key)
+	switch k {
 	case HeaderHost:
 		return h.Host()
 	case HeaderContentType:
@@ -1034,8 +1062,8 @@ func (h *ResponseHeader) Len() int {
 // Thread-safe: No.
 func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
-		for _, e := range h.h.Entries() {
-			if !yield(bytesconv.S2B(e.Key), bytesconv.S2B(e.Value)) {
+		for k, v := range h.h.All() {
+			if !yield(bytesconv.S2B(k), bytesconv.S2B(v)) {
 				return
 			}
 		}
@@ -1090,21 +1118,7 @@ func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) Del(key string) {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
-	h.del(h.bufK)
-}
-
-// DelBytes deletes header with the given key bytes (RFC 9110 Section 5).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) DelBytes(key []byte) {
-	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
-	h.del(h.bufK)
-}
-
-func (h *ResponseHeader) del(key []byte) {
-	switch string(key) {
+	switch key {
 	case HeaderContentType:
 		h.contentType = h.contentType[:0]
 	case HeaderContentEncoding:
@@ -1122,7 +1136,39 @@ func (h *ResponseHeader) del(key []byte) {
 		h.trailer = h.trailer[:0]
 	}
 
-	h.h.Del(bytesconv.B2S(key))
+	h.h.Del(key)
+}
+
+// DelBytes deletes header with the given key bytes (RFC 9110 Section 5).
+//
+// Thread-safe: No.
+func (h *ResponseHeader) DelBytes(key []byte) {
+	h.bufK = append(h.bufK[:0], key...)
+	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	h.del(h.bufK)
+}
+
+func (h *ResponseHeader) del(key []byte) {
+	k := bytesconv.B2S(key)
+	switch k {
+	case HeaderContentType:
+		h.contentType = h.contentType[:0]
+	case HeaderContentEncoding:
+		h.contentEncoding = h.contentEncoding[:0]
+	case HeaderServer:
+		h.server = h.server[:0]
+	case HeaderSetCookie:
+		h.cookies = h.cookies[:0]
+	case HeaderContentLength:
+		h.contentLength = 0
+		h.contentLengthBytes = h.contentLengthBytes[:0]
+	case HeaderConnection:
+		h.connectionClose = false
+	case HeaderTrailer:
+		h.trailer = h.trailer[:0]
+	}
+
+	h.h.Del(k)
 }
 
 func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
@@ -1195,7 +1241,12 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) Add(key, value string) {
-	h.AddBytesKV(bytesconv.S2B(key), bytesconv.S2B(value))
+	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	if h.setSpecialHeader(h.bufK, h.bufV) {
+		return
+	}
+
+	h.h.Add(key, value)
 }
 
 // AddBytesK adds the given 'Key: value' header (RFC 9110 Section 5.2).
@@ -1236,7 +1287,11 @@ func (h *ResponseHeader) AddBytesKV(key, value []byte) {
 // Thread-safe: No.
 func (h *ResponseHeader) Set(key, value string) {
 	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
-	h.SetCanonical(h.bufK, h.bufV)
+	if h.setSpecialHeader(h.bufK, h.bufV) {
+		return
+	}
+
+	h.h.Set(key, value)
 }
 
 // SetBytesK sets the given 'Key: value' header (RFC 9110 Section 5.1).
@@ -1302,7 +1357,8 @@ func (h *ResponseHeader) PeekCanonical(key []byte) []byte {
 }
 
 func (h *ResponseHeader) peek(key []byte) []byte {
-	switch string(key) {
+	k := bytesconv.B2S(key)
+	switch k {
 	case HeaderContentType:
 		return h.ContentType()
 	case HeaderContentEncoding:
@@ -1603,21 +1659,21 @@ func appendArgBytesHeaders(h *headkit.Headers, key, value []byte) {
 	h.Add(string(key), string(value))
 }
 
-// copyHeaders copies all header entries from src to dst.
+// copyHeaders copies all header entries from src to dst with zero heap allocations.
 func copyHeaders(dst, src *headkit.Headers) {
 	dst.Reset()
 
-	for _, e := range src.Entries() {
-		dst.Add(e.Key, e.Value)
+	for k, v := range src.All() {
+		dst.Add(k, v)
 	}
 }
 
-// peekAllArgBytesToDstHeaders appends all values matching key in h to dst.
+// peekAllArgBytesToDstHeaders appends all values matching key in h to dst without allocating intermediate slices.
 func peekAllArgBytesToDstHeaders(dst [][]byte, h *headkit.Headers, key []byte) [][]byte {
 	kStr := bytesconv.B2S(key)
-	for _, e := range h.Entries() {
-		if bytesconv.EqualFoldASCII(e.Key, kStr) {
-			dst = append(dst, bytesconv.S2B(e.Value))
+	for k, v := range h.All() {
+		if bytesconv.EqualFoldASCII(k, kStr) {
+			dst = append(dst, bytesconv.S2B(v))
 		}
 	}
 

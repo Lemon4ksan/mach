@@ -11,6 +11,8 @@ import (
 	"io"
 	"mime/multipart"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
@@ -54,7 +56,12 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 		return req.multipartForm, nil
 	}
 
-	req.multipartFormBoundary = string(req.Header.MultipartFormBoundary())
+	b := req.Header.MultipartFormBoundary()
+	if len(b) > 0 {
+		req.multipartFormBoundary = bytesconv.B2S(b)
+	} else {
+		req.multipartFormBoundary = headkit.ExtractBoundary(bytesconv.B2S(req.Header.ContentType()))
+	}
 	if req.multipartFormBoundary == "" {
 		return nil, ErrNoMultipartForm
 	}

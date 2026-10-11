@@ -17,8 +17,8 @@ import (
 	"strings"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-	"github.com/lemon4ksan/foundation/silicon/simd"
 
+	protoh1 "github.com/lemon4ksan/mach/proto/h1"
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/header"
 )
@@ -188,7 +188,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 			}
 
 			if startIdx < len(peekBytes) {
-				headerEnd := simd.IndexCRLFCRLFVector(peekBytes[startIdx:])
+				headerEnd := protoh1.IndexCRLFCRLF(peekBytes[startIdx:])
 				if headerEnd != -1 {
 					headerEnd += startIdx
 					headerBlock := peekBytes[startIdx : headerEnd-4]
@@ -256,7 +256,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 }
 
 func (r *Request) parseHeaderBlock(headerBlock []byte) error {
-	crlfIdx := simd.ScanByteVector(headerBlock, '\n')
+	crlfIdx := protoh1.IndexByte(headerBlock, '\n')
 	if crlfIdx <= 0 {
 		return r.parseRequestLine(headerBlock)
 	}
@@ -280,14 +280,14 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 }
 
 func (r *Request) parseRequestLine(line []byte) error {
-	s1 := simd.ScanByteVector(line, ' ')
+	s1 := protoh1.IndexByte(line, ' ')
 	if s1 <= 0 {
 		return ErrMalformedRequestLine
 	}
 
 	rem := line[s1+1:]
 
-	s2Offset := simd.ScanByteVector(rem, ' ')
+	s2Offset := protoh1.IndexByte(rem, ' ')
 	if s2Offset <= 0 {
 		return ErrMalformedRequestLine
 	}
@@ -303,7 +303,7 @@ func (r *Request) parseRequestLine(line []byte) error {
 	r.Proto = bytesconv.B2S(line[s2+1:])
 
 	uriBytes := line[s1+1 : s2]
-	if qIdx := simd.ScanByteVector(uriBytes, '?'); qIdx != -1 {
+	if qIdx := protoh1.IndexByte(uriBytes, '?'); qIdx != -1 {
 		r.Path = bytesconv.B2S(uriBytes[:qIdx])
 		r.Query = bytesconv.B2S(uriBytes[qIdx+1:])
 	} else {

@@ -376,15 +376,15 @@ func parseEntry(s string) (Entry, error) {
 			continue
 		}
 
-		eqIdx := strings.IndexByte(p, '=')
+		before, after, ok := strings.Cut(p, "=")
 
 		var key, val string
-		if eqIdx < 0 {
+		if !ok {
 			key = strings.ToLower(p)
 			val = "?1" // RFC 8941 boolean true default for bare parameters
 		} else {
-			key = strings.ToLower(strings.TrimSpace(p[:eqIdx]))
-			val = strings.TrimSpace(p[eqIdx+1:])
+			key = strings.ToLower(strings.TrimSpace(before))
+			val = strings.TrimSpace(after)
 		}
 
 		switch key {

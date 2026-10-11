@@ -43,6 +43,11 @@ func TestInternKey_AllPrecompiledKeys(t *testing.T) {
 		{"cache-control", rodata.KeyCacheControl},
 		{"Cache-Control", rodata.KeyCacheControl},
 
+		// 'd' keys
+		{"date", rodata.KeyDate},
+		{"Date", rodata.KeyDate},
+		{"DATE", rodata.KeyDate},
+
 		// 'h' keys
 		{"host", rodata.KeyHost},
 		{"HOST", rodata.KeyHost},
@@ -102,6 +107,17 @@ func TestInternKey_AllPrecompiledKeys(t *testing.T) {
 				t.Errorf("InternKey(%q) = %s, want %s", tt.input, got, tt.expected)
 			}
 		}
+
+		gotBytes := rodata.InternKeyBytes([]byte(tt.input))
+		if tt.expected == nil {
+			if gotBytes != nil {
+				t.Errorf("InternKeyBytes(%q) = %s, want nil", tt.input, gotBytes)
+			}
+		} else {
+			if !bytes.Equal(gotBytes, tt.expected) {
+				t.Errorf("InternKeyBytes(%q) = %s, want %s", tt.input, gotBytes, tt.expected)
+			}
+		}
 	}
 }
 
@@ -135,6 +151,58 @@ func TestInternValue_AllPrecompiledValues(t *testing.T) {
 			if !bytes.Equal(got, tt.expected) {
 				t.Errorf("InternValue(%q) = %s, want %s", tt.input, got, tt.expected)
 			}
+		}
+
+		gotBytes := rodata.InternValueBytes([]byte(tt.input))
+		if tt.expected == nil {
+			if gotBytes != nil {
+				t.Errorf("InternValueBytes(%q) = %s, want nil", tt.input, gotBytes)
+			}
+		} else {
+			if !bytes.Equal(gotBytes, tt.expected) {
+				t.Errorf("InternValueBytes(%q) = %s, want %s", tt.input, gotBytes, tt.expected)
+			}
+		}
+	}
+}
+
+func BenchmarkInternKeyBytes(b *testing.B) {
+	keys := [][]byte{
+		[]byte("content-type"),
+		[]byte("Content-Type"),
+		[]byte("CONTENT-LENGTH"),
+		[]byte("host"),
+		[]byte("user-agent"),
+		[]byte("sec-fetch-dest"),
+		[]byte("upgrade-insecure-requests"),
+		[]byte("unknown-header"),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		for _, k := range keys {
+			_ = rodata.InternKeyBytes(k)
+		}
+	}
+}
+
+func BenchmarkInternValueBytes(b *testing.B) {
+	values := [][]byte{
+		[]byte("application/json"),
+		[]byte("keep-alive"),
+		[]byte("gzip, deflate, br, zstd"),
+		[]byte("?1"),
+		[]byte("unknown-val"),
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		for _, v := range values {
+			_ = rodata.InternValueBytes(v)
 		}
 	}
 }
