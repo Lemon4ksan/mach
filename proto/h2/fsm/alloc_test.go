@@ -16,6 +16,8 @@ func (d *dummyHandler) OnPing(payload []byte, ack bool)                         
 func (d *dummyHandler) OnWindowUpdate(streamID, increment uint32)                             {}
 func (d *dummyHandler) OnStreamReset(streamID, errorCode uint32)                              {}
 func (d *dummyHandler) OnGoAway(lastStreamID, errorCode uint32)                               {}
+func (d *dummyHandler) OnPriority(streamID uint32, payload []byte)                            {}
+func (d *dummyHandler) OnUnknownFrame(streamID uint32, frameType uint8, flags uint8, payload []byte) {}
 func (d *dummyHandler) OnWrite(payload []byte)                                                {}
 
 func TestAlloc(t *testing.T) {

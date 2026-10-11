@@ -19,6 +19,8 @@ type EventHandler interface {
 	OnWindowUpdate(streamID, increment uint32)
 	OnStreamReset(streamID, errorCode uint32)
 	OnGoAway(lastStreamID, errorCode uint32)
+	OnPriority(streamID uint32, payload []byte)
+	OnUnknownFrame(streamID uint32, frameType uint8, flags uint8, payload []byte)
 	OnWrite(payload []byte)
 }
 
@@ -60,7 +62,7 @@ func (sm *StateMachine) Feed(data []byte) (int, error) {
 			hf := overlay.HeadersFrame(f)
 			sm.Handler.OnHeaders(streamID, hf.HeaderBlockFragment(), hf.IsEndHeaders(), hf.IsEndStream())
 		case 0x02: // PRIORITY
-			// Ignore
+			sm.Handler.OnPriority(streamID, f.Payload())
 		case 0x03: // RST_STREAM
 			if payloadLen == 4 {
 				errorCode := uint32(
@@ -79,7 +81,7 @@ func (sm *StateMachine) Feed(data []byte) (int, error) {
 			ack := flags&0x1 != 0
 			sm.Handler.OnSettings(f.Payload(), ack)
 		case 0x05: // PUSH_PROMISE
-			// Ignore
+			sm.Handler.OnUnknownFrame(streamID, 0x05, flags, f.Payload())
 		case 0x06: // PING
 			ack := flags&0x1 != 0
 			sm.Handler.OnPing(f.Payload(), ack)
@@ -123,6 +125,8 @@ func (sm *StateMachine) Feed(data []byte) (int, error) {
 		case 0x09: // CONTINUATION
 			endHeaders := flags&0x4 != 0
 			sm.Handler.OnContinuation(streamID, f.Payload(), endHeaders)
+		default:
+			sm.Handler.OnUnknownFrame(streamID, f.Type(), flags, f.Payload())
 		}
 
 		data = data[frameLen:]
