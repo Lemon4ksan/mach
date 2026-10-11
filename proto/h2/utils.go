@@ -131,7 +131,7 @@ func cutPadding(payload []byte, length int) ([]byte, error) {
 	}
 
 	pad := int(payload[0])
-	if len(payload) < length-pad-1 || length-pad < 1 {
+	if pad >= len(payload) || length > len(payload) || pad >= length || length-pad < 1 {
 		return nil, NewGoAwayError(ProtocolError, "padding out of range (RFC 9113 §6.1)")
 	}
 

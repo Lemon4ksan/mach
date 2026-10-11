@@ -164,6 +164,10 @@ func (cc *ClientConn) readResponseFrom(
 
 			dataBufPool.Put(bufPtr)
 
+			if lim, ok := lr.(*io.LimitedReader); ok && lim.N > 0 {
+				return nil, io.ErrUnexpectedEOF
+			}
+
 		default:
 			if coreh3.IsReservedH2FrameType(frameType) {
 				// RFC 9114 §7.2.8 & §11.2.1: Reserved HTTP/2 frame types MUST cause H3_FRAME_UNEXPECTED

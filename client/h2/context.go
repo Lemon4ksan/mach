@@ -5,6 +5,7 @@
 package h2
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -51,6 +52,7 @@ type Context struct {
 	headersParsed    bool
 	trailersReceived bool
 	endStreamPending bool
+	mu               sync.Mutex
 }
 
 // ID returns the active stream identifier (RFC 9113 §5.1.1).

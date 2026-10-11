@@ -314,17 +314,17 @@ func (p *TransportParameters) Unmarshal(data []byte, sentBy Perspective) error {
 			p.HasStatelessResetToken = true
 
 		case paramMaxIdleTimeout:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "max_idle_timeout")
 			if err != nil {
-				return tpError("malformed max_idle_timeout: %v", err)
+				return err
 			}
 			p.MaxIdleTimeout = time.Duration(v) * time.Millisecond
 			p.HasMaxIdleTimeout = true
 
 		case paramMaxUDPPayloadSize:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "max_udp_payload_size")
 			if err != nil {
-				return tpError("malformed max_udp_payload_size: %v", err)
+				return err
 			}
 			if v < 1200 {
 				return tpError("max_udp_payload_size must be >= 1200, got %d", v)
@@ -332,51 +332,51 @@ func (p *TransportParameters) Unmarshal(data []byte, sentBy Perspective) error {
 			p.MaxUDPPayloadSize = v
 
 		case paramInitialMaxData:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "initial_max_data")
 			if err != nil {
-				return tpError("malformed initial_max_data: %v", err)
+				return err
 			}
 			p.InitialMaxData = v
 
 		case paramInitialMaxStreamDataBidiLocal:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "initial_max_stream_data_bidi_local")
 			if err != nil {
-				return tpError("malformed initial_max_stream_data_bidi_local: %v", err)
+				return err
 			}
 			p.InitialMaxStreamDataBidiLocal = v
 
 		case paramInitialMaxStreamDataBidiRemote:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "initial_max_stream_data_bidi_remote")
 			if err != nil {
-				return tpError("malformed initial_max_stream_data_bidi_remote: %v", err)
+				return err
 			}
 			p.InitialMaxStreamDataBidiRemote = v
 
 		case paramInitialMaxStreamDataUni:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "initial_max_stream_data_uni")
 			if err != nil {
-				return tpError("malformed initial_max_stream_data_uni: %v", err)
+				return err
 			}
 			p.InitialMaxStreamDataUni = v
 
 		case paramInitialMaxStreamsBidi:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "initial_max_streams_bidi")
 			if err != nil {
-				return tpError("malformed initial_max_streams_bidi: %v", err)
+				return err
 			}
 			p.InitialMaxStreamsBidi = v
 
 		case paramInitialMaxStreamsUni:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "initial_max_streams_uni")
 			if err != nil {
-				return tpError("malformed initial_max_streams_uni: %v", err)
+				return err
 			}
 			p.InitialMaxStreamsUni = v
 
 		case paramAckDelayExponent:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "ack_delay_exponent")
 			if err != nil {
-				return tpError("malformed ack_delay_exponent: %v", err)
+				return err
 			}
 			if v > 20 {
 				return tpError("ack_delay_exponent must be <= 20, got %d", v)
@@ -384,9 +384,9 @@ func (p *TransportParameters) Unmarshal(data []byte, sentBy Perspective) error {
 			p.AckDelayExponent = uint8(v)
 
 		case paramMaxAckDelay:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "max_ack_delay")
 			if err != nil {
-				return tpError("malformed max_ack_delay: %v", err)
+				return err
 			}
 			if v >= (1 << 14) {
 				return tpError("max_ack_delay must be < 2^14 ms, got %d", v)
@@ -400,9 +400,9 @@ func (p *TransportParameters) Unmarshal(data []byte, sentBy Perspective) error {
 			p.DisableActiveMigration = true
 
 		case paramActiveConnectionIDLimit:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "active_connection_id_limit")
 			if err != nil {
-				return tpError("malformed active_connection_id_limit: %v", err)
+				return err
 			}
 			if v < 2 {
 				return tpError("active_connection_id_limit must be >= 2, got %d", v)
@@ -416,9 +416,9 @@ func (p *TransportParameters) Unmarshal(data []byte, sentBy Perspective) error {
 			p.HasPreferredAddress = true
 
 		case paramMaxDatagramFrameSize:
-			v, _, err := readVarint(paramData)
+			v, err := readVarintExact(paramData, "max_datagram_frame_size")
 			if err != nil {
-				return tpError("malformed max_datagram_frame_size: %v", err)
+				return err
 			}
 			p.MaxDatagramFrameSize = v
 			p.HasMaxDatagramFrameSize = true
@@ -461,4 +461,15 @@ func (p *TransportParameters) unmarshalPreferredAddress(b []byte) error {
 	copy(p.PreferredAddress.StatelessResetToken[:], b[25+cidLen:41+cidLen])
 
 	return nil
+}
+
+func readVarintExact(data []byte, name string) (uint64, error) {
+	v, n, err := readVarint(data)
+	if err != nil {
+		return 0, tpError("malformed %s: %v", name, err)
+	}
+	if n != len(data) {
+		return 0, tpError("%s parameter length mismatch: %d bytes provided, %d consumed (RFC 9000 §18.2)", name, len(data), n)
+	}
+	return v, nil
 }
