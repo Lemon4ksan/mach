@@ -31,17 +31,21 @@ func (c *Conn) waitExpectContinue(ctx *Context) {
 }
 
 func (c *Conn) writeRequest(ctx *Context) error {
-	if ctx.State() == streamClosed {
+	ctx.mu.Lock()
+	if ctx.State() == streamClosed || ctx.Request == nil {
+		ctx.mu.Unlock()
 		return context.Canceled
 	}
 
 	if !c.CanOpenStream() {
+		ctx.mu.Unlock()
 		return coreh2.ErrNoAvailableStreams
 	}
 
 	// RFC 9113 §5.1.1: Streams initiated by a client MUST use odd-numbered stream identifiers (1, 3, 5, ...).
 	id := c.nextID.Add(2) - 2
 	if id >= (1<<31 - 1) {
+		ctx.mu.Unlock()
 		// RFC 9113 §5.1.1: Stream identifiers must be 31-bit unsigned integers.
 		// When reaching 2^31-1, stream identifiers cannot be reused and connection must close.
 		_ = c.Close()
@@ -84,6 +88,8 @@ func (c *Conn) writeRequest(ctx *Context) error {
 
 	c.storeStream(ctx)
 	c.openStreams.Add(1)
+
+	ctx.mu.Unlock()
 
 	c.writeMu.Lock()
 

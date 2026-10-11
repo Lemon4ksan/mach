@@ -163,7 +163,7 @@ func (c *Conn) SetOrderedHeaders(keys []string) {
 // CancelStream terminates an active HTTP/2 stream by transmitting an RST_STREAM frame
 // with error code CANCEL (0x08) per RFC 9113 §5.1 and §6.4.
 func (c *Conn) CancelStream(ctx *Context) {
-	if ctx == nil || ctx.StreamID.Load() == 0 {
+	if ctx == nil {
 		return
 	}
 
@@ -171,7 +171,16 @@ func (c *Conn) CancelStream(ctx *Context) {
 		return
 	}
 
+	ctx.mu.Lock()
+	ctx.Request = nil
+	ctx.Response = nil
+	ctx.mu.Unlock()
+
 	streamID := ctx.StreamID.Load()
+	if streamID == 0 {
+		return
+	}
+
 	c.deleteStream(streamID)
 	c.openStreams.Add(-1)
 
@@ -186,6 +195,7 @@ func (c *Conn) CancelStream(ctx *Context) {
 		select {
 		case c.out <- fr:
 		default:
+			coreh2.ReleaseFrameHeader(fr)
 		}
 	}
 

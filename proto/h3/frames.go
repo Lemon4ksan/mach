@@ -209,6 +209,10 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		}
 	}
 
+	if lim, ok := lr.(*io.LimitedReader); ok && lim.N > 0 {
+		return nil, io.ErrUnexpectedEOF
+	}
+
 	return st, nil
 }
 

@@ -226,14 +226,30 @@ func (c *Conn) handleSettings(st *coreh2.Settings) {
 // handlePing replies to received PING frames with an identical payload and ACK bit set (RFC 9113 §6.7).
 func (c *Conn) handlePing(ping *coreh2.Ping) {
 	fr := coreh2.AcquireFrameHeader()
-
-	ping.SetAck(true)
-	fr.SetBody(ping)
+	pingAck := coreh2.AcquireFrame(coreh2.FramePing).(*coreh2.Ping)
+	pingAck.SetAck(true)
+	pingAck.SetData(ping.Data())
+	fr.SetBody(pingAck)
 
 	c.out <- fr
 }
 
 func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
+	reqCtx.mu.Lock()
+	defer reqCtx.mu.Unlock()
+
+	if reqCtx.State() == streamClosed || reqCtx.Response == nil {
+		if fr.Type() == coreh2.FrameHeaders || fr.Type() == coreh2.FrameContinuation {
+			if h, ok := fr.Body().(FrameWithHeaders); ok {
+				resp := h1.AcquireResponse()
+				_, decErr := c.readHeader(h.Headers(), resp)
+				h1.ReleaseResponse(resp)
+				return decErr
+			}
+		}
+		return nil
+	}
+
 	switch fr.Type() {
 	case coreh2.FrameHeaders, coreh2.FrameContinuation:
 		h := fr.Body().(FrameWithHeaders)

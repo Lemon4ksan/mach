@@ -242,7 +242,11 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 	}
 
 	if increment == 0 || increment > 0x7fffffff {
-		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		if streamID == 0 {
+			sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		} else {
+			_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
+		}
 		return
 	}
 

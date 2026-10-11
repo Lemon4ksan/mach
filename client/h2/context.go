@@ -5,6 +5,7 @@
 package h2
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -49,6 +50,7 @@ type Context struct {
 	streamRxWindow atomic.Int32
 	state          atomic.Int32
 	headersParsed  bool
+	mu             sync.Mutex
 }
 
 // ID returns the active stream identifier (RFC 9113 §5.1.1).

@@ -53,6 +53,10 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		return err
 	}
 
+	if len(host) > 255 {
+		return errors.New("FQDN too long")
+	}
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
