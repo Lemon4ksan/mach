@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
@@ -25,6 +26,7 @@ var (
 )
 
 // ParseHexUint parses a hex-encoded uint from src for chunk-size decoding (RFC 9112 §7.1).
+// Anticipates large numerals and prevents parsing errors due to integer overflow (RFC 9112 §7.1).
 // Returns the parsed integer, number of bytes consumed, or an error.
 func ParseHexUint(src []byte) (int, int, error) {
 	if len(src) == 0 {
@@ -52,6 +54,10 @@ func ParseHexUint(src []byte) (int, int, error) {
 			}
 
 			return val, i, nil
+		}
+
+		if val > (math.MaxInt-d)>>4 {
+			return 0, 0, ErrInvalidChunkSize
 		}
 
 		val = (val << 4) | d
@@ -112,27 +118,48 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 
-		line = bytes.TrimRight(line, "\r\n")
-		// Strip chunk extensions if present (e.g., "1a;ext=val")
+		// RFC 9112 §7.1: chunk = chunk-size [ chunk-ext ] CRLF
+		if len(line) < 2 || line[len(line)-2] != '\r' || line[len(line)-1] != '\n' {
+			return 0, ErrChunkBoundaryError
+		}
+		line = line[:len(line)-2]
+
+		// RFC 9112 §7.1.1: Strip chunk extensions (e.g., "1a;ext=val" or "1a ;ext=val")
 		if idx := bytes.IndexByte(line, ';'); idx != -1 {
 			line = line[:idx]
 		}
 
-		line = bytes.TrimSpace(line)
+		// Strip trailing BWS (RFC 9112 §7.1.1: chunk-size [ BWS ";" ... ])
+		for len(line) > 0 && (line[len(line)-1] == ' ' || line[len(line)-1] == '\t') {
+			line = line[:len(line)-1]
+		}
 
+		// RFC 9112 §7.1: chunk-size = 1*HEXDIG. Leading whitespace is prohibited.
 		if len(line) == 0 {
 			return 0, ErrInvalidChunkSize
 		}
 
-		chunkSize, _, err := ParseHexUint(line)
-		if err != nil || chunkSize < 0 {
+		chunkSize, consumed, err := ParseHexUint(line)
+		if err != nil || chunkSize < 0 || consumed != len(line) {
 			return 0, fmt.Errorf("%w: %w", ErrInvalidChunkSize, err)
 		}
 
 		if chunkSize == 0 {
 			cr.done = true
-			// Drain trailing CRLF or trailer headers
-			_, _ = cr.r.ReadBytes('\n')
+			// RFC 9112 §7.1.2: Drain trailer section *( field-line CRLF ) terminated by empty CRLF line
+			for {
+				tLine, tErr := cr.r.ReadBytes('\n')
+				if tErr != nil {
+					if errors.Is(tErr, io.EOF) {
+						return 0, io.EOF
+					}
+					return 0, tErr
+				}
+				trimmed := bytes.TrimRight(tLine, "\r\n")
+				if len(trimmed) == 0 {
+					break
+				}
+			}
 
 			return 0, io.EOF
 		}

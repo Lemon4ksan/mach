@@ -88,6 +88,14 @@ func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, end
 
 	if endHeaders {
 		if err := sc.finishHeaderBlock(st); err != nil {
+			// RFC 9113 §8.1.1: Malformed requests MUST be treated as a stream error of type PROTOCOL_ERROR.
+			if errors.Is(err, coreh2.ProtocolError) {
+				_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
+				sc.streamsMu.Lock()
+				delete(sc.streams, streamID)
+				sc.streamsMu.Unlock()
+				return
+			}
 			sc.closeErr = err
 			sc.isClosed.Store(true)
 		}
@@ -110,6 +118,14 @@ func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders
 	if endHeaders {
 		st.endHeaders = true
 		if err := sc.finishHeaderBlock(st); err != nil {
+			// RFC 9113 §8.1.1: Malformed requests MUST be treated as a stream error of type PROTOCOL_ERROR.
+			if errors.Is(err, coreh2.ProtocolError) {
+				_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
+				sc.streamsMu.Lock()
+				delete(sc.streams, streamID)
+				sc.streamsMu.Unlock()
+				return
+			}
 			sc.closeErr = err
 			sc.isClosed.Store(true)
 		}

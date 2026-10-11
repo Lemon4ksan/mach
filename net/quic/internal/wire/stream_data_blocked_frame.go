@@ -9,12 +9,13 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A StreamDataBlockedFrame is a STREAM_DATA_BLOCKED frame
+// A StreamDataBlockedFrame is a STREAM_DATA_BLOCKED frame (RFC 9000 §19.13).
 type StreamDataBlockedFrame struct {
 	StreamID          protocol.StreamID
 	MaximumStreamData protocol.ByteCount
 }
 
+// parseStreamDataBlockedFrame parses a STREAM_DATA_BLOCKED frame (RFC 9000 §19.13).
 func parseStreamDataBlockedFrame(b []byte, _ protocol.Version) (*StreamDataBlockedFrame, int, error) {
 	startLen := len(b)
 

@@ -19,15 +19,17 @@ import (
 
 const (
 	// Maximum reordering in time space before time based loss detection considers a packet lost.
-	// Specified as an RTT multiplier.
+	// Specified as an RTT multiplier (RFC 9002 §6.1.2: kTimeThreshold = 9/8).
 	timeThreshold = 9.0 / 8
-	// Maximum reordering in packets before packet threshold loss detection considers a packet lost.
+	// Maximum reordering in packets before packet threshold loss detection considers a packet lost
+	// (RFC 9002 §6.1.1: kPacketThreshold = 3).
 	packetThreshold = 3
-	// Before validating the client's address, the server won't send more than 3x bytes than it received.
+	// Before validating the client's address, the server won't send more than 3x bytes than it received
+	// (RFC 9000 §8.1: Anti-amplification limit).
 	amplificationFactor = 3
 	// We use Retry packets to derive an RTT estimate. Make sure we don't set the RTT to a super low value yet.
 	minRTTAfterRetry = 5 * time.Millisecond
-	// The PTO duration uses exponential backoff, but is truncated to a maximum value, as allowed by RFC 8961, section 4.4.
+	// The PTO duration uses exponential backoff, but is truncated to a maximum value, as allowed by RFC 9002 §6.2.1 and RFC 8961 §4.4.
 	maxPTODuration = 60 * time.Second
 )
 
@@ -640,6 +642,7 @@ func (h *sentPacketHandler) getLossTimeAndSpace() (monotime.Time, protocol.Encry
 	return lossTime, encLevel
 }
 
+// getScaledPTO returns the PTO duration scaled by the PTO count with exponential backoff (RFC 9002 §6.2.1).
 func (h *sentPacketHandler) getScaledPTO(includeMaxAckDelay bool) time.Duration {
 	pto := h.rttStats.PTO(includeMaxAckDelay) << h.ptoCount
 	if pto > maxPTODuration || pto <= 0 {
@@ -783,14 +786,16 @@ func (h *sentPacketHandler) detectLostPathProbes(now monotime.Time) {
 	}
 }
 
+// detectLostPackets detects lost packets using packet and time thresholds (RFC 9002 §6.1).
 func (h *sentPacketHandler) detectLostPackets(now monotime.Time, encLevel protocol.EncryptionLevel) {
 	pnSpace := h.getPacketNumberSpace(encLevel)
 	pnSpace.lossTime = 0
 
+	// RFC 9002 §6.1.2: loss_delay = max(kTimeThreshold * max(latest_rtt, smoothed_rtt), kGranularity)
 	maxRTT := float64(max(h.rttStats.LatestRTT(), h.rttStats.SmoothedRTT()))
 	lossDelay := time.Duration(timeThreshold * maxRTT)
 
-	// Minimum time of granularity before packets are deemed lost.
+	// Minimum time of granularity before packets are deemed lost (RFC 9002 §6.1.2).
 	lossDelay = max(lossDelay, protocol.TimerGranularity)
 
 	// Packets sent before this time are deemed lost.
@@ -804,6 +809,7 @@ func (h *sentPacketHandler) detectLostPackets(now monotime.Time, encLevel protoc
 
 		var packetLost bool
 		switch {
+		// RFC 9002 §6.1.2: Time threshold loss detection
 		case !p.SendTime.After(lostSendTime):
 			packetLost = true
 
@@ -813,6 +819,7 @@ func (h *sentPacketHandler) detectLostPackets(now monotime.Time, encLevel protoc
 				}
 			}
 
+		// RFC 9002 §6.1.1: Packet threshold loss detection (reordering threshold >= kPacketThreshold)
 		case pnSpace.history.Difference(pnSpace.largestAcked, pn) >= packetThreshold:
 			packetLost = true
 
@@ -1060,6 +1067,7 @@ func (h *sentPacketHandler) SetMaxDatagramSize(s protocol.ByteCount) {
 	h.congestion.SetMaxDatagramSize(s)
 }
 
+// isAmplificationLimited checks if the server is blocked by the anti-amplification limit (RFC 9000 §8.1).
 func (h *sentPacketHandler) isAmplificationLimited() bool {
 	if h.peerAddressValidated {
 		return false
@@ -1068,6 +1076,7 @@ func (h *sentPacketHandler) isAmplificationLimited() bool {
 	return h.bytesSent >= amplificationFactor*h.bytesReceived
 }
 
+// AmplificationAllowance returns the remaining bytes allowed under the anti-amplification limit (RFC 9000 §8.1).
 func (h *sentPacketHandler) AmplificationAllowance() protocol.ByteCount {
 	if h.peerAddressValidated {
 		return protocol.MaxByteCount

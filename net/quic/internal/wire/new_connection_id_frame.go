@@ -13,7 +13,7 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A NewConnectionIDFrame is a NEW_CONNECTION_ID frame
+// A NewConnectionIDFrame is a NEW_CONNECTION_ID frame (RFC 9000 §19.15).
 type NewConnectionIDFrame struct {
 	SequenceNumber      uint64
 	RetirePriorTo       uint64
@@ -21,6 +21,7 @@ type NewConnectionIDFrame struct {
 	StatelessResetToken protocol.StatelessResetToken
 }
 
+// parseNewConnectionIDFrame parses a NEW_CONNECTION_ID frame (RFC 9000 §19.15).
 func parseNewConnectionIDFrame(b []byte, _ protocol.Version) (*NewConnectionIDFrame, int, error) {
 	startLen := len(b)
 

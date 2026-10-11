@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package etag implements RFC 7232, RFC 9110, and RFC 9111 HTTP Entity Tags, conditional request matching, and 304 response reconstruction.
+// Package etag implements RFC 9110 (§8.8.1-§8.8.3) and RFC 9111 HTTP Entity Tags, conditional request matching, and 304 response reconstruction.
 package etag
 
 import (
@@ -15,7 +15,7 @@ import (
 	"github.com/lemon4ksan/foundation/generic"
 )
 
-// StrongMatch checks whether two ETags match under strong comparison semantics (RFC 7232 §2.3.2).
+// StrongMatch checks whether two ETags match under strong comparison semantics (RFC 9110 §8.8.2.1, obsoleting RFC 7232 §2.3.2).
 // Both must not be weak, and the opaque tags must be identical.
 func StrongMatch(a, b string) bool {
 	a = strings.TrimSpace(a)
@@ -28,7 +28,7 @@ func StrongMatch(a, b string) bool {
 	return a == b
 }
 
-// WeakMatch checks whether two ETags match under weak comparison semantics (RFC 7232 §2.3.2).
+// WeakMatch checks whether two ETags match under weak comparison semantics (RFC 9110 §8.8.2.2, obsoleting RFC 7232 §2.3.2).
 // Opaque-tags must match regardless of weak "W/" indicator.
 func WeakMatch(a, b string) bool {
 	a = Normalize(a)
@@ -41,7 +41,7 @@ func WeakMatch(a, b string) bool {
 	return a == b
 }
 
-// IsWeak reports whether etagVal is a weak entity tag (starts with "W/" or "w/").
+// IsWeak reports whether etagVal is a weak entity tag (starts with "W/" or "w/") per RFC 9110 §8.8.1.
 func IsWeak(etagVal string) bool {
 	trimmed := strings.TrimSpace(etagVal)
 	return strings.HasPrefix(trimmed, "W/\"") || strings.HasPrefix(trimmed, "w/\"")

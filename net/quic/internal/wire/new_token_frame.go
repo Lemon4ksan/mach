@@ -13,11 +13,12 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A NewTokenFrame is a NEW_TOKEN frame
+// A NewTokenFrame is a NEW_TOKEN frame (RFC 9000 §19.7).
 type NewTokenFrame struct {
 	Token []byte
 }
 
+// parseNewTokenFrame parses a NEW_TOKEN frame (RFC 9000 §19.7).
 func parseNewTokenFrame(b []byte, _ protocol.Version) (*NewTokenFrame, int, error) {
 	tokenLen, l, err := varint.Parse(b)
 	if err != nil {

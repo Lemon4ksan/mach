@@ -7,7 +7,7 @@ package qpack
 import (
 	"math"
 
-	"golang.org/x/net/http2/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 )
 
 // String literal length limit: 1 MB (1024 * 1024 bytes).
@@ -199,19 +199,19 @@ func NewInstructionDecoder(language *Language, delegate InstructionDecoderDelega
 }
 
 // SBit returns the decoded static/sign bit from the current instruction.
-func (d *InstructionDecoder) SBit() bool      { return d.sBit }
+func (d *InstructionDecoder) SBit() bool { return d.sBit }
 
 // Varint returns the first decoded variable-length integer.
-func (d *InstructionDecoder) Varint() uint64  { return d.varint }
+func (d *InstructionDecoder) Varint() uint64 { return d.varint }
 
 // Varint2 returns the second decoded variable-length integer.
 func (d *InstructionDecoder) Varint2() uint64 { return d.varint2 }
 
 // Name returns the decoded literal header name.
-func (d *InstructionDecoder) Name() string    { return d.name }
+func (d *InstructionDecoder) Name() string { return d.name }
 
 // Value returns the decoded literal header value.
-func (d *InstructionDecoder) Value() string   { return d.value }
+func (d *InstructionDecoder) Value() string { return d.value }
 
 // AtInstructionBoundary reports whether the decoder is currently positioned between instructions.
 func (d *InstructionDecoder) AtInstructionBoundary() bool {

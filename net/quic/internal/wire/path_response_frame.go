@@ -10,11 +10,12 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A PathResponseFrame is a PATH_RESPONSE frame
+// A PathResponseFrame is a PATH_RESPONSE frame (RFC 9000 §19.18).
 type PathResponseFrame struct {
 	Data [8]byte
 }
 
+// parsePathResponseFrame parses a PATH_RESPONSE frame (RFC 9000 §19.18).
 func parsePathResponseFrame(b []byte, _ protocol.Version) (*PathResponseFrame, int, error) {
 	f := &PathResponseFrame{}
 

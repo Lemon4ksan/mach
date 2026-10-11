@@ -31,11 +31,12 @@ const (
 
 const defaultNumConnections = 1
 
-// Default Cubic backoff factor
+// Default Cubic backoff factor (RFC 8312 §4.5: beta_cubic = 0.7).
 const beta float32 = 0.7
 
 // Additional backoff factor when loss occurs in the concave part of the Cubic
-// curve. This additional backoff factor is expected to give up bandwidth to
+// curve (RFC 8312 §4.6: Fast convergence beta_last_max = 0.85).
+// This additional backoff factor is expected to give up bandwidth to
 // new concurrent flows and speed up convergence.
 const betaLastMax float32 = 0.85
 
@@ -93,7 +94,7 @@ func (c *Cubic) Reset() {
 }
 
 func (c *Cubic) alpha() float32 {
-	// TCPFriendly alpha is described in Section 3.3 of the CUBIC paper. Note that
+	// TCP-friendly alpha is described in RFC 8312 §4.2 (Eq. 4). Note that
 	// beta here is a cwnd multiplier, and is equal to 1-beta from the paper.
 	// We derive the equivalent alpha for an N-connection emulation as:
 	b := c.beta()
@@ -117,14 +118,14 @@ func (c *Cubic) betaLastMax() float32 {
 }
 
 // OnApplicationLimited is called on ack arrival when sender is unable to use
-// the available congestion window. Resets Cubic state during quiescence.
+// the available congestion window (RFC 8312 §5.8). Resets Cubic state during quiescence.
 func (c *Cubic) OnApplicationLimited() {
 	// When sender is not using the available congestion window, the window does
 	// not grow. But to be RTT-independent, Cubic assumes that the sender has been
 	// using the entire window during the time since the beginning of the current
 	// "epoch" (the end of the last loss recovery period). Since
 	// application-limited periods break this assumption, we reset the epoch when
-	// in such a period. This reset effectively freezes congestion window growth
+	// in such a period (RFC 8312 §5.8). This reset effectively freezes congestion window growth
 	// through application-limited periods and allows Cubic growth to continue
 	// when the entire window is being used.
 	c.epoch = 0
@@ -174,6 +175,7 @@ func (c *Cubic) CongestionWindowAfterAck(
 			c.timeToOriginPoint = 0
 			c.originPointCongestionWindow = currentCongestionWindow
 		} else {
+			// RFC 8312 §4.1 Eq. 2: K = cubic_root((W_max - W_cubic(0)) / C)
 			c.timeToOriginPoint = uint32(
 				math.Cbrt(float64(cubeFactor * (c.lastMaxCongestionWindow - currentCongestionWindow))),
 			)
@@ -193,6 +195,7 @@ func (c *Cubic) CongestionWindowAfterAck(
 		offset = -offset
 	}
 
+	// RFC 8312 §4.1 Eq. 1: W_cubic(t) = C * (t - K)^3 + W_max
 	deltaCongestionWindow := protocol.ByteCount(
 		cubeCongestionWindowScale*offset*offset*offset,
 	) * maxDatagramSize >> cubeScale
@@ -207,8 +210,9 @@ func (c *Cubic) CongestionWindowAfterAck(
 	// Limit the CWND increase to half the acked bytes.
 	targetCongestionWindow = min(targetCongestionWindow, currentCongestionWindow+c.ackedBytesCount/2)
 
+	// RFC 8312 §4.2 Eq. 4: TCP-Friendly Region Reno emulation window growth.
 	// Increase the window by approximately Alpha * 1 MSS of bytes every
-	// time we ack an estimated tcp window of bytes.  For small
+	// time we ack an estimated tcp window of bytes. For small
 	// congestion windows (less than 25), the formula below will
 	// increase slightly slower than linearly per estimated tcp window
 	// of bytes.
@@ -221,7 +225,7 @@ func (c *Cubic) CongestionWindowAfterAck(
 	c.lastTargetCongestionWindow = targetCongestionWindow
 
 	// Compute target congestion_window based on cubic target and estimated TCP
-	// congestion_window, use highest (fastest).
+	// congestion_window, use highest (fastest) per RFC 8312 §4.2.
 	if targetCongestionWindow < c.estimatedTCPcongestionWindow {
 		targetCongestionWindow = c.estimatedTCPcongestionWindow
 	}

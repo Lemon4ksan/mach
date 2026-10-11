@@ -43,28 +43,28 @@ func (s *EncoderStreamSender) SetDelegate(delegate StreamSenderDelegate) {
 }
 
 // SendInsertWithNameReference encodes an Insert with Name Reference instruction.
-// RFC 9204 §4.3.1.
+// RFC 9204 §4.3.2.
 func (s *EncoderStreamSender) SendInsertWithNameReference(isStatic bool, nameIndex uint64, value string) {
 	instruction := InstructionWithValuesInsertWithNameReference(isStatic, nameIndex, value)
 	s.instructionEncoder.EncodeTo(instruction, &s.buffer)
 }
 
-// SendInsertWithoutNameReference encodes an Insert Without Name Reference instruction.
-// RFC 9204 §4.3.2.
+// SendInsertWithoutNameReference encodes an Insert with Literal Name instruction.
+// RFC 9204 §4.3.3.
 func (s *EncoderStreamSender) SendInsertWithoutNameReference(name, value string) {
 	instruction := InstructionWithValuesInsertWithoutNameReference(name, value)
 	s.instructionEncoder.EncodeTo(instruction, &s.buffer)
 }
 
 // SendDuplicate encodes a Duplicate instruction.
-// RFC 9204 §4.3.3.
+// RFC 9204 §4.3.4.
 func (s *EncoderStreamSender) SendDuplicate(index uint64) {
 	instruction := InstructionWithValuesDuplicate(index)
 	s.instructionEncoder.EncodeTo(instruction, &s.buffer)
 }
 
 // SendSetDynamicTableCapacity encodes a Set Dynamic Table Capacity instruction.
-// RFC 9204 §4.3.4.
+// RFC 9204 §4.3.1.
 func (s *EncoderStreamSender) SendSetDynamicTableCapacity(capacity uint64) {
 	instruction := InstructionWithValuesSetDynamicTableCapacity(capacity)
 	s.instructionEncoder.EncodeTo(instruction, &s.buffer)

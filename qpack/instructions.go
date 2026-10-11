@@ -126,7 +126,7 @@ var (
 )
 
 func initInstructions() {
-	// 1. Insert With Name Reference (RFC 9204 §4.3.1): [1 T NNNNNN] [H VVVVVVV]
+	// 1. Insert With Name Reference (RFC 9204 §4.3.2): [1 T NNNNNN] [H VVVVVVV]
 	instInsertWithNameReference = &Instruction{
 		Opcode: InstructionOpcode{Value: 0x80, Mask: 0x80},
 		Fields: []InstructionField{
@@ -136,7 +136,7 @@ func initInstructions() {
 		},
 	}
 
-	// 2. Insert Without Name Reference (RFC 9204 §4.3.2): [01 H NNNNN] [H VVVVVVV]
+	// 2. Insert Without Name Reference / Literal Name (RFC 9204 §4.3.3): [01 H NNNNN] [H VVVVVVV]
 	instInsertWithoutNameReference = &Instruction{
 		Opcode: InstructionOpcode{Value: 0x40, Mask: 0xc0},
 		Fields: []InstructionField{
@@ -145,7 +145,7 @@ func initInstructions() {
 		},
 	}
 
-	// 3. Duplicate (RFC 9204 §4.3.3): [000 NNNNN]
+	// 3. Duplicate (RFC 9204 §4.3.4): [000 NNNNN]
 	instDuplicate = &Instruction{
 		Opcode: InstructionOpcode{Value: 0x00, Mask: 0xe0},
 		Fields: []InstructionField{
@@ -153,7 +153,7 @@ func initInstructions() {
 		},
 	}
 
-	// 4. Set Dynamic Table Capacity (RFC 9204 §4.3.4): [001 CCCCC]
+	// 4. Set Dynamic Table Capacity (RFC 9204 §4.3.1): [001 CCCCC]
 	instSetDynamicTableCapacity = &Instruction{
 		Opcode: InstructionOpcode{Value: 0x20, Mask: 0xe0},
 		Fields: []InstructionField{

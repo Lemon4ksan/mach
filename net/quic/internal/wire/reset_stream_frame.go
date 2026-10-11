@@ -12,7 +12,7 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/qerr"
 )
 
-// A ResetStreamFrame is a RESET_STREAM or RESET_STREAM_AT frame in QUIC
+// A ResetStreamFrame is a RESET_STREAM frame (RFC 9000 §19.4) or RESET_STREAM_AT frame in QUIC
 type ResetStreamFrame struct {
 	StreamID     protocol.StreamID
 	ErrorCode    qerr.StreamErrorCode
@@ -20,6 +20,7 @@ type ResetStreamFrame struct {
 	ReliableSize protocol.ByteCount
 }
 
+// parseResetStreamFrame parses a RESET_STREAM frame (RFC 9000 §19.4).
 func parseResetStreamFrame(b []byte, isResetStreamAt bool, _ protocol.Version) (*ResetStreamFrame, int, error) {
 	startLen := len(b)
 

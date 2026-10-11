@@ -25,8 +25,7 @@ const (
 	PacketNumberLen4 PacketNumberLen = 4
 )
 
-// DecodePacketNumber calculates the packet number based its length and the last seen packet number
-// This function is taken from https://www.rfc-editor.org/rfc/rfc9000.html#section-a.3.
+// DecodePacketNumber calculates the full packet number based on its truncated length and the largest acknowledged packet number (RFC 9000 §17.1 & Appendix A.3).
 func DecodePacketNumber(length PacketNumberLen, largest, truncated PacketNumber) PacketNumber {
 	expected := largest + 1
 	win := PacketNumber(1 << (length * 8))
@@ -45,8 +44,8 @@ func DecodePacketNumber(length PacketNumberLen, largest, truncated PacketNumber)
 	return candidate
 }
 
-// PacketNumberLengthForHeader gets the length of the packet number for the public header
-// it never chooses a PacketNumberLen of 1 byte, since this is too short under certain circumstances
+// PacketNumberLengthForHeader determines the minimum packet number length needed to prevent ambiguity (RFC 9000 §17.1 & Appendix A.2).
+// It never chooses a PacketNumberLen of 1 byte, since this is too short under certain loss recovery circumstances.
 func PacketNumberLengthForHeader(pn, largestAcked PacketNumber) PacketNumberLen {
 	var numUnacked PacketNumber
 	if largestAcked == InvalidPacketNumber {

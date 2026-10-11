@@ -17,16 +17,16 @@ type StreamReceiver interface {
 
 // EncoderStreamReceiverDelegate handles instructions decoded from the encoder stream (RFC 9204 §4.3).
 type EncoderStreamReceiverDelegate interface {
-	// InsertWithNameReference is called when an Insert With Name Reference instruction is decoded (RFC 9204 §4.3.1).
+	// InsertWithNameReference is called when an Insert With Name Reference instruction is decoded (RFC 9204 §4.3.2).
 	InsertWithNameReference(isStatic bool, nameIndex uint64, value string)
 
-	// InsertWithoutNameReference is called when an Insert Without Name Reference instruction is decoded (RFC 9204 §4.3.2).
+	// InsertWithoutNameReference is called when an Insert Without Name Reference instruction is decoded (RFC 9204 §4.3.3).
 	InsertWithoutNameReference(name, value string)
 
-	// Duplicate is called when a Duplicate instruction is decoded (RFC 9204 §4.3.3).
+	// Duplicate is called when a Duplicate instruction is decoded (RFC 9204 §4.3.4).
 	Duplicate(index uint64)
 
-	// SetDynamicTableCapacity is called when a Set Dynamic Table Capacity instruction is decoded (RFC 9204 §4.3.4).
+	// SetDynamicTableCapacity is called when a Set Dynamic Table Capacity instruction is decoded (RFC 9204 §4.3.1).
 	SetDynamicTableCapacity(capacity uint64)
 
 	// Error is called when an instruction decoding error or stream error is detected.

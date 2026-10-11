@@ -459,3 +459,129 @@ func (h *testHeadersHandler) OnDecodingCompleted() {}
 func (h *testHeadersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage string) {
 	h.err = errors.New(errorMessage)
 }
+
+func TestDecodeResponseHeaders_MalformedRules(t *testing.T) {
+	t.Parallel()
+
+	codec := NewQPACKCodec()
+
+	// 1. Connection-specific headers in responses (RFC 9114 §4.2)
+	connSpecific := []string{
+		"connection",
+		"keep-alive",
+		"proxy-connection",
+		"transfer-encoding",
+		"upgrade",
+		"te",
+	}
+
+	for _, hdr := range connSpecific {
+		fields := []qpack.HeaderField{
+			{Name: ":status", Value: "200"},
+			{Name: hdr, Value: "close"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		var res h1.ResponseHeader
+		_, err := codec.DecodeResponseHeaders(0, block, &res)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+
+	// 2. Uppercase in header name (RFC 9114 §4.2)
+	{
+		fields := []qpack.HeaderField{
+			{Name: ":status", Value: "200"},
+			{Name: "X-Uppercase-Header", Value: "test"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		var res h1.ResponseHeader
+		_, err := codec.DecodeResponseHeaders(0, block, &res)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+
+	// 3. Pseudo-header after regular header (RFC 9114 §4.3)
+	{
+		fields := []qpack.HeaderField{
+			{Name: "content-type", Value: "text/plain"},
+			{Name: ":status", Value: "200"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		var res h1.ResponseHeader
+		_, err := codec.DecodeResponseHeaders(0, block, &res)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+
+	// 4. Undefined pseudo-header in response (RFC 9114 §4.3 & §4.3.2)
+	{
+		fields := []qpack.HeaderField{
+			{Name: ":status", Value: "200"},
+			{Name: ":method", Value: "GET"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		var res h1.ResponseHeader
+		_, err := codec.DecodeResponseHeaders(0, block, &res)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+
+	// 5. 101 Switching Protocols status code is prohibited in HTTP/3 (RFC 9114 §4.3.1)
+	{
+		fields := []qpack.HeaderField{
+			{Name: ":status", Value: "101"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		var res h1.ResponseHeader
+		_, err := codec.DecodeResponseHeaders(0, block, &res)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+}
+
+func TestDecodeResponseTrailers_MalformedRules(t *testing.T) {
+	t.Parallel()
+
+	codec := NewQPACKCodec()
+
+	// 1. Pseudo-header in trailers (RFC 9114 §4.3)
+	{
+		fields := []qpack.HeaderField{
+			{Name: ":status", Value: "200"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		_, err := codec.DecodeResponseTrailers(0, block)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+
+	// 2. Connection-specific header in trailers (RFC 9114 §4.2)
+	{
+		fields := []qpack.HeaderField{
+			{Name: "connection", Value: "close"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		_, err := codec.DecodeResponseTrailers(0, block)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+
+	// 3. Uppercase in trailer name (RFC 9114 §4.2)
+	{
+		fields := []qpack.HeaderField{
+			{Name: "X-Checksum", Value: "abcdef"},
+		}
+		block := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, fields, nil)
+
+		_, err := codec.DecodeResponseTrailers(0, block)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMalformedHeader)
+	}
+}

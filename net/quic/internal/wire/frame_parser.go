@@ -35,8 +35,8 @@ func NewFrameParser(supportsDatagrams, supportsResetStreamAt, supportsAckFrequen
 	}
 }
 
-// ParseType parses the frame type of the next frame.
-// It skips over PADDING frames.
+// ParseType parses the frame type of the next frame (RFC 9000 §12.4).
+// It skips over PADDING frames (RFC 9000 §19.1).
 func (p *FrameParser) ParseType(b []byte, encLevel protocol.EncryptionLevel) (FrameType, int, error) {
 	var parsed int
 	for len(b) != 0 {
@@ -144,7 +144,7 @@ func (p *FrameParser) ParseDatagramFrame(
 	return f, l, nil
 }
 
-// ParseLessCommonFrame parses everything except STREAM, ACK or DATAGRAM.
+// ParseLessCommonFrame parses frames defined in RFC 9000 §19 except STREAM, ACK or DATAGRAM.
 // These cases should be handled separately for performance reasons.
 func (p *FrameParser) ParseLessCommonFrame(frameType FrameType, data []byte, v protocol.Version) (Frame, int, error) {
 	var (

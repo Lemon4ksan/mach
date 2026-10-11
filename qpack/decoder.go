@@ -239,7 +239,7 @@ func (d *Decoder) Duplicate(index uint64) {
 	d.headerTable.InsertEntry(entry.Name, entry.Value)
 }
 
-// SetDynamicTableCapacity handles RFC 9204 §4.3.4 on encoder stream.
+// SetDynamicTableCapacity handles RFC 9204 §4.3.1 on encoder stream.
 func (d *Decoder) SetDynamicTableCapacity(capacity uint64) {
 	if !d.headerTable.SetDynamicTableCapacity(capacity) {
 		d.OnErrorDetected(

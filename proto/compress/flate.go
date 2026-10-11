@@ -53,7 +53,7 @@ func resetFlateReader(zr io.ReadCloser, r io.Reader) error {
 
 var flateReaderPool sync.Pool
 
-// AcquireStacklessDeflateWriter acquires an asynchronous stackless Deflate writer targeting w at the given compression level (RFC 1951).
+// AcquireStacklessDeflateWriter acquires an asynchronous stackless Deflate writer targeting w at the given compression level (RFC 1950 §2.2, RFC 1951 §3.1.1).
 //
 // It offloads deflate compression work to a dedicated worker pool, avoiding stack expansion on the caller goroutine.
 // Callers must return the writer to the pool with [ReleaseStacklessDeflateWriter] when completed.
@@ -74,7 +74,7 @@ func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
 	return sw
 }
 
-// ReleaseStacklessDeflateWriter closes sw and returns it to the corresponding deflate pool (RFC 1951).
+// ReleaseStacklessDeflateWriter closes sw and returns it to the corresponding deflate pool (RFC 1950 §2.2, RFC 1951 §3.1.1).
 //
 // Callers must not use sw after calling ReleaseStacklessDeflateWriter.
 func ReleaseStacklessDeflateWriter(sw stackless.Writer, level int) {
@@ -127,7 +127,7 @@ var (
 )
 
 // AppendDeflateBytesLevel appends deflated src to dst using the given
-// compression level and returns the resulting slice (RFC 1951).
+// compression level and returns the resulting slice (RFC 1950 §2.2, RFC 1951 §3.1.1).
 //
 // Supported compression levels are:
 //
@@ -144,7 +144,7 @@ func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 }
 
 // WriteDeflateLevel writes deflated p to w using the given compression level
-// and returns the number of compressed bytes written to w (RFC 1951).
+// and returns the number of compressed bytes written to w (RFC 1950 §2.2, RFC 1951 §3.1.1).
 //
 // Supported compression levels are:
 //
@@ -199,24 +199,26 @@ func nonblockingWriteDeflate(ctxv any) {
 }
 
 // WriteDeflate writes deflated p to w using [CompressDefaultCompression] and returns the number of compressed
-// bytes written to w (RFC 1951).
+// bytes written to w (RFC 1950 §2.2, RFC 1951 §3.1.1).
 func WriteDeflate(w io.Writer, p []byte) (int, error) {
 	return WriteDeflateLevel(w, p, CompressDefaultCompression)
 }
 
-// AppendDeflateBytes appends deflated src to dst using [CompressDefaultCompression] and returns the resulting slice (RFC 1951).
+// AppendDeflateBytes appends deflated src to dst using [CompressDefaultCompression] and returns the resulting slice (RFC 1950 §2.2, RFC 1951 §3.1.1).
 func AppendDeflateBytes(dst, src []byte) []byte {
 	return AppendDeflateBytesLevel(dst, src, CompressDefaultCompression)
 }
 
 // WriteInflate writes inflated p to w and returns the number of uncompressed
-// bytes written to w (RFC 1951).
+// bytes written to w (RFC 1950 §2.2, RFC 1951 §3.1.1).
 func WriteInflate(w io.Writer, p []byte) (int, error) {
 	return WriteInflateLimit(w, p, 0)
 }
 
-// WriteInflateLimit decompresses zlib/deflate payload p and writes up to maxBodySize uncompressed bytes to w (RFC 1950, RFC 1951).
+// WriteInflateLimit decompresses zlib/deflate payload p and writes up to maxBodySize uncompressed bytes to w (RFC 1950 §2.2, RFC 1951 §3.1.1).
 //
+// RFC 1950 §2.2 defines the 2-byte header (CMF/FLG with FCHECK verification) and 4-byte Adler-32
+// checksum trailer, wrapping RFC 1951 §3.1.1/§3.2 DEFLATE compressed data blocks.
 // If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
 // more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
 func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
@@ -237,9 +239,18 @@ func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendInflateBytes appends inflated src to dst and returns the resulting slice (RFC 1951).
+// AppendInflateBytes appends inflated src to dst and returns the resulting slice (RFC 1950 §2.2, RFC 1951 §3.1.1).
 func AppendInflateBytes(dst, src []byte) ([]byte, error) {
+	return AppendInflateBytesLimit(dst, src, 0)
+}
+
+// AppendInflateBytesLimit appends inflated src to dst up to maxBodySize uncompressed bytes and returns the resulting slice (RFC 1950 §2.2, RFC 1951 §3.1.1).
+//
+// RFC 1950 §2.2 defines the 2-byte header (CMF/FLG) and Adler-32 trailer wrapping RFC 1951 §3.1.1 DEFLATE.
+// If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
+// more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
+func AppendInflateBytesLimit(dst, src []byte, maxBodySize int) ([]byte, error) {
 	w := &byteSliceWriter{b: dst}
-	_, err := WriteInflate(w, src)
+	_, err := WriteInflateLimit(w, src, maxBodySize)
 	return w.b, err
 }

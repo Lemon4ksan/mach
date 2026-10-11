@@ -14,12 +14,12 @@ import (
 
 const (
 	// maxDatagramSize is the default maximum packet size used in the Linux TCP implementation.
-	// Used in QUIC for congestion window computations in bytes.
+	// Used in QUIC for congestion window computations in bytes (RFC 9002 §7).
 	initialMaxDatagramSize     = protocol.ByteCount(protocol.InitialPacketSize)
 	maxBurstPackets            = 3
-	renoBeta                   = 0.7 // Reno backoff factor.
-	minCongestionWindowPackets = 2
-	initialCongestionWindow    = 32
+	renoBeta                   = 0.7 // Reno backoff factor (RFC 9002 §7.3.3, RFC 8312 §4.5).
+	minCongestionWindowPackets = 2   // Minimum congestion window: 2 * max_datagram_size (RFC 9002 §7.2).
+	initialCongestionWindow    = 32  // Initial congestion window in packets (RFC 9002 §7.2).
 )
 
 type cubicSender struct {
@@ -152,11 +152,13 @@ func (c *cubicSender) CanSend(bytesInFlight protocol.ByteCount) bool {
 	return bytesInFlight < c.CongestionWindow()
 }
 
+// InRecovery checks if the sender is currently in a recovery period (RFC 9002 §7.3.3).
 func (c *cubicSender) InRecovery() bool {
 	return c.largestAckedPacketNumber != protocol.InvalidPacketNumber &&
 		c.largestAckedPacketNumber <= c.largestSentAtLastCutback
 }
 
+// InSlowStart checks if the sender is in slow start (RFC 9002 §7.3.1).
 func (c *cubicSender) InSlowStart() bool {
 	return c.CongestionWindow() < c.slowStartThreshold
 }
@@ -165,6 +167,7 @@ func (c *cubicSender) CongestionWindow() protocol.ByteCount {
 	return c.congestionWindow
 }
 
+// MaybeExitSlowStart checks whether slow start should be exited (RFC 9002 §7.3.1).
 func (c *cubicSender) MaybeExitSlowStart() {
 	if c.InSlowStart() &&
 		c.hybridSlowStart.ShouldExitSlowStart(
@@ -195,6 +198,7 @@ func (c *cubicSender) OnPacketAcked(
 	}
 }
 
+// OnCongestionEvent handles a packet loss congestion event per RFC 9002 §7.3.3.
 func (c *cubicSender) OnCongestionEvent(
 	packetNumber protocol.PacketNumber,
 	lostBytes, priorInFlight protocol.ByteCount,
@@ -202,7 +206,7 @@ func (c *cubicSender) OnCongestionEvent(
 	c.connStats.PacketsLost.Add(1)
 	c.connStats.BytesLost.Add(uint64(lostBytes))
 
-	// TCP NewReno (RFC6582) says that once a loss occurs, any losses in packets
+	// TCP NewReno (RFC 6582) says that once a loss occurs, any losses in packets
 	// already sent should be treated as a single loss event, since it's expected.
 	if packetNumber <= c.largestSentAtLastCutback {
 		return
@@ -227,8 +231,8 @@ func (c *cubicSender) OnCongestionEvent(
 	c.numAckedPackets = 0
 }
 
-// Called when we receive an ack. Normal TCP tracks how many packets one ack
-// represents, but quic has a separate ack for each packet.
+// maybeIncreaseCwnd increases the congestion window on ACK arrival (RFC 9002 §7.3.1, §7.3.2).
+// Normal TCP tracks how many packets one ack represents, but QUIC has a separate ack for each packet.
 func (c *cubicSender) maybeIncreaseCwnd(
 	_ protocol.PacketNumber,
 	ackedBytes protocol.ByteCount,
@@ -236,7 +240,7 @@ func (c *cubicSender) maybeIncreaseCwnd(
 	eventTime monotime.Time,
 ) {
 	// Do not increase the congestion window unless the sender is close to using
-	// the current window.
+	// the current window (RFC 9002 §7.8: Underutilizing the Congestion Window).
 	if !c.isCwndLimited(priorInFlight) {
 		c.cubic.OnApplicationLimited()
 		return
@@ -247,12 +251,12 @@ func (c *cubicSender) maybeIncreaseCwnd(
 	}
 
 	if c.InSlowStart() {
-		// TCP slow start, exponential growth, increase by one for each ACK.
+		// TCP slow start, exponential growth, increase by one for each ACK (RFC 9002 §7.3.1).
 		c.congestionWindow += c.maxDatagramSize
 		return
 	}
 
-	// Congestion avoidance
+	// Congestion avoidance (RFC 9002 §7.3.2)
 	if c.reno {
 		// Classic Reno congestion avoidance.
 		c.numAckedPackets++
@@ -268,6 +272,7 @@ func (c *cubicSender) maybeIncreaseCwnd(
 	}
 }
 
+// isCwndLimited determines if the sender is limited by the congestion window (RFC 9002 §7.8).
 func (c *cubicSender) isCwndLimited(bytesInFlight protocol.ByteCount) bool {
 	congestionWindow := c.CongestionWindow()
 	if bytesInFlight >= congestionWindow {

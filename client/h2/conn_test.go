@@ -217,3 +217,187 @@ func TestClientConn_MockServer(t *testing.T) {
 		t.Fatalf("unexpected response: %d, body: %s", resp.StatusCode(), string(resp.Body()))
 	}
 }
+
+type testKV struct {
+	k, v string
+}
+
+func TestReadHeader_RFC9113Compliance(t *testing.T) {
+	enc := hpack.AcquireHPACK()
+	defer hpack.ReleaseHPACK(enc)
+
+	encodeFields := func(fields []testKV) []byte {
+		var buf []byte
+		hf := hpack.AcquireHeaderField()
+		defer hpack.ReleaseHeaderField(hf)
+		for _, f := range fields {
+			hf.Set(f.k, f.v)
+			buf = enc.AppendHeader(buf, hf, false)
+		}
+		return buf
+	}
+
+	tests := []struct {
+		name    string
+		fields  []testKV
+		wantErr bool
+	}{
+		{
+			name: "valid response headers",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: "content-type", v: "text/plain"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "RFC 9113 §8.2.1: uppercase header name rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: "x-custom-Header", v: "text/plain"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.2.2: connection header rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: "connection", v: "close"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.2.2: transfer-encoding header rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: "transfer-encoding", v: "chunked"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.3: pseudo-header after regular header rejected",
+			fields: []testKV{
+				{k: "content-type", v: "text/plain"},
+				{k: ":status", v: "200"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.3: duplicate pseudo-header rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: ":status", v: "200"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.3.2: invalid pseudo-header in response rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: ":method", v: "GET"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.3.2: missing :status rejected",
+			fields: []testKV{
+				{k: "content-type", v: "text/plain"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.2.1: CR/LF in field value rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+				{k: "x-foo", v: "bar\r\nbaz"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := &Conn{
+				dec: hpack.AcquireHPACK(),
+			}
+			defer hpack.ReleaseHPACK(conn.dec)
+
+			b := encodeFields(tc.fields)
+			res := h1.AcquireResponse()
+			defer h1.ReleaseResponse(res)
+
+			_, err := conn.readHeader(b, res)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("readHeader error = %v, wantErr = %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestReadTrailers_RFC9113Compliance(t *testing.T) {
+	enc := hpack.AcquireHPACK()
+	defer hpack.ReleaseHPACK(enc)
+
+	encodeFields := func(fields []testKV) []byte {
+		var buf []byte
+		hf := hpack.AcquireHeaderField()
+		defer hpack.ReleaseHeaderField(hf)
+		for _, f := range fields {
+			hf.Set(f.k, f.v)
+			buf = enc.AppendHeader(buf, hf, false)
+		}
+		return buf
+	}
+
+	tests := []struct {
+		name    string
+		fields  []testKV
+		wantErr bool
+	}{
+		{
+			name: "valid trailer",
+			fields: []testKV{
+				{k: "grpc-status", v: "0"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "RFC 9113 §8.3: pseudo-header in trailer rejected",
+			fields: []testKV{
+				{k: ":status", v: "200"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.2.1: uppercase trailer rejected",
+			fields: []testKV{
+				{k: "Grpc-Status", v: "0"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "RFC 9113 §8.2.2: connection header in trailer rejected",
+			fields: []testKV{
+				{k: "connection", v: "close"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := &Conn{
+				dec: hpack.AcquireHPACK(),
+			}
+			defer hpack.ReleaseHPACK(conn.dec)
+
+			b := encodeFields(tc.fields)
+			reqCtx := &Context{}
+
+			err := conn.readTrailers(b, reqCtx)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("readTrailers error = %v, wantErr = %v", err, tc.wantErr)
+			}
+		})
+	}
+}

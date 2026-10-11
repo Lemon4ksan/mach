@@ -8,7 +8,7 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A HandshakeDoneFrame is a HANDSHAKE_DONE frame
+// A HandshakeDoneFrame is a HANDSHAKE_DONE frame (RFC 9000 §19.20).
 type HandshakeDoneFrame struct{}
 
 func (f *HandshakeDoneFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {

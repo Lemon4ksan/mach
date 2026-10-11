@@ -9,11 +9,12 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A DataBlockedFrame is a DATA_BLOCKED frame
+// A DataBlockedFrame is a DATA_BLOCKED frame (RFC 9000 §19.12).
 type DataBlockedFrame struct {
 	MaximumData protocol.ByteCount
 }
 
+// parseDataBlockedFrame parses a DATA_BLOCKED frame (RFC 9000 §19.12).
 func parseDataBlockedFrame(b []byte, _ protocol.Version) (*DataBlockedFrame, int, error) {
 	offset, l, err := varint.Parse(b)
 	if err != nil {

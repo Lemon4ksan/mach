@@ -55,6 +55,7 @@ func (s *headerScanner) next() bool {
 			s.b = s.b[:i]
 		}
 
+		// RFC 9112 §5.2: Obsolete line folding: message cannot begin with leading whitespace.
 		if len(s.b) > 0 && (s.b[0] == ' ' || s.b[0] == '\t') {
 			s.err = errors.New("invalid headers, headers cannot start with space or tab")
 			return false
@@ -72,6 +73,7 @@ func (s *headerScanner) next() bool {
 	// Key ends at the first colon, already found by readContinuedLineSlice.
 	k, v := kv[:colon], kv[colon+1:]
 
+	// RFC 9112 §5.1: Field name validation (no whitespace before colon, valid token characters).
 	valid, innerSpace := isValidHeaderKey(k)
 	if !valid {
 		s.err = fmt.Errorf("malformed mime header line: %q", kv)

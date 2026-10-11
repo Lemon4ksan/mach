@@ -9,11 +9,12 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A RetireConnectionIDFrame is a RETIRE_CONNECTION_ID frame
+// A RetireConnectionIDFrame is a RETIRE_CONNECTION_ID frame (RFC 9000 §19.16).
 type RetireConnectionIDFrame struct {
 	SequenceNumber uint64
 }
 
+// parseRetireConnectionIDFrame parses a RETIRE_CONNECTION_ID frame (RFC 9000 §19.16).
 func parseRetireConnectionIDFrame(b []byte, _ protocol.Version) (*RetireConnectionIDFrame, int, error) {
 	seq, l, err := varint.Parse(b)
 	if err != nil {

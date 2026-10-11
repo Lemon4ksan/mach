@@ -10,13 +10,13 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/qerr"
 )
 
-// A StopSendingFrame is a STOP_SENDING frame
+// A StopSendingFrame is a STOP_SENDING frame (RFC 9000 §19.5).
 type StopSendingFrame struct {
 	StreamID  protocol.StreamID
 	ErrorCode qerr.StreamErrorCode
 }
 
-// parseStopSendingFrame parses a STOP_SENDING frame
+// parseStopSendingFrame parses a STOP_SENDING frame (RFC 9000 §19.5).
 func parseStopSendingFrame(b []byte, _ protocol.Version) (*StopSendingFrame, int, error) {
 	startLen := len(b)
 

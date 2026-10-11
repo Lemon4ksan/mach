@@ -10,11 +10,12 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A PathChallengeFrame is a PATH_CHALLENGE frame
+// A PathChallengeFrame is a PATH_CHALLENGE frame (RFC 9000 §19.17).
 type PathChallengeFrame struct {
 	Data [8]byte
 }
 
+// parsePathChallengeFrame parses a PATH_CHALLENGE frame (RFC 9000 §19.17).
 func parsePathChallengeFrame(b []byte, _ protocol.Version) (*PathChallengeFrame, int, error) {
 	f := &PathChallengeFrame{}
 

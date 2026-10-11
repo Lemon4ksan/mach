@@ -41,6 +41,9 @@ var (
 
 	// ErrHijackNotSupported is returned when connection hijacking is attempted on a non-hijackable socket (RFC 9110 §15.2.2).
 	ErrHijackNotSupported = errors.New("h1: hijacking not supported on this connection")
+
+	// ErrWhitespaceBeforeColon is returned when whitespace occurs between header name and colon (RFC 9112 §5.1).
+	ErrWhitespaceBeforeColon = errors.New("h1: whitespace between header name and colon prohibited (RFC 9112 §5.1)")
 )
 
 // Request holds parsed HTTP/1.1 request data (RFC 9112, RFC 9110).
@@ -183,6 +186,9 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 	}
 
 	r.Headers.ParseHeaderBlockSWAR(fallbackBuf)
+	if err := r.Headers.Err(); err != nil {
+		return ErrWhitespaceBeforeColon
+	}
 
 	return r.finishRequestRead(br, bw, maxBodySize)
 }
@@ -203,6 +209,9 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 	}
 
 	r.Headers.ParseHeaderBlockSWAR(headerBlock[crlfIdx+1:])
+	if err := r.Headers.Err(); err != nil {
+		return ErrWhitespaceBeforeColon
+	}
 
 	return nil
 }

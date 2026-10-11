@@ -21,14 +21,20 @@ func decodeHuffman(src []byte, arena *[]byte) (string, error) {
 		bufPtr := huffmanDecStorage.Get()
 		defer huffmanDecStorage.Put(bufPtr)
 
-		dst := hpack.HuffmanDecode((*bufPtr)[:0], src)
+		dst, err := hpack.AppendHuffmanDecode((*bufPtr)[:0], src)
+		if err != nil {
+			return "", err
+		}
 		*bufPtr = dst
 
 		return string(dst), nil
 	}
 
 	start := len(*arena)
-	dst := hpack.HuffmanDecode(*arena, src)
+	dst, err := hpack.AppendHuffmanDecode(*arena, src)
+	if err != nil {
+		return "", err
+	}
 
 	*arena = dst
 

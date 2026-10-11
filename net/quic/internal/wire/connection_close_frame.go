@@ -11,7 +11,7 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A ConnectionCloseFrame is a CONNECTION_CLOSE frame
+// A ConnectionCloseFrame is a CONNECTION_CLOSE frame (RFC 9000 §19.19).
 type ConnectionCloseFrame struct {
 	ReasonPhrase       string
 	ErrorCode          uint64
@@ -19,6 +19,7 @@ type ConnectionCloseFrame struct {
 	IsApplicationError bool
 }
 
+// parseConnectionCloseFrame parses a CONNECTION_CLOSE frame (RFC 9000 §19.19).
 func parseConnectionCloseFrame(b []byte, typ FrameType, _ protocol.Version) (*ConnectionCloseFrame, int, error) {
 	startLen := len(b)
 	f := &ConnectionCloseFrame{IsApplicationError: typ == FrameTypeApplicationClose}

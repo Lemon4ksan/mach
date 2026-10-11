@@ -16,7 +16,7 @@ import (
 
 var errInvalidAckRanges = errors.New("AckFrame: ACK frame contains invalid ACK ranges")
 
-// An AckFrame is an ACK frame
+// An AckFrame is an ACK frame (RFC 9000 §19.3 & §19.3.2).
 type AckFrame struct {
 	AckRanges []AckRange // has to be ordered. The highest ACK range goes first, the lowest ACK range goes last
 	DelayTime time.Duration

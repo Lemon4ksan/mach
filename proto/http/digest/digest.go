@@ -39,6 +39,7 @@ var (
 	ErrDigestQopNotSupported = errors.New("digest: qop not supported")
 )
 
+// digestHashFuncs registers hash algorithms for HTTP Digest Authentication (RFC 7616 §6.1).
 var digestHashFuncs = map[string]func() hash.Hash{
 	"":                 md5.New,
 	"MD5":              md5.New,
@@ -152,6 +153,7 @@ func (dt *Transport) cloneReq(r *http.Request) *http.Request {
 	return r1
 }
 
+// parseChallenge parses WWW-Authenticate challenge parameters (RFC 7616 §3.3).
 func (dt *Transport) parseChallenge(input string) (*digestChallenge, error) {
 	params, ok := auth.ExtractChallengeParams(input, "Digest")
 	if !ok {
@@ -168,6 +170,7 @@ func (dt *Transport) parseChallenge(input string) (*digestChallenge, error) {
 	return c, nil
 }
 
+// createCredentials constructs digest credentials for the request (RFC 7616 §3.4).
 func (dt *Transport) createCredentials(cha *digestChallenge, req *http.Request) (*digestCredentials, error) {
 	cred := &digestCredentials{
 		username:      dt.Username,
@@ -350,6 +353,7 @@ func (dc *digestCredentials) h(data string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// digest computes the cryptographic response digest (RFC 7616 §3.4.1).
 func (dc *digestCredentials) digest(cha *digestChallenge) (string, error) {
 	normAlg := strings.ToUpper(strings.TrimSpace(dc.algorithm))
 	if normAlg == "" {
@@ -386,6 +390,7 @@ func (dc *digestCredentials) digest(cha *digestChallenge) (string, error) {
 	return "Digest " + dc.String(), nil
 }
 
+// ha1 computes the A1 hash (RFC 7616 §3.4.2).
 func (dc *digestCredentials) ha1() string {
 	a1 := dc.h(dc.username + ":" + dc.realm + ":" + dc.password)
 	if dc.sessAlgorithm {
@@ -395,6 +400,7 @@ func (dc *digestCredentials) ha1() string {
 	return a1
 }
 
+// ha2 computes the A2 hash (RFC 7616 §3.4.3).
 func (dc *digestCredentials) ha2() string {
 	if dc.qop == qopAuthInt {
 		return dc.h(dc.method + ":" + dc.uri + ":" + dc.bodyHash)

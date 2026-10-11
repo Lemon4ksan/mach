@@ -260,12 +260,38 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 			return err
 		}
 
+		if hf.Empty() {
+			continue
+		}
+
 		totalSize += hf.Size()
 		if totalSize > maxList {
 			return coreh2.ErrPayloadExceeds
 		}
 
-		if !hf.IsPseudo() && len(hf.KeyBytes()) > 0 {
+		// RFC 9113 §8.3: Pseudo-header fields MUST NOT appear in a trailer section.
+		// Receiving pseudo-header fields in trailers MUST be treated as malformed (stream error of type PROTOCOL_ERROR).
+		if hf.IsPseudo() {
+			return coreh2.ProtocolError
+		}
+
+		k := hf.KeyBytes()
+		v := hf.ValueBytes()
+
+		// RFC 9113 §8.2.1: Field names MUST be lowercase ASCII and conform to field validity requirements.
+		if err := coreh2.ValidateHeaderName(k, false); err != nil {
+			return err
+		}
+		if err := coreh2.ValidateHeaderValue(v); err != nil {
+			return err
+		}
+
+		// RFC 9113 §8.2.2: Connection-specific header fields MUST NOT be present.
+		if coreh2.IsConnectionSpecificHeader(k, v) {
+			return coreh2.ProtocolError
+		}
+
+		if len(k) > 0 {
 			key := hf.Key()
 			reqCtx.Trailers[key] = append(reqCtx.Trailers[key], hf.Value())
 		}
@@ -279,10 +305,12 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 	defer hpack.ReleaseHeaderField(hf)
 
 	var (
-		err        error
-		statusCode int
-		totalSize  uint32
-		maxList    = c.current.MaxHeaderListSize()
+		err                  error
+		statusCode           int
+		hasStatus            bool
+		hasRegularHeader     bool
+		totalSize            uint32
+		maxList              = c.current.MaxHeaderListSize()
 	)
 
 	if maxList == 0 {
@@ -297,18 +325,52 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 			return 0, err
 		}
 
+		if hf.Empty() {
+			continue
+		}
+
 		totalSize += hf.Size()
 		if totalSize > maxList {
 			return 0, coreh2.ErrPayloadExceeds
 		}
 
-		if hf.IsPseudo() && len(hf.KeyBytes()) > 1 && hf.KeyBytes()[1] == 's' {
+		k := hf.KeyBytes()
+		v := hf.ValueBytes()
+
+		// RFC 9113 §8.2.1: Field names MUST be lowercase ASCII and conform to field validity requirements.
+		if err := coreh2.ValidateHeaderName(k, hf.IsPseudo()); err != nil {
+			return 0, err
+		}
+
+		// RFC 9113 §8.2.1: Field values MUST NOT contain NUL, CR, or LF at any position.
+		if err := coreh2.ValidateHeaderValue(v); err != nil {
+			return 0, err
+		}
+
+		if hf.IsPseudo() {
+			// RFC 9113 §8.3: Pseudo-headers MUST appear before regular header fields.
+			if hasRegularHeader {
+				return 0, coreh2.ProtocolError
+			}
+
+			// RFC 9113 §8.3.2: For HTTP/2 responses, only the ":status" pseudo-header field is defined.
+			if !bytes.Equal(k, coreh2.StringStatus) {
+				return 0, coreh2.ProtocolError
+			}
+
+			// RFC 9113 §8.3: Repeated pseudo-header fields MUST be treated as malformed.
+			if hasStatus {
+				return 0, coreh2.ProtocolError
+			}
+
 			n, pErr := strconv.ParseInt(hf.Value(), 10, 64)
-			if pErr != nil {
-				return 0, pErr
+			if pErr != nil || n < 100 || n > 599 {
+				return 0, coreh2.ProtocolError
 			}
 
 			statusCode = int(n)
+			hasStatus = true
+
 			if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
 				res.SetStatusCode(statusCode)
 			}
@@ -316,18 +378,30 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 			continue
 		}
 
+		hasRegularHeader = true
+
+		// RFC 9113 §8.2.2: Connection-specific header fields are prohibited in HTTP/2.
+		if coreh2.IsConnectionSpecificHeader(k, v) {
+			return 0, coreh2.ProtocolError
+		}
+
 		if statusCode >= 100 && statusCode < 200 && statusCode != 101 {
 			informationalHeader.Add(hf.Key(), hf.Value())
 			continue
 		}
 
-		if bytes.Equal(hf.KeyBytes(), coreh2.StringContentLength) {
+		if bytes.Equal(k, coreh2.StringContentLength) {
 			n, _ := strconv.Atoi(hf.Value())
 			res.Header.SetContentLength(n)
 			continue
 		}
 
-		res.Header.AddBytesKV(hf.KeyBytes(), hf.ValueBytes())
+		res.Header.AddBytesKV(k, v)
+	}
+
+	// RFC 9113 §8.3.2: ":status" pseudo-header field MUST be included in all responses.
+	if !hasStatus {
+		return 0, coreh2.ProtocolError
 	}
 
 	if statusCode == 103 {

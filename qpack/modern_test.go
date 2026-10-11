@@ -1115,10 +1115,15 @@ func TestModern_TargetedBranches(t *testing.T) {
 		t.Errorf("unexpected null delimited split: %v", nullDelimited)
 	}
 
-	// 2. decodeHuffman with nil arena
-	decodedStr, err := decodeHuffman([]byte{0xff}, nil)
-	if err != nil {
-		t.Errorf("decodeHuffman failed: %v", err)
+	// 2. decodeHuffman with nil arena (0x1f is 'a': 5 bits '00011' + 3 bits '111' padding, RFC 7541 §5.2)
+	decodedStr, err := decodeHuffman([]byte{0x1f}, nil)
+	if err != nil || decodedStr != "a" {
+		t.Errorf("decodeHuffman failed: %v, got %q", err, decodedStr)
+	}
+
+	// 0xff by itself is 8 bits of 1s (padding > 7 bits), must error per RFC 7541 §5.2
+	if _, err := decodeHuffman([]byte{0xff}, nil); err == nil {
+		t.Errorf("expected error decoding 0xff")
 	}
 	_ = decodedStr
 
@@ -1197,9 +1202,9 @@ func TestModern_TargetedBranches(t *testing.T) {
 
 	// 8. decodeHuffman with non-nil arena
 	arena := make([]byte, 0, 32)
-	strArena, err := decodeHuffman([]byte{0xff}, &arena)
-	if err != nil {
-		t.Errorf("decodeHuffman with arena failed: %v", err)
+	strArena, err := decodeHuffman([]byte{0x1f}, &arena)
+	if err != nil || strArena != "a" {
+		t.Errorf("decodeHuffman with arena failed: %v, got %q", err, strArena)
 	}
 	_ = strArena
 

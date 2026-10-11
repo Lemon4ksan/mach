@@ -36,7 +36,15 @@ func (cc *ClientConn) readResponse(
 ) (trailers map[string][]string, err error) {
 	streamID := uint64(str.StreamID()) //nolint:gosec // StreamID is positive
 
-	return cc.readResponseFrom(str, resp, streamID)
+	trailers, err = cc.readResponseFrom(str, resp, streamID)
+	if err != nil {
+		if errors.Is(err, coreh3.ErrMalformedHeader) || errors.Is(err, coreh3.ErrMissingStatusHeader) {
+			str.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+			str.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+		}
+	}
+
+	return trailers, err
 }
 
 func (cc *ClientConn) readResponseScoped(
@@ -157,6 +165,19 @@ func (cc *ClientConn) readResponseFrom(
 			dataBufPool.Put(bufPtr)
 
 		default:
+			if coreh3.IsReservedH2FrameType(frameType) {
+				// RFC 9114 §7.2.8 & §11.2.1: Reserved HTTP/2 frame types MUST cause H3_FRAME_UNEXPECTED
+				return nil, coreh3.ErrFrameUnexpected
+			}
+
+			// Control-only frames received on request/response stream (RFC 9114 Table 1, §7.2.3, §7.2.4, §7.2.6, §7.2.7)
+			if frameType == coreh3.FrameTypeSettings ||
+				frameType == coreh3.FrameTypeGoAway ||
+				frameType == coreh3.FrameTypeCancelPush ||
+				frameType == coreh3.FrameTypeMaxPushID {
+				return nil, coreh3.ErrFrameUnexpected
+			}
+
 			if _, err := io.CopyN(io.Discard, r, int64(payloadLen)); err != nil { //nolint:gosec
 				return nil, err
 			}

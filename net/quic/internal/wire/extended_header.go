@@ -21,7 +21,17 @@ import (
 // in order to avoid a timing side-channel.
 var ErrInvalidReservedBits = errors.New("invalid reserved bits")
 
-// ExtendedHeader is the header of a QUIC packet.
+// ExtendedHeader is the unpacked header of a QUIC Long Header packet (RFC 9000 §17.2).
+//
+// Long Header Format (RFC 9000 §17.2):
+//   - Header Form (bit 7): 1 for Long Header (RFC 9000 §17.2)
+//   - Fixed Bit (bit 6): MUST be 1 (RFC 9000 §17.2)
+//   - Long Packet Type (bits 5-4): Initial, 0-RTT, Handshake, Retry (RFC 9000 §17.2)
+//   - Reserved Bits (bits 3-2): MUST be 00 (RFC 9000 §17.2)
+//   - Packet Number Length (bits 1-0): Packet number length (1 to 4 bytes, RFC 9000 §17.1)
+//   - Version (32 bits): QUIC version (RFC 9000 §17.2)
+//   - Destination Connection ID Length (8 bits) & Value (0..160 bits) (RFC 9000 §17.2)
+//   - Source Connection ID Length (8 bits) & Value (0..160 bits) (RFC 9000 §17.2)
 type ExtendedHeader struct {
 	Header
 

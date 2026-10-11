@@ -220,6 +220,29 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 			}
 
 		default:
+			if coreh3.IsReservedH2FrameType(frameType) {
+				// RFC 9114 §7.2.8 & §11.2.1: Reserved HTTP/2 frame types MUST cause H3_FRAME_UNEXPECTED
+				_ = sc.quicConn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+					"reserved H2 frame type on request stream (RFC 9114 §7.2.8)",
+				)
+
+				return
+			}
+
+			// Control-only frames received on request stream (RFC 9114 Table 1, §7.2.3, §7.2.4, §7.2.6, §7.2.7)
+			if frameType == coreh3.FrameTypeSettings ||
+				frameType == coreh3.FrameTypeGoAway ||
+				frameType == coreh3.FrameTypeCancelPush ||
+				frameType == coreh3.FrameTypeMaxPushID {
+				_ = sc.quicConn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+					"control frame received on request stream (RFC 9114 §7.2 Table 1)",
+				)
+
+				return
+			}
+
 			if frameLen > 0 {
 				lr := io.LimitReader(br, int64(frameLen)) //nolint:gosec
 				_, _ = io.Copy(io.Discard, lr)
@@ -229,6 +252,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 	if !hasSeenHeaders || len(headerBlock) == 0 {
 		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3RequestIncomplete))
+		stream.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3RequestIncomplete))
 		return
 	}
 
@@ -241,6 +265,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	)
 	if err != nil {
 		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+		stream.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
 		return
 	}
 

@@ -36,6 +36,18 @@ const (
 	// FrameTypeMaxPushID controls the maximum server push ID allowed by client (RFC 9114 §7.2.7: 0x0d).
 	FrameTypeMaxPushID uint64 = 0x0D
 
+	// FrameTypeReservedPriority is an obsolete HTTP/2 frame type reserved by HTTP/3 (RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x02).
+	FrameTypeReservedPriority uint64 = 0x02
+
+	// FrameTypeReservedPing is an obsolete HTTP/2 frame type reserved by HTTP/3 (RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x06).
+	FrameTypeReservedPing uint64 = 0x06
+
+	// FrameTypeReservedWindowUpdate is an obsolete HTTP/2 frame type reserved by HTTP/3 (RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x08).
+	FrameTypeReservedWindowUpdate uint64 = 0x08
+
+	// FrameTypeReservedContinuation is an obsolete HTTP/2 frame type reserved by HTTP/3 (RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x09).
+	FrameTypeReservedContinuation uint64 = 0x09
+
 	// FrameTypeWebTransportStream establishes a WebTransport stream (WebTransport over HTTP/3 §4.1: 0x41).
 	FrameTypeWebTransportStream uint64 = 0x41
 )
@@ -166,11 +178,12 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 			return nil, err
 		}
 
-		// RFC 9114 Section 7.2.4.1 & Appendix A.3: reserved H2 settings (0x00, 0x02, 0x03, 0x04, 0x05)
-		switch id {
-		case 0x00, 0x02, 0x03, 0x04, 0x05:
+		// RFC 9114 §7.2.4.1 & §11.2.2 Table 3: reserved H2 settings (0x00, 0x02, 0x03, 0x04, 0x05)
+		if IsReservedH2Setting(id) {
 			return nil, ErrH3SettingsError
+		}
 
+		switch id {
 		case SettingMaxFieldSectionSize:
 			st.MaxFieldSectionSize = int64(val) //nolint:gosec // setting value fits int64
 		case SettingQpackMaxTableCapacity:
@@ -222,4 +235,43 @@ func AppendHeadersHeader(b []byte, length uint64) []byte {
 func AppendDataHeader(b []byte, length uint64) []byte {
 	b = varint.Append(b, FrameTypeData)
 	return varint.Append(b, length)
+}
+
+// IsReservedH2FrameType reports whether frameType is an obsolete HTTP/2 frame type reserved in HTTP/3
+// (RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x02, 0x06, 0x08, 0x09).
+// Receipt of any reserved frame type MUST cause a connection error of type H3_FRAME_UNEXPECTED.
+func IsReservedH2FrameType(frameType uint64) bool {
+	switch frameType {
+	case FrameTypeReservedPriority,
+		FrameTypeReservedPing,
+		FrameTypeReservedWindowUpdate,
+		FrameTypeReservedContinuation:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsGreaseFrameType reports whether frameType is of the GREASE format 0x1f * N + 0x21 (RFC 9114 §7.2.8).
+// Endpoints MUST NOT consider these frames to have any meaning upon receipt and MUST safely ignore them.
+func IsGreaseFrameType(frameType uint64) bool {
+	return frameType >= 0x21 && (frameType-0x21)%0x1f == 0
+}
+
+// IsReservedH2Setting reports whether settingID is an obsolete HTTP/2 setting parameter reserved in HTTP/3
+// (RFC 9114 §7.2.4.1 & §11.2.2 Table 3: 0x00, 0x02, 0x03, 0x04, 0x05).
+// Receipt of any reserved setting MUST cause a connection error of type H3_SETTINGS_ERROR.
+func IsReservedH2Setting(settingID uint64) bool {
+	switch settingID {
+	case 0x00, 0x02, 0x03, 0x04, 0x05:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsGreaseSetting reports whether settingID is of the GREASE format 0x1f * N + 0x21 (RFC 9114 §7.2.4.1).
+// Endpoints MUST ignore unknown or GREASE settings upon receipt.
+func IsGreaseSetting(settingID uint64) bool {
+	return settingID >= 0x21 && (settingID-0x21)%0x1f == 0
 }

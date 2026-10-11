@@ -9,12 +9,12 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A MaxDataFrame carries flow control information for the connection
+// A MaxDataFrame carries flow control information for the connection (RFC 9000 §19.9).
 type MaxDataFrame struct {
 	MaximumData protocol.ByteCount
 }
 
-// parseMaxDataFrame parses a MAX_DATA frame
+// parseMaxDataFrame parses a MAX_DATA frame (RFC 9000 §19.9).
 func parseMaxDataFrame(b []byte, _ protocol.Version) (*MaxDataFrame, int, error) {
 	frame := &MaxDataFrame{}
 

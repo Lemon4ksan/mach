@@ -12,12 +12,13 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A CryptoFrame is a CRYPTO frame
+// A CryptoFrame is a CRYPTO frame (RFC 9000 §19.6).
 type CryptoFrame struct {
 	Data   []byte
 	Offset protocol.ByteCount
 }
 
+// parseCryptoFrame parses a CRYPTO frame (RFC 9000 §19.6).
 func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
 	startLen := len(b)
 	frame := &CryptoFrame{}

@@ -360,6 +360,91 @@ func TestReadResponse_UnknownFrameDiscarded(t *testing.T) {
 	assert.Equal(t, 204, resp.StatusCode())
 }
 
+func TestReadResponse_ReservedH2FramesRejected(t *testing.T) {
+	t.Parallel()
+
+	cc := &ClientConn{
+		qpack: coreh3.NewQPACKCodec(),
+	}
+
+	// RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x02, 0x06, 0x08, 0x09 must cause H3_FRAME_UNEXPECTED
+	reservedFrames := []uint64{0x02, 0x06, 0x08, 0x09}
+
+	for _, rf := range reservedFrames {
+		var streamBuf bytes.Buffer
+		var frameHdr []byte
+		frameHdr = varint.Append(frameHdr, rf)
+		frameHdr = varint.Append(frameHdr, 4)
+		streamBuf.Write(frameHdr)
+		streamBuf.Write([]byte("data"))
+
+		resp := h1.AcquireResponse()
+		_, err := cc.readResponseFrom(&streamBuf, resp, 0)
+		h1.ReleaseResponse(resp)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, coreh3.ErrFrameUnexpected)
+	}
+}
+
+func TestReadResponse_ControlOnlyFramesRejected(t *testing.T) {
+	t.Parallel()
+
+	cc := &ClientConn{
+		qpack: coreh3.NewQPACKCodec(),
+	}
+
+	// RFC 9114 Table 1: SETTINGS (0x04), GOAWAY (0x07), CANCEL_PUSH (0x03), MAX_PUSH_ID (0x0d)
+	// cannot appear on request or response streams.
+	controlFrames := []uint64{
+		coreh3.FrameTypeSettings,
+		coreh3.FrameTypeGoAway,
+		coreh3.FrameTypeCancelPush,
+		coreh3.FrameTypeMaxPushID,
+	}
+
+	for _, cf := range controlFrames {
+		var streamBuf bytes.Buffer
+		var frameHdr []byte
+		frameHdr = varint.Append(frameHdr, cf)
+		frameHdr = varint.Append(frameHdr, 1)
+		streamBuf.Write(frameHdr)
+		streamBuf.Write([]byte{0x00})
+
+		resp := h1.AcquireResponse()
+		_, err := cc.readResponseFrom(&streamBuf, resp, 0)
+		h1.ReleaseResponse(resp)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, coreh3.ErrFrameUnexpected)
+	}
+}
+
+func TestHandleGoAway_Validation(t *testing.T) {
+	t.Parallel()
+
+	cc := &ClientConn{
+		closed: make(chan struct{}),
+	}
+
+	// 1. Empty payload (RFC 9114 §7.1 & §7.2.6: frame terminates before end of identified fields)
+	err := cc.handleGoAway(varint.NewReader(bytes.NewReader(nil)), 0)
+	require.Error(t, err)
+
+	// 2. Excess bytes after Stream ID varint (RFC 9114 §7.1: contains additional bytes)
+	var excessBuf bytes.Buffer
+	excessBuf.Write(varint.Append(nil, 4))
+	excessBuf.WriteByte(0xFF) // trailing byte
+	err = cc.handleGoAway(varint.NewReader(&excessBuf), uint64(excessBuf.Len()))
+	require.Error(t, err)
+
+	// 3. Valid GOAWAY
+	var validBuf bytes.Buffer
+	validBuf.Write(varint.Append(nil, 4))
+	err = cc.handleGoAway(varint.NewReader(&validBuf), uint64(validBuf.Len()))
+	require.NoError(t, err)
+}
+
 func TestSettings_ReservedH2SettingsError(t *testing.T) {
 	t.Parallel()
 

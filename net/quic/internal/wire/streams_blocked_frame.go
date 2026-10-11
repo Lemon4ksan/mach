@@ -11,12 +11,13 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A StreamsBlockedFrame is a STREAMS_BLOCKED frame
+// A StreamsBlockedFrame is a STREAMS_BLOCKED frame (RFC 9000 §19.14).
 type StreamsBlockedFrame struct {
 	Type        protocol.StreamType
 	StreamLimit protocol.StreamNum
 }
 
+// parseStreamsBlockedFrame parses a STREAMS_BLOCKED frame (RFC 9000 §19.14).
 func parseStreamsBlockedFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamsBlockedFrame, int, error) {
 	f := &StreamsBlockedFrame{}
 	//nolint:exhaustive // This will only be called with a BidiStreamBlockedFrameType or a UniStreamBlockedFrameType.

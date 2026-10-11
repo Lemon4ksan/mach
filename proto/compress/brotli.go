@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/seal/codec/compress"
 	"github.com/lemon4ksan/seal/codec/compress/brotli"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// Supported Brotli compression levels (RFC 7932).
+// Supported Brotli compression levels (RFC 7932 §9.1, §9.2).
 const (
 	// CompressBrotliNoCompression disables Brotli compression (RFC 7932).
 	CompressBrotliNoCompression = 0
@@ -34,7 +34,7 @@ func releaseBrotliReader(zr *brotli.Reader) {
 	compress.ReleaseBrotliReader(zr)
 }
 
-// AppendBrotliBytesLevel appends Brotli-compressed src to dst using the specified compression level (RFC 7932).
+// AppendBrotliBytesLevel appends Brotli-compressed src to dst using the specified compression level (RFC 7932 §9.2).
 func AppendBrotliBytesLevel(dst, src []byte, level int) []byte {
 	var buf bytes.Buffer
 	buf.Write(dst)
@@ -46,28 +46,28 @@ func AppendBrotliBytesLevel(dst, src []byte, level int) []byte {
 	return buf.Bytes()
 }
 
-// WriteBrotliLevel compresses p with Brotli at the given level and writes it to w (RFC 7932).
+// WriteBrotliLevel compresses p with Brotli at the given level and writes it to w (RFC 7932 §9.2).
 func WriteBrotliLevel(w io.Writer, p []byte, level int) (int, error) {
 	b := AppendBrotliBytesLevel(nil, p, level)
 	return w.Write(b)
 }
 
-// WriteBrotli compresses p with [CompressBrotliDefaultCompression] and writes it to w (RFC 7932).
+// WriteBrotli compresses p with [CompressBrotliDefaultCompression] and writes it to w (RFC 7932 §9.2).
 func WriteBrotli(w io.Writer, p []byte) (int, error) {
 	return WriteBrotliLevel(w, p, CompressBrotliDefaultCompression)
 }
 
-// AppendBrotliBytes appends Brotli-compressed src to dst using [CompressBrotliDefaultCompression] (RFC 7932).
+// AppendBrotliBytes appends Brotli-compressed src to dst using [CompressBrotliDefaultCompression] (RFC 7932 §9.2).
 func AppendBrotliBytes(dst, src []byte) []byte {
 	return AppendBrotliBytesLevel(dst, src, CompressBrotliDefaultCompression)
 }
 
-// WriteUnbrotli decompresses Brotli payload p and writes the uncompressed data to w.
+// WriteUnbrotli decompresses Brotli payload p and writes the uncompressed data to w (RFC 7932 §2).
 func WriteUnbrotli(w io.Writer, p []byte) (int, error) {
 	return WriteUnbrotliLimit(w, p, 0)
 }
 
-// WriteUnbrotliLimit decompresses Brotli payload p and writes up to maxBodySize uncompressed bytes to w (RFC 7932).
+// WriteUnbrotliLimit decompresses Brotli payload p and writes up to maxBodySize uncompressed bytes to w (RFC 7932 §2, §9.2).
 //
 // If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
 // more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
@@ -89,7 +89,7 @@ func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendUnbrotliBytes decompresses Brotli payload src and appends the uncompressed data to dst (RFC 7932).
+// AppendUnbrotliBytes decompresses Brotli payload src and appends the uncompressed data to dst (RFC 7932 §2).
 func AppendUnbrotliBytes(dst, src []byte) ([]byte, error) {
 	if len(dst) == 0 {
 		return compress.Unbrotli(src, dst)
@@ -99,4 +99,14 @@ func AppendUnbrotliBytes(dst, src []byte) ([]byte, error) {
 		return dst, err
 	}
 	return append(dst, res...), nil
+}
+
+// AppendUnbrotliBytesLimit decompresses Brotli payload src up to maxBodySize uncompressed bytes and appends the uncompressed data to dst (RFC 7932 §2, §9.2).
+//
+// If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
+// more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
+func AppendUnbrotliBytesLimit(dst, src []byte, maxBodySize int) ([]byte, error) {
+	w := &byteSliceWriter{b: dst}
+	_, err := WriteUnbrotliLimit(w, src, maxBodySize)
+	return w.b, err
 }

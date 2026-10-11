@@ -11,12 +11,13 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A MaxStreamsFrame is a MAX_STREAMS frame
+// A MaxStreamsFrame is a MAX_STREAMS frame (RFC 9000 §19.11).
 type MaxStreamsFrame struct {
 	Type         protocol.StreamType
 	MaxStreamNum protocol.StreamNum
 }
 
+// parseMaxStreamsFrame parses a MAX_STREAMS frame (RFC 9000 §19.11).
 func parseMaxStreamsFrame(b []byte, typ FrameType, _ protocol.Version) (*MaxStreamsFrame, int, error) {
 	f := &MaxStreamsFrame{}
 	//nolint:exhaustive // Function will only be called with BidiMaxStreamsFrameType or UniMaxStreamsFrameType

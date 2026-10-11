@@ -11,10 +11,10 @@ import (
 	"strings"
 )
 
-// HeaderPriority is the standard RFC 9218 header name for extensible HTTP priorities.
+// HeaderPriority is the standard RFC 9218 §4 header name for extensible HTTP priorities.
 const HeaderPriority = "priority"
 
-// Standard RFC 9218 urgency levels (0 to 7).
+// Standard RFC 9218 §4.1 urgency levels (0 to 7).
 const (
 	// UrgencyUserBlocking (0) represents critical blocking resources (e.g. HTML documents, synchronous scripts).
 	UrgencyUserBlocking = 0
@@ -56,12 +56,12 @@ var (
 	Background = Priority{Urgency: UrgencyBackground, Incremental: false}
 )
 
-// Priority encapsulates RFC 9218 priority parameters: urgency (0-7) and incremental streaming flag.
+// Priority encapsulates RFC 9218 §4 priority parameters: urgency (0-7, RFC 9218 §4.1) and incremental streaming flag (RFC 9218 §4.2).
 type Priority struct {
-	// Urgency indicates resource priority level from 0 (highest) to 7 (lowest).
+	// Urgency indicates resource priority level from 0 (highest) to 7 (lowest) (RFC 9218 §4.1).
 	Urgency int
 
-	// Incremental indicates whether the response can be processed incrementally in parallel.
+	// Incremental indicates whether the response can be processed incrementally in parallel (RFC 9218 §4.2).
 	Incremental bool
 }
 
@@ -73,7 +73,7 @@ func New(urgency int, incremental bool) Priority {
 	}
 }
 
-// AppendFormat serializes the [Priority] into an RFC 9218 string and appends it to dst without heap allocations.
+// AppendFormat serializes the [Priority] into an RFC 9218 §4 string and appends it to dst without heap allocations.
 func (p Priority) AppendFormat(dst []byte) []byte {
 	urg := min(max(p.Urgency, 0), 7)
 
@@ -85,7 +85,7 @@ func (p Priority) AppendFormat(dst []byte) []byte {
 	return dst
 }
 
-// Format serializes the [Priority] into an RFC 9218 Structured Field dictionary string (e.g. "u=1, i").
+// Format serializes the [Priority] into an RFC 9218 §4 Structured Field dictionary string (e.g. "u=1, i").
 func (p Priority) Format() string {
 	var buf [8]byte
 	return string(p.AppendFormat(buf[:0]))
@@ -95,7 +95,7 @@ func (p Priority) String() string {
 	return p.Format()
 }
 
-// Parse deserializes an RFC 9218 priority header string (e.g. "u=1, i", "u=3", "i, u=0").
+// Parse deserializes an RFC 9218 §4 priority header string (e.g. "u=1, i", "u=3", "i, u=0").
 func Parse(s string) (Priority, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

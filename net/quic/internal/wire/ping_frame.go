@@ -8,7 +8,7 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A PingFrame is a PING frame
+// A PingFrame is a PING frame (RFC 9000 §19.2).
 type PingFrame struct{}
 
 func (f *PingFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {

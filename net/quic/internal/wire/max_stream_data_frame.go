@@ -9,12 +9,13 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
-// A MaxStreamDataFrame is a MAX_STREAM_DATA frame
+// A MaxStreamDataFrame is a MAX_STREAM_DATA frame (RFC 9000 §19.10).
 type MaxStreamDataFrame struct {
 	StreamID          protocol.StreamID
 	MaximumStreamData protocol.ByteCount
 }
 
+// parseMaxStreamDataFrame parses a MAX_STREAM_DATA frame (RFC 9000 §19.10).
 func parseMaxStreamDataFrame(b []byte, _ protocol.Version) (*MaxStreamDataFrame, int, error) {
 	startLen := len(b)
 

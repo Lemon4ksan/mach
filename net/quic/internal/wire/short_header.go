@@ -12,9 +12,20 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/utils"
 )
 
-// ParseShortHeader parses a short header packet.
-// It must be called after header protection was removed.
-// Otherwise, the check for the reserved bits will (most likely) fail.
+// ParseShortHeader parses a 1-RTT Short Header packet (RFC 9000 §17.3).
+//
+// Short Header Format (RFC 9000 §17.3.1):
+//   - Header Form (bit 7): 0 for Short Header (RFC 9000 §17.3.1)
+//   - Fixed Bit (bit 6): MUST be 1 (RFC 9000 §17.3.1)
+//   - Spin Bit (bit 5): Latency spin bit (RFC 9000 §17.4)
+//   - Reserved Bits (bits 4-3): MUST be 00 (RFC 9000 §17.3.1)
+//   - Key Phase (bit 2): 1-RTT key phase bit (RFC 9000 §17.3.1, RFC 9001 §6)
+//   - Packet Number Length (bits 1-0): Packet number length (1 to 4 bytes, RFC 9000 §17.1)
+//   - Destination Connection ID (0..160 bits): Length determined by connIDLen
+//   - Packet Number (1..4 bytes): Truncated packet number (RFC 9000 §17.1)
+//
+// It must be called after header protection was removed (RFC 9001 §5.4).
+// If the reserved bits are invalid, ErrInvalidReservedBits is returned while continuing parsing (RFC 9001 §5.4.1).
 func ParseShortHeader(
 	data []byte,
 	connIDLen int,

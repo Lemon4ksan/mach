@@ -375,6 +375,35 @@ func TestCookieParseAndParseBytes(t *testing.T) {
 	if !bytes.Equal(c.Key(), []byte("k")) || !bytes.Equal(c.Value(), []byte("v")) {
 		t.Fatal("Parse with stray semicolons gave wrong result")
 	}
+
+	// RFC 6265 §5.2.2: Negative and zero Max-Age MUST be parsed and indicate expiration
+	if err := c.Parse("session=dead; Max-Age=-1"); err != nil {
+		t.Fatalf("Parse negative Max-Age failed: %v", err)
+	}
+	if c.MaxAge() != -1 {
+		t.Fatalf("expected MaxAge -1, got %d", c.MaxAge())
+	}
+
+	if err := c.Parse("session=dead; Max-Age=0"); err != nil {
+		t.Fatalf("Parse zero Max-Age failed: %v", err)
+	}
+	if c.MaxAge() != -1 {
+		t.Fatalf("expected MaxAge -1 for zero max-age, got %d", c.MaxAge())
+	}
+
+	if err := c.Parse("session=dead; Max-Age=-3600"); err != nil {
+		t.Fatalf("Parse negative -3600 Max-Age failed: %v", err)
+	}
+	if c.MaxAge() != -1 {
+		t.Fatalf("expected MaxAge -1 for -3600 max-age, got %d", c.MaxAge())
+	}
+
+	if err := c.Parse("session=dead; Max-Age=-"); err == nil {
+		t.Fatal("expected error on isolated '-' in Max-Age")
+	}
+	if err := c.Parse("session=dead; Max-Age=-abc"); err == nil {
+		t.Fatal("expected error on non-digits after '-' in Max-Age")
+	}
 }
 
 func TestCookieRequestAndResponseCookies(t *testing.T) {

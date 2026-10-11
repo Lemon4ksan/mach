@@ -229,3 +229,69 @@ func SerializeResponseHeaders(dst *Headers, hp *hpack.HPACK, statusCode int, hea
 		}
 	}
 }
+
+// ValidateHeaderName validates that a header field name conforms to RFC 9113 §8.2.1.
+// A field name MUST NOT contain characters in the ranges 0x00-0x20, 0x41-0x5a ('A'-'Z'), or 0x7f-0xff.
+// With the exception of pseudo-headers, field names MUST NOT include a colon (':').
+// Messages violating these rules MUST be treated as malformed (stream error of type PROTOCOL_ERROR per RFC 9113 §8.1.1).
+func ValidateHeaderName(k []byte, isPseudo bool) error {
+	if len(k) == 0 {
+		return ProtocolError
+	}
+	start := 0
+	if isPseudo {
+		if k[0] != ':' || len(k) == 1 {
+			return ProtocolError
+		}
+		start = 1
+	}
+	for i := start; i < len(k); i++ {
+		c := k[i]
+		if c <= 0x20 || (c >= 'A' && c <= 'Z') || c >= 0x7f || c == ':' {
+			return ProtocolError
+		}
+	}
+	return nil
+}
+
+// ValidateHeaderValue validates that a header field value conforms to RFC 9113 §8.2.1.
+// A field value MUST NOT contain NUL (0x00), LF (0x0a), or CR (0x0d) at any position.
+// Messages violating these rules MUST be treated as malformed (stream error of type PROTOCOL_ERROR per RFC 9113 §8.1.1).
+func ValidateHeaderValue(v []byte) error {
+	for i := 0; i < len(v); i++ {
+		if v[i] == 0 || v[i] == '\r' || v[i] == '\n' {
+			return ProtocolError
+		}
+	}
+	return nil
+}
+
+// IsConnectionSpecificHeader reports whether a header field is connection-specific per RFC 9113 §8.2.2.
+// Connection-specific header fields (Connection, Keep-Alive, Proxy-Connection, Transfer-Encoding, Upgrade,
+// and TE with values other than "trailers") MUST NOT be present in HTTP/2 messages.
+// Any message containing them MUST be treated as malformed (stream error of type PROTOCOL_ERROR per RFC 9113 §8.1.1).
+func IsConnectionSpecificHeader(k, v []byte) bool {
+	switch len(k) {
+	case 2:
+		if bytes.Equal(k, []byte("te")) {
+			return !bytes.Equal(v, []byte("trailers"))
+		}
+	case 7:
+		if bytes.Equal(k, []byte("upgrade")) {
+			return true
+		}
+	case 10:
+		if bytes.Equal(k, []byte("connection")) || bytes.Equal(k, []byte("keep-alive")) {
+			return true
+		}
+	case 16:
+		if bytes.Equal(k, []byte("proxy-connection")) {
+			return true
+		}
+	case 17:
+		if bytes.Equal(k, []byte("transfer-encoding")) {
+			return true
+		}
+	}
+	return false
+}

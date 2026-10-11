@@ -206,6 +206,7 @@ func validHeaderValueByte(c byte) bool {
 	return zerocopy.ValidHeaderValueByteTable[c] == 1
 }
 
+// isValidHeaderKey validates whether a header field name contains only valid token characters (RFC 9110 §5.6.2 and RFC 9112 §5.1).
 func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 	if len(a) == 0 {
 		return false, false
@@ -245,6 +246,14 @@ func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {
 		idxColon := bytes.IndexByte(line, ':')
 		if idxColon > 0 {
 			k := line[:idxColon]
+			// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+			if k[len(k)-1] == ' ' || k[len(k)-1] == '\t' {
+				return n, errors.New("http: whitespace before colon in trailer (RFC 9112 §5.1)")
+			}
+			valid, _ := isValidHeaderKey(k)
+			if !valid {
+				return n, errors.New("http: malformed trailer key (RFC 9112 §5.1)")
+			}
 			v := bytes.TrimSpace(line[idxColon+1:])
 			dest.Add(string(k), string(v))
 		}
@@ -253,6 +262,7 @@ func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {
 	return n, err
 }
 
+// isBadTrailer checks whether key is forbidden from appearing in trailers (RFC 9112 §7.1.2 & RFC 9110 §6.5.1).
 func isBadTrailer(key []byte) bool {
 	if len(key) == 0 {
 		return true

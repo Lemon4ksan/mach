@@ -6,12 +6,18 @@ package headkit
 
 import (
 	"encoding/binary"
+	"errors"
 	"iter"
 	"math/bits"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/http/header"
+)
+
+var (
+	// ErrWhitespaceBeforeColon is returned when whitespace occurs between header name and colon (RFC 9112 §5.1).
+	ErrWhitespaceBeforeColon = errors.New("headkit: whitespace between header name and colon prohibited (RFC 9112 §5.1)")
 )
 
 const (
@@ -39,6 +45,7 @@ type Headers struct {
 	count  int
 
 	dynamic []HeaderEntry // Fallback for dynamically added/modified headers
+	err     error
 }
 
 func NewWithCapacity(cap int) Headers {
@@ -58,6 +65,7 @@ func (h *Headers) GetRawBuf() []byte {
 
 func (h *Headers) Reset() {
 	h.buf = h.buf[:0]
+	h.err = nil
 
 	h.count = idxReservedCount
 	for i := range maxHeaders {
@@ -65,6 +73,11 @@ func (h *Headers) Reset() {
 	}
 
 	h.dynamic = h.dynamic[:0]
+}
+
+// Err returns any parsing error encountered during SWAR block processing (RFC 9112 §5.1).
+func (h *Headers) Err() error {
+	return h.err
 }
 
 const (
@@ -110,6 +123,15 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 			c := block[idx]
 
 			if c == ':' && keyEnd == -1 {
+				// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+				// A server MUST reject, with a response status code of 400 (Bad Request),
+				// any received request message that contains whitespace between a header field name and colon.
+				if idx > keyStart && (block[idx-1] == ' ' || block[idx-1] == '\t') {
+					if h.err == nil {
+						h.err = ErrWhitespaceBeforeColon
+					}
+				}
+
 				keyEnd = idx
 				valStart = idx + 1
 				// Trim leading spaces for value
@@ -151,6 +173,13 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 	for ; i < len(block); i++ {
 		c := block[i]
 		if c == ':' && keyEnd == -1 {
+			// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+			if i > keyStart && (block[i-1] == ' ' || block[i-1] == '\t') {
+				if h.err == nil {
+					h.err = ErrWhitespaceBeforeColon
+				}
+			}
+
 			keyEnd = i
 
 			valStart = i + 1

@@ -350,6 +350,25 @@ func TestRequestParsing_RFC9112_MissingHost(t *testing.T) {
 	}
 }
 
+func TestRequestParsing_RFC9112_WhitespaceBeforeColon(t *testing.T) {
+	// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+	// Server MUST reject with 400 Bad Request.
+	badRequests := []string{
+		"GET /ping HTTP/1.1\r\nHost : example.com\r\n\r\n",
+		"GET /ping HTTP/1.1\r\nHost: example.com\r\nUser-Agent \t: test\r\n\r\n",
+		"GET /ping HTTP/1.1\r\nHost: example.com\r\nFoo : bar\r\n\r\n",
+	}
+
+	for _, raw := range badRequests {
+		br := bufio.NewReader(stringsReader(raw))
+		var req h1.Request
+		err := req.ReadRequest(br, nil, 1024)
+		if !errors.Is(err, h1.ErrWhitespaceBeforeColon) {
+			t.Fatalf("expected ErrWhitespaceBeforeColon for %q, got: %v", raw, err)
+		}
+	}
+}
+
 func stringsReader(s string) io.Reader {
 	return bytes.NewReader([]byte(s))
 }
@@ -407,6 +426,64 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 		t.Fatalf("expected ff, got %s", string(hexBuf[:n255]))
 	}
 }
+
+func TestChunkedReader_RFC9112Compliance(t *testing.T) {
+	// RFC 9112 §7.1: chunk-size = 1*HEXDIG. Leading whitespace is prohibited.
+	t.Run("LeadingWhitespaceRejection", func(t *testing.T) {
+		raw := " 5\r\nhello\r\n0\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		_, err := io.ReadAll(cr)
+		if !errors.Is(err, h1.ErrInvalidChunkSize) {
+			t.Fatalf("expected ErrInvalidChunkSize for leading whitespace, got: %v", err)
+		}
+	})
+
+	// RFC 9112 §7.1.1: Chunk extensions and BWS before ';'
+	t.Run("ChunkExtensionsAndBWS", func(t *testing.T) {
+		raw := "5;ext=foo\r\nhello\r\n5 ;ext=bar;token=val\r\nworld\r\n0;terminal\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		data, err := io.ReadAll(cr)
+		require.NoError(t, err)
+		assert.Equal(t, "helloworld", string(data))
+	})
+
+	// RFC 9112 §7.1: Integer overflow prevention in chunk size
+	t.Run("ChunkSizeIntegerOverflow", func(t *testing.T) {
+		raw := "7fffffffffffffff0\r\nhello\r\n0\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		_, err := io.ReadAll(cr)
+		if !errors.Is(err, h1.ErrInvalidChunkSize) {
+			t.Fatalf("expected ErrInvalidChunkSize on overflow, got: %v", err)
+		}
+	})
+
+	// RFC 9112 §7.1: Chunk boundary missing CRLF
+	t.Run("MissingCRLFBoundary", func(t *testing.T) {
+		raw := "5\r\nhelloXX0\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		_, err := io.ReadAll(cr)
+		if !errors.Is(err, h1.ErrChunkBoundaryError) {
+			t.Fatalf("expected ErrChunkBoundaryError, got: %v", err)
+		}
+	})
+
+	// RFC 9112 §7.1.2: Terminal chunk trailer draining *( field-line CRLF ) CRLF
+	t.Run("TrailerSectionDraining", func(t *testing.T) {
+		raw := "5\r\nhello\r\n0\r\nExpires: Wed, 21 Oct 2026 07:28:00 GMT\r\nContent-MD5: Q2hlY2sgSW50ZWdyaXR5IQ==\r\n\r\nNEXT_REQUEST"
+		br := bufio.NewReader(stringsReader(raw))
+		cr := h1.NewChunkedReader(br)
+
+		data, err := io.ReadAll(cr)
+		require.NoError(t, err)
+		assert.Equal(t, "hello", string(data))
+
+		// Subsequent read from underlying bufio.Reader should immediately yield NEXT_REQUEST
+		nextData, err := io.ReadAll(br)
+		require.NoError(t, err)
+		assert.Equal(t, "NEXT_REQUEST", string(nextData))
+	})
+}
+
 
 func TestHeaders_Comprehensive(t *testing.T) {
 	h := headkit.NewWithCapacity(8)

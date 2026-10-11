@@ -67,24 +67,55 @@ func HuffmanEncodeLength(src []byte) int {
 	return int((bits + 7) / 8)
 }
 
-// HuffmanDecode decodes HPACK Huffman encoded data from src into dst (RFC 7541 §5.2 & Appendix B).
-func HuffmanDecode(dst, src []byte) []byte {
+// AppendHuffmanDecode decodes HPACK Huffman encoded data from src into dst (RFC 7541 §5.2 & Appendix B).
+// It returns ErrInvalidHuffman if src contains malformed Huffman codes, explicit EOS,
+// or invalid padding (strictly longer than 7 bits, or not consisting of all 1s).
+func AppendHuffmanDecode(dst, src []byte) ([]byte, error) {
 	if hasVectorHuffman {
-		return vectorHuffmanDecode(dst, src)
+		return vectorAppendHuffmanDecode(dst, src)
 	}
 
-	return huffmanDecodeFallback(dst, src)
+	return appendHuffmanDecodeFallback(dst, src)
+}
+
+// HuffmanDecodeToString decodes HPACK Huffman encoded data in src into a string (RFC 7541 §5.2).
+// It returns ErrInvalidHuffman if src contains malformed Huffman codes, explicit EOS,
+// or invalid padding (strictly longer than 7 bits, or not consisting of all 1s).
+func HuffmanDecodeToString(src []byte) (string, error) {
+	bufPtr := byteStorage.Get()
+	defer byteStorage.Put(bufPtr)
+
+	dst, err := AppendHuffmanDecode((*bufPtr)[:0], src)
+	if err != nil {
+		return "", err
+	}
+
+	*bufPtr = dst
+	return string(dst), nil
+}
+
+// HuffmanDecode decodes HPACK Huffman encoded data from src into dst (RFC 7541 §5.2 & Appendix B).
+// For strict RFC compliance and error handling, use [AppendHuffmanDecode].
+func HuffmanDecode(dst, src []byte) []byte {
+	res, _ := AppendHuffmanDecode(dst, src)
+	return res
 }
 
 func huffmanDecodeFallback(dst, src []byte) []byte {
+	res, _ := appendHuffmanDecodeFallback(dst, src)
+	return res
+}
+
+func appendHuffmanDecodeFallback(dst, src []byte) ([]byte, error) {
 	nSrc := len(src)
 	if nSrc == 0 {
-		return dst
+		return dst, nil
 	}
 
 	var (
-		cum  uint32
-		bits uint8
+		cum   uint32
+		cbits uint8
+		sbits uint8
 	)
 
 	currNode := 0
@@ -92,40 +123,53 @@ func huffmanDecodeFallback(dst, src []byte) []byte {
 
 	for i := range nSrc {
 		cum = cum<<8 | uint32(src[i])
-		bits += 8
+		cbits += 8
+		sbits += 8
 
-		for bits >= 8 {
-			entry := table[currNode][byte(cum>>(bits-8))]
+		for cbits >= 8 {
+			entry := table[currNode][byte(cum>>(cbits-8))]
 			if !entry.isLeaf {
 				if entry.next == 0 && currNode != 0 {
-					return dst
+					return dst, ErrInvalidHuffman
 				}
 
 				currNode = int(entry.next)
-				bits -= 8
+				cbits -= 8
 			} else {
-				bits -= entry.codeLen
+				cbits -= entry.codeLen
+				sbits = cbits
 				dst = append(dst, entry.sym)
 				currNode = 0
 			}
 		}
 	}
 
-	cum &= (1 << bits) - 1
+	cum &= (1 << cbits) - 1
 
-	for bits > 0 {
-		entry := table[currNode][byte(cum<<(8-bits))]
-		if !entry.isLeaf || entry.codeLen > bits {
+	for cbits > 0 {
+		entry := table[currNode][byte(cum<<(8-cbits))]
+		if !entry.isLeaf || entry.codeLen > cbits {
 			break
 		}
 
 		dst = append(dst, entry.sym)
-		bits -= entry.codeLen
-		cum &= (1 << bits) - 1
+		cbits -= entry.codeLen
+		sbits = cbits
+		cum &= (1 << cbits) - 1
 		currNode = 0
 	}
 
-	return dst
+	// RFC 7541 §5.2: A padding strictly longer than 7 bits MUST be treated as a decoding error.
+	if sbits > 7 {
+		return dst, ErrInvalidHuffman
+	}
+
+	// RFC 7541 §5.2: A padding not corresponding to the most significant bits of the code for the EOS symbol MUST be treated as a decoding error.
+	if mask := uint32(1<<cbits - 1); cum&mask != mask {
+		return dst, ErrInvalidHuffman
+	}
+
+	return dst, nil
 }
 
 type huffmanTableEntry struct {

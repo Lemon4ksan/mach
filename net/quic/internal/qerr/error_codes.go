@@ -9,30 +9,64 @@ import (
 	"fmt"
 )
 
-// TransportErrorCode is a QUIC transport error.
+// TransportErrorCode represents a QUIC transport error code transmitted over wire (RFC 9000 §20.1).
 type TransportErrorCode uint64
 
-// The error codes defined by QUIC
+// QUIC Transport Error Codes (RFC 9000 §20.1 & RFC 9001 §4.8).
 const (
-	NoError                   TransportErrorCode = 0x0
-	InternalError             TransportErrorCode = 0x1
-	ConnectionRefused         TransportErrorCode = 0x2
-	FlowControlError          TransportErrorCode = 0x3
-	StreamLimitError          TransportErrorCode = 0x4
-	StreamStateError          TransportErrorCode = 0x5
-	FinalSizeError            TransportErrorCode = 0x6
-	FrameEncodingError        TransportErrorCode = 0x7
-	TransportParameterError   TransportErrorCode = 0x8
-	ConnectionIDLimitError    TransportErrorCode = 0x9
-	ProtocolViolation         TransportErrorCode = 0xa
-	InvalidToken              TransportErrorCode = 0xb
+	// NoError signals connection closure without an error (RFC 9000 §20.1: 0x0).
+	NoError TransportErrorCode = 0x0
+
+	// InternalError signals stack or host defect (RFC 9000 §20.1: 0x1).
+	InternalError TransportErrorCode = 0x1
+
+	// ConnectionRefused signals peer refused to accept connection (RFC 9000 §20.1: 0x2).
+	ConnectionRefused TransportErrorCode = 0x2
+
+	// FlowControlError signals stream or connection flow-control limit exceeded (RFC 9000 §20.1: 0x3).
+	FlowControlError TransportErrorCode = 0x3
+
+	// StreamLimitError signals stream limit exceeded (RFC 9000 §20.1: 0x4).
+	StreamLimitError TransportErrorCode = 0x4
+
+	// StreamStateError signals frame received in invalid stream state (RFC 9000 §20.1: 0x5).
+	StreamStateError TransportErrorCode = 0x5
+
+	// FinalSizeError signals offset or final size inconsistency (RFC 9000 §20.1: 0x6).
+	FinalSizeError TransportErrorCode = 0x6
+
+	// FrameEncodingError signals malformed frame syntax or length (RFC 9000 §20.1: 0x7).
+	FrameEncodingError TransportErrorCode = 0x7
+
+	// TransportParameterError signals invalid or inconsistent transport parameters (RFC 9000 §20.1: 0x8).
+	TransportParameterError TransportErrorCode = 0x8
+
+	// ConnectionIDLimitError signals number of active connection IDs exceeded limit (RFC 9000 §20.1: 0x9).
+	ConnectionIDLimitError TransportErrorCode = 0x9
+
+	// ProtocolViolation signals general unclassified protocol violation (RFC 9000 §20.1: 0xa).
+	ProtocolViolation TransportErrorCode = 0xa
+
+	// InvalidToken signals token in Initial packet failed verification (RFC 9000 §20.1: 0xb).
+	InvalidToken TransportErrorCode = 0xb
+
+	// ApplicationErrorErrorCode signals application-layer error (RFC 9000 §20.1: 0xc).
 	ApplicationErrorErrorCode TransportErrorCode = 0xc
-	CryptoBufferExceeded      TransportErrorCode = 0xd
-	KeyUpdateError            TransportErrorCode = 0xe
-	AEADLimitReached          TransportErrorCode = 0xf
-	NoViablePathError         TransportErrorCode = 0x10
+
+	// CryptoBufferExceeded signals buffering limit for CRYPTO data exceeded (RFC 9000 §20.1: 0xd).
+	CryptoBufferExceeded TransportErrorCode = 0xd
+
+	// KeyUpdateError signals peer rejected cryptographic key update (RFC 9000 §20.1: 0xe).
+	KeyUpdateError TransportErrorCode = 0xe
+
+	// AEADLimitReached signals packet protection confidentiality or integrity limit reached (RFC 9000 §20.1: 0xf).
+	AEADLimitReached TransportErrorCode = 0xf
+
+	// NoViablePathError signals network path incapable of supporting minimum MTU (RFC 9000 §20.1: 0x10).
+	NoViablePathError TransportErrorCode = 0x10
 )
 
+// IsCryptoError reports whether e is a TLS alert error mapped into the 0x0100-0x01ff space (RFC 9000 §20.1 & RFC 9001 §4.8).
 func (e TransportErrorCode) IsCryptoError() bool {
 	return e >= 0x100 && e < 0x200
 }

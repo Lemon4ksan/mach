@@ -2,6 +2,7 @@ package auth
 
 import "strings"
 
+// ExtractChallengeParams parses auth-param key-value pairs from an authentication challenge header (RFC 9110 §11.2 & RFC 7616 §3.3).
 func ExtractChallengeParams(header, scheme string) (map[string]string, bool) {
 	header = strings.TrimSpace(header)
 	schemeLower := strings.ToLower(scheme)

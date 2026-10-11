@@ -9,21 +9,21 @@ import (
 	"io/fs"
 	"sync"
 
-	"github.com/lemon4ksan/seal/codec/compress/flate"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/seal/codec/compress/flate"
 )
 
-// Supported compression levels (RFC 1951).
+// Supported compression levels (RFC 1951 §3.2).
 const (
-	// CompressNoCompression disables Deflate compression (RFC 1951).
+	// CompressNoCompression disables Deflate compression (RFC 1951 §3.2.3: non-compressed blocks BTYPE=00).
 	CompressNoCompression = flate.NoCompression
-	// CompressBestSpeed specifies compression level tuned for throughput at the expense of ratio (RFC 1951).
+	// CompressBestSpeed specifies compression level tuned for throughput at the expense of ratio (RFC 1951 §3.2).
 	CompressBestSpeed = flate.BestSpeed
-	// CompressBestCompression specifies compression level tuned for ratio at the expense of throughput (RFC 1951).
+	// CompressBestCompression specifies compression level tuned for ratio at the expense of throughput (RFC 1951 §3.2).
 	CompressBestCompression = flate.BestCompression
-	// CompressDefaultCompression specifies standard balanced compression level (RFC 1951).
+	// CompressDefaultCompression specifies standard balanced compression level (RFC 1951 §3.2).
 	CompressDefaultCompression = 6 // flate.DefaultCompression
-	// CompressHuffmanOnly restricts deflate compression to Huffman coding only (RFC 1951).
+	// CompressHuffmanOnly restricts deflate compression to Huffman coding only (RFC 1951 §3.2.5).
 	CompressHuffmanOnly = -2 // flate.HuffmanOnly
 )
 

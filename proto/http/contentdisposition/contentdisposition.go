@@ -16,7 +16,7 @@ import (
 	"github.com/lemon4ksan/seal/text/encoding/htmlindex"
 )
 
-// Standard Content-Disposition disposition types per RFC 6266 §4.2 and RFC 7578.
+// Standard Content-Disposition disposition types per RFC 6266 §4.2 and RFC 7578 §4.2.
 const (
 	// DispositionInline indicates default in-place processing and rendering of the response (RFC 6266 §4.2).
 	DispositionInline = "inline"
@@ -24,7 +24,7 @@ const (
 	// DispositionAttachment prompts the user to save the response locally ("Save As...") (RFC 6266 §4.2).
 	DispositionAttachment = "attachment"
 
-	// DispositionFormData denotes a form field payload in multipart/form-data bodies (RFC 7578).
+	// DispositionFormData denotes a form field payload in multipart/form-data bodies (RFC 7578 §4.2).
 	DispositionFormData = "form-data"
 )
 

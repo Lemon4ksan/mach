@@ -19,3 +19,7 @@ func vectorHuffmanEncodeLength(src []byte) int {
 func vectorHuffmanDecode(dst, src []byte) []byte {
 	return dst
 }
+
+func vectorAppendHuffmanDecode(dst, src []byte) ([]byte, error) {
+	return appendHuffmanDecodeFallback(dst, src)
+}

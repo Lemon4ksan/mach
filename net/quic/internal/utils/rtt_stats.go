@@ -12,13 +12,15 @@ import (
 )
 
 const (
+	// RFC 9002 §5.3: smoothed_rtt = 7/8 * smoothed_rtt + 1/8 * adjusted_rtt (alpha = 1/8 = 0.125).
 	rttAlpha      = 0.125
 	oneMinusAlpha = 1 - rttAlpha
+	// RFC 9002 §5.3: rttvar = 3/4 * rttvar + 1/4 * rttvar_sample (beta = 1/4 = 0.25).
 	rttBeta       = 0.25
 	oneMinusBeta  = 1 - rttBeta
 )
 
-// The default RTT used before an RTT sample is taken
+// The default RTT used before an RTT sample is taken (RFC 9002 §5.2).
 const DefaultInitialRTT = 100 * time.Millisecond
 
 // RTTStats provides round-trip statistics
@@ -70,7 +72,7 @@ func (r *RTTStats) MaxAckDelay() time.Duration {
 	return time.Duration(r.maxAckDelay.Load())
 }
 
-// PTO gets the probe timeout duration.
+// PTO gets the probe timeout duration (RFC 9002 §6.2.1: PTO = smoothed_rtt + max(4*rttvar, kGranularity) + max_ack_delay).
 func (r *RTTStats) PTO(includeMaxAckDelay bool) time.Duration {
 	if !r.hasMeasurement {
 		return 2 * DefaultInitialRTT
@@ -84,7 +86,7 @@ func (r *RTTStats) PTO(includeMaxAckDelay bool) time.Duration {
 	return pto
 }
 
-// UpdateRTT updates the RTT based on a new sample.
+// UpdateRTT updates the RTT based on a new sample (RFC 9002 §5.3).
 func (r *RTTStats) UpdateRTT(sendDelta, ackDelay time.Duration) {
 	if sendDelta <= 0 {
 		return
@@ -93,28 +95,29 @@ func (r *RTTStats) UpdateRTT(sendDelta, ackDelay time.Duration) {
 	// Update r.minRTT first. r.minRTT does not use an rttSample corrected for
 	// ackDelay but the raw observed sendDelta, since poor clock granularity at
 	// the client may cause a high ackDelay to result in underestimation of the
-	// r.minRTT.
+	// r.minRTT (RFC 9002 §5.2).
 	minRTT := time.Duration(r.minRTT.Load())
 	if !r.hasMeasurement || minRTT > sendDelta {
 		minRTT = sendDelta
 		r.minRTT.Store(sendDelta.Nanoseconds())
 	}
 
-	// Correct for ackDelay if information received from the peer results in a
+	// Correct for ackDelay if information received from the peer results in
 	// an RTT sample at least as large as minRTT. Otherwise, only use the
-	// sendDelta.
+	// sendDelta (RFC 9002 §5.3).
 	sample := sendDelta
 	if sample-minRTT >= ackDelay {
 		sample -= ackDelay
 	}
 
 	r.latestRTT.Store(sample.Nanoseconds())
-	// First time call.
+	// First time call (RFC 9002 §5.3: smoothed_rtt = latest_rtt, rttvar = latest_rtt / 2).
 	if !r.hasMeasurement {
 		r.hasMeasurement = true
 		r.smoothedRTT.Store(sample.Nanoseconds())
 		r.meanDeviation.Store(sample.Nanoseconds() / 2)
 	} else {
+		// Subsequent RTT samples (RFC 9002 §5.3).
 		smoothedRTT := r.SmoothedRTT()
 		meanDev := time.Duration(
 			oneMinusBeta*float32(

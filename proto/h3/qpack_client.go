@@ -177,10 +177,11 @@ func (q *QPACKCodec) getOrderedHeaders(req *http.Request, orderedKeys []string) 
 }
 
 type responseHeaderHandler struct {
-	res        *http.ResponseHeader
-	hasStatus  bool
-	statusCode int
-	parseErr   error
+	res                  *http.ResponseHeader
+	hasStatus            bool
+	hasSeenRegularHeader bool
+	statusCode           int
+	parseErr             error
 }
 
 func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
@@ -188,7 +189,38 @@ func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
 		return
 	}
 
-	if name == ":status" {
+	// RFC 9114 §4.2: Characters in field names MUST be converted to lowercase prior to encoding.
+	// A request or response containing uppercase characters in field names MUST be treated as malformed.
+	for i := range len(name) {
+		c := name[i]
+		if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
+			h.parseErr = ErrMalformedHeader
+			return
+		}
+	}
+
+	// RFC 9114 §4.1.2 & §10.3: Field values must not contain NUL (0x00).
+	for i := range len(value) {
+		if value[i] == 0 {
+			h.parseErr = ErrMalformedHeader
+			return
+		}
+	}
+
+	if len(name) > 0 && name[0] == ':' {
+		// RFC 9114 §4.3: All pseudo-header fields MUST appear in the header section before regular header fields.
+		if h.hasSeenRegularHeader {
+			h.parseErr = ErrMalformedHeader
+			return
+		}
+
+		// RFC 9114 §4.3.2: For responses, a single ":status" pseudo-header field is defined.
+		// Undefined or invalid pseudo-header fields MUST be treated as malformed (RFC 9114 §4.3).
+		if name != ":status" {
+			h.parseErr = ErrMalformedHeader
+			return
+		}
+
 		if h.hasStatus {
 			h.parseErr = ErrMalformedHeader
 			return
@@ -196,11 +228,12 @@ func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
 
 		code, err := strconv.Atoi(value)
 		if err != nil {
-			h.parseErr = err
+			h.parseErr = ErrMalformedHeader
 			return
 		}
 
 		h.statusCode = code
+		// RFC 9114 §4.3.1: 101 Switching Protocols is not supported in HTTP/3.
 		if h.statusCode == 101 {
 			h.parseErr = ErrMalformedHeader
 			return
@@ -215,8 +248,13 @@ func (h *responseHeaderHandler) OnHeaderDecoded(name, value string) {
 		return
 	}
 
-	// Pseudo-headers check (simplified)
-	if len(name) > 0 && name[0] == ':' {
+	h.hasSeenRegularHeader = true
+
+	// RFC 9114 §4.2: Connection-specific fields MUST NOT be present in HTTP/3 field sections;
+	// any message containing connection-specific fields MUST be treated as malformed.
+	switch name {
+	case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te":
+		h.parseErr = ErrMalformedHeader
 		return
 	}
 
@@ -236,11 +274,12 @@ func (h *responseHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorM
 	h.parseErr = ErrQPACKDecompressFailed
 }
 
-// DecodeResponseHeaders decodes a QPACK-encoded response header block into res (RFC 9204 §4.5, RFC 9114 §4.3).
+// DecodeResponseHeaders decodes a QPACK-encoded response header block into res (RFC 9204 §4.5, RFC 9114 §4.2 & §4.3).
 //
 // It decodes the mandatory :status pseudo-header and populates response header fields,
 // returning the parsed HTTP status code. If :status is missing or malformed (such as status 101,
-// prohibited in HTTP/3 by RFC 9114 §4.3.1), ErrMissingStatusHeader or ErrMalformedHeader is returned.
+// prohibited in HTTP/3 by RFC 9114 §4.3.1, or prohibited connection-specific fields per RFC 9114 §4.2),
+// ErrMissingStatusHeader or ErrMalformedHeader is returned.
 //
 // Complexity:
 //   - Time: O(B) progressive parsing across the header block of B bytes (RFC 9204 §4.5).
@@ -289,7 +328,29 @@ type trailersHandler struct {
 }
 
 func (h *trailersHandler) OnHeaderDecoded(name, value string) {
+	if h.err != nil {
+		return
+	}
+
+	// RFC 9114 §4.3: Pseudo-header fields MUST NOT appear in trailer sections.
 	if len(name) > 0 && name[0] == ':' {
+		h.err = ErrMalformedHeader
+		return
+	}
+
+	// RFC 9114 §4.2: Lowercase validation.
+	for i := range len(name) {
+		c := name[i]
+		if c <= 0x20 || c >= 0x7f || (c >= 'A' && c <= 'Z') {
+			h.err = ErrMalformedHeader
+			return
+		}
+	}
+
+	// RFC 9114 §4.2: Connection-specific fields forbidden in trailers.
+	switch name {
+	case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te":
+		h.err = ErrMalformedHeader
 		return
 	}
 

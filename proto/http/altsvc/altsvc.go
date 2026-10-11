@@ -1,3 +1,4 @@
+// Package altsvc provides parsing for HTTP Alt-Svc response headers per RFC 7838 (§3, §3.1).
 package altsvc
 
 import (
@@ -7,16 +8,17 @@ import (
 	"time"
 )
 
-// Service represents an alternative service entry (RFC 7838).
+// Service represents an alternative service entry (RFC 7838 §3).
 type Service struct {
-	ProtocolID string        // e.g., "h3", "h2"
-	Host       string        // Alternative host (can be empty, meaning same host)
-	Port       int           // Alternative port
-	MaxAge     time.Duration // ma parameter, defaults to 24 hours (86400s)
-	Persist    bool          // persist parameter
+	ProtocolID string        // e.g., "h3", "h2" (RFC 7838 §3)
+	Host       string        // Alternative host (can be empty, meaning same host) (RFC 7838 §3)
+	Port       int           // Alternative port (RFC 7838 §3)
+	MaxAge     time.Duration // ma parameter, defaults to 24 hours (86400s) (RFC 7838 §3.1)
+	Persist    bool          // persist parameter (RFC 7838 §3.1)
 }
 
-// All returns an iterator over alternative services without allocating slices.
+// All returns an iterator over alternative services without allocating slices (RFC 7838 §3).
+// Handles the special "clear" keyword to invalidate all alternative services (RFC 7838 §3).
 func All(header string) iter.Seq[Service] {
 	return func(yield func(Service) bool) {
 		if header == "clear" {
@@ -96,7 +98,7 @@ func All(header string) iter.Seq[Service] {
 	}
 }
 
-// Parse parses an Alt-Svc header value into a slice of services.
+// Parse parses an Alt-Svc header value into a slice of services (RFC 7838 §3).
 func Parse(header string) []Service {
 	var services []Service
 

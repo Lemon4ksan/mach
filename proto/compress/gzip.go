@@ -10,9 +10,9 @@ import (
 	"io"
 	"sync"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/seal/codec/compress"
 	"github.com/lemon4ksan/seal/codec/compress/gzip"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/internal/stackless"
 )
@@ -209,7 +209,7 @@ func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendGunzipBytes appends gunzipped src to dst and returns the resulting slice (RFC 1952).
+// AppendGunzipBytes appends gunzipped src to dst and returns the resulting slice (RFC 1952 §2.2 & §2.3.1).
 func AppendGunzipBytes(dst, src []byte) ([]byte, error) {
 	if len(dst) == 0 {
 		return compress.Gunzip(src, dst)
@@ -219,4 +219,14 @@ func AppendGunzipBytes(dst, src []byte) ([]byte, error) {
 		return dst, err
 	}
 	return append(dst, res...), nil
+}
+
+// AppendGunzipBytesLimit decompresses gzipped src and appends up to maxBodySize uncompressed bytes to dst (RFC 1952 §2.2 & §2.3.1).
+//
+// If maxBodySize is 0 or negative, uncompressed size is unlimited. If decompression produces
+// more than maxBodySize bytes, decompression halts and an error is returned to prevent decompression bombs.
+func AppendGunzipBytesLimit(dst, src []byte, maxBodySize int) ([]byte, error) {
+	w := &byteSliceWriter{b: dst}
+	_, err := WriteGunzipLimit(w, src, maxBodySize)
+	return w.b, err
 }

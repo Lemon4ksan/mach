@@ -68,9 +68,14 @@ func vectorHuffmanEncodeLength(src []byte) int {
 }
 
 func vectorHuffmanDecode(dst, src []byte) []byte {
+	out, _ := vectorAppendHuffmanDecode(dst, src)
+	return out
+}
+
+func vectorAppendHuffmanDecode(dst, src []byte) ([]byte, error) {
 	nSrc := len(src)
 	if nSrc == 0 {
-		return dst
+		return dst, nil
 	}
 
 	// Maximum possible decoded expansion is ~2x src length (shortest Huffman code is 5 bits for 8-bit symbol)
@@ -79,12 +84,20 @@ func vectorHuffmanDecode(dst, src []byte) []byte {
 	var (
 		stackBuf [512]byte
 		workBuf  []byte
+		bufPtr   *[]byte
 	)
 
 	if maxCap <= len(stackBuf) {
 		workBuf = stackBuf[:]
 	} else {
-		workBuf = make([]byte, maxCap)
+		bufPtr = byteStorage.Get()
+		defer byteStorage.Put(bufPtr)
+		if cap(*bufPtr) < maxCap {
+			*bufPtr = make([]byte, maxCap)
+		} else {
+			*bufPtr = (*bufPtr)[:maxCap]
+		}
+		workBuf = *bufPtr
 	}
 
 	res := int64(hpack_huffman_decode(
@@ -97,9 +110,10 @@ func vectorHuffmanDecode(dst, src []byte) []byte {
 	))
 
 	if res < 0 {
-		// Fallback to table decoder
-		return huffmanDecodeFallback(dst, src)
+		// When assembly decoder flags an error or invalid padding state,
+		// fall back to appendHuffmanDecodeFallback to produce ErrInvalidHuffman or validate.
+		return appendHuffmanDecodeFallback(dst, src)
 	}
 
-	return append(dst, workBuf[:res]...)
+	return append(dst, workBuf[:res]...), nil
 }

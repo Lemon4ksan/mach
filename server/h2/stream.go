@@ -69,6 +69,7 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 	defer hpack.ReleaseHeaderField(hf)
 
 	var hasSeenRegularHeader bool
+	sc.hpackDec.BeginHeaderBlock()
 	for len(rawBlock) > 0 {
 		hf.Reset()
 
@@ -84,15 +85,21 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 			continue
 		}
 
-		k := string(hf.KeyBytes())
-		v := string(hf.ValueBytes())
+		kBytes := hf.KeyBytes()
+		vBytes := hf.ValueBytes()
 
-		// RFC 9113 §8.2: All field names MUST be lowercase ASCII
-		for i := range len(k) {
-			if k[i] >= 'A' && k[i] <= 'Z' {
-				return coreh2.ProtocolError
-			}
+		// RFC 9113 §8.2.1: Field names MUST be lowercase ASCII and conform to field validity requirements.
+		if err := coreh2.ValidateHeaderName(kBytes, hf.IsPseudo()); err != nil {
+			return err
 		}
+
+		// RFC 9113 §8.2.1: Field values MUST NOT contain NUL, CR, or LF at any position.
+		if err := coreh2.ValidateHeaderValue(vBytes); err != nil {
+			return err
+		}
+
+		k := string(kBytes)
+		v := string(vBytes)
 
 		if hf.IsPseudo() {
 			// RFC 9113 §8.3: Pseudo-headers MUST appear before regular headers
@@ -148,30 +155,39 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 		hasSeenRegularHeader = true
 
 		// RFC 9113 §8.2.2: Connection-specific headers are prohibited in HTTP/2
-		switch k {
-		case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
+		if coreh2.IsConnectionSpecificHeader(kBytes, vBytes) {
 			return coreh2.ProtocolError
-		case "te":
-			if v != "trailers" {
-				return coreh2.ProtocolError
-			}
 		}
 
 		st.headers.Add(k, v)
 	}
 
-	// RFC 9113 §8.3.1 & RFC 8441 §4: Mandatory request pseudo-headers
+	// RFC 9113 §8.3.1, §8.5 & RFC 8441 §4: Request pseudo-header validation
 	if st.method == "" {
 		return coreh2.ProtocolError
 	}
 
-	if st.protocol != "" {
-		// RFC 8441 §4: :protocol pseudo-header is only valid on CONNECT requests with :scheme and :path
-		if st.method != "CONNECT" || st.scheme == "" || st.path == "" {
+	if st.method == "CONNECT" {
+		if st.protocol != "" {
+			// RFC 8441 §4: Extended CONNECT requires :scheme, :path, and :authority
+			if st.scheme == "" || st.path == "" || st.authority == "" {
+				return coreh2.ProtocolError
+			}
+		} else {
+			// RFC 9113 §8.5: Standard CONNECT requires :scheme and :path to be omitted, and :authority present
+			if st.scheme != "" || st.path != "" || st.authority == "" {
+				return coreh2.ProtocolError
+			}
+		}
+	} else {
+		// RFC 8441 §4: :protocol pseudo-header is only valid on CONNECT requests
+		if st.protocol != "" {
 			return coreh2.ProtocolError
 		}
-	} else if st.method != "CONNECT" && (st.scheme == "" || st.path == "") {
-		return coreh2.ProtocolError
+		// RFC 9113 §8.3.1: All other requests MUST include exactly one :method, :scheme, and :path
+		if st.scheme == "" || st.path == "" {
+			return coreh2.ProtocolError
+		}
 	}
 
 	if st.endStream {

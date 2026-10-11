@@ -5,6 +5,7 @@
 package h3
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
@@ -81,6 +82,7 @@ func NewClientConn(conn *quic.Conn, settings *coreh3.Settings) (*ClientConn, err
 	}
 
 	go cc.readUnidirectionalStreams()
+	go cc.readBidirectionalStreams()
 
 	return cc, nil
 }
@@ -128,4 +130,22 @@ func (cc *ClientConn) Close() error {
 	})
 
 	return nil
+}
+
+// readBidirectionalStreams rejects server-initiated bidirectional streams with H3_STREAM_CREATION_ERROR (RFC 9114 §6.1).
+func (cc *ClientConn) readBidirectionalStreams() {
+	for {
+		str, err := cc.conn.AcceptStream(context.Background())
+		if err != nil {
+			return
+		}
+
+		_ = cc.conn.CloseWithError(
+			quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
+			"server-initiated bidirectional stream (RFC 9114 §6.1)",
+		)
+		_ = str.Close()
+
+		return
+	}
 }

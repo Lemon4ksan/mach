@@ -7,7 +7,7 @@ package qpack
 import (
 	"fmt"
 
-	"golang.org/x/net/http2/hpack"
+	"github.com/lemon4ksan/mach/hpack"
 )
 
 // HuffmanEncoding specifies whether Huffman compression is attempted when encoding strings.
@@ -135,7 +135,7 @@ func (e *InstructionEncoder) doStartString(instWithValues *InstructionWithValues
 		e.stringVal = instWithValues.Value()
 	}
 
-	huffmanLen := hpack.HuffmanEncodeLength(e.stringVal)
+	huffmanLen := hpack.HuffmanEncodeStringLength(e.stringVal)
 	// Chromium Huffman decision rule: strictly less than unencoded size.
 	if e.huffman == HuffmanEncodingEnabled && huffmanLen < uint64(len(e.stringVal)) {
 		e.useHuffman = true

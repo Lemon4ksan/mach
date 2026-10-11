@@ -11,6 +11,7 @@ import (
 	"iter"
 	"math"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/proto/http/rodata"
@@ -39,6 +40,19 @@ var (
 
 	// ErrIndexZero indicates that a decoded index value was 0, which is forbidden (RFC 7541 §6.1).
 	ErrIndexZero = errors.New("hpack: index value of 0 is forbidden (RFC 7541 §6.1)")
+
+	// ErrInvalidHuffman indicates malformed Huffman coding, explicit EOS symbol, or invalid padding (RFC 7541 §5.2).
+	ErrInvalidHuffman = errors.New("hpack: invalid Huffman code or padding (RFC 7541 §5.2)")
+
+	// ErrTableSizeUpdateNotAllowed indicates that a dynamic table size update occurred elsewhere
+	// than at the beginning of a header block (RFC 7541 §4.2).
+	ErrTableSizeUpdateNotAllowed = errors.New("hpack: dynamic table size update MUST occur at the beginning of the header block (RFC 7541 §4.2)")
+
+	// ErrTableSizeLimitExceeded indicates that a dynamic table size update exceeds the protocol limit (RFC 7541 §4.2 & §6.3).
+	ErrTableSizeLimitExceeded = errors.New("hpack: dynamic table size update exceeds maximum capacity (RFC 7541 §4.2 & §6.3)")
+
+	// ErrIndexOutOfBounds indicates that an index exceeds the combined static and dynamic table address space (RFC 7541 §2.3.3).
+	ErrIndexOutOfBounds = errors.New("hpack: index out of bounds (RFC 7541 §2.3.3)")
 )
 
 var headerStorage = pool.NewPerCorePool(func() *HeaderField {
@@ -89,25 +103,25 @@ func (hf *HeaderField) Reset() {
 }
 
 // Size returns the entry size in octets as the sum of key length, value length, and 32 octets of overhead (RFC 7541 §4.1).
-func (hf *HeaderField) Size() uint32       { return uint32(len(hf.key) + len(hf.value) + 32) } //nolint:gosec
+func (hf *HeaderField) Size() uint32 { return uint32(len(hf.key) + len(hf.value) + 32) } //nolint:gosec
 
 // Key returns the header field name as a string.
-func (hf *HeaderField) Key() string        { return string(hf.key) }
+func (hf *HeaderField) Key() string { return string(hf.key) }
 
 // Value returns the header field value as a string.
-func (hf *HeaderField) Value() string      { return string(hf.value) }
+func (hf *HeaderField) Value() string { return string(hf.value) }
 
 // KeyBytes returns the uncopied byte slice of the header field name.
-func (hf *HeaderField) KeyBytes() []byte   { return hf.key }
+func (hf *HeaderField) KeyBytes() []byte { return hf.key }
 
 // ValueBytes returns the uncopied byte slice of the header field value.
 func (hf *HeaderField) ValueBytes() []byte { return hf.value }
 
 // IsPseudo reports whether the header field is an HTTP/2 pseudo-header beginning with a colon ':'.
-func (hf *HeaderField) IsPseudo() bool     { return len(hf.key) > 0 && hf.key[0] == ':' }
+func (hf *HeaderField) IsPseudo() bool { return len(hf.key) > 0 && hf.key[0] == ':' }
 
 // IsSensible reports whether the header field is marked sensitive and must never be indexed (RFC 7541 §6.2.3).
-func (hf *HeaderField) IsSensible() bool   { return hf.sensible }
+func (hf *HeaderField) IsSensible() bool { return hf.sensible }
 
 // Set stores the key and value strings into the header field.
 func (hf *HeaderField) Set(k, v string) {
@@ -195,21 +209,23 @@ func (hf *HeaderField) AppendBytes(dst []byte) []byte {
 
 var hpackStorage = pool.NewPerCorePool(func() *HPACK {
 	return &HPACK{
-		maxTableSize: 4096,
-		MaxCapacity:  4096,
-		dynamic:      make([]*HeaderField, 0, 16),
+		maxTableSize:           4096,
+		MaxCapacity:            4096,
+		tableSizeUpdateAllowed: true,
+		dynamic:                make([]*HeaderField, 0, 16),
 	}
 })
 
 // HPACK manages static and dynamic header compression tables and codec operations (RFC 7541).
 // The zero value is ready to use with default settings, or instances may be acquired from [AcquireHPACK].
 type HPACK struct {
-	DisableCompression  bool
-	DisableDynamicTable bool
-	dynamic             []*HeaderField
-	maxTableSize        uint32
-	dynamicSize         uint32
-	MaxCapacity         uint32
+	DisableCompression     bool
+	DisableDynamicTable    bool
+	tableSizeUpdateAllowed bool
+	dynamic                []*HeaderField
+	maxTableSize           uint32
+	dynamicSize            uint32
+	MaxCapacity            uint32
 }
 
 // AcquireHPACK retrieves an [HPACK] instance from the pool.
@@ -233,8 +249,14 @@ func (hp *HPACK) Reset() {
 	hp.maxTableSize = 4096
 	hp.MaxCapacity = 4096
 	hp.dynamicSize = 0
+	hp.tableSizeUpdateAllowed = true
 	hp.DisableCompression = false
 	hp.DisableDynamicTable = false
+}
+
+// BeginHeaderBlock signals the start of a new header block, permitting dynamic table size updates at the beginning (RFC 7541 §4.2).
+func (hp *HPACK) BeginHeaderBlock() {
+	hp.tableSizeUpdateAllowed = true
 }
 
 func (hp *HPACK) releaseDynamic() {
@@ -273,8 +295,20 @@ func (hp *HPACK) DynamicSize() uint32 {
 	return hp.dynamicSize
 }
 
+// DynamicEntries returns the number of entries currently stored in the dynamic table (RFC 7541 §2.3.2).
+func (hp *HPACK) DynamicEntries() int {
+	return len(hp.dynamic)
+}
+
 // addDynamic inserts a new header field into the dynamic table with FIFO ordering and eviction (RFC 7541 §2.3.2 & §4.4).
 func (hp *HPACK) addDynamic(hf *HeaderField) {
+	if hf.Size() > hp.maxTableSize {
+		// RFC 7541 §4.4: An attempt to add an entry larger than the maximum size
+		// causes the table to be emptied of all existing entries and results in an empty table.
+		hp.releaseDynamic()
+		return
+	}
+
 	hf2 := AcquireHeaderField()
 	hf.CopyTo(hf2)
 	hp.dynamic = append(hp.dynamic, hf2)
@@ -456,9 +490,12 @@ func (hp *HPACK) search(hf *HeaderField) (n uint64, fullMatch bool) {
 	return n, false
 }
 
-// Decode returns an iterator yielding decoded [HeaderField] entries and any decoding errors encountered in b.
+// Decode returns an iterator yielding decoded [HeaderField] entries and any decoding errors encountered in b (RFC 7541 §3.2).
 func (hp *HPACK) Decode(b []byte) iter.Seq2[*HeaderField, error] {
 	return func(yield func(*HeaderField, error) bool) {
+		// RFC 7541 §4.2: Dynamic table size updates MUST occur at the beginning of the header block.
+		hp.BeginHeaderBlock()
+
 		for len(b) > 0 {
 			hf := AcquireHeaderField()
 
@@ -493,19 +530,30 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 		switch {
 		case c&indexByte == indexByte:
 			// RFC 7541 §6.1: Indexed Header Field Representation ('1' 1-bit prefix)
+			hp.tableSizeUpdateAllowed = false
 			return hp.decodeIndexed(hf, b)
 		case c&literalByte == literalByte:
 			// RFC 7541 §6.2.1: Literal Header Field with Incremental Indexing ('01' 2-bit prefix)
+			hp.tableSizeUpdateAllowed = false
 			return hp.decodeLiteralIndexed(hf, b)
 		case c&noIndexByte == 16:
 			// RFC 7541 §6.2.3: Literal Header Field Never Indexed ('0001' 4-bit prefix)
+			hp.tableSizeUpdateAllowed = false
 			hf.sensible = true
 			return hp.decodeLiteralNoIndex(hf, b)
 		case c&noIndexByte == 0:
 			// RFC 7541 §6.2.2: Literal Header Field without Indexing ('0000' 4-bit prefix)
+			hp.tableSizeUpdateAllowed = false
 			return hp.decodeLiteralNoIndex(hf, b)
-		case c&32 == 32:
-			// RFC 7541 §6.3: Dynamic Table Size Update ('001' 3-bit prefix)
+		case c&0xe0 == 0x20:
+			// RFC 7541 §4.2 & §6.3: Dynamic Table Size Update ('001' 3-bit prefix).
+			// This dynamic table size update MUST occur at the beginning of the first header block
+			// following the change to the dynamic table size. If it occurs elsewhere, it MUST be treated
+			// as a decoding error.
+			if !hp.tableSizeUpdateAllowed {
+				return b, ErrTableSizeUpdateNotAllowed
+			}
+
 			var (
 				n   uint64
 				err error
@@ -516,11 +564,13 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 				return b, err
 			}
 			if uint32(n) > hp.MaxCapacity {
-				return b, errors.New("hpack: dynamic table size update exceeds maximum capacity")
+				return b, ErrTableSizeLimitExceeded
 			}
 
 			hp.maxTableSize = uint32(n)
 			hp.shrink()
+		default:
+			return b, errors.New("hpack: unknown header representation (RFC 7541 §6)")
 		}
 	}
 
@@ -541,7 +591,7 @@ func (hp *HPACK) decodeIndexed(hf *HeaderField, b []byte) ([]byte, error) {
 
 	hf2 := hp.peek(n)
 	if hf2 == nil {
-		return b, fmt.Errorf("index field not found: %d (RFC 7541 §2.3.3)", n)
+		return b, fmt.Errorf("%w: %d", ErrIndexOutOfBounds, n)
 	}
 
 	hf2.CopyTo(hf)
@@ -792,7 +842,7 @@ func appendInt(dst []byte, bits uint8, index uint64) []byte {
 // readString decodes an HPACK string literal representation with optional Huffman decoding (RFC 7541 §5.2).
 func readString(dst, b []byte) ([]byte, []byte, error) {
 	if len(b) == 0 {
-		return b, dst, errors.New("hpack: malformed string")
+		return b, dst, errors.New("hpack: malformed string (RFC 7541 §5.2)")
 	}
 
 	mustDecode := b[0]&128 == 128
@@ -806,16 +856,29 @@ func readString(dst, b []byte) ([]byte, []byte, error) {
 		return b, dst, err
 	}
 	if uint64(len(b)) < n {
-		return b, dst, errors.New("hpack: unexpected size")
+		return b, dst, errors.New("hpack: truncated string literal (RFC 7541 §5.2)")
 	}
 
 	if mustDecode {
-		dst = HuffmanDecode(dst, b[:n])
+		dst, err = AppendHuffmanDecode(dst, b[:n])
+		if err != nil {
+			return b, dst, err
+		}
 	} else {
 		dst = append(dst, b[:n]...)
 	}
 
 	return b[n:], dst, nil
+}
+
+// AppendHuffmanString encodes s using static HPACK Huffman coding and appends the result to dst (RFC 7541 §5.2 & Appendix B).
+func AppendHuffmanString(dst []byte, s string) []byte {
+	return HuffmanEncode(dst, bytesconv.S2B(s))
+}
+
+// HuffmanEncodeStringLength returns the byte count required to store s when Huffman encoded (RFC 7541 §5.2).
+func HuffmanEncodeStringLength(s string) uint64 {
+	return uint64(HuffmanEncodeLength(bytesconv.S2B(s)))
 }
 
 // appendString encodes a string literal with optional static Huffman coding and 7-bit length prefix (RFC 7541 §5.2).

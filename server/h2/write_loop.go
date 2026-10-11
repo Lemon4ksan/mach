@@ -109,3 +109,24 @@ func (sc *ServerConn) sendWindowUpdateFrame(streamID, inc uint32) error {
 
 	return sc.bw.Flush()
 }
+
+// writeRstStream emits an RST_STREAM frame to terminate an individual stream with an error code (RFC 9113 §6.4 & §5.4.2).
+func (sc *ServerConn) writeRstStream(streamID uint32, code coreh2.ErrorCode) error {
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	rstFr := coreh2.AcquireFrameHeader()
+	defer coreh2.ReleaseFrameHeader(rstFr)
+
+	rstFr.SetStream(streamID)
+
+	rst := coreh2.AcquireFrame(coreh2.FrameResetStream).(*coreh2.RstStream)
+	rst.SetCode(code)
+	rstFr.SetBody(rst)
+
+	if _, err := rstFr.WriteTo(sc.bw); err != nil {
+		return err
+	}
+
+	return sc.bw.Flush()
+}

@@ -302,3 +302,123 @@ func TestCompression_DecompressionBomb_Protection(t *testing.T) {
 	_, err = compress.WriteInflateLimit(&out, deflateBytes, limit)
 	require.Error(t, err)
 }
+
+func TestCompression_AppendLimit_SuccessAndBomb(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte("Decompression limit test string for RFC compliance validation: 0123456789")
+
+	// 1. Gzip (RFC 1952 §2.2, §2.3.1)
+	gzComp := compress.AppendGzipBytes(nil, payload)
+	// Unlimited
+	gzDec, err := compress.AppendGunzipBytesLimit(nil, gzComp, 0)
+	require.NoError(t, err)
+	assert.Equal(t, payload, gzDec)
+	// Exact limit
+	gzDec, err = compress.AppendGunzipBytesLimit(nil, gzComp, len(payload))
+	require.NoError(t, err)
+	assert.Equal(t, payload, gzDec)
+	// Exceeded limit (bomb protection)
+	_, err = compress.AppendGunzipBytesLimit(nil, gzComp, len(payload)-1)
+	require.Error(t, err)
+
+	// 2. Deflate / ZLIB (RFC 1950 §2.2, RFC 1951 §3.1.1)
+	flateComp := compress.AppendDeflateBytes(nil, payload)
+	// Unlimited
+	flateDec, err := compress.AppendInflateBytesLimit(nil, flateComp, 0)
+	require.NoError(t, err)
+	assert.Equal(t, payload, flateDec)
+	// Exact limit
+	flateDec, err = compress.AppendInflateBytesLimit(nil, flateComp, len(payload))
+	require.NoError(t, err)
+	assert.Equal(t, payload, flateDec)
+	// Exceeded limit
+	_, err = compress.AppendInflateBytesLimit(nil, flateComp, len(payload)-1)
+	require.Error(t, err)
+
+	// 3. Brotli (RFC 7932 §2, §9.2)
+	brComp := compress.AppendBrotliBytes(nil, payload)
+	// Unlimited
+	brDec, err := compress.AppendUnbrotliBytesLimit(nil, brComp, 0)
+	require.NoError(t, err)
+	assert.Equal(t, payload, brDec)
+	// Exact limit
+	brDec, err = compress.AppendUnbrotliBytesLimit(nil, brComp, len(payload))
+	require.NoError(t, err)
+	assert.Equal(t, payload, brDec)
+	// Exceeded limit
+	_, err = compress.AppendUnbrotliBytesLimit(nil, brComp, len(payload)-1)
+	require.Error(t, err)
+
+	// 4. Zstd (RFC 8878 §3.1.1)
+	zstdComp := compress.AppendZstdBytes(nil, payload)
+	// Unlimited
+	zstdDec, err := compress.AppendUnzstdBytesLimit(nil, zstdComp, 0)
+	require.NoError(t, err)
+	assert.Equal(t, payload, zstdDec)
+	// Exact limit
+	zstdDec, err = compress.AppendUnzstdBytesLimit(nil, zstdComp, len(payload))
+	require.NoError(t, err)
+	assert.Equal(t, payload, zstdDec)
+	// Exceeded limit
+	_, err = compress.AppendUnzstdBytesLimit(nil, zstdComp, len(payload)-1)
+	require.Error(t, err)
+}
+
+func TestCompression_ChecksumAndHeader_Validation(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte("Validation of checksums and magic headers across all codecs.")
+
+	t.Run("gzip_corrupt_crc32", func(t *testing.T) {
+		// RFC 1952 §2.2: The last 8 bytes are CRC32 (4 bytes) and ISIZE (4 bytes)
+		gz := compress.AppendGzipBytes(nil, payload)
+		require.True(t, len(gz) >= 10)
+		corrupt := slices.Clone(gz)
+		corrupt[len(corrupt)-8] ^= 0xff // Corrupt CRC32 byte
+		_, err := compress.AppendGunzipBytes(nil, corrupt)
+		require.Error(t, err)
+	})
+
+	t.Run("gzip_corrupt_id_magic", func(t *testing.T) {
+		// RFC 1952 §2.3.1: ID1 = 31 (0x1f), ID2 = 139 (0x8b)
+		gz := compress.AppendGzipBytes(nil, payload)
+		require.True(t, len(gz) >= 2)
+		assert.Equal(t, byte(0x1f), gz[0])
+		assert.Equal(t, byte(0x8b), gz[1])
+		corrupt := slices.Clone(gz)
+		corrupt[0] = 0x00
+		_, err := compress.AppendGunzipBytes(nil, corrupt)
+		require.Error(t, err)
+	})
+
+	t.Run("zlib_corrupt_adler32", func(t *testing.T) {
+		// RFC 1950 §2.2: The last 4 bytes are Adler-32 checksum
+		zl := compress.AppendDeflateBytes(nil, payload)
+		require.True(t, len(zl) >= 6)
+		corrupt := slices.Clone(zl)
+		corrupt[len(corrupt)-1] ^= 0xff // Corrupt Adler-32 byte
+		_, err := compress.AppendInflateBytes(nil, corrupt)
+		require.Error(t, err)
+	})
+
+	t.Run("zlib_corrupt_cmf_flg_header", func(t *testing.T) {
+		// RFC 1950 §2.2: CMF and FLG must satisfy (CMF*256 + FLG) % 31 == 0
+		zl := compress.AppendDeflateBytes(nil, payload)
+		require.True(t, len(zl) >= 2)
+		corrupt := slices.Clone(zl)
+		corrupt[0] ^= 0x01 // Break CMF/FLG checksum
+		_, err := compress.AppendInflateBytes(nil, corrupt)
+		require.Error(t, err)
+	})
+
+	t.Run("zstd_corrupt_magic", func(t *testing.T) {
+		// RFC 8878 §3.1.1: 4 bytes Magic Number: 0xFD2FB528 (little-endian: 0x28, 0xB5, 0x2F, 0xFD)
+		zs := compress.AppendZstdBytes(nil, payload)
+		require.True(t, len(zs) >= 4)
+		corrupt := slices.Clone(zs)
+		corrupt[0] ^= 0xff // Invalidate magic
+		_, err := compress.AppendUnzstdBytes(nil, corrupt)
+		require.Error(t, err)
+	})
+}

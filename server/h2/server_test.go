@@ -5,6 +5,7 @@
 package h2_test
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"io"
@@ -20,6 +21,8 @@ import (
 	"golang.org/x/net/http2"
 
 	h2client "github.com/lemon4ksan/mach/client/h2"
+	"github.com/lemon4ksan/mach/hpack"
+	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	machhttp "github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/server/h2"
@@ -322,4 +325,88 @@ func TestAdversarial_H2_StreamTeardown_IncompleteStreams(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for ServerConn.Release() to complete on abrupt disconnect")
 	}
+}
+
+func TestH2Server_RFC9113_MalformedHeaders_StreamReset(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	handler := func(req *h2.ServerRequest, res *h2.ServerResponse) error {
+		res.StatusCode = status.OK
+		res.Body = []byte("OK")
+		return nil
+	}
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		sc := h2.NewServerConn(conn, handler)
+		defer sc.Release()
+		_ = sc.Serve()
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	require.NoError(t, err)
+	defer clientConn.Close()
+
+	// Send preface + empty SETTINGS
+	_, err = clientConn.Write([]byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n\x00\x00\x00\x04\x00\x00\x00\x00\x00"))
+	require.NoError(t, err)
+
+	enc := hpack.AcquireHPACK()
+	defer hpack.ReleaseHPACK(enc)
+
+	// Stream 1: Send request with uppercase header name (RFC 9113 §8.2.1)
+	var headerPayload []byte
+	hf := hpack.AcquireHeaderField()
+	defer hpack.ReleaseHeaderField(hf)
+
+	for _, kv := range [][2]string{
+		{":method", "GET"},
+		{":scheme", "http"},
+		{":path", "/test"},
+		{"x-Uppercase-Header", "value"},
+	} {
+		hf.Set(kv[0], kv[1])
+		headerPayload = enc.AppendHeader(headerPayload, hf, false)
+	}
+
+	fr := coreh2.AcquireFrameHeader()
+	defer coreh2.ReleaseFrameHeader(fr)
+
+	hFrame := coreh2.AcquireFrame(coreh2.FrameHeaders).(*coreh2.Headers)
+	hFrame.SetEndHeaders(true)
+	hFrame.SetEndStream(true)
+	hFrame.SetHeaders(headerPayload)
+
+	fr.SetStream(1)
+	fr.SetFlags(coreh2.FlagEndHeaders | coreh2.FlagEndStream)
+	fr.SetBody(hFrame)
+
+	bw := bufio.NewWriter(clientConn)
+	_, err = fr.WriteTo(bw)
+	require.NoError(t, err)
+	_ = bw.Flush()
+
+	// Read frames from server until RST_STREAM on stream 1 is observed
+	br := bufio.NewReader(clientConn)
+	foundRst := false
+	for range 10 {
+		respFr, rErr := coreh2.ReadFrameFrom(br)
+		if rErr != nil {
+			break
+		}
+		if respFr.Type() == coreh2.FrameResetStream && respFr.Stream() == 1 {
+			rst := respFr.Body().(*coreh2.RstStream)
+			assert.Equal(t, coreh2.ProtocolError, rst.Code())
+			foundRst = true
+			coreh2.ReleaseFrameHeader(respFr)
+			break
+		}
+		coreh2.ReleaseFrameHeader(respFr)
+	}
+	assert.True(t, foundRst, "expected RST_STREAM(1, PROTOCOL_ERROR) for uppercase header name (RFC 9113 §8.2.1)")
 }
