@@ -10,7 +10,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/generic"
 
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/mach/proto/codec/qpack"
 )
 
 // QPACKStreamError represents a fatal protocol error detected on a QPACK unidirectional stream (RFC 9204 §6).

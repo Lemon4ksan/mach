@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // AppendHTMLEscape appends the HTML-escaped string s to dst and returns the resulting slice.
@@ -488,39 +490,15 @@ func LowercaseBytes(b []byte) {
 
 // AppendUnquotedArg decodes URL-encoded argument bytes from src, appends them to dst, and returns the slice.
 func AppendUnquotedArg(dst, src []byte) []byte {
-	return DecodeArgAppend(dst, src)
+	return uri.AppendUnquotedArg(dst, src)
 }
 
 // AppendQuotedArg URL-encodes src bytes, appends them to dst, and returns the slice (RFC 3986 §2.1).
 func AppendQuotedArg(dst, src []byte) []byte {
-	for _, c := range src {
-		switch {
-		case c == ' ':
-			dst = append(dst, '+')
-		case quotedArgShouldEscapeTable[int(c)] != 0:
-			dst = append(dst, '%', upperhex[c>>4], upperhex[c&0xf])
-		default:
-			dst = append(dst, c)
-		}
-	}
-
-	return dst
+	return uri.AppendQuotedArg(dst, src)
 }
 
 // AppendQuotedPath encodes path bytes in src according to URL path escaping rules and appends them to dst (RFC 3986 §3.3).
 func AppendQuotedPath(dst, src []byte) []byte {
-	// Fix issue in https://github.com/golang/go/issues/11202
-	if len(src) == 1 && src[0] == '*' {
-		return append(dst, '*')
-	}
-
-	for _, c := range src {
-		if quotedPathShouldEscapeTable[int(c)] != 0 {
-			dst = append(dst, '%', upperhex[c>>4], upperhex[c&0xf])
-		} else {
-			dst = append(dst, c)
-		}
-	}
-
-	return dst
+	return uri.AppendQuotedPath(dst, src)
 }

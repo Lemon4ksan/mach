@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 )
 
 // FuzzHPACKDecode tests hpack.HPACK decoder robustness against arbitrary byte inputs.

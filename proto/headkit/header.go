@@ -11,8 +11,6 @@ import (
 	"math/bits"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-
-	"github.com/lemon4ksan/mach/proto/http/header"
 )
 
 var (
@@ -452,15 +450,15 @@ func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
 func (h *Headers) IsKeepAlive(proto string) bool {
 	connHeader := h.getVal(h.packed[IdxConnection])
 	if connHeader == "" {
-		connHeader = h.Get(header.Connection)
+		connHeader = h.Get(Connection)
 	}
 
 	if proto == "HTTP/1.0" {
-		return bytesconv.EqualFoldASCII(connHeader, header.ValueKeepAlive)
+		return bytesconv.EqualFoldASCII(connHeader, ValueKeepAlive)
 	}
 
 	// For HTTP/1.1, keep-alive by default
-	isKeepAlive := !bytesconv.EqualFoldASCII(connHeader, header.ValueClose)
+	isKeepAlive := !bytesconv.EqualFoldASCII(connHeader, ValueClose)
 
 	return isKeepAlive
 }

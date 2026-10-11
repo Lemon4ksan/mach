@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	machcompress "github.com/lemon4ksan/mach/proto/compress"
+	machcompress "github.com/lemon4ksan/mach/proto/codec/compress"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )

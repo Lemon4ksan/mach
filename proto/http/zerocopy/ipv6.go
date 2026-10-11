@@ -15,6 +15,10 @@ var (
 	errInvalidIPv6Address = errors.New("invalid ipv6 address")
 )
 
+func ishex(c byte) bool {
+	return Hex2intTable[c] < 16
+}
+
 func validateIPv6Literal(host []byte) error {
 	if len(host) == 0 || host[0] != '[' {
 		return nil

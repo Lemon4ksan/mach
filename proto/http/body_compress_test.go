@@ -15,7 +15,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
-	machcompress "github.com/lemon4ksan/mach/proto/compress"
+	machcompress "github.com/lemon4ksan/mach/proto/codec/compress"
 )
 
 func TestBodyCompress_PanicRecovery(t *testing.T) {

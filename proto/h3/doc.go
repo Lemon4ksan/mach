@@ -26,6 +26,9 @@
 //   - Error Hierarchy ([ErrorCode]):
 //     Strict RFC 9114 §8.1 application error codes transmitted across QUIC stream resets
 //     and connection closure frames.
+//   - Transport Stream Abstractions ([Stream], [ReceiveStream], [SendStream]):
+//     Decouples L7 HTTP/3 wire parsing and serialization from underlying L4 QUIC transport
+//     mechanics, enforcing strict layer separation.
 //
 // # Transport Model
 //

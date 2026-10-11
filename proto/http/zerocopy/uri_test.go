@@ -481,25 +481,6 @@ func TestURIHelpersAndEdgeCases(t *testing.T) {
 		}
 	}
 
-	// isAuthorityDelimiter
-	if !isAuthorityDelimiter([]byte("//host"), 0) {
-		t.Fatal("expected isAuthorityDelimiter=true at 0")
-	}
-	if !isAuthorityDelimiter([]byte("http://host"), 5) {
-		t.Fatal("expected isAuthorityDelimiter=true for http://")
-	}
-	if isAuthorityDelimiter([]byte("path//sub"), 4) {
-		t.Fatal("expected isAuthorityDelimiter=false for path//sub")
-	}
-
-	// validOptionalPort
-	if !validOptionalPort(nil) || !validOptionalPort([]byte(":8080")) || !validOptionalPort([]byte("")) {
-		t.Fatal("validOptionalPort rejected valid ports")
-	}
-	if validOptionalPort([]byte("8080")) || validOptionalPort([]byte(":80a")) {
-		t.Fatal("validOptionalPort accepted invalid ports")
-	}
-
 	// Error types
 	escErr := EscapeError("%ZZ")
 	if escErr.Error() == "" {
@@ -508,28 +489,6 @@ func TestURIHelpersAndEdgeCases(t *testing.T) {
 	invHostErr := InvalidHostError("^")
 	if invHostErr.Error() == "" {
 		t.Fatal("InvalidHostError empty string")
-	}
-
-	// ishex and unhex
-	if !ishex('0') || !ishex('a') || !ishex('F') || ishex('g') || ishex('Z') {
-		t.Fatal("ishex failed")
-	}
-	if unhex('a') != 10 || unhex('F') != 15 || unhex('9') != 9 {
-		t.Fatal("unhex failed")
-	}
-
-	// unescape errors
-	if _, err := unescape([]byte("%2"), encodeHost); err == nil {
-		t.Fatal("expected error on truncated % escape")
-	}
-	if _, err := unescape([]byte("%2g"), encodeHost); err == nil {
-		t.Fatal("expected error on non-hex % escape")
-	}
-	if _, err := unescape([]byte("%20"), encodeHost); err == nil {
-		t.Fatal("expected error on host percent escape with ASCII < 8")
-	}
-	if _, err := unescape([]byte("^"), encodeHost); err == nil {
-		t.Fatal("expected error on invalid host character")
 	}
 }
 

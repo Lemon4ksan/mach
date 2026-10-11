@@ -14,7 +14,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/randkit"
 
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 

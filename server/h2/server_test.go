@@ -21,7 +21,7 @@ import (
 	"golang.org/x/net/http2"
 
 	h2client "github.com/lemon4ksan/mach/client/h2"
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	machhttp "github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/proto/http/status"

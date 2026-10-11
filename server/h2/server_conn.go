@@ -16,9 +16,9 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 	"golang.org/x/sys/cpu"
 
-	fsm "github.com/lemon4ksan/mach/fsm/h2"
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
+	"github.com/lemon4ksan/mach/proto/h2/fsm"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming HTTP/2 stream request (RFC 9113 §8.1).

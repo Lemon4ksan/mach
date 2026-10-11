@@ -11,8 +11,8 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
+	"github.com/lemon4ksan/mach/proto/codec/qpack"
 	"github.com/lemon4ksan/mach/proto/http"
-	"github.com/lemon4ksan/mach/qpack"
 )
 
 // EncodeRequestHeaders encodes request headers into a QPACK-encoded field section (RFC 9204 §4.5, RFC 9114 §4.3.1).

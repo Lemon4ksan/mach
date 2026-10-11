@@ -11,8 +11,8 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
+	"github.com/lemon4ksan/mach/proto/codec/qpack"
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/qpack"
 )
 
 type requestHeaderHandler struct {

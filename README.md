@@ -35,19 +35,22 @@ mach/
 │   ├── h1/                   # HTTP/1.1 Client Engine. Connection reuse, chunked transfers
 │   ├── h2/                   # HTTP/2 Client Engine. Concurrent stream multiplexing
 │   └── h3/                   # HTTP/3 Client Engine. QUIC stream lifecycle, 0-RTT transactions
-├── fsm/                      # Finite State Machines
-│   └── h2/                   # Strict RFC 9113 §5.1 HTTP/2 stream transition verifier
-├── hpack/                    # HPACK (RFC 7541) header compression codec
+├── net/                      # Network & Transport layers
+│   ├── proxy/                # SOCKS5 proxy support
+│   └── quic/                 # L4 QUIC transport engine (RFC 9000, RFC 9001, RFC 9002)
 ├── proto/                    # RFC-conforming wire mechanics (client/server agnostic)
-│   ├── compress/             # Streaming Brotli, Gzip, Deflate, Zstd decompressors
+│   ├── codec/                # Wire codecs & compression
+│   │   ├── compress/         # Streaming Brotli, Gzip, Deflate, Zstd decompressors
+│   │   ├── hpack/            # HPACK (RFC 7541) header compression codec
+│   │   └── qpack/            # QPACK (RFC 9204) header compression codec
 │   ├── h2/                   # HTTP/2 framing (RFC 9113), priority trees, flow control
+│   │   ├── fsm/              # Strict RFC 9113 §5.1 HTTP/2 stream transition verifier
 │   │   └── overlay/          # Sub-nanosecond In-Situ binary frame overlay
-│   ├── h3/                   # HTTP/3 framing (RFC 9114), datagrams, capsules
+│   ├── h3/                   # HTTP/3 framing (RFC 9114), datagrams, capsules, stream contracts
 │   ├── http/                 # HTTP/1.1 wire parser, SIMD scanner, zero-alloc Request/Response
 │   │   └── stackless/        # Goroutine-free async I/O dispatch
 │   ├── packet/               # L3/L4 packet parsers (ICMP, TCP)
 │   └── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
-├── qpack/                    # QPACK (RFC 9204) header compression codec
 ├── scripts/                  # CI & Fuzzing suites
 │   └── fuzz_all.go           # Heavy automated fuzz harness
 ├── server/                   # Server protocol engines (optimized for `sein`)
