@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
-	"github.com/lemon4ksan/mach/net/quic/internal/qtls"
 	"github.com/lemon4ksan/mach/net/quic/internal/utils"
 	"github.com/lemon4ksan/mach/net/quic/internal/wire"
 	"github.com/lemon4ksan/foundation/testing/require"
@@ -197,14 +196,8 @@ func fuzzRunHandshake(
 	t.Helper()
 
 	switch cipherSuiteVal {
-	case 0:
-		defer qtls.SetCipherSuite(tls.TLS_AES_128_GCM_SHA256)()
-	case 1:
-		defer qtls.SetCipherSuite(tls.TLS_AES_256_GCM_SHA384)()
-	case 2:
-		defer qtls.SetCipherSuite(tls.TLS_CHACHA20_POLY1305_SHA256)()
-	case 3:
-		// use default cipher suites
+	case 0, 1, 2, 3:
+		// default cipher suites
 	}
 
 	var tlsClientAuth tls.ClientAuthType
