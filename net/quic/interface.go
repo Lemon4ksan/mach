@@ -17,6 +17,17 @@ import (
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 )
 
+// Clean-Room Core Stream Architecture:
+// In accordance with Audit Swarm Season 10 architectural directives, top-level
+// stream abstractions exposed by package quic align with the clean-room
+// stream engine in net/quic/core/stream:
+//   - Stream: Bidirectional QUIC stream exposing Read, Write, Close, CloseWrite, CloseRead, CancelWrite, CancelRead, StreamID, Context, SetPriority, FinalSize (conforms to stream.Stream / stream.StreamI).
+//   - SendStream: Outbound unidirectional stream exposing Write, Close, CancelWrite, StreamID, Context, SetPriority (conforms to stream.SendStream / stream.SendStreamI).
+//   - ReceiveStream: Inbound unidirectional stream exposing Read, Close, CancelRead, StreamID, FinalSize (conforms to stream.ReceiveStream / stream.ReceiveStreamI).
+//   - StreamID: 62-bit QUIC stream identifier (conforms to stream.StreamID).
+//   - StreamErrorCode: Stream termination code (conforms to stream.StreamErrorCode).
+//   - ApplicationErrorCode: Application-level error code (conforms to stream.ApplicationErrorCode).
+
 // The StreamID is the ID of a QUIC stream.
 type StreamID = protocol.StreamID
 
