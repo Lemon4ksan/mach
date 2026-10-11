@@ -49,13 +49,15 @@ type DecoderStreamReceiverDelegate interface {
 }
 
 // EncoderStreamReceiver decodes data received on the encoder stream (RFC 9204 §4.3).
+// The zero value is not ready for use; initialize with [NewEncoderStreamReceiver].
 type EncoderStreamReceiver struct {
 	instructionDecoder *InstructionDecoder
 	delegate           EncoderStreamReceiverDelegate
 	errorDetected      bool
 }
 
-// NewEncoderStreamReceiver creates a new encoder stream receiver.
+// NewEncoderStreamReceiver creates an initialized [EncoderStreamReceiver].
+// NewEncoderStreamReceiver panics if delegate is nil.
 func NewEncoderStreamReceiver(delegate EncoderStreamReceiverDelegate) *EncoderStreamReceiver {
 	if delegate == nil {
 		panic("qpack: delegate must not be nil")
@@ -170,13 +172,15 @@ func (r *EncoderStreamReceiver) OnInstructionDecodingError(
 }
 
 // DecoderStreamReceiver decodes data received on the decoder stream (RFC 9204 §4.4).
+// The zero value is not ready for use; initialize with [NewDecoderStreamReceiver].
 type DecoderStreamReceiver struct {
 	instructionDecoder *InstructionDecoder
 	delegate           DecoderStreamReceiverDelegate
 	errorDetected      bool
 }
 
-// NewDecoderStreamReceiver creates a new decoder stream receiver.
+// NewDecoderStreamReceiver creates an initialized [DecoderStreamReceiver].
+// NewDecoderStreamReceiver panics if delegate is nil.
 func NewDecoderStreamReceiver(delegate DecoderStreamReceiverDelegate) *DecoderStreamReceiver {
 	if delegate == nil {
 		panic("qpack: delegate must not be nil")

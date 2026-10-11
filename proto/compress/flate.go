@@ -56,8 +56,7 @@ var flateReaderPool sync.Pool
 // AcquireStacklessDeflateWriter acquires an asynchronous stackless Deflate writer targeting w at the given compression level (RFC 1951).
 //
 // It offloads deflate compression work to a dedicated worker pool, avoiding stack expansion on the caller goroutine.
-// Callers must return the writer to the pool with ReleaseStacklessDeflateWriter when completed.
-// Concurrency: Acquired writer is single-goroutine; pool acquisition is thread-safe.
+// Callers must return the writer to the pool with [ReleaseStacklessDeflateWriter] when completed.
 func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
 	nLevel := normalizeCompressLevel(level)
 	p := stacklessDeflateWriterPoolMap[nLevel]
@@ -78,7 +77,6 @@ func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
 // ReleaseStacklessDeflateWriter closes sw and returns it to the corresponding deflate pool (RFC 1951).
 //
 // Callers must not use sw after calling ReleaseStacklessDeflateWriter.
-// Concurrency: Thread-safe.
 func ReleaseStacklessDeflateWriter(sw stackless.Writer, level int) {
 	_ = sw.Close()
 
@@ -129,15 +127,15 @@ var (
 )
 
 // AppendDeflateBytesLevel appends deflated src to dst using the given
-// compression level and returns the resulting dst (RFC 1951).
+// compression level and returns the resulting slice (RFC 1951).
 //
 // Supported compression levels are:
 //
-//   - CompressNoCompression
-//   - CompressBestSpeed
-//   - CompressBestCompression
-//   - CompressDefaultCompression
-//   - CompressHuffmanOnly
+//   - [CompressNoCompression]
+//   - [CompressBestSpeed]
+//   - [CompressBestCompression]
+//   - [CompressDefaultCompression]
+//   - [CompressHuffmanOnly]
 func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 	w := &byteSliceWriter{b: dst}
 	_, _ = WriteDeflateLevel(w, src, level)
@@ -150,11 +148,11 @@ func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 //
 // Supported compression levels are:
 //
-//   - CompressNoCompression
-//   - CompressBestSpeed
-//   - CompressBestCompression
-//   - CompressDefaultCompression
-//   - CompressHuffmanOnly
+//   - [CompressNoCompression]
+//   - [CompressBestSpeed]
+//   - [CompressBestCompression]
+//   - [CompressDefaultCompression]
+//   - [CompressHuffmanOnly]
 func WriteDeflateLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
@@ -200,13 +198,13 @@ func nonblockingWriteDeflate(ctxv any) {
 	releaseRealDeflateWriter(zw, ctx.level)
 }
 
-// WriteDeflate writes deflated p to w using default compression level and returns the number of compressed
+// WriteDeflate writes deflated p to w using [CompressDefaultCompression] and returns the number of compressed
 // bytes written to w (RFC 1951).
 func WriteDeflate(w io.Writer, p []byte) (int, error) {
 	return WriteDeflateLevel(w, p, CompressDefaultCompression)
 }
 
-// AppendDeflateBytes appends deflated src to dst using default compression level and returns the resulting dst (RFC 1951).
+// AppendDeflateBytes appends deflated src to dst using [CompressDefaultCompression] and returns the resulting slice (RFC 1951).
 func AppendDeflateBytes(dst, src []byte) []byte {
 	return AppendDeflateBytesLevel(dst, src, CompressDefaultCompression)
 }
@@ -239,7 +237,7 @@ func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendInflateBytes appends inflated src to dst and returns the resulting dst (RFC 1951).
+// AppendInflateBytes appends inflated src to dst and returns the resulting slice (RFC 1951).
 func AppendInflateBytes(dst, src []byte) ([]byte, error) {
 	w := &byteSliceWriter{b: dst}
 	_, err := WriteInflate(w, src)

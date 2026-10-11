@@ -43,6 +43,7 @@ type DecodingCompletedVisitor interface {
 }
 
 // ProgressiveDecoder decodes a single header block progressively (RFC 9204 §4.5).
+// The zero value is not ready for use; initialize with [NewProgressiveDecoder].
 type ProgressiveDecoder struct {
 	streamID        uint64
 	maxBufferedData uint64
@@ -68,7 +69,7 @@ type ProgressiveDecoder struct {
 	lastErr       error
 }
 
-// NewProgressiveDecoder creates a new progressive decoder for streamID.
+// NewProgressiveDecoder creates an initialized [ProgressiveDecoder] for streamID.
 func NewProgressiveDecoder(
 	streamID uint64,
 	maxBufferedData uint64,

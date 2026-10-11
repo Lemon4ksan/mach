@@ -70,7 +70,7 @@ func (dt *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		tr = http.DefaultTransport
 	}
 
-	req1 := dt.cloneReq(req, true)
+	req1 := dt.cloneReq(req)
 
 	res, err := tr.RoundTrip(req1)
 	if err != nil || res.StatusCode != http.StatusUnauthorized {
@@ -115,7 +115,7 @@ func (dt *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, ErrDigestBadChallenge
 	}
 
-	req2 := dt.cloneReq(req, false)
+	req2 := dt.cloneReq(req)
 
 	cred, err := dt.createCredentials(cha, req2)
 	if err != nil {
@@ -146,7 +146,7 @@ func (dt *Transport) CloneTransport(next http.RoundTripper) http.RoundTripper {
 	}
 }
 
-func (dt *Transport) cloneReq(r *http.Request, first bool) *http.Request {
+func (dt *Transport) cloneReq(r *http.Request) *http.Request {
 	r1 := r.Clone(r.Context())
 
 	return r1
@@ -419,11 +419,11 @@ func (dc *digestCredentials) String() string {
 			}
 		}
 
+		userStr := "username*=UTF-8''" + encodeRFC8187Simple(dc.username)
 		if isASCII {
-			sl = append(sl, `username="`+dc.username+`"`)
-		} else {
-			sl = append(sl, "username*=UTF-8''"+encodeRFC8187Simple(dc.username))
+			userStr = `username="` + dc.username + `"`
 		}
+		sl = append(sl, userStr)
 	}
 
 	sl = append(sl, `realm="`+dc.realm+`"`)
@@ -463,11 +463,12 @@ func encodeRFC8187Simple(s string) string {
 		b := s[i]
 		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') {
 			_ = sb.WriteByte(b)
-		} else {
-			_ = sb.WriteByte('%')
-			_ = sb.WriteByte(hexChars[b>>4])
-			_ = sb.WriteByte(hexChars[b&0x0F])
+			continue
 		}
+
+		_ = sb.WriteByte('%')
+		_ = sb.WriteByte(hexChars[b>>4])
+		_ = sb.WriteByte(hexChars[b&0x0F])
 	}
 
 	return string(sb.Bytes())

@@ -104,18 +104,15 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 			return
 		}
 
-		if firstFrame {
-			if frameType != coreh3.FrameTypeSettings {
-				_ = sc.quicConn.CloseWithError(
-					quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
-					"missing SETTINGS on control stream (RFC 9114 §6.2.1)",
-				)
+		if firstFrame && frameType != coreh3.FrameTypeSettings {
+			_ = sc.quicConn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
+				"missing SETTINGS on control stream (RFC 9114 §6.2.1)",
+			)
 
-				return
-			}
-
-			firstFrame = false
-		} else if frameType == coreh3.FrameTypeSettings {
+			return
+		}
+		if !firstFrame && frameType == coreh3.FrameTypeSettings {
 			// RFC 9114 §7.2.4: A second SETTINGS frame MUST cause H3_FRAME_UNEXPECTED
 			_ = sc.quicConn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
@@ -124,6 +121,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 
 			return
 		}
+		firstFrame = false
 
 		switch frameType {
 		case coreh3.FrameTypeSettings:

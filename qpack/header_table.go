@@ -101,6 +101,7 @@ func (rb *qpackRingBuffer) PopFront() *Entry {
 
 // HeaderTableBase is the base struct for encoder and decoder dynamic header tables.
 // It manages capacity enforcement, byte tracking, dynamic entry storage, and FIFO eviction.
+// The zero value is not ready for use; embedded within [EncoderHeaderTable] or [DecoderHeaderTable].
 type HeaderTableBase struct {
 	dynamicEntries              qpackRingBuffer
 	dynamicTableSize            uint64
@@ -125,15 +126,14 @@ func (t *HeaderTableBase) initBase() {
 	t.removeEntryFromEndHook = t.baseRemoveEntryFromEnd
 }
 
-// EntryFitsDynamicTableCapacity returns whether an entry with name and value has a size
-// (including 32 bytes overhead) smaller than or equal to the capacity of the dynamic table.
+// EntryFitsDynamicTableCapacity reports whether an entry with name and value fits within the current dynamic table capacity.
 func (t *HeaderTableBase) EntryFitsDynamicTableCapacity(name, value string) bool {
 	return EntrySize(name, value) <= t.dynamicTableCapacity
 }
 
-// InsertEntry inserts (name, value) into the dynamic table. Entry must not be larger than
-// the capacity of the dynamic table. May evict older entries.
+// InsertEntry inserts a name-value pair into the dynamic table, evicting older entries as necessary.
 // Returns the zero-based absolute index of the inserted dynamic table entry.
+// InsertEntry panics if the size of the entry exceeds the dynamic table capacity.
 func (t *HeaderTableBase) InsertEntry(name, value string) uint64 {
 	entrySize := EntrySize(name, value)
 	if entrySize > t.dynamicTableCapacity {
@@ -152,8 +152,8 @@ func (t *HeaderTableBase) InsertEntry(name, value string) uint64 {
 	return index
 }
 
-// SetDynamicTableCapacity changes the dynamic table capacity.
-// Returns true on success. Returns false if capacity exceeds maximumDynamicTableCapacity.
+// SetDynamicTableCapacity changes the dynamic table capacity in bytes.
+// Returns true on success, or false if capacity exceeds maximumDynamicTableCapacity.
 func (t *HeaderTableBase) SetDynamicTableCapacity(capacity uint64) bool {
 	if capacity > t.maximumDynamicTableCapacity {
 		return false
@@ -178,14 +178,14 @@ func (t *HeaderTableBase) SetMaximumDynamicTableCapacity(maximumDynamicTableCapa
 	return maximumDynamicTableCapacity == t.maximumDynamicTableCapacity
 }
 
-// EvictDownToCapacity evicts entries from the dynamic table until table size is <= capacity.
+// EvictDownToCapacity evicts entries from the dynamic table until table size is less than or equal to capacity.
 func (t *HeaderTableBase) EvictDownToCapacity(capacity uint64) {
 	for t.dynamicTableSize > capacity {
 		t.RemoveEntryFromEnd()
 	}
 }
 
-// RemoveEntryFromEnd removes a single entry from the dynamic table via hook delegation.
+// RemoveEntryFromEnd removes the oldest single entry from the dynamic table via hook delegation.
 func (t *HeaderTableBase) RemoveEntryFromEnd() {
 	if t.removeEntryFromEndHook != nil {
 		t.removeEntryFromEndHook()
@@ -207,34 +207,42 @@ func (t *HeaderTableBase) baseRemoveEntryFromEnd() {
 	t.droppedEntryCount++
 }
 
+// DynamicTableSize returns the current cumulative size of all entries in the dynamic table in bytes.
 func (t *HeaderTableBase) DynamicTableSize() uint64 {
 	return t.dynamicTableSize
 }
 
+// DynamicTableCapacity returns the current dynamic table capacity in bytes.
 func (t *HeaderTableBase) DynamicTableCapacity() uint64 {
 	return t.dynamicTableCapacity
 }
 
+// MaximumDynamicTableCapacity returns the maximum allowed dynamic table capacity in bytes.
 func (t *HeaderTableBase) MaximumDynamicTableCapacity() uint64 {
 	return t.maximumDynamicTableCapacity
 }
 
+// MaxEntries returns the maximum number of dynamic table entries based on maximum capacity.
 func (t *HeaderTableBase) MaxEntries() uint64 {
 	return t.maxEntries
 }
 
+// InsertedEntryCount returns the total number of entries inserted into the dynamic table over its lifetime.
 func (t *HeaderTableBase) InsertedEntryCount() uint64 {
 	return t.droppedEntryCount + uint64(t.dynamicEntries.size())
 }
 
+// DroppedEntryCount returns the total number of dynamic table entries that have been evicted.
 func (t *HeaderTableBase) DroppedEntryCount() uint64 {
 	return t.droppedEntryCount
 }
 
+// SetDynamicTableEntryReferenced marks that at least one dynamic table entry has been referenced.
 func (t *HeaderTableBase) SetDynamicTableEntryReferenced() {
 	t.dynamicTableEntryReferenced = true
 }
 
+// DynamicTableEntryReferenced reports whether any dynamic table entries have been referenced.
 func (t *HeaderTableBase) DynamicTableEntryReferenced() bool {
 	return t.dynamicTableEntryReferenced
 }
@@ -243,26 +251,33 @@ func (t *HeaderTableBase) DynamicTableEntryReferenced() bool {
 type MatchType int
 
 const (
+	// MatchTypeNoMatch indicates neither name nor value matched in the header table.
 	MatchTypeNoMatch MatchType = iota
+	// MatchTypeName indicates only the header name matched in the header table.
 	MatchTypeName
+	// MatchTypeNameAndValue indicates both header name and value matched in the header table.
 	MatchTypeNameAndValue
 )
 
 // Chromium naming aliases for 1:1 unit test parity
 const (
-	MatchNoMatch      = MatchTypeNoMatch
-	MatchName         = MatchTypeName
+	// MatchNoMatch is an alias for [MatchTypeNoMatch].
+	MatchNoMatch = MatchTypeNoMatch
+	// MatchName is an alias for [MatchTypeName].
+	MatchName = MatchTypeName
+	// MatchNameAndValue is an alias for [MatchTypeNameAndValue].
 	MatchNameAndValue = MatchTypeNameAndValue
 
-	// Deprecated: use MatchTypeNoMatch.
+	// Deprecated: use [MatchTypeNoMatch].
 	KNoMatch = MatchTypeNoMatch
-	// Deprecated: use MatchTypeName.
+	// Deprecated: use [MatchTypeName].
 	KName = MatchTypeName
-	// Deprecated: use MatchTypeNameAndValue.
+	// Deprecated: use [MatchTypeNameAndValue].
 	KNameAndValue = MatchTypeNameAndValue
 )
 
-// MatchResult describes the result of a header lookup.
+// MatchResult describes the result of a header table lookup.
+// The zero value is ready to use.
 type MatchResult struct {
 	Match    MatchType
 	IsStatic bool
@@ -276,6 +291,7 @@ type qpackLookupEntry struct {
 }
 
 // EncoderHeaderTable manages dynamic and static table lookups for the encoder.
+// The zero value is not ready for use; initialize with [NewEncoderHeaderTable].
 type EncoderHeaderTable struct {
 	HeaderTableBase
 
@@ -284,7 +300,7 @@ type EncoderHeaderTable struct {
 	smallestAllowedIndex uint64
 }
 
-// NewEncoderHeaderTable constructs an initialized EncoderHeaderTable.
+// NewEncoderHeaderTable constructs an initialized [EncoderHeaderTable].
 func NewEncoderHeaderTable() *EncoderHeaderTable {
 	t := &EncoderHeaderTable{
 		dynamicIndex:     make(map[qpackLookupEntry]uint64),
@@ -454,7 +470,9 @@ func (t *EncoderHeaderTable) Entries() iter.Seq2[uint64, *Entry] {
 // DecoderHeaderTableObserver is notified when the dynamic table insert count
 // reaches a specified threshold, or when the table is cancelled/destroyed.
 type DecoderHeaderTableObserver interface {
+	// OnInsertCountReachedThreshold is invoked when the dynamic table insert count meets or exceeds the required threshold.
 	OnInsertCountReachedThreshold()
+	// Cancel is invoked when the dynamic table observer is cancelled or the table is closed.
 	Cancel()
 }
 
@@ -464,13 +482,14 @@ type observerEntry struct {
 }
 
 // DecoderHeaderTable manages dynamic table lookups and blocking observers for the decoder.
+// The zero value is not ready for use; initialize with [NewDecoderHeaderTable].
 type DecoderHeaderTable struct {
 	HeaderTableBase
 
 	observers []observerEntry
 }
 
-// NewDecoderHeaderTable constructs an initialized DecoderHeaderTable.
+// NewDecoderHeaderTable constructs an initialized [DecoderHeaderTable].
 func NewDecoderHeaderTable() *DecoderHeaderTable {
 	t := &DecoderHeaderTable{
 		observers: make([]observerEntry, 0, 8),
@@ -500,6 +519,7 @@ func (t *DecoderHeaderTable) InsertEntry(name, value string) uint64 {
 }
 
 // RegisterObserver registers an observer to be notified when insertedEntryCount reaches requiredInsertCount.
+// RegisterObserver panics if requiredInsertCount is zero.
 func (t *DecoderHeaderTable) RegisterObserver(requiredInsertCount uint64, observer DecoderHeaderTableObserver) {
 	if requiredInsertCount == 0 {
 		panic("qpack: requiredInsertCount must be > 0")
@@ -518,7 +538,7 @@ func (t *DecoderHeaderTable) RegisterObserver(requiredInsertCount uint64, observ
 	t.observers = append(t.observers[:idx], append([]observerEntry{entry}, t.observers[idx:]...)...)
 }
 
-// UnregisterObserver removes a previously registered observer.
+// UnregisterObserver removes a previously registered [DecoderHeaderTableObserver].
 func (t *DecoderHeaderTable) UnregisterObserver(requiredInsertCount uint64, observer DecoderHeaderTableObserver) {
 	for i, o := range t.observers {
 		if o.requiredInsertCount == requiredInsertCount && o.observer == observer {

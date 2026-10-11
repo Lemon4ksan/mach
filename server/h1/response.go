@@ -36,10 +36,9 @@ func (r *Response) Reset() {
 	r.Headers.Reset()
 	r.Cookies = r.Cookies[:0]
 
+	r.Body = r.Body[:0]
 	if cap(r.Body) > 64*1024 {
 		r.Body = make([]byte, 0, 1024)
-	} else {
-		r.Body = r.Body[:0]
 	}
 
 	r.StreamWriter = nil
@@ -80,12 +79,10 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 	}
 
 	// 3. Connection Header
-	if keepAlive {
-		if r.Headers.Get(header.Connection) == "" {
-			_, _ = bw.Write(hdrConnectionKeepAlive)
-		}
-	} else {
+	if !keepAlive {
 		_, _ = bw.Write(hdrConnectionClose)
+	} else if r.Headers.Get(header.Connection) == "" {
+		_, _ = bw.Write(hdrConnectionKeepAlive)
 	}
 
 	// 4. Transfer-Encoding or Content-Length
@@ -93,14 +90,13 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 		if r.Headers.Get(header.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
-	} else if code != status.NoContent && code != status.NotModified {
-		if r.Headers.Get(header.ContentLength) == "" && r.Headers.Get(header.TransferEncoding) == "" {
-			var clBuf [24]byte
+	} else if code != status.NoContent && code != status.NotModified &&
+		r.Headers.Get(header.ContentLength) == "" && r.Headers.Get(header.TransferEncoding) == "" {
+		var clBuf [24]byte
 
-			_, _ = bw.Write(hdrContentLengthPrefix)
-			_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(len(r.Body)), 10))
-			_, _ = bw.Write(hdrCRLF)
-		}
+		_, _ = bw.Write(hdrContentLengthPrefix)
+		_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(len(r.Body)), 10))
+		_, _ = bw.Write(hdrCRLF)
 	}
 
 	// 5. User Headers
@@ -125,10 +121,6 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 
 	if len(r.Body) > 0 && code != status.NoContent && code != status.NotModified {
 		_, _ = bw.Write(r.Body)
-	}
-
-	if flush {
-		return nil
 	}
 
 	return nil

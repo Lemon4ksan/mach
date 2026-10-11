@@ -129,6 +129,11 @@ func (s *Settings) Encode() []byte {
 }
 
 // DecodeSettings decodes an incoming H3 SETTINGS frame and verifies that no reserved HTTP/2 settings are present (RFC 9114 §7.2.4 & §7.2.4.1).
+//
+// Complexity:
+//   - Time: O(N) where N is payloadLen in bytes. Each setting parameter ID and value pair is decoded as a
+//     QUIC varint and validated against seen identifiers and reserved HTTP/2 settings in O(1) amortized time.
+//   - Space: O(S) where S is the count of unique settings parameters retained in the seen map and Other map.
 func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 	lr := io.LimitReader(r, int64(payloadLen)) //nolint:gosec // payloadLen fits int64
 	qr := varint.NewReader(lr)

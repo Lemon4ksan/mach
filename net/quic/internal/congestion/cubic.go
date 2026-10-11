@@ -130,9 +130,12 @@ func (c *Cubic) OnApplicationLimited() {
 	c.epoch = 0
 }
 
-// CongestionWindowAfterPacketLoss computes a new congestion window to use after
-// a loss event. Returns the new congestion window in packets. The new
-// congestion window is a multiplicative decrease of our current window.
+// CongestionWindowAfterPacketLoss computes a new congestion window following packet loss (RFC 8312 §4.5, RFC 9002 §7).
+// Applies multiplicative decrease backoff (beta or betaLastMax) and resets epoch time.
+//
+// Complexity:
+//   - Time: O(1) scalar floating point multiplication and state updates.
+//   - Space: O(1) zero heap allocations.
 func (c *Cubic) CongestionWindowAfterPacketLoss(currentCongestionWindow protocol.ByteCount) protocol.ByteCount {
 	if currentCongestionWindow+maxDatagramSize < c.lastMaxCongestionWindow {
 		// We never reached the old max, so assume we are competing with another
@@ -147,10 +150,12 @@ func (c *Cubic) CongestionWindowAfterPacketLoss(currentCongestionWindow protocol
 	return protocol.ByteCount(float32(currentCongestionWindow) * c.beta())
 }
 
-// CongestionWindowAfterAck computes a new congestion window to use after a received ACK.
-// Returns the new congestion window in packets. The new congestion window
-// follows a cubic function that depends on the time passed since last
-// packet loss.
+// CongestionWindowAfterAck computes the updated congestion window upon ACK receipt (RFC 8312 §4.1-§4.3, RFC 9002 §7).
+// Evaluates the fixed-point CUBIC polynomial curve and TCP-friendly Reno emulation.
+//
+// Complexity:
+//   - Time: O(1) closed-form algebraic evaluation; initializes epoch with O(1) math.Cbrt and bit-shifts.
+//   - Space: O(1) zero heap allocations.
 func (c *Cubic) CongestionWindowAfterAck(
 	ackedBytes protocol.ByteCount,
 	currentCongestionWindow protocol.ByteCount,

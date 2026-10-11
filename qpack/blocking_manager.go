@@ -12,6 +12,7 @@ import (
 )
 
 // IndexSet tracks the minimum and maximum dynamic table indices referenced in a header block (RFC 9204).
+// The zero value is ready to use, or instances may be created with [NewIndexSet].
 type IndexSet struct {
 	indices  []uint64
 	minIndex uint64
@@ -19,7 +20,7 @@ type IndexSet struct {
 	hasIndex bool
 }
 
-// NewIndexSet constructs an empty IndexSet.
+// NewIndexSet creates an empty [IndexSet].
 func NewIndexSet() *IndexSet {
 	return &IndexSet{}
 }
@@ -98,6 +99,7 @@ func (s *IndexSet) All() iter.Seq[uint64] {
 }
 
 // HeaderData represents unacknowledged dynamic table references for a single header block (RFC 9204).
+// The zero value is ready to use, or instances may be created with [NewHeaderData] or [NewHeaderDataWithRIC].
 type HeaderData struct {
 	indices             []uint64
 	requiredInsertCount uint64
@@ -105,7 +107,7 @@ type HeaderData struct {
 	hasMinIndex         bool
 }
 
-// NewHeaderData creates HeaderData from a slice of dynamic table indices (encoder path).
+// NewHeaderData creates [HeaderData] from a slice of dynamic table indices (encoder path).
 func NewHeaderData(indices []uint64) HeaderData {
 	if len(indices) == 0 {
 		return HeaderData{
@@ -137,7 +139,7 @@ func NewHeaderData(indices []uint64) HeaderData {
 	}
 }
 
-// NewHeaderDataWithRIC creates HeaderData directly from Required Insert Count (decoder path).
+// NewHeaderDataWithRIC creates [HeaderData] directly from Required Insert Count (decoder path).
 func NewHeaderDataWithRIC(requiredInsertCount uint64) HeaderData {
 	return HeaderData{
 		indices:             nil,
@@ -164,6 +166,7 @@ func (h HeaderData) MinIndex() (uint64, bool) {
 
 // BlockingManager manages blocked streams, in-flight header block dependencies,
 // dynamic table eviction barriers, and known received counts per RFC 9204.
+// The zero value is not ready for use; initialize with [NewBlockingManager] or [NewBlockingManagerWithMax].
 type BlockingManager struct {
 	// streamMap maps stream ID -> FIFO queue of unacknowledged HeaderData
 	streamMap map[uint64][]HeaderData
@@ -184,9 +187,7 @@ type BlockingManager struct {
 	maxBlockedStreams uint64
 }
 
-// Note: In Go, NewBlockingManager is the standard constructor function for BlockingManager.
-
-// NewBlockingManager constructs an initialized BlockingManager.
+// NewBlockingManager creates an initialized [BlockingManager].
 // An optional argument specifies maxBlockedStreams.
 func NewBlockingManager(maxBlockedStreams ...uint64) *BlockingManager {
 	maxVal := uint64(0)
@@ -204,7 +205,7 @@ func NewBlockingManager(maxBlockedStreams ...uint64) *BlockingManager {
 	}
 }
 
-// NewBlockingManagerWithMax constructs a manager with an explicit maxBlockedStreams limit.
+// NewBlockingManagerWithMax creates a [BlockingManager] with an explicit maxBlockedStreams limit.
 func NewBlockingManagerWithMax(maxBlockedStreams uint64) *BlockingManager {
 	return NewBlockingManager(maxBlockedStreams)
 }

@@ -27,10 +27,8 @@ func releaseGzipReader(zr *gzip.Reader) {
 
 // AcquireStacklessGzipWriter acquires an asynchronous stackless Gzip writer targeting w at the given compression level (RFC 1952).
 //
-// It shields calling goroutines from large stack allocations by offloading compression work
-// to a worker pool managed by stackless.Writer. Callers must release the returned writer
-// using ReleaseStacklessGzipWriter when finished.
-// Concurrency: Acquired writer is single-goroutine; pool acquisition is thread-safe.
+// It offloads compression work to a dedicated worker pool, avoiding stack expansion on the caller goroutine.
+// Callers must release the returned writer using [ReleaseStacklessGzipWriter] when finished.
 func AcquireStacklessGzipWriter(w io.Writer, level int) stackless.Writer {
 	nLevel := normalizeCompressLevel(level)
 	p := stacklessGzipWriterPoolMap[nLevel]
@@ -51,7 +49,6 @@ func AcquireStacklessGzipWriter(w io.Writer, level int) stackless.Writer {
 // ReleaseStacklessGzipWriter closes sw and returns it to the corresponding compression level pool (RFC 1952).
 //
 // Callers must not use sw after calling ReleaseStacklessGzipWriter.
-// Concurrency: Thread-safe.
 func ReleaseStacklessGzipWriter(sw stackless.Writer, level int) {
 	_ = sw.Close()
 
@@ -102,21 +99,15 @@ var (
 )
 
 // AppendGzipBytesLevel appends gzipped src to dst using the given
-// compression level and returns the resulting dst (RFC 1952).
+// compression level and returns the resulting slice (RFC 1952).
 //
 // Supported compression levels are:
 //
-//   - CompressNoCompression
-// AppendGzipBytesLevel appends gzipped src to dst using the given
-// compression level and returns the resulting dst (RFC 1952).
-//
-// Supported compression levels are:
-//
-//   - CompressNoCompression
-//   - CompressBestSpeed
-//   - CompressBestCompression
-//   - CompressDefaultCompression
-//   - CompressHuffmanOnly
+//   - [CompressNoCompression]
+//   - [CompressBestSpeed]
+//   - [CompressBestCompression]
+//   - [CompressDefaultCompression]
+//   - [CompressHuffmanOnly]
 func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 	w := &byteSliceWriter{b: dst}
 	_, _ = WriteGzipLevel(w, src, level)
@@ -129,11 +120,11 @@ func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 //
 // Supported compression levels are:
 //
-//   - CompressNoCompression
-//   - CompressBestSpeed
-//   - CompressBestCompression
-//   - CompressDefaultCompression
-//   - CompressHuffmanOnly
+//   - [CompressNoCompression]
+//   - [CompressBestSpeed]
+//   - [CompressBestCompression]
+//   - [CompressDefaultCompression]
+//   - [CompressHuffmanOnly]
 func WriteGzipLevel(w io.Writer, p []byte, level int) (int, error) {
 	switch w.(type) {
 	case *byteSliceWriter,
@@ -179,13 +170,13 @@ func nonblockingWriteGzip(ctxv any) {
 	releaseRealGzipWriter(zw, ctx.level)
 }
 
-// WriteGzip writes gzipped p to w using default compression level and returns the number of compressed
+// WriteGzip writes gzipped p to w using [CompressDefaultCompression] and returns the number of compressed
 // bytes written to w (RFC 1952).
 func WriteGzip(w io.Writer, p []byte) (int, error) {
 	return WriteGzipLevel(w, p, CompressDefaultCompression)
 }
 
-// AppendGzipBytes appends gzipped src to dst using default compression and returns the resulting dst (RFC 1952).
+// AppendGzipBytes appends gzipped src to dst using [CompressDefaultCompression] and returns the resulting slice (RFC 1952).
 func AppendGzipBytes(dst, src []byte) []byte {
 	return AppendGzipBytesLevel(dst, src, CompressDefaultCompression)
 }
@@ -218,7 +209,7 @@ func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendGunzipBytes appends gunzipped src to dst and returns the resulting dst (RFC 1952).
+// AppendGunzipBytes appends gunzipped src to dst and returns the resulting slice (RFC 1952).
 func AppendGunzipBytes(dst, src []byte) ([]byte, error) {
 	if len(dst) == 0 {
 		return compress.Gunzip(src, dst)

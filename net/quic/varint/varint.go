@@ -113,8 +113,12 @@ func Decode(payload []byte) (val uint64, readLen int, err error) {
 	return 0, 0, ErrInvalidTag
 }
 
-// DecodeSeq returns a push iterator yielding successive decoded varint values and their byte lengths from payload.
+// DecodeSeq returns a push iterator yielding successive decoded varint values and their byte lengths from payload (RFC 9000 §16).
 // Iteration stops when payload is exhausted, a truncated or malformed varint is encountered, or yield returns false.
+//
+// Complexity:
+//   - Time: O(N) where N is len(payload). Consumes variable-length integers (1, 2, 4, or 8 bytes) sequentially in linear time.
+//   - Space: O(1) zero heap allocations; yields directly via stack frame parameters.
 func DecodeSeq(payload []byte) iter.Seq2[uint64, int] {
 	return func(yield func(uint64, int) bool) {
 		for len(payload) > 0 {
@@ -130,8 +134,12 @@ func DecodeSeq(payload []byte) iter.Seq2[uint64, int] {
 	}
 }
 
-// Values returns a push iterator yielding successive decoded varint values from payload.
+// Values returns a push iterator yielding successive decoded varint values from payload (RFC 9000 §16).
 // Iteration stops when payload is exhausted, a truncated or malformed varint is encountered, or yield returns false.
+//
+// Complexity:
+//   - Time: O(N) where N is len(payload).
+//   - Space: O(1) zero heap allocations.
 func Values(payload []byte) iter.Seq[uint64] {
 	return func(yield func(uint64) bool) {
 		for len(payload) > 0 {

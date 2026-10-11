@@ -141,21 +141,23 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 				// RFC 9113 §8.3: Unknown or invalid pseudo-header
 				return coreh2.ProtocolError
 			}
-		} else {
-			hasSeenRegularHeader = true
 
-			// RFC 9113 §8.2.2: Connection-specific headers are prohibited in HTTP/2
-			switch k {
-			case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
-				return coreh2.ProtocolError
-			case "te":
-				if v != "trailers" {
-					return coreh2.ProtocolError
-				}
-			}
-
-			st.headers.Add(k, v)
+			continue
 		}
+
+		hasSeenRegularHeader = true
+
+		// RFC 9113 §8.2.2: Connection-specific headers are prohibited in HTTP/2
+		switch k {
+		case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
+			return coreh2.ProtocolError
+		case "te":
+			if v != "trailers" {
+				return coreh2.ProtocolError
+			}
+		}
+
+		st.headers.Add(k, v)
 	}
 
 	// RFC 9113 §8.3.1 & RFC 8441 §4: Mandatory request pseudo-headers

@@ -136,6 +136,14 @@ func (f *framer) QueueControlFrame(frame wire.Frame) {
 	f.controlFrames = append(f.controlFrames, frame)
 }
 
+// Append serializes queued control frames and multiplexes stream data frames up to maxLen (RFC 9000 §13.3, RFC 9218 §2).
+// Retransmissions are strictly prioritized across all 8 urgency tiers before fresh stream data.
+//
+// Complexity:
+//   - Time: O(C + R + N * log S) where C is the control frame count, R is the retransmission frame count,
+//     N is the count of packed stream frames, and S is the number of active non-incremental streams (O(1)
+//     per incremental stream via FIFO ringbuffer, O(log S) per non-incremental stream via minheap).
+//   - Space: O(1) auxiliary heap allocations; frames are appended directly into caller-provided slices.
 func (f *framer) Append(
 	frames []ackhandler.Frame,
 	streamFrames []ackhandler.StreamFrame,
@@ -330,6 +338,12 @@ func (f *framer) QueuedTooManyControlFrames() bool {
 	return f.queuedTooManyControlFrames
 }
 
+// AddActiveStream enqueues an active stream into the appropriate urgency tier (RFC 9218 §2).
+//
+// Complexity:
+//   - Time: O(1) for incremental streams (FIFO ringbuffer push); O(log S) for non-incremental streams
+//     where S is the count of active streams in the minheap at urgency tier.
+//   - Space: O(1) amortized queue storage.
 func (f *framer) AddActiveStream(id protocol.StreamID, str streamFrameGetter) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -383,6 +397,12 @@ func (f *framer) RemoveActiveStream(id protocol.StreamID) {
 	delete(f.retransmissionStreams, id)
 }
 
+// UpdateStreamPriority records an updated priority for an active stream (RFC 9218 §2).
+//
+// Complexity:
+//   - Time: O(1) for incremental streams or O(log S) for non-incremental streams via lazy generation
+//     invalidation, avoiding costly O(S) queue searches. Stale generation entries are discarded on pop.
+//   - Space: O(1) queue entry addition.
 func (f *framer) UpdateStreamPriority(id protocol.StreamID) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()

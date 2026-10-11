@@ -36,7 +36,13 @@ func newReceivedPacketHistory() *receivedPacketHistory {
 	return h
 }
 
-// ReceivedPacket registers a packet with PacketNumber p and updates the ranges
+// ReceivedPacket registers a packet with PacketNumber p and updates the ranges (RFC 9000 §13.2 & RFC 9002 §6).
+// Discards delayed packets below deletedBelow and enforces MaxNumAckRanges DoS bounds.
+//
+// Complexity:
+//   - Time: O(1) amortized for mostly sequential in-order packet arrivals (updating the last interval).
+//     O(K) worst case for out-of-order reordering where K <= protocol.MaxNumAckRanges (64) for interval search and slice insertion.
+//   - Space: O(K) interval storage (first 4 intervals stored inline without heap allocations).
 func (h *receivedPacketHistory) ReceivedPacket(
 	p protocol.PacketNumber,
 ) bool /* is a new packet (and not a duplicate / delayed packet) */ {
@@ -98,7 +104,11 @@ func (h *receivedPacketHistory) addToRanges(
 	return true
 }
 
-// DeleteBelow deletes all entries below (but not including) p
+// DeleteBelow deletes all entries below (but not including) p (RFC 9000 §13.2.4).
+//
+// Complexity:
+//   - Time: O(K) where K is len(ranges) <= 64. Trims leading intervals and compacts the slice.
+//   - Space: O(1) zero heap allocations.
 func (h *receivedPacketHistory) DeleteBelow(p protocol.PacketNumber) {
 	if p < h.deletedBelow {
 		return
@@ -140,6 +150,11 @@ func (h *receivedPacketHistory) Backward() iter.Seq[interval] {
 	}
 }
 
+// HighestMissingUpTo returns the highest packet number missing up to p (RFC 9002 §6).
+//
+// Complexity:
+//   - Time: O(K) reverse linear scan over at most K <= 64 intervals.
+//   - Space: O(1) zero heap allocations.
 func (h *receivedPacketHistory) HighestMissingUpTo(p protocol.PacketNumber) protocol.PacketNumber {
 	if len(h.ranges) == 0 || (h.deletedBelow != protocol.InvalidPacketNumber && p < h.deletedBelow) {
 		return protocol.InvalidPacketNumber
@@ -165,6 +180,11 @@ func (h *receivedPacketHistory) HighestMissingUpTo(p protocol.PacketNumber) prot
 	return p
 }
 
+// IsPotentiallyDuplicate checks whether packet number p has already been recorded (RFC 9000 §13.2.3).
+//
+// Complexity:
+//   - Time: O(K) reverse linear scan over at most K <= 64 intervals.
+//   - Space: O(1) zero heap allocations.
 func (h *receivedPacketHistory) IsPotentiallyDuplicate(p protocol.PacketNumber) bool {
 	if p < h.deletedBelow {
 		return true

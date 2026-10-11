@@ -20,7 +20,7 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// AppendHTMLEscape appends html-escaped s to dst and returns the extended dst.
+// AppendHTMLEscape appends the HTML-escaped string s to dst and returns the resulting slice.
 func AppendHTMLEscape(dst []byte, s string) []byte {
 	var (
 		prev int
@@ -52,14 +52,12 @@ func AppendHTMLEscape(dst []byte, s string) []byte {
 	return append(dst, s[prev:]...)
 }
 
-// AppendHTMLEscapeBytes appends html-escaped s to dst and returns
-// the extended dst.
+// AppendHTMLEscapeBytes appends the HTML-escaped byte slice s to dst and returns the resulting slice.
 func AppendHTMLEscapeBytes(dst, s []byte) []byte {
 	return AppendHTMLEscape(dst, bytesconv.B2S(s))
 }
 
-// AppendIPv4 appends string representation of the given ip v4 to dst
-// and returns the extended dst.
+// AppendIPv4 appends the dotted decimal string representation of ip to dst and returns the resulting slice.
 func AppendIPv4(dst []byte, ip net.IP) []byte {
 	ip = ip.To4()
 	if len(ip) != net.IPv4len {
@@ -79,7 +77,7 @@ var errEmptyIPStr = errors.New("empty ip address string")
 
 var httpDateGMT = time.FixedZone("GMT", 0)
 
-// ParseIPv4 parses ip address from ipStr into dst and returns the extended dst.
+// ParseIPv4 parses an IPv4 address string from ipStr into dst and returns the resulting slice.
 func ParseIPv4(dst net.IP, ipStr []byte) (net.IP, error) {
 	if len(ipStr) == 0 {
 		return dst, errEmptyIPStr
@@ -126,15 +124,14 @@ func ParseIPv4(dst net.IP, ipStr []byte) (net.IP, error) {
 	return dst, nil
 }
 
-// AppendHTTPDate appends HTTP-compliant (RFC1123) representation of date
-// to dst and returns the extended dst.
+// AppendHTTPDate formats date in HTTP-date GMT format (RFC 9110 §5.6.7), appends it to dst, and returns the slice.
 func AppendHTTPDate(dst []byte, date time.Time) []byte {
 	dst = date.In(time.UTC).AppendFormat(dst, time.RFC1123)
 	copy(dst[len(dst)-3:], StrGMT)
 	return dst
 }
 
-// ParseHTTPDate parses HTTP-compliant (RFC1123) date.
+// ParseHTTPDate parses an HTTP-date formatted byte slice according to RFC 9110 §5.6.7.
 func ParseHTTPDate(date []byte) (time.Time, error) {
 	if t, ok := ParseRFC1123DateGMT(date); ok {
 		return t, nil
@@ -143,6 +140,7 @@ func ParseHTTPDate(date []byte) (time.Time, error) {
 	return time.Parse(http.TimeFormat, bytesconv.B2S(date))
 }
 
+// ParseRFC1123DateGMT parses an RFC 1123 GMT date byte slice into a [time.Time].
 func ParseRFC1123DateGMT(b []byte) (time.Time, bool) {
 	// Expects "Mon, 02 Jan 2006 15:04:05 GMT".
 	if len(b) != 29 {
@@ -201,6 +199,7 @@ func ParseRFC1123DateGMT(b []byte) (time.Time, bool) {
 	return t, true
 }
 
+// IsWeekday3 reports whether three-byte sequence a, b, c represents a 3-letter weekday abbreviation.
 func IsWeekday3(a, b, c byte) bool {
 	a |= 0x20
 	b |= 0x20
@@ -221,6 +220,7 @@ func IsWeekday3(a, b, c byte) bool {
 	}
 }
 
+// Parse2Digits parses two decimal digit bytes a and b into an integer.
 func Parse2Digits(a, b byte) (int, bool) {
 	if a < '0' || a > '9' || b < '0' || b > '9' {
 		return 0, false
@@ -229,6 +229,7 @@ func Parse2Digits(a, b byte) (int, bool) {
 	return int(a-'0')*10 + int(b-'0'), true
 }
 
+// Parse4Digits parses four decimal digit bytes a, b, c, and d into an integer.
 func Parse4Digits(a, b, c, d byte) (int, bool) {
 	v1, ok := Parse2Digits(a, b)
 	if !ok {
@@ -243,6 +244,7 @@ func Parse4Digits(a, b, c, d byte) (int, bool) {
 	return v1*100 + v2, true
 }
 
+// ParseMonth3 parses three-byte sequence a, b, c into a [time.Month].
 func ParseMonth3(a, b, c byte) (time.Month, bool) {
 	a |= 0x20
 	b |= 0x20
@@ -279,7 +281,8 @@ func ParseMonth3(a, b, c byte) (time.Month, bool) {
 	return 0, false
 }
 
-// AppendUint appends n to dst and returns the extended dst.
+// AppendUint appends the decimal representation of n to dst and returns the resulting slice.
+// AppendUint panics if n is negative.
 func AppendUint(dst []byte, n int) []byte {
 	if n < 0 {
 		// developer sanity-check
@@ -324,6 +327,7 @@ const (
 	maxSafeIntDigits = 9 * (strconv.IntSize / 32)
 )
 
+// ParseUintBuf parses an unsigned decimal integer from b, returning the parsed value, bytes consumed, and any error.
 func ParseUintBuf(b []byte) (int, int, error) {
 	if len(b) == 0 {
 		return -1, 0, errEmptyInt
@@ -359,6 +363,7 @@ func ParseUintBuf(b []byte) (int, int, error) {
 	return v, len(b), nil
 }
 
+// ParseIPv4Octet parses an IPv4 octet (0-255) from b, returning the byte value, bytes consumed, and any error.
 func ParseIPv4Octet(b []byte) (byte, int, error) {
 	if len(b) == 0 {
 		return 0, 0, errEmptyInt
@@ -391,7 +396,7 @@ func ParseIPv4Octet(b []byte) (byte, int, error) {
 	return octet, parsed, nil
 }
 
-// ParseUfloat parses unsigned float from buf.
+// ParseUfloat parses an unsigned floating-point number from buf.
 func ParseUfloat(buf []byte) (float64, error) {
 	// The implementation of parsing a float string is not easy.
 	// We believe that the conservative approach is to call strconv.ParseFloat.
@@ -409,10 +414,13 @@ func ParseUfloat(buf []byte) (float64, error) {
 }
 
 var (
+	// ErrEmptyHexNum indicates that a hexadecimal number buffer was empty.
 	ErrEmptyHexNum    = errors.New("empty hex number")
+	// ErrTooLargeHexNum indicates that a hexadecimal number exceeds implementation limits.
 	ErrTooLargeHexNum = errors.New("too large hex number")
 )
 
+// ReadHexInt reads a hexadecimal integer from r.
 func ReadHexInt(r *bufio.Reader) (int, error) {
 	var k, i, n int
 	for {
@@ -450,6 +458,8 @@ func ReadHexInt(r *bufio.Reader) (int, error) {
 //nolint:unused
 var hexIntBufPool sync.Pool
 
+// WriteHexInt formats n as a hexadecimal integer and writes it to w.
+// WriteHexInt panics if n is negative.
 func WriteHexInt(w *bufio.Writer, n int) error {
 	if n < 0 {
 		// developer sanity-check
@@ -469,6 +479,7 @@ const (
 	lowerhex = "0123456789abcdef"
 )
 
+// LowercaseBytes converts ASCII bytes in b to lowercase in place.
 func LowercaseBytes(b []byte) {
 	for i := range b {
 		p := &b[i]
@@ -476,14 +487,12 @@ func LowercaseBytes(b []byte) {
 	}
 }
 
-// AppendUnquotedArg appends url-decoded src to dst and returns appended dst.
-//
-// dst may point to src. In this case src will be overwritten.
+// AppendUnquotedArg decodes URL-encoded argument bytes from src, appends them to dst, and returns the slice.
 func AppendUnquotedArg(dst, src []byte) []byte {
 	return DecodeArgAppend(dst, src)
 }
 
-// AppendQuotedArg appends url-encoded src to dst and returns appended dst.
+// AppendQuotedArg URL-encodes src bytes, appends them to dst, and returns the slice (RFC 3986 §2.1).
 func AppendQuotedArg(dst, src []byte) []byte {
 	for _, c := range src {
 		switch {
@@ -499,6 +508,7 @@ func AppendQuotedArg(dst, src []byte) []byte {
 	return dst
 }
 
+// AppendQuotedPath encodes path bytes in src according to URL path escaping rules and appends them to dst (RFC 3986 §3.3).
 func AppendQuotedPath(dst, src []byte) []byte {
 	// Fix issue in https://github.com/golang/go/issues/11202
 	if len(src) == 1 && src[0] == '*' {

@@ -13,17 +13,17 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// Supported Zstandard compression speed levels (RFC 8878).
+// Supported Zstandard compression levels (RFC 8878).
 const (
-	// CompressZstdSpeedNotSet indicates default compression speed.
+	// CompressZstdSpeedNotSet specifies default compression speed.
 	CompressZstdSpeedNotSet = iota
-	// CompressZstdBestSpeed indicates fastest compression speed.
+	// CompressZstdBestSpeed specifies compression level tuned for throughput at the expense of ratio.
 	CompressZstdBestSpeed
-	// CompressZstdDefault indicates standard balanced compression speed.
+	// CompressZstdDefault specifies standard balanced compression speed.
 	CompressZstdDefault
-	// CompressZstdSpeedBetter indicates improved compression ratio over default.
+	// CompressZstdSpeedBetter specifies increased compression ratio over default.
 	CompressZstdSpeedBetter
-	// CompressZstdBestCompression indicates maximum compression ratio.
+	// CompressZstdBestCompression specifies maximum compression ratio.
 	CompressZstdBestCompression
 )
 
@@ -45,7 +45,7 @@ func AppendZstdBytesLevel(dst, src []byte, level int) []byte {
 	return append(dst, res...)
 }
 
-// WriteZstdLevel compresses p using Zstandard at the specified level and writes it to w.
+// WriteZstdLevel compresses p using Zstandard at the specified level and writes it to w (RFC 8878).
 func WriteZstdLevel(w io.Writer, p []byte, level int) (int, error) {
 	res, err := compress.CompressZstd(p, nil, level)
 	if err != nil {
@@ -55,17 +55,17 @@ func WriteZstdLevel(w io.Writer, p []byte, level int) (int, error) {
 	return w.Write(res)
 }
 
-// WriteZstd compresses p using default Zstandard compression and writes it to w.
+// WriteZstd compresses p using [CompressZstdDefault] and writes it to w (RFC 8878).
 func WriteZstd(w io.Writer, p []byte) (int, error) {
 	return WriteZstdLevel(w, p, CompressZstdDefault)
 }
 
-// AppendZstdBytes compresses src using default Zstandard compression and appends the result to dst.
+// AppendZstdBytes compresses src using [CompressZstdDefault] and appends the result to dst (RFC 8878).
 func AppendZstdBytes(dst, src []byte) []byte {
 	return AppendZstdBytesLevel(dst, src, CompressZstdDefault)
 }
 
-// WriteUnzstd decompresses Zstandard payload p and writes the uncompressed data to w.
+// WriteUnzstd decompresses Zstandard payload p and writes the uncompressed data to w (RFC 8878).
 func WriteUnzstd(w io.Writer, p []byte) (int, error) {
 	return WriteUnzstdLimit(w, p, 0)
 }
@@ -92,7 +92,7 @@ func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendUnzstdBytes decompresses Zstandard payload src and appends the uncompressed data to dst.
+// AppendUnzstdBytes decompresses Zstandard payload src and appends the uncompressed data to dst (RFC 8878).
 func AppendUnzstdBytes(dst, src []byte) ([]byte, error) {
 	if len(dst) == 0 {
 		return compress.Unzstd(src, dst)

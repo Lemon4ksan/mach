@@ -4,8 +4,8 @@
 
 package zerocopy
 
-// FormatHexUint writes the hex representation of val into buf.
-// Returns the number of bytes written.
+// FormatHexUint writes the hexadecimal representation of val into buf and returns the number of bytes written.
+// FormatHexUint panics if val is negative.
 func FormatHexUint(buf *[16]byte, val int) int {
 	return formatHexUintFallback(buf, val)
 }

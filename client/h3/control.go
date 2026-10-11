@@ -117,18 +117,15 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 			return
 		}
 
-		if firstFrame {
-			if frameType != coreh3.FrameTypeSettings {
-				_ = cc.conn.CloseWithError(
-					quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
-					"H3_MISSING_SETTINGS: first frame must be SETTINGS (RFC 9114 §7.2.4)",
-				)
+		if firstFrame && frameType != coreh3.FrameTypeSettings {
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
+				"H3_MISSING_SETTINGS: first frame must be SETTINGS (RFC 9114 §7.2.4)",
+			)
 
-				return
-			}
-
-			firstFrame = false
-		} else if frameType == coreh3.FrameTypeSettings {
+			return
+		}
+		if !firstFrame && frameType == coreh3.FrameTypeSettings {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
 				"H3_FRAME_UNEXPECTED: second SETTINGS frame on control stream (RFC 9114 §7.2.4)",
@@ -136,22 +133,20 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 
 			return
 		}
+		firstFrame = false
 
 		switch frameType {
 		case coreh3.FrameTypeSettings:
 			st, err := coreh3.DecodeSettings(r, payloadLen)
 			if err != nil {
+				msg := "H3_SETTINGS_ERROR: invalid settings payload (RFC 9114 §7.2.4)"
 				if errors.Is(err, coreh3.ErrH3SettingsError) {
-					_ = cc.conn.CloseWithError(
-						quic.ApplicationErrorCode(coreh3.ErrCodeH3SettingsError),
-						"H3_SETTINGS_ERROR: reserved H2 setting ID (RFC 9114 §7.2.4.1)",
-					)
-				} else {
-					_ = cc.conn.CloseWithError(
-						quic.ApplicationErrorCode(coreh3.ErrCodeH3SettingsError),
-						"H3_SETTINGS_ERROR: invalid settings payload (RFC 9114 §7.2.4)",
-					)
+					msg = "H3_SETTINGS_ERROR: reserved H2 setting ID (RFC 9114 §7.2.4.1)"
 				}
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3SettingsError),
+					msg,
+				)
 
 				return
 			}

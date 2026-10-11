@@ -53,12 +53,7 @@ func (c *Conn) readLoop() {
 		}
 
 		err = c.readStream(fr, r)
-		if err == nil {
-			if fr.Flags().Has(coreh2.FlagEndStream) {
-				r.SetState(streamClosed)
-				c.finish(r, fr.Stream(), nil)
-			}
-		} else {
+		if err != nil {
 			r.SetState(streamClosed)
 			c.finish(r, fr.Stream(), err)
 
@@ -66,6 +61,14 @@ func (c *Conn) readLoop() {
 				coreh2.ReleaseFrameHeader(fr)
 				break
 			}
+
+			coreh2.ReleaseFrameHeader(fr)
+			continue
+		}
+
+		if fr.Flags().Has(coreh2.FlagEndStream) {
+			r.SetState(streamClosed)
+			c.finish(r, fr.Stream(), nil)
 		}
 
 		coreh2.ReleaseFrameHeader(fr)
@@ -83,10 +86,10 @@ func (c *Conn) readNext() (*coreh2.FrameHeader, error) {
 			c.consecutiveControlFrames = 0
 		} else {
 			c.consecutiveControlFrames++
-			if c.consecutiveControlFrames > maxConsecutiveControlFrames {
-				coreh2.ReleaseFrameHeader(fr)
-				return nil, coreh2.ErrControlFrameFlood
-			}
+		}
+		if c.consecutiveControlFrames > maxConsecutiveControlFrames {
+			coreh2.ReleaseFrameHeader(fr)
+			return nil, coreh2.ErrControlFrameFlood
 		}
 
 		if fr.Stream() != 0 {
@@ -118,11 +121,11 @@ func (c *Conn) handleConnectionFrame(fr *coreh2.FrameHeader) error {
 	case coreh2.FramePing:
 		if fr.Body() != nil {
 			ping := fr.Body().(*coreh2.Ping)
-			if !ping.IsAck() {
-				c.handlePing(ping)
-			} else {
+			if ping.IsAck() {
 				c.handlePingAck(ping)
+				return nil
 			}
+			c.handlePing(ping)
 		}
 
 	case coreh2.FrameGoAway:

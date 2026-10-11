@@ -24,7 +24,11 @@ type AckFrame struct {
 	ECT0, ECT1, ECNCE uint64
 }
 
-// parseAckFrame reads an ACK frame
+// parseAckFrame reads an ACK frame and populates AckRanges and ECN metrics (RFC 9000 §19.3 & §19.3.2).
+//
+// Complexity:
+//   - Time: O(R) where R is the number of ACK ranges encoded in the wire payload.
+//   - Space: O(R) slice storage for parsed AckRange intervals.
 func parseAckFrame(frame *AckFrame, b []byte, typ FrameType, ackDelayExponent uint8, _ protocol.Version) (int, error) {
 	startLen := len(b)
 	ecn := typ == FrameTypeAckECN
@@ -211,8 +215,11 @@ func (f *AckFrame) Truncate(maxSize protocol.ByteCount, _ protocol.Version) {
 	f.AckRanges = f.AckRanges[:f.numEncodableAckRanges(maxSize)]
 }
 
-// gets the number of ACK ranges that can be encoded
-// such that the resulting frame is smaller than maxSize
+// numEncodableAckRanges calculates the maximum number of ACK ranges that fit into maxSize (RFC 9000 §19.3).
+//
+// Complexity:
+//   - Time: O(1) fast path assuming 8-byte worst-case varints; O(R) exact length scan slow path where R <= MaxNumAckRanges (64).
+//   - Space: O(1) zero heap allocations.
 func (f *AckFrame) numEncodableAckRanges(maxSize protocol.ByteCount) int {
 	// Fast path: Most ACK frames are relatively small, and we don't need to calculate the exact length.
 	// We just assume the worst case scenario: every varint is encoded to 8 bytes.
@@ -268,6 +275,11 @@ func (f *AckFrame) HasMissingRanges() bool {
 	return len(f.AckRanges) > 1
 }
 
+// validateAckRanges checks monotonicity and non-overlap across all ACK ranges (RFC 9000 §19.3.1).
+//
+// Complexity:
+//   - Time: O(R) where R is len(AckRanges). Validates that Smallest <= Largest and that gaps between ranges are positive.
+//   - Space: O(1) zero heap allocations.
 func (f *AckFrame) validateAckRanges() bool {
 	if len(f.AckRanges) == 0 {
 		return false
@@ -318,7 +330,11 @@ func (f *AckFrame) LowestAcked() protocol.PacketNumber {
 	return f.AckRanges[len(f.AckRanges)-1].Smallest
 }
 
-// AcksPacket determines if this ACK frame acks a certain packet number
+// AcksPacket determines if this ACK frame acknowledges packet number p using binary search (RFC 9000 §19.3).
+//
+// Complexity:
+//   - Time: O(log R) binary search where R <= protocol.MaxNumAckRanges (64) is the range count.
+//   - Space: O(1) zero heap allocations.
 func (f *AckFrame) AcksPacket(p protocol.PacketNumber) bool {
 	if len(f.AckRanges) == 0 || p < f.LowestAcked() || p > f.LargestAcked() {
 		return false

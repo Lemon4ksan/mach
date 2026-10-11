@@ -120,21 +120,22 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 
 	if len(c.orderedKeys) > 0 {
 		c.appendOrderedHeaders(h, req, hf)
-	} else {
-		ua := req.Header.UserAgent()
-		if len(ua) > 0 {
-			hf.SetBytes(coreh2.StringUserAgent, ua)
-			h.AppendHeaderField(enc, hf, true)
+		return
+	}
+
+	ua := req.Header.UserAgent()
+	if len(ua) > 0 {
+		hf.SetBytes(coreh2.StringUserAgent, ua)
+		h.AppendHeaderField(enc, hf, true)
+	}
+
+	for k, v := range req.Header.All() {
+		if isForbiddenH2Header(k, v) {
+			continue
 		}
 
-		for k, v := range req.Header.All() {
-			if isForbiddenH2Header(k, v) {
-				continue
-			}
-
-			hf.SetBytes(coreh2.ToLowerCopy(k), v)
-			h.AppendHeaderField(enc, hf, false)
-		}
+		hf.SetBytes(coreh2.ToLowerCopy(k), v)
+		h.AppendHeaderField(enc, hf, false)
 	}
 }
 
@@ -188,23 +189,23 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *hpac
 			continue
 		}
 
-		var val []byte
-		if bytesconv.EqualFoldASCII(key, "cookie") {
-			val = getFastHTTPCookieHeader(req)
-		} else {
+		val := getFastHTTPCookieHeader(req)
+		if !bytesconv.EqualFoldASCII(key, "cookie") {
 			val = req.Header.Peek(key)
 			if len(val) == 0 && len(key) > 0 {
 				val = peekHeaderCaseInsensitive(req, key)
 			}
 		}
 
-		if len(val) > 0 {
-			hf.SetKey(key)
-			hf.SetValueBytes(val)
-			h.AppendHeaderField(c.enc, hf, false)
-
-			visitedBits |= (1 << i)
+		if len(val) == 0 {
+			continue
 		}
+
+		hf.SetKey(key)
+		hf.SetValueBytes(val)
+		h.AppendHeaderField(c.enc, hf, false)
+
+		visitedBits |= (1 << i)
 	}
 
 	for k, v := range req.Header.All() {
@@ -323,9 +324,10 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 		if bytes.Equal(hf.KeyBytes(), coreh2.StringContentLength) {
 			n, _ := strconv.Atoi(hf.Value())
 			res.Header.SetContentLength(n)
-		} else {
-			res.Header.AddBytesKV(hf.KeyBytes(), hf.ValueBytes())
+			continue
 		}
+
+		res.Header.AddBytesKV(hf.KeyBytes(), hf.ValueBytes())
 	}
 
 	if statusCode == 103 {

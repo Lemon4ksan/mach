@@ -476,7 +476,7 @@ func TestDoScoped_Execution(t *testing.T) {
 	resp := h1.AcquireResponse()
 	defer h1.ReleaseResponse(resp)
 
-	_, err := cc.readResponseScoped(&streamBuf, resp, scope)
+	_, err := cc.readResponseScoped(&streamBuf, resp)
 	require.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode())
 	assert.Equal(t, "scoped body content", string(resp.Body()))

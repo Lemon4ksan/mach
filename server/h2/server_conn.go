@@ -101,9 +101,8 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 
 	if sc.bw == nil {
 		sc.bw = bufio.NewWriterSize(netConn, 4096)
-	} else {
-		sc.bw.Reset(netConn)
 	}
+	sc.bw.Reset(netConn)
 
 	sc.muBuf = sc.muBuf[:0]
 

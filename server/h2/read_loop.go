@@ -216,7 +216,8 @@ func (sc *ServerConn) sendSettings(st *coreh2.Settings, ack bool) error {
 	if ack {
 		stFrame.SetAck(true)
 		fr.SetFlags(coreh2.FlagAck)
-	} else {
+	}
+	if !ack {
 		st.CopyTo(stFrame)
 	}
 

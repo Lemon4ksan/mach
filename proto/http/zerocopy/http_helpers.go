@@ -16,6 +16,7 @@ const (
 	nChar = '\n'
 )
 
+// CaseInsensitiveCompare reports whether byte slices a and b are equal under ASCII case-insensitivity.
 func CaseInsensitiveCompare(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
@@ -40,34 +41,38 @@ func CaseInsensitiveCompare(a, b []byte) bool {
 	return true
 }
 
-// ValidHeaderFieldByte returns true if c valid header field byte
-// as defined by RFC 7230.
+// ValidHeaderFieldByte reports whether c is a valid HTTP header field byte (RFC 9110 §5.1).
 func ValidHeaderFieldByte(c byte) bool {
 	return c < 128 && ValidHeaderFieldByteTable[c] == 1
 }
 
+// InitHeaderKV initializes and normalizes header key and value buffers from strings.
 func InitHeaderKV(bufK, bufV []byte, key, value string, disableNormalizing bool) ([]byte, []byte) {
 	bufK = GetHeaderKeyBytes(bufK, key, disableNormalizing)
 	bufV = InitHeaderValueString(bufV, value)
 	return bufK, bufV
 }
 
+// InitHeaderValueString initializes and sanitizes a header value buffer from value string.
 func InitHeaderValueString(bufV []byte, value string) []byte {
 	return InitHeaderValueBytes(bufV, bytesconv.S2B(value))
 }
 
+// InitHeaderValueBytes copies value into bufV and sanitizes CR and LF characters.
 func InitHeaderValueBytes(bufV, value []byte) []byte {
 	bufV = append(bufV[:0], value...)
 	bufV = RemoveNewLines(bufV)
 	return bufV
 }
 
+// GetHeaderKeyBytes copies and normalizes key string into bufK.
 func GetHeaderKeyBytes(bufK []byte, key string, disableNormalizing bool) []byte {
 	bufK = append(bufK[:0], key...)
 	NormalizeHeaderKey(bufK, disableNormalizing)
 	return bufK
 }
 
+// NormalizeHeaderKey canonicalizes header key bytes in b unless disableNormalizing is true.
 func NormalizeHeaderKey(b []byte, disableNormalizing bool) {
 	b = RemoveNewLines(b)
 
@@ -89,6 +94,7 @@ func NormalizeHeaderKey(b []byte, disableNormalizing bool) {
 	NormalizeHeaderKeyValidated(b, false)
 }
 
+// NormalizeHeaderKeyValidated applies casing normalization to valid header key bytes in b.
 func NormalizeHeaderKeyValidated(b []byte, disableNormalizing bool) {
 	if disableNormalizing {
 		return

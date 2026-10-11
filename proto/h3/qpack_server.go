@@ -123,7 +123,10 @@ func (h *requestHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorMe
 // It validates mandatory pseudo-headers (:method, :scheme, :authority, :path) according to HTTP/3
 // semantics, handles extended CONNECT tunnels (RFC 9114 §4.4), and populates reqHeaders with regular
 // headers while discarding or rejecting prohibited hop-by-hop headers.
-// Concurrency: Thread-safe; protected by the internal decoder mutex (decMu).
+//
+// Complexity:
+//   - Time: O(B) progressive parsing across the header block of B bytes with in-place ASCII character checks.
+//   - Space: O(H) where H is the count of decoded headers stored in reqHeaders.
 func (q *QPACKCodec) DecodeRequestHeaders(
 	streamID uint64,
 	headerBlock []byte,
@@ -185,7 +188,10 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 //
 // It serializes the :status pseudo-header, optional content-length header if bodyLen >= 0,
 // and all supplied response headers, filtering out prohibited HTTP/3 connection-specific headers (RFC 9114 §4.1).
-// Concurrency: Thread-safe; protected by the internal encoder mutex (encMu).
+//
+// Complexity:
+//   - Time: O(H + B) where H is the header entry count and B is the cumulative byte length of names and values.
+//   - Space: O(B) buffer allocation for the generated QPACK instruction block.
 func (q *QPACKCodec) EncodeResponseHeaders(
 	streamID uint64,
 	statusCode int,

@@ -17,7 +17,9 @@ import (
 )
 
 const (
-	ArgsNoValue  = true
+	// ArgsNoValue specifies that an argument has no value component.
+	ArgsNoValue = true
+	// ArgsHasValue specifies that an argument contains a value component.
 	ArgsHasValue = false
 )
 
@@ -25,18 +27,19 @@ var argsStorage = pool.NewPerCorePool(func() *Args {
 	return &Args{}
 })
 
-// AcquireArgs returns an empty Args from the pool.
+// AcquireArgs returns an empty [Args] instance from the pool.
 func AcquireArgs() *Args {
 	return argsStorage.Get()
 }
 
-// ReleaseArgs clears and returns a to the pool.
+// ReleaseArgs resets a and returns it to the pool.
 func ReleaseArgs(a *Args) {
 	a.Reset()
 	argsStorage.Put(a)
 }
 
-// Args represents query arguments.
+// Args represents HTTP query parameters or form arguments (RFC 3986 §3.4).
+// The zero value is ready to use, or instances may be acquired from [AcquireArgs].
 type Args struct {
 	noCopy NoCopy
 
@@ -44,6 +47,8 @@ type Args struct {
 	buf  []byte
 }
 
+// ArgsKV represents an individual key-value query argument pair.
+// The zero value is ready to use.
 type ArgsKV struct {
 	Key     []byte
 	Value   []byte
@@ -381,6 +386,7 @@ func (a *Args) GetBool(key string) bool {
 	}
 }
 
+// CopyArgs copies query arguments from src to dst and returns the resulting slice.
 func CopyArgs(dst, src []ArgsKV) []ArgsKV {
 	if cap(dst) < len(src) {
 		tmp := make([]ArgsKV, len(src))
@@ -417,6 +423,7 @@ func CopyArgs(dst, src []ArgsKV) []ArgsKV {
 	return dst
 }
 
+// DelAllArgsStable removes all occurrences of key from args preserving entry order.
 func DelAllArgsStable(args []ArgsKV, key string) []ArgsKV {
 	for i, n := 0, len(args); i < n; i++ {
 		kv := &args[i]
@@ -435,6 +442,7 @@ func DelAllArgsStable(args []ArgsKV, key string) []ArgsKV {
 	return args
 }
 
+// DelAllArgs removes all occurrences of key from args without preserving entry order.
 func DelAllArgs(args []ArgsKV, key string) []ArgsKV {
 	n := len(args)
 	for i := 0; i < n; i++ {
@@ -448,10 +456,12 @@ func DelAllArgs(args []ArgsKV, key string) []ArgsKV {
 	return args[:n]
 }
 
+// SetArgBytes sets key and value byte slices in h, replacing existing entries.
 func SetArgBytes(h []ArgsKV, key, value []byte, noValue bool) []ArgsKV {
 	return SetArg(h, bytesconv.B2S(key), bytesconv.B2S(value), noValue)
 }
 
+// SetArg sets key and value strings in h, replacing existing entries.
 func SetArg(h []ArgsKV, key, value string, noValue bool) []ArgsKV {
 	n := len(h)
 	for i := range n {
@@ -477,6 +487,7 @@ func AppendArgBytes(h []ArgsKV, key, value []byte, noValue bool) []ArgsKV {
 	return AppendArg(h, bytesconv.B2S(key), bytesconv.B2S(value), noValue)
 }
 
+// AppendArg appends a key-value argument to args.
 func AppendArg(args []ArgsKV, key, value string, noValue bool) []ArgsKV {
 	var kv *ArgsKV
 
@@ -494,6 +505,7 @@ func AppendArg(args []ArgsKV, key, value string, noValue bool) []ArgsKV {
 	return args
 }
 
+// AllocArg expands h by one [ArgsKV] element and returns the slice and pointer to the element.
 func AllocArg(h []ArgsKV) ([]ArgsKV, *ArgsKV) {
 	n := len(h)
 	if cap(h) > n {
@@ -507,6 +519,7 @@ func AllocArg(h []ArgsKV) ([]ArgsKV, *ArgsKV) {
 	return h, &h[n]
 }
 
+// ReleaseArg trims the last [ArgsKV] element from h.
 func ReleaseArg(h []ArgsKV) []ArgsKV {
 	return h[:len(h)-1]
 }
@@ -521,6 +534,7 @@ func hasArg(h []ArgsKV, key string) bool {
 	return false
 }
 
+// PeekArgBytes returns the argument value corresponding to k in h.
 func PeekArgBytes(h []ArgsKV, k []byte) []byte {
 	for i := range h {
 		if bytes.Equal(h[i].Key, k) {
@@ -531,6 +545,7 @@ func PeekArgBytes(h []ArgsKV, k []byte) []byte {
 	return nil
 }
 
+// PeekArgStr returns the argument value corresponding to k string in h.
 func PeekArgStr(h []ArgsKV, k string) []byte {
 	for i, n := 0, len(h); i < n; i++ {
 		kv := &h[i]

@@ -16,34 +16,37 @@ import (
 // DrainingFraction defines the fraction of dynamic table entries reserved for draining (RFC 9204).
 // The oldest entries will not be referenced in header blocks.
 // A new entry (duplicate or literal with name reference) will be added to the
-// dynamic table instead to allow draining entries to be evicted faster.
+// dynamic table instead to facilitate prompt eviction of draining entries.
 const DrainingFraction float64 = 0.25
 
-// Deprecated: use DrainingFraction.
+// Deprecated: use [DrainingFraction].
 const kDrainingFraction = DrainingFraction
 
 // DecoderStreamErrorHandler receives notifications of errors on the decoder stream.
 // This MUST be treated as a connection error of type HTTP_QPACK_DECODER_STREAM_ERROR.
 type DecoderStreamErrorHandler func(errorCode uint64, errorMessage string)
 
-// CookieCrumbling specifies whether cookie crumbling should be used when sending QPACK headers.
+// CookieCrumbling specifies whether cookie crumbling is enabled when serializing QPACK headers.
 type CookieCrumbling int
 
 const (
+	// CookieCrumblingEnabled enables cookie crumbling into individual sub-crumbs.
 	CookieCrumblingEnabled CookieCrumbling = iota
+	// CookieCrumblingDisabled disables cookie crumbling.
 	CookieCrumblingDisabled
 )
 
 const (
-	// Deprecated: use CookieCrumblingEnabled.
+	// Deprecated: use [CookieCrumblingEnabled].
 	KCookieCrumblingEnabled = CookieCrumblingEnabled
-	// Deprecated: use CookieCrumblingDisabled.
+	// Deprecated: use [CookieCrumblingDisabled].
 	KCookieCrumblingDisabled = CookieCrumblingDisabled
 )
 
 // Encoder manages dynamic table state, generates encoder stream instructions,
 // processes decoder stream feedback, and serializes HTTP/3 header blocks using two-pass encoding (RFC 9204).
 // Exactly one instance should exist per QUIC connection.
+// The zero value is not ready for use; initialize with [NewEncoder] or [NewEncoderWithDefaults].
 type Encoder struct {
 	huffmanEncoding           HuffmanEncoding
 	cookieCrumbling           CookieCrumbling
@@ -57,7 +60,7 @@ type Encoder struct {
 	lastErr                   error
 }
 
-// NewEncoder constructs a new Encoder.
+// NewEncoder constructs an initialized [Encoder] with the provided error handler, Huffman encoding mode, and cookie crumbling strategy.
 func NewEncoder(
 	decoderStreamErrorHandler DecoderStreamErrorHandler,
 	huffmanEncoding HuffmanEncoding,
@@ -82,7 +85,7 @@ func NewEncoder(
 	return encoder
 }
 
-// NewEncoderWithDefaults constructs a new Encoder with default Huffman and cookie crumbling settings.
+// NewEncoderWithDefaults constructs an initialized [Encoder] with default Huffman and cookie crumbling settings.
 func NewEncoderWithDefaults(decoderStreamErrorHandler DecoderStreamErrorHandler) *Encoder {
 	return NewEncoder(decoderStreamErrorHandler, HuffmanEncodingEnabled, CookieCrumblingEnabled)
 }
@@ -91,7 +94,7 @@ func NewEncoderWithDefaults(decoderStreamErrorHandler DecoderStreamErrorHandler)
 // Header Encoding
 // -----------------------------------------------------------------------------
 
-// EncodeHeaderList encodes a header list for streamID.
+// EncodeHeaderList encodes a slice of [HeaderField] entries for streamID.
 // If encoderStreamSentByteCount is non-nil, it is populated with the number of bytes
 // sent on the encoder stream to insert dynamic table entries.
 func (e *Encoder) EncodeHeaderList(
@@ -111,7 +114,7 @@ func (e *Encoder) EncodeHeaderList(
 	return e.secondPassEncode(representations, requiredInsertCount)
 }
 
-// EncodeHeaderSeq encodes headers supplied as an iter.Seq[HeaderField].
+// EncodeHeaderSeq encodes headers supplied as an [iter.Seq] of [HeaderField].
 func (e *Encoder) EncodeHeaderSeq(
 	streamID uint64,
 	headers iter.Seq[HeaderField],
@@ -125,7 +128,7 @@ func (e *Encoder) EncodeHeaderSeq(
 	return e.EncodeHeaderList(streamID, list, encoderStreamSentByteCount)
 }
 
-// EncodeHeaderSeq2 encodes headers supplied as an iter.Seq2[string, string].
+// EncodeHeaderSeq2 encodes headers supplied as an [iter.Seq2] of name-value string pairs.
 func (e *Encoder) EncodeHeaderSeq2(
 	streamID uint64,
 	headers iter.Seq2[string, string],
@@ -139,7 +142,7 @@ func (e *Encoder) EncodeHeaderSeq2(
 	return e.EncodeHeaderList(streamID, list, encoderStreamSentByteCount)
 }
 
-// EncodeHeaderListTo encodes headerList directly into an io.Writer.
+// EncodeHeaderListTo encodes headerList directly into an [io.Writer].
 // Returns the number of bytes written and any write error.
 func (e *Encoder) EncodeHeaderListTo(
 	w io.Writer,
@@ -161,6 +164,7 @@ func (e *Encoder) SetMaximumDynamicTableCapacity(maximumDynamicTableCapacity uin
 // SetDynamicTableCapacity sets the dynamic table capacity.
 // dynamicTableCapacity must not exceed maximum dynamic table capacity.
 // Also emits a Set Dynamic Table Capacity instruction on the encoder stream.
+// SetDynamicTableCapacity panics if dynamicTableCapacity exceeds maximum dynamic table capacity.
 func (e *Encoder) SetDynamicTableCapacity(dynamicTableCapacity uint64) {
 	e.encoderStreamSender.SendSetDynamicTableCapacity(dynamicTableCapacity)
 	// Do not flush encoder stream. This write can safely be delayed until more instructions are written.
@@ -229,22 +233,22 @@ func (e *Encoder) MaximumDynamicTableCapacity() uint64 {
 // DecoderStreamReceiverDelegate implementation & Chromium Feedback Handlers
 // -----------------------------------------------------------------------------
 
-// SectionAck implements DecoderStreamReceiverDelegate.SectionAck.
+// SectionAck implements [DecoderStreamReceiverDelegate.SectionAck].
 func (e *Encoder) SectionAck(streamID uint64) {
 	e.OnHeaderAcknowledgement(streamID)
 }
 
-// StreamCancellation implements DecoderStreamReceiverDelegate.StreamCancellation.
+// StreamCancellation implements [DecoderStreamReceiverDelegate.StreamCancellation].
 func (e *Encoder) StreamCancellation(streamID uint64) {
 	e.OnStreamCancellation(streamID)
 }
 
-// InsertCountIncrement implements DecoderStreamReceiverDelegate.InsertCountIncrement.
+// InsertCountIncrement implements [DecoderStreamReceiverDelegate.InsertCountIncrement].
 func (e *Encoder) InsertCountIncrement(increment uint64) {
 	e.OnInsertCountIncrement(increment)
 }
 
-// Error implements DecoderStreamReceiverDelegate.Error.
+// Error implements [DecoderStreamReceiverDelegate.Error].
 func (e *Encoder) Error(qpackError uint64, errorMessage string) {
 	e.OnErrorDetected(qpackError, errorMessage)
 }
@@ -605,7 +609,7 @@ func (e *Encoder) secondPassEncode(
 	return encodedHeaders
 }
 
-// EncodeIndexedHeaderField generates an indexed header field representation and tracks dynamic indices.
+// EncodeIndexedHeaderField generates an indexed header field representation and tracks dynamic indices in referredIndices.
 func EncodeIndexedHeaderField(
 	isStatic bool,
 	index uint64,
@@ -618,7 +622,7 @@ func EncodeIndexedHeaderField(
 	return InstructionWithValuesIndexedHeaderField(isStatic, index)
 }
 
-// EncodeLiteralHeaderFieldWithNameReference generates a literal header field with name reference.
+// EncodeLiteralHeaderFieldWithNameReference generates a literal header field with name reference representation.
 func EncodeLiteralHeaderFieldWithNameReference(
 	isStatic bool,
 	index uint64,
@@ -632,7 +636,7 @@ func EncodeLiteralHeaderFieldWithNameReference(
 	return InstructionWithValuesLiteralHeaderFieldNameReference(isStatic, index, value)
 }
 
-// EncodeLiteralHeaderField generates a literal header field with literal name and value.
+// EncodeLiteralHeaderField generates a literal header field representation with literal name and value.
 func EncodeLiteralHeaderField(name, value string) *InstructionWithValues {
 	return InstructionWithValuesLiteralHeaderField(name, value)
 }
@@ -642,27 +646,28 @@ func EncodeLiteralHeaderField(name, value string) *InstructionWithValues {
 // -----------------------------------------------------------------------------
 
 // EncoderPeer provides access to internal encoder state for unit tests.
+// The zero value is ready to use.
 //
-// Deprecated: use Encoder.HeaderTable(), Encoder.MaximumBlockedStreams(), or Encoder.BlockingManager().
+// Deprecated: use [Encoder.HeaderTable], [Encoder.MaximumBlockedStreams], or [Encoder.BlockingManager].
 type EncoderPeer struct{}
 
 // EncoderPeerHeaderTable returns encoder's header table.
 //
-// Deprecated: use encoder.HeaderTable().
+// Deprecated: use [Encoder.HeaderTable].
 func EncoderPeerHeaderTable(encoder *Encoder) *EncoderHeaderTable {
 	return encoder.headerTable
 }
 
 // EncoderPeerMaximumBlockedStreams returns encoder's maximum blocked streams limit.
 //
-// Deprecated: use encoder.MaximumBlockedStreams().
+// Deprecated: use [Encoder.MaximumBlockedStreams].
 func EncoderPeerMaximumBlockedStreams(encoder *Encoder) uint64 {
 	return encoder.maximumBlockedStreams
 }
 
 // EncoderPeerSmallestBlockingIndex returns encoder's smallest blocking index.
 //
-// Deprecated: use encoder.BlockingManager().SmallestBlockingIndex().
+// Deprecated: use [BlockingManager.SmallestBlockingIndex].
 func EncoderPeerSmallestBlockingIndex(encoder *Encoder) uint64 {
 	return encoder.blockingManager.SmallestBlockingIndex()
 }

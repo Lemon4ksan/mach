@@ -32,7 +32,8 @@ func (h *RequestHeader) SetByteRange(startPos, endPos int) {
 	b = append(b, '=')
 	if startPos >= 0 {
 		b = zerocopy.AppendUint(b, startPos)
-	} else {
+	}
+	if startPos < 0 {
 		endPos = -startPos
 	}
 
@@ -564,11 +565,11 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
 			if hasHeaderValue(value, zerocopy.StrClose) {
 				h.SetConnectionClose()
-			} else {
-				h.ResetConnectionClose()
-				h.setNonSpecial(key, value)
+				return true
 			}
 
+			h.ResetConnectionClose()
+			h.setNonSpecial(key, value)
 			return true
 
 		case zerocopy.CaseInsensitiveCompare(zerocopy.StrCookie, key):
@@ -637,7 +638,7 @@ func (h *RequestHeader) AddBytesKV(key, value []byte) {
 		return
 	}
 
-	appendArgBytesHeaders(&h.h, h.bufK, h.bufV, zerocopy.ArgsHasValue)
+	appendArgBytesHeaders(&h.h, h.bufK, h.bufV)
 }
 
 // Set sets the given 'Key: value' header (RFC 9110 Section 5.1).
@@ -769,18 +770,20 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 	case HeaderConnection:
 		if h.ConnectionClose() {
 			h.mulHeader = append(h.mulHeader, zerocopy.StrClose)
-		} else {
-			h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
+			return h.mulHeader
 		}
+
+		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
 	case HeaderContentLength:
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
 	case HeaderCookie:
 		if h.cookiesCollected {
 			h.mulHeader = append(h.mulHeader, zerocopy.AppendRequestCookieBytes(nil, h.cookies))
-		} else {
-			h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
+			return h.mulHeader
 		}
+
+		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
 	case HeaderTrailer:
 		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
@@ -970,7 +973,10 @@ func (h *ResponseHeader) addVaryBytes(value []byte) {
 	v := h.peek(zerocopy.StrVary)
 	if len(v) == 0 {
 		h.SetBytesV(HeaderVary, value)
-	} else if !bytes.Contains(v, value) {
+		return
+	}
+
+	if !bytes.Contains(v, value) {
 		h.SetBytesV(HeaderVary, append(append(v, ','), value...))
 	}
 }
@@ -1144,11 +1150,11 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
 			if hasHeaderValue(value, zerocopy.StrClose) {
 				h.SetConnectionClose()
-			} else {
-				h.ResetConnectionClose()
-				h.setNonSpecial(key, value)
+				return true
 			}
 
+			h.ResetConnectionClose()
+			h.setNonSpecial(key, value)
 			return true
 		}
 
@@ -1156,7 +1162,8 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 		if zerocopy.CaseInsensitiveCompare(zerocopy.StrServer, key) {
 			h.SetServerBytes(value)
 			return true
-		} else if zerocopy.CaseInsensitiveCompare(zerocopy.StrSetCookie, key) {
+		}
+		if zerocopy.CaseInsensitiveCompare(zerocopy.StrSetCookie, key) {
 			var kv *zerocopy.ArgsKV
 
 			h.cookies, kv = zerocopy.AllocArg(h.cookies)
@@ -1220,7 +1227,7 @@ func (h *ResponseHeader) AddBytesKV(key, value []byte) {
 		return
 	}
 
-	appendArgBytesHeaders(&h.h, h.bufK, h.bufV, zerocopy.ArgsHasValue)
+	appendArgBytesHeaders(&h.h, h.bufK, h.bufV)
 }
 
 // Set sets the given 'Key: value' header (RFC 9110 Section 5.1).
@@ -1347,9 +1354,10 @@ func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 	case HeaderConnection:
 		if h.ConnectionClose() {
 			h.mulHeader = append(h.mulHeader, zerocopy.StrClose)
-		} else {
-			h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
+			return h.mulHeader
 		}
+
+		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
 	case HeaderContentLength:
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
@@ -1410,14 +1418,15 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 
 	if bytes.IndexByte(value, '\n') < 0 && bytes.IndexByte(value, '\r') < 0 {
 		dst = append(dst, value...)
-	} else {
-		for _, c := range value {
-			if c == '\n' || c == '\r' {
-				dst = append(dst, ' ')
-			} else {
-				dst = append(dst, c)
-			}
+		return append(dst, zerocopy.StrCRLF...)
+	}
+
+	for _, c := range value {
+		if c == '\n' || c == '\r' {
+			dst = append(dst, ' ')
+			continue
 		}
+		dst = append(dst, c)
 	}
 
 	return append(dst, zerocopy.StrCRLF...)
@@ -1585,12 +1594,12 @@ func peekArgBytesHeaders(h *headkit.Headers, key []byte) []byte {
 }
 
 // setArgBytesHeaders sets the header value for key in h.
-func setArgBytesHeaders(h *headkit.Headers, key, value []byte, noValue bool) {
+func setArgBytesHeaders(h *headkit.Headers, key, value []byte) {
 	h.Set(string(key), string(value))
 }
 
 // appendArgBytesHeaders appends a header key-value entry to h.
-func appendArgBytesHeaders(h *headkit.Headers, key, value []byte, noValue bool) {
+func appendArgBytesHeaders(h *headkit.Headers, key, value []byte) {
 	h.Add(string(key), string(value))
 }
 

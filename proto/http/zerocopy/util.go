@@ -12,19 +12,17 @@ import (
 	"sync"
 )
 
-// NoCopy may be embedded into structs which must not be copied
-// after the first use.
-//
-// See https://golang.org/issues/8005#issuecomment-190753527
-// for details.
+// NoCopy may be embedded into structs which must not be copied after the first use.
+// The zero value is ready to use.
 type NoCopy struct{}
 
-// Lock is a no-op used by -copylocks checker from `go vet`.
+// Lock is a no-op method used by the -copylocks checker from go vet.
 func (*NoCopy) Lock()   {}
+
+// Unlock is a no-op method used by the -copylocks checker from go vet.
 func (*NoCopy) Unlock() {}
 
-// CopyZeroAlloc optimizes io.Copy by calling ReadFrom or WriteTo only when
-// copying between os.File and net.TCPConn.
+// CopyZeroAlloc copies data from r to w by invoking [io.ReaderFrom] or [io.WriterTo] when available.
 func CopyZeroAlloc(w io.Writer, r io.Reader) (int64, error) {
 	var readerIsFile, readerIsConn bool
 
@@ -64,6 +62,7 @@ func CopyZeroAlloc(w io.Writer, r io.Reader) (int64, error) {
 	return n, err
 }
 
+// CopyBuffer copies from src to dst using the provided buffer slice buf.
 func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
 	for {
 		nr, er := src.Read(buf)
@@ -102,16 +101,17 @@ func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err er
 	return written, err
 }
 
+// CopyBufPool provides recycled 4096-byte buffers for streaming copy operations.
 var CopyBufPool = sync.Pool{
 	New: func() any {
 		return make([]byte, 4096)
 	},
 }
 
-// ErrBodyTooLarge is returned if either request or response body exceeds
-// the given limit.
+// ErrBodyTooLarge indicates that either request or response body exceeds the specified limit.
 var ErrBodyTooLarge = errors.New("zerocopy: body size exceeds the given limit")
 
+// CopyZeroAllocWithLimit copies up to maxBodySize bytes from r to w using [CopyZeroAlloc].
 func CopyZeroAllocWithLimit(w io.Writer, r io.Reader, maxBodySize int) (int64, error) {
 	if maxBodySize <= 0 {
 		return CopyZeroAlloc(w, r)

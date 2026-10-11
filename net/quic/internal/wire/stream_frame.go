@@ -22,6 +22,11 @@ type StreamFrame struct {
 	fromPool       bool
 }
 
+// ParseStreamFrame parses a STREAM frame from b, extracting StreamID, Offset, Length, and FIN flag (RFC 9000 §19.8).
+//
+// Complexity:
+//   - Time: O(D) where D is the payload byte length copied into the pooled buffer slice.
+//   - Space: O(1) allocations using pooled StreamFrame buffers.
 func ParseStreamFrame(b []byte, typ FrameType, _ protocol.Version) (*StreamFrame, int, error) {
 	startLen := len(b)
 	hasOffset := typ&0b100 > 0
@@ -181,11 +186,15 @@ func (f *StreamFrame) MaxDataLen(maxSize protocol.ByteCount, _ protocol.Version)
 	return maxDataLen
 }
 
-// MaybeSplitOffFrame splits a frame such that it is not bigger than n bytes.
+// MaybeSplitOffFrame splits a frame such that it is not bigger than n bytes (RFC 9000 §19.8).
 // It returns if the frame was actually split.
 // The frame might not be split if:
-// * the size is large enough to fit the whole frame
-// * the size is too small to fit even a 1-byte frame. In that case, the frame returned is nil.
+//   - the size is large enough to fit the whole frame
+//   - the size is too small to fit even a 1-byte frame. In that case, the frame returned is nil.
+//
+// Complexity:
+//   - Time: O(len(Data) - n) memory shift copying the unsent suffix to the head of the buffer.
+//   - Space: O(1) buffer pool acquisition.
 func (f *StreamFrame) MaybeSplitOffFrame(
 	maxSize protocol.ByteCount,
 	version protocol.Version,

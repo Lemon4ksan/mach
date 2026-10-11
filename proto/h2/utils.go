@@ -176,7 +176,7 @@ func ToLowerCopy(b []byte) []byte {
 	return out
 }
 
-// FasthttpResponseHeaders serializes response status and headers from a h1.Response into hpack.HPACK-encoded header fields.
+// FasthttpResponseHeaders serializes response status and headers from an HTTP/1.x response ([h1.Response]) into hpack.HPACK-encoded header fields.
 func FasthttpResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
 	hf := hpack.AcquireHeaderField()
 	defer hpack.ReleaseHeaderField(hf)

@@ -4,8 +4,7 @@
 
 package hpack
 
-// HuffmanEncode compresses src bytes using the canonical static HPACK Huffman code table (RFC 7541 §5.2 & Appendix B)
-// with BCE (Bounds Check Elimination) compiler optimizations.
+// HuffmanEncode encodes src using the static HPACK Huffman code table (RFC 7541 §5.2 & Appendix B) and appends the result to dst.
 func HuffmanEncode(dst, src []byte) []byte {
 	if hasVectorHuffman {
 		return vectorHuffmanEncode(dst, src)
@@ -54,7 +53,7 @@ func huffmanEncodeFallback(dst, src []byte) []byte {
 	return dst
 }
 
-// HuffmanEncodeLength calculates the exact byte length of src when Huffman encoded without allocating.
+// HuffmanEncodeLength returns the exact byte count required to store src when Huffman encoded.
 func HuffmanEncodeLength(src []byte) int {
 	if hasVectorHuffman {
 		return vectorHuffmanEncodeLength(src)
@@ -68,7 +67,7 @@ func HuffmanEncodeLength(src []byte) int {
 	return int((bits + 7) / 8)
 }
 
-// HuffmanDecode decompresses HPACK Huffman encoded src bytes into dst using flat table-driven decoding (RFC 7541 §5.2 & Appendix B).
+// HuffmanDecode decodes HPACK Huffman encoded data from src into dst (RFC 7541 §5.2 & Appendix B).
 func HuffmanDecode(dst, src []byte) []byte {
 	if hasVectorHuffman {
 		return vectorHuffmanDecode(dst, src)

@@ -153,7 +153,7 @@ const MaxMaxAckDelay = (1<<14 - 1) * time.Millisecond
 const MaxConnIDLen = 20
 
 // InvalidPacketLimitAES is the maximum number of packets that we can fail to decrypt when using
-// AEAD_AES_128_GCM or AEAD_AES_265_GCM.
+// AEAD_AES_128_GCM or AEAD_AES_256_GCM (RFC 9001 §5.8).
 const InvalidPacketLimitAES = 1 << 52
 
 // InvalidPacketLimitChaCha is the maximum number of packets that we can fail to decrypt when using AEAD_CHACHA20_POLY1305.

@@ -6,6 +6,7 @@ package zerocopy
 
 import "bytes"
 
+// DecodeArgAppend decodes URL-encoded argument bytes from src into dst, replacing '+' with space (RFC 3986 §2.1).
 func DecodeArgAppend(dst, src []byte) []byte {
 	idxPercent := bytes.IndexByte(src, '%')
 
@@ -58,6 +59,7 @@ func DecodeArgAppend(dst, src []byte) []byte {
 	return dst
 }
 
+// DecodeArgAppendNoPlus decodes percent-encoded bytes from src into dst without translating '+' into space (RFC 3986 §2.1).
 func DecodeArgAppendNoPlus(dst, src []byte) []byte {
 	idx := bytes.IndexByte(src, '%')
 	if idx < 0 {

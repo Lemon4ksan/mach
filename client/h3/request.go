@@ -136,7 +136,7 @@ func (cc *ClientConn) DoScoped(
 		return nil, err
 	}
 
-	trailers, rErr := cc.readResponseScoped(str, resp, s)
+	trailers, rErr := cc.readResponseScoped(str, resp)
 
 	close(done)
 	<-cancelDone

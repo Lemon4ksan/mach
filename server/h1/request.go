@@ -81,10 +81,9 @@ func (r *Request) Reset() {
 	r.Host = ""
 	r.Headers.Reset()
 
+	r.Body = r.Body[:0]
 	if cap(r.Body) > 64*1024 {
 		r.Body = make([]byte, 0, 1024)
-	} else {
-		r.Body = r.Body[:0]
 	}
 
 	r.RemoteAddr = ""
@@ -231,12 +230,11 @@ func (r *Request) parseRequestLine(line []byte) error {
 	r.URI = bytesconv.B2S(line[s1+1 : s2])
 	r.Proto = bytesconv.B2S(line[s2+1:])
 
+	r.Path = r.URI
+	r.Query = ""
 	if qIdx := strings.IndexByte(r.URI, '?'); qIdx != -1 {
 		r.Path = r.URI[:qIdx]
 		r.Query = r.URI[qIdx+1:]
-	} else {
-		r.Path = r.URI
-		r.Query = ""
 	}
 
 	return nil
@@ -299,27 +297,33 @@ func (r *Request) finishRequestBodyRead(
 		}
 
 		r.Body = chunkedBody
-	} else if clStr := r.Headers.Get(header.ContentLength); clStr != "" {
-		// RFC 9112 §6.3 Item 5 & 6: Validate Content-Length decimal representation
-		contentLength, err := strconv.ParseInt(clStr, 10, 64)
-		if err != nil || contentLength < 0 {
-			return fmt.Errorf("h1: invalid content-length %q (RFC 9112 §6.3)", clStr)
+		return nil
+	}
+
+	clStr := r.Headers.Get(header.ContentLength)
+	if clStr == "" {
+		return nil
+	}
+
+	// RFC 9112 §6.3 Item 5 & 6: Validate Content-Length decimal representation
+	contentLength, err := strconv.ParseInt(clStr, 10, 64)
+	if err != nil || contentLength < 0 {
+		return fmt.Errorf("h1: invalid content-length %q (RFC 9112 §6.3)", clStr)
+	}
+
+	if contentLength > maxBodySize {
+		return ErrBodyTooLarge
+	}
+
+	if contentLength > 0 {
+		if cap(r.Body) < int(contentLength) {
+			r.Body = make([]byte, contentLength)
+		} else {
+			r.Body = r.Body[:contentLength]
 		}
 
-		if contentLength > maxBodySize {
-			return ErrBodyTooLarge
-		}
-
-		if contentLength > 0 {
-			if cap(r.Body) < int(contentLength) {
-				r.Body = make([]byte, contentLength)
-			} else {
-				r.Body = r.Body[:contentLength]
-			}
-
-			if _, err := io.ReadFull(br, r.Body); err != nil {
-				return err
-			}
+		if _, err := io.ReadFull(br, r.Body); err != nil {
+			return err
 		}
 	}
 

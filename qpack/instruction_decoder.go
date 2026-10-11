@@ -13,31 +13,32 @@ import (
 // String literal length limit: 1 MB (1024 * 1024 bytes).
 const qpackStringLiteralLengthLimit uint64 = 1024 * 1024
 
-// InstructionDecoderErrorCode identifies error conditions during instruction decoding.
-// Direct 1:1 translation of Chromium's quiche::InstructionDecoder::ErrorCode.
+// InstructionDecoderErrorCode identifies error conditions encountered during instruction decoding.
 type InstructionDecoderErrorCode = uint64
 
 const (
-	// InstructionDecoderIntegerTooLarge: Varint exceeds 64 bits or has > 10 extension bytes.
+	// InstructionDecoderIntegerTooLarge indicates a varint exceeds 64 bits or has more than 10 extension bytes.
 	InstructionDecoderIntegerTooLarge InstructionDecoderErrorCode = iota
-	// InstructionDecoderStringLiteralTooLong: String literal length exceeds 1 MB limit.
+	// InstructionDecoderStringLiteralTooLong indicates a string literal exceeds the 1 MB size limit.
 	InstructionDecoderStringLiteralTooLong
-	// InstructionDecoderHuffmanEncodingError: Malformed Huffman code, explicit EOS, or invalid padding.
+	// InstructionDecoderHuffmanEncodingError indicates malformed Huffman code, explicit EOS, or invalid padding.
 	InstructionDecoderHuffmanEncodingError
 )
 
 // Aliases for parity across naming styles.
 const (
-	InstructionDecoderErrorCodeIntegerTooLarge      = InstructionDecoderIntegerTooLarge
+	// InstructionDecoderErrorCodeIntegerTooLarge is an alias for [InstructionDecoderIntegerTooLarge].
+	InstructionDecoderErrorCodeIntegerTooLarge = InstructionDecoderIntegerTooLarge
+	// InstructionDecoderErrorCodeStringLiteralTooLong is an alias for [InstructionDecoderStringLiteralTooLong].
 	InstructionDecoderErrorCodeStringLiteralTooLong = InstructionDecoderStringLiteralTooLong
+	// InstructionDecoderErrorCodeHuffmanEncodingError is an alias for [InstructionDecoderHuffmanEncodingError].
 	InstructionDecoderErrorCodeHuffmanEncodingError = InstructionDecoderHuffmanEncodingError
 )
 
-// InstructionDecoderDelegate is the callback interface for decoded instructions and errors.
-// Direct 1:1 translation of Chromium's quiche::InstructionDecoder::Delegate.
+// InstructionDecoderDelegate provides callback methods for decoded instructions and decoding errors.
 type InstructionDecoderDelegate interface {
-	// OnInstructionDecoded is called when an instruction and all its fields are fully decoded.
-	// Returning false halts decoding immediately (semantic error).
+	// OnInstructionDecoded is called when an [Instruction] and all its fields are fully decoded.
+	// Returning false halts decoding immediately.
 	OnInstructionDecoded(instruction *Instruction) bool
 
 	// OnInstructionDecodingError is called when a decoding error occurs.
@@ -167,7 +168,7 @@ const (
 )
 
 // InstructionDecoder parses stream bytes into QPACK instructions via an 8-state machine.
-// Direct 1:1 structural translation of Chromium's quiche::InstructionDecoder.
+// The zero value is not ready for use; initialize with [NewInstructionDecoder].
 type InstructionDecoder struct {
 	language *Language
 	delegate InstructionDecoderDelegate
@@ -188,7 +189,7 @@ type InstructionDecoder struct {
 	fieldIdx      int
 }
 
-// NewInstructionDecoder creates a new instruction decoder for the given language.
+// NewInstructionDecoder creates an initialized [InstructionDecoder] for the given language.
 func NewInstructionDecoder(language *Language, delegate InstructionDecoderDelegate) *InstructionDecoder {
 	return &InstructionDecoder{
 		language: language,
@@ -197,24 +198,32 @@ func NewInstructionDecoder(language *Language, delegate InstructionDecoderDelega
 	}
 }
 
-// Field value accessors
+// SBit returns the decoded static/sign bit from the current instruction.
 func (d *InstructionDecoder) SBit() bool      { return d.sBit }
+
+// Varint returns the first decoded variable-length integer.
 func (d *InstructionDecoder) Varint() uint64  { return d.varint }
+
+// Varint2 returns the second decoded variable-length integer.
 func (d *InstructionDecoder) Varint2() uint64 { return d.varint2 }
+
+// Name returns the decoded literal header name.
 func (d *InstructionDecoder) Name() string    { return d.name }
+
+// Value returns the decoded literal header value.
 func (d *InstructionDecoder) Value() string   { return d.value }
 
-// AtInstructionBoundary returns true if the decoder is currently between instructions.
+// AtInstructionBoundary reports whether the decoder is currently positioned between instructions.
 func (d *InstructionDecoder) AtInstructionBoundary() bool {
 	return d.state == stateStartInstruction
 }
 
-// HasError returns true if a decoding error occurred.
+// HasError reports whether a decoding error has been detected.
 func (d *InstructionDecoder) HasError() bool {
 	return d.errorDetected
 }
 
-// EndDecoding signals that no more data is expected.
+// EndDecoding signals that no more data is expected on the stream.
 // If the decoder is not at an instruction boundary, an error is reported.
 func (d *InstructionDecoder) EndDecoding() {
 	if !d.AtInstructionBoundary() && !d.errorDetected {

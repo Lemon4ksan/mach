@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
@@ -43,12 +42,12 @@ func (cc *ClientConn) readResponse(
 func (cc *ClientConn) readResponseScoped(
 	reader io.Reader,
 	resp *h1.Response,
-	_ *borrow.Scope,
 ) (trailers map[string][]string, err error) {
 	var streamID uint64
-	if s, ok := reader.(*quic.Stream); ok {
+	switch s := reader.(type) {
+	case *quic.Stream:
 		streamID = uint64(s.StreamID()) //nolint:gosec
-	} else if s, ok := reader.(interface{ StreamID() int64 }); ok {
+	case interface{ StreamID() int64 }:
 		streamID = uint64(s.StreamID()) //nolint:gosec
 	}
 
@@ -112,30 +111,21 @@ func (cc *ClientConn) readResponseFrom(
 
 			if headersParsed {
 				trailers, err = cc.qpack.DecodeResponseTrailers(streamID, headerBlock)
-
-				if heapHeaderBuf != nil {
-					*heapHeaderBuf = (*heapHeaderBuf)[:0]
-					h3HeaderBlockStorage.Put(heapHeaderBuf)
-				}
-
-				if err != nil {
-					return nil, err
-				}
 			} else {
-				statusCode, err := cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
-
-				if heapHeaderBuf != nil {
-					*heapHeaderBuf = (*heapHeaderBuf)[:0]
-					h3HeaderBlockStorage.Put(heapHeaderBuf)
-				}
-
-				if err != nil {
-					return nil, err
-				}
-
-				if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
+				var statusCode int
+				statusCode, err = cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
+				if err == nil && (statusCode < 100 || statusCode >= 200 || statusCode == 101) {
 					headersParsed = true
 				}
+			}
+
+			if heapHeaderBuf != nil {
+				*heapHeaderBuf = (*heapHeaderBuf)[:0]
+				h3HeaderBlockStorage.Put(heapHeaderBuf)
+			}
+
+			if err != nil {
+				return nil, err
 			}
 
 		case coreh3.FrameTypeData:

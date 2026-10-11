@@ -62,7 +62,7 @@ const TokenValidity = 24 * time.Hour
 
 // MaxOutstandingSentPackets is maximum number of packets saved for retransmission.
 // When reached, it imposes a soft limit on sending new packets:
-// Sending ACKs and retransmission is still allowed, but now new regular packets can be sent.
+// Sending ACKs and retransmission is still allowed, but no new regular packets can be sent.
 const MaxOutstandingSentPackets = 2 * MaxCongestionWindowPackets
 
 // MaxTrackedSentPackets is maximum number of sent packets saved for retransmission.
@@ -134,7 +134,7 @@ const MaxActiveConnectionIDs = 4
 const MaxIssuedConnectionIDs = 6
 
 // PacketsPerConnectionID is the number of packets we send using one connection ID.
-// If the peer provices us with enough new connection IDs, we switch to a new connection ID.
+// If the peer provides us with enough new connection IDs, we switch to a new connection ID.
 const PacketsPerConnectionID = 10000
 
 // AckDelayExponent is the ack delay exponent used when sending ACKs.

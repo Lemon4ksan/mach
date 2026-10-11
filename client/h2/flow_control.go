@@ -65,19 +65,19 @@ func (c *Conn) handleWindowUpdate(fr *coreh2.FrameHeader) error {
 	}
 
 	streamID := fr.Stream()
-
-	var err error
 	if streamID == 0 {
-		err = c.updateServerWindow(inc)
-	} else {
-		err = c.updateStreamWindow(streamID, inc)
-	}
-
-	if err == nil {
+		if err := c.updateServerWindow(inc); err != nil {
+			return err
+		}
 		c.broadcastWindowUpdate()
+		return nil
 	}
 
-	return err
+	if err := c.updateStreamWindow(streamID, inc); err != nil {
+		return err
+	}
+	c.broadcastWindowUpdate()
+	return nil
 }
 
 func (c *Conn) updateServerWindow(inc int32) error {

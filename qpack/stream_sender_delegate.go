@@ -20,7 +20,7 @@ type writerStreamSenderDelegate struct {
 	w io.Writer
 }
 
-// StreamWriter adapts an io.Writer into a StreamSenderDelegate.
+// StreamWriter adapts an [io.Writer] into a [StreamSenderDelegate].
 // Writes to the delegate are directly forwarded to w.
 func StreamWriter(w io.Writer) StreamSenderDelegate {
 	return &writerStreamSenderDelegate{w: w}

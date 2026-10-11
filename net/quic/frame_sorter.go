@@ -81,6 +81,13 @@ func (s *frameSorter) flushSeqToQueue() {
 	}
 }
 
+// Push inserts stream data at the given offset, defragmenting out-of-order arrivals and trimming overlapping bytes (RFC 9000 §2.2 & §6.2).
+//
+// Complexity:
+//   - Time: O(1) fast path for in-order sequential data with no gaps fitting into the 16-slot ring buffer.
+//     O(G + M) slow path for out-of-order frames, where G <= MaxStreamFrameSorterGaps (traversing the gap linked list)
+//     and M is the count of existing overlapping queued frames replaced or truncated.
+//   - Space: O(1) allocations on fast path; O(N) map entries for N out-of-order frames buffered during packet loss.
 func (s *frameSorter) Push(data []byte, offset protocol.ByteCount, doneCb func()) error {
 	err := s.push(data, offset, doneCb)
 	if errors.Is(err, errDuplicateStreamData) {
@@ -312,6 +319,11 @@ func (s *frameSorter) deleteConsecutive(pos protocol.ByteCount) {
 	}
 }
 
+// Pop returns the next contiguous slice of stream data starting at readPos (RFC 9000 §2.2).
+//
+// Complexity:
+//   - Time: O(1) amortized. Directly drains the contiguous ring buffer in O(1) or performs an O(1) map lookup.
+//   - Space: O(1) zero allocations.
 func (s *frameSorter) Pop() (protocol.ByteCount, []byte, func()) {
 	if s.seqCount > 0 && s.seqBuf[s.seqHead].offset == s.readPos {
 		item := s.seqBuf[s.seqHead]
@@ -357,6 +369,10 @@ var errTooLittleData = errors.New("too little data")
 // It is only possible to peek from an offset where a frame starts.
 //
 // If there isn't enough consecutive data available, errTooLittleData is returned.
+//
+// Complexity:
+//   - Time: O(F + B) where F is the count of consecutive frames spanned by len(p) and B is len(p) bytes copied.
+//   - Space: O(1) zero heap allocations.
 func (s *frameSorter) Peek(offset protocol.ByteCount, p []byte) error {
 	if len(p) == 0 {
 		return nil

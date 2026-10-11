@@ -15,13 +15,13 @@ import (
 
 // Supported compression levels (RFC 1951).
 const (
-	// CompressNoCompression disables compression (RFC 1951).
+	// CompressNoCompression disables Deflate compression (RFC 1951).
 	CompressNoCompression = flate.NoCompression
-	// CompressBestSpeed uses the fastest compression speed (RFC 1951).
+	// CompressBestSpeed specifies compression level tuned for throughput at the expense of ratio (RFC 1951).
 	CompressBestSpeed = flate.BestSpeed
-	// CompressBestCompression uses the maximum compression ratio (RFC 1951).
+	// CompressBestCompression specifies compression level tuned for ratio at the expense of throughput (RFC 1951).
 	CompressBestCompression = flate.BestCompression
-	// CompressDefaultCompression uses standard balanced compression (RFC 1951).
+	// CompressDefaultCompression specifies standard balanced compression level (RFC 1951).
 	CompressDefaultCompression = 6 // flate.DefaultCompression
 	// CompressHuffmanOnly restricts deflate compression to Huffman coding only (RFC 1951).
 	CompressHuffmanOnly = -2 // flate.HuffmanOnly

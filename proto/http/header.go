@@ -180,7 +180,7 @@ func (h *header) copyTo(dst *header) {
 }
 
 func (h *header) setNonSpecial(key, value []byte) {
-	setArgBytesHeaders(&h.h, key, value, zerocopy.ArgsHasValue)
+	setArgBytesHeaders(&h.h, key, value)
 }
 
 // RequestHeader represents an HTTP request header block (RFC 9112 Section 2.1).

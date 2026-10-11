@@ -19,7 +19,12 @@ import (
 //
 // It serializes mandatory pseudo-headers (:method, :scheme, :authority, :path, and optional :protocol for extended CONNECT),
 // content-type, content-length, and custom headers in orderedKeys or natural iteration, omitting prohibited HTTP/3 headers.
-// Concurrency: Thread-safe; protected by the internal encoder mutex (encMu).
+//
+// Complexity:
+//   - Time: O(H + B) where H is the total header count and B is the aggregate byte size of field names and values.
+//     Each header undergoes O(1) prohibited field verification (RFC 9114 §4.1). When orderedKeys is provided,
+//     getOrderedHeaders runs in O(K * M + H) where K <= 64 via a bitmask-accelerated deduplication pass.
+//   - Space: O(B) buffer allocation for the generated QPACK instruction block.
 func (q *QPACKCodec) EncodeRequestHeaders(
 	streamID uint64,
 	w io.Writer,
@@ -236,7 +241,10 @@ func (h *responseHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorM
 // It decodes the mandatory :status pseudo-header and populates response header fields,
 // returning the parsed HTTP status code. If :status is missing or malformed (such as status 101,
 // prohibited in HTTP/3 by RFC 9114 §4.3.1), ErrMissingStatusHeader or ErrMalformedHeader is returned.
-// Concurrency: Thread-safe; protected by the internal decoder mutex (decMu).
+//
+// Complexity:
+//   - Time: O(B) progressive parsing across the header block of B bytes (RFC 9204 §4.5).
+//   - Space: O(H) where H is the count of decoded response header entries stored in res.
 func (q *QPACKCodec) DecodeResponseHeaders(
 	streamID uint64,
 	headerBlock []byte,
@@ -296,7 +304,10 @@ func (h *trailersHandler) OnDecodingErrorDetected(errorCode uint64, errorMessage
 // DecodeResponseTrailers decodes a QPACK-encoded trailing field section (RFC 9204 §4.5, RFC 9114 §4.3.4).
 //
 // Trailing pseudo-headers (beginning with ':') are discarded per RFC 9114 §4.3.4.
-// Concurrency: Thread-safe; protected by the internal decoder mutex (decMu).
+//
+// Complexity:
+//   - Time: O(B) progressive parsing over the B trailer block bytes.
+//   - Space: O(T) allocations for T decoded trailer entries stored in the map.
 func (q *QPACKCodec) DecodeResponseTrailers(
 	streamID uint64,
 	headerBlock []byte,

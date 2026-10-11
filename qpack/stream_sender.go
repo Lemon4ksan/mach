@@ -9,19 +9,20 @@ import "io"
 const maxBytesBufferedByStream uint64 = 64 * 1024
 
 // EncoderStreamSender serializes instructions for the encoder stream (RFC 9204 §4.3).
+// The zero value is not ready for use; initialize with [NewEncoderStreamSender] or [NewEncoderStreamSenderWithHuffman].
 type EncoderStreamSender struct {
 	delegate           StreamSenderDelegate
 	instructionEncoder *InstructionEncoder
 	buffer             []byte
 }
 
-// NewEncoderStreamSender creates a new EncoderStreamSender with default
-// Huffman encoding (enabled) and the specified delegate.
+// NewEncoderStreamSender creates an initialized [EncoderStreamSender] with default
+// Huffman encoding enabled and the specified delegate.
 func NewEncoderStreamSender(delegate StreamSenderDelegate) *EncoderStreamSender {
 	return NewEncoderStreamSenderWithHuffman(HuffmanEncodingEnabled, delegate)
 }
 
-// NewEncoderStreamSenderWithHuffman creates a new EncoderStreamSender
+// NewEncoderStreamSenderWithHuffman creates an initialized [EncoderStreamSender]
 // with an explicit Huffman encoding policy.
 func NewEncoderStreamSenderWithHuffman(huffman HuffmanEncoding, delegate StreamSenderDelegate) *EncoderStreamSender {
 	return &EncoderStreamSender{
@@ -113,13 +114,14 @@ func (s *EncoderStreamSender) FlushTo(w io.Writer) error {
 // -----------------------------------------------------------------------------
 
 // DecoderStreamSender serializes instructions for the decoder stream (RFC 9204 §4.4).
+// The zero value is not ready for use; initialize with [NewDecoderStreamSender].
 type DecoderStreamSender struct {
 	delegate           StreamSenderDelegate
 	instructionEncoder *InstructionEncoder
 	buffer             []byte
 }
 
-// NewDecoderStreamSender creates a new DecoderStreamSender.
+// NewDecoderStreamSender creates an initialized [DecoderStreamSender].
 // Decoder stream instructions only contain integer values, so Huffman encoding is disabled.
 func NewDecoderStreamSender(delegate StreamSenderDelegate) *DecoderStreamSender {
 	return &DecoderStreamSender{

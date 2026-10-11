@@ -71,9 +71,8 @@ func FormatHexUint(buf *[16]byte, val int) int {
 	idx := 15
 	for val > 0 {
 		nib := byte(val & 0x0F)
-		if nib < 10 {
-			buf[idx] = '0' + nib
-		} else {
+		buf[idx] = '0' + nib
+		if nib >= 10 {
 			buf[idx] = 'a' + (nib - 10)
 		}
 

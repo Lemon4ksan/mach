@@ -287,7 +287,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 		}
 
 		if h.disableSpecialHeader {
-			appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
+			appendArgBytesHeaders(&h.h, s.key, s.value)
 			continue
 		}
 
@@ -329,10 +329,11 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
 				if hasHeaderValue(s.value, zerocopy.StrClose) {
 					h.connectionClose = true
-				} else {
-					h.connectionClose = false
-					appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
+					continue
 				}
+
+				h.connectionClose = false
+				appendArgBytesHeaders(&h.h, s.key, s.value)
 
 				continue
 			}
@@ -353,7 +354,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 				if isChunked {
 					h.contentLength = -1
-					setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked, zerocopy.ArgsHasValue)
+					setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked)
 				}
 
 				continue
@@ -370,7 +371,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			}
 		}
 
-		appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
+		appendArgBytesHeaders(&h.h, s.key, s.value)
 	}
 
 	if s.err != nil {
@@ -713,10 +714,11 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
 				if hasHeaderValue(s.value, zerocopy.StrClose) {
 					h.connectionClose = true
-				} else {
-					h.connectionClose = false
-					appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
+					continue
 				}
+
+				h.connectionClose = false
+				appendArgBytesHeaders(&h.h, s.key, s.value)
 
 				continue
 			}
@@ -762,7 +764,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				}
 
 				h.contentLength = -1
-				setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked, zerocopy.ArgsHasValue)
+				setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked)
 
 				continue
 			}
@@ -778,7 +780,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			}
 		}
 
-		appendArgBytesHeaders(&h.h, s.key, s.value, zerocopy.ArgsHasValue)
+		appendArgBytesHeaders(&h.h, s.key, s.value)
 	}
 
 	if s.err != nil {

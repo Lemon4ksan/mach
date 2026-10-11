@@ -111,15 +111,16 @@ func (c *Conn) writeRequest(ctx *Context) error {
 		}
 	}
 
-	if err == nil {
-		c.openStreams.Add(1)
-	} else {
+	if err != nil {
 		c.lastErr = err
 		c.deleteStream(id)
 		ctx.SetState(streamClosed)
+		return err
 	}
 
-	return err
+	c.openStreams.Add(1)
+
+	return nil
 }
 
 func (c *Conn) writeData(fh *coreh2.FrameHeader, ctx *Context, body []byte) error {

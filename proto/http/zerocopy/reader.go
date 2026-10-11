@@ -10,8 +10,11 @@ import (
 	"io"
 )
 
+// ErrBufferFull indicates that StreamReader buffer capacity was exceeded.
 var ErrBufferFull = errors.New("zerocopy: buffer full")
 
+// StreamReader provides buffered reading without heap allocation during scans.
+// The zero value is not ready for use; initialize with [NewStreamReader].
 type StreamReader struct {
 	buf []byte
 	rd  io.Reader
@@ -20,6 +23,7 @@ type StreamReader struct {
 	err error
 }
 
+// NewStreamReader returns a new [StreamReader] instance reading from rd with the specified buffer size.
 func NewStreamReader(rd io.Reader, size int) *StreamReader {
 	if size < 4096 {
 		size = 4096
@@ -31,6 +35,7 @@ func NewStreamReader(rd io.Reader, size int) *StreamReader {
 	}
 }
 
+// Reset resets b to read from rd and clears internal buffer state.
 func (b *StreamReader) Reset(rd io.Reader) {
 	b.rd = rd
 	b.r = 0
@@ -38,10 +43,12 @@ func (b *StreamReader) Reset(rd io.Reader) {
 	b.err = nil
 }
 
+// Buffered returns the count of buffered bytes available to read.
 func (b *StreamReader) Buffered() int {
 	return b.w - b.r
 }
 
+// Peek returns the next n bytes without advancing the read position.
 func (b *StreamReader) Peek(n int) ([]byte, error) {
 	if n < 0 {
 		return nil, errors.New("zerocopy: negative count")
@@ -68,6 +75,7 @@ func (b *StreamReader) Peek(n int) ([]byte, error) {
 	return b.buf[b.r : b.r+n], err
 }
 
+// Discard skips the next n bytes in the buffer, returning the number of bytes skipped.
 func (b *StreamReader) Discard(n int) (int, error) {
 	if n < 0 {
 		return 0, errors.New("zerocopy: negative count")
@@ -92,6 +100,7 @@ func (b *StreamReader) Discard(n int) (int, error) {
 	return remain, io.EOF
 }
 
+// ReadSlice reads until the first occurrence of delim in the input stream.
 func (b *StreamReader) ReadSlice(delim byte) ([]byte, error) {
 	s := 0
 	for {
@@ -114,6 +123,7 @@ func (b *StreamReader) ReadSlice(delim byte) ([]byte, error) {
 	}
 }
 
+// Read reads up to len(p) bytes into p from the buffered stream.
 func (b *StreamReader) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -142,6 +152,7 @@ func (b *StreamReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
+// ReadByte reads and returns the next byte from the buffered stream.
 func (b *StreamReader) ReadByte() (byte, error) {
 	for b.r == b.w {
 		if b.err != nil {

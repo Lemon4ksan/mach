@@ -34,7 +34,6 @@ func (e *QPACKStreamError) Error() string {
 //
 // Specifically, it matches ErrQPACKDecompressFailed when e.Code equals
 // ErrCodeQpackDecompressionFailed (RFC 9114 §4.2, RFC 9204 §8.3).
-// Concurrency: Safe for concurrent invocation across goroutines.
 func (e *QPACKStreamError) Is(target error) bool {
 	if e == nil {
 		return false
@@ -101,7 +100,7 @@ func (q *QPACKCodec) SetErrorHandler(fn func(err error)) {
 	q.errHook = fn
 }
 
-// NewQPACKCodec instantiates a thread-safe, panic-free QPACKCodec with defaults (RFC 9204).
+// NewQPACKCodec instantiates a QPACKCodec with defaults (RFC 9204).
 func NewQPACKCodec() *QPACKCodec {
 	return NewQPACKCodecWithOptions(4096, 100, nil)
 }
@@ -140,8 +139,6 @@ func NewQPACKCodecWithOptions(maxDynamicTableCapacity, maxBlockedStreams uint64,
 // Decoder returns the underlying QPACK progressive decoder instance (RFC 9204 §3).
 //
 // Callers may use the decoder to inspect dynamic table state or create progressive decoders.
-// Concurrency: State inspection is thread-safe; progressive decoders created from this instance
-// must be synchronized or managed per-stream.
 func (q *QPACKCodec) Decoder() *qpack.Decoder {
 	return q.decoder
 }
@@ -149,7 +146,6 @@ func (q *QPACKCodec) Decoder() *qpack.Decoder {
 // Encoder returns the underlying QPACK encoder instance (RFC 9204 §4).
 //
 // Callers may use the encoder to inspect header table capacity or encode raw header lists.
-// Concurrency: Concurrent encoding operations must be synchronized via the codec's encoder mutex.
 func (q *QPACKCodec) Encoder() *qpack.Encoder {
 	return q.encoder
 }

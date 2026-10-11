@@ -55,8 +55,11 @@ func (c *receiveFlowController) getWindowUpdate(now monotime.Time) protocol.Byte
 	return c.receiveWindow
 }
 
-// maybeAdjustWindowSize increases the receiveWindowSize if we're sending updates too often.
-// For details about auto-tuning, see https://docs.google.com/document/d/1SExkMmGiz8VYzV3s9E35JQlJ73vhzCekKkDi85F1qCE/edit?usp=sharing.
+// maybeAdjustWindowSize auto-tunes receiveWindowSize when reading data faster than 4*RTT (RFC 9000 §4.2).
+//
+// Complexity:
+//   - Time: O(1) fixed scalar arithmetic evaluating consumption rate against smoothed RTT across epochs.
+//   - Space: O(1) zero heap allocations.
 func (c *receiveFlowController) maybeAdjustWindowSize(now monotime.Time) {
 	bytesReadInEpoch := c.bytesRead - c.epochStartOffset
 	// don't do anything if less than half the window has been consumed

@@ -14,11 +14,15 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// Supported compression levels.
+// Supported Brotli compression levels (RFC 7932).
 const (
-	CompressBrotliNoCompression      = 0
-	CompressBrotliBestSpeed          = 1
-	CompressBrotliBestCompression    = 11
+	// CompressBrotliNoCompression disables Brotli compression (RFC 7932).
+	CompressBrotliNoCompression = 0
+	// CompressBrotliBestSpeed selects the lowest compression level tuned for throughput (RFC 7932).
+	CompressBrotliBestSpeed = 1
+	// CompressBrotliBestCompression selects the highest compression level tuned for ratio (RFC 7932).
+	CompressBrotliBestCompression = 11
+	// CompressBrotliDefaultCompression selects the default balanced Brotli compression level (RFC 7932).
 	CompressBrotliDefaultCompression = 4
 )
 
@@ -42,18 +46,18 @@ func AppendBrotliBytesLevel(dst, src []byte, level int) []byte {
 	return buf.Bytes()
 }
 
-// WriteBrotliLevel compresses p with Brotli at the given level and writes it to w.
+// WriteBrotliLevel compresses p with Brotli at the given level and writes it to w (RFC 7932).
 func WriteBrotliLevel(w io.Writer, p []byte, level int) (int, error) {
 	b := AppendBrotliBytesLevel(nil, p, level)
 	return w.Write(b)
 }
 
-// WriteBrotli compresses p with default Brotli compression and writes it to w.
+// WriteBrotli compresses p with [CompressBrotliDefaultCompression] and writes it to w (RFC 7932).
 func WriteBrotli(w io.Writer, p []byte) (int, error) {
 	return WriteBrotliLevel(w, p, CompressBrotliDefaultCompression)
 }
 
-// AppendBrotliBytes appends Brotli-compressed src to dst using default compression.
+// AppendBrotliBytes appends Brotli-compressed src to dst using [CompressBrotliDefaultCompression] (RFC 7932).
 func AppendBrotliBytes(dst, src []byte) []byte {
 	return AppendBrotliBytesLevel(dst, src, CompressBrotliDefaultCompression)
 }
@@ -85,7 +89,7 @@ func WriteUnbrotliLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
 	return nn, err
 }
 
-// AppendUnbrotliBytes decompresses Brotli payload src and appends the uncompressed data to dst.
+// AppendUnbrotliBytes decompresses Brotli payload src and appends the uncompressed data to dst (RFC 7932).
 func AppendUnbrotliBytes(dst, src []byte) ([]byte, error) {
 	if len(dst) == 0 {
 		return compress.Unbrotli(src, dst)

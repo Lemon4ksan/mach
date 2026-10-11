@@ -148,11 +148,11 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 
 func (c *Conn) recoverWriteLoop(lastErr *error) {
 	if r := recover(); r != nil && *lastErr == nil {
-		if err, ok := r.(error); ok {
-			*lastErr = err
-		} else {
-			*lastErr = fmt.Errorf("h2engine panic: %v", r)
+		err, ok := r.(error)
+		if !ok {
+			err = fmt.Errorf("h2engine panic: %v", r)
 		}
+		*lastErr = err
 	}
 
 	if *lastErr == nil {
@@ -175,9 +175,9 @@ func (c *Conn) writePing() error {
 	_, err := fr.WriteTo(c.bw)
 	if err == nil {
 		err = c.bw.Flush()
-		if err == nil {
-			c.pingUnacks++
-		}
+	}
+	if err == nil {
+		c.pingUnacks++
 	}
 
 	c.writeMu.Unlock()

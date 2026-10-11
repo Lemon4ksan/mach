@@ -161,10 +161,12 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		req.EarlyHintsFn = earlyHintsFn
 
 		// Set read timeout
-		if ch.ReadTimeout > 0 {
-			_ = conn.SetReadDeadline(time.Now().Add(ch.ReadTimeout))
-		} else if ch.IdleTimeout > 0 {
-			_ = conn.SetReadDeadline(time.Now().Add(ch.IdleTimeout))
+		readDeadline := ch.ReadTimeout
+		if readDeadline <= 0 {
+			readDeadline = ch.IdleTimeout
+		}
+		if readDeadline > 0 {
+			_ = conn.SetReadDeadline(time.Now().Add(readDeadline))
 		}
 
 		err := req.ReadRequest(br, bw, maxBody)

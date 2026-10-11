@@ -24,25 +24,40 @@ const (
 	// ErrCodeDecoderStreamError indicates an error on the decoder stream (RFC 9204 §2.2.3.3).
 	ErrCodeDecoderStreamError ErrorCode = 0x0202
 
-	// Detailed RFC 9204 / QUIC encoder stream error subcodes.
-	ErrCodeEncoderIntegerTooLarge               ErrorCode = 174
-	ErrCodeEncoderStringLiteralTooLong          ErrorCode = 175
-	ErrCodeEncoderHuffmanEncodingError          ErrorCode = 176
-	ErrCodeEncoderInvalidStaticEntry            ErrorCode = 177
-	ErrCodeEncoderErrorInsertingStatic          ErrorCode = 178
+	// ErrCodeEncoderIntegerTooLarge indicates an integer on the encoder stream exceeds representable bounds.
+	ErrCodeEncoderIntegerTooLarge ErrorCode = 174
+	// ErrCodeEncoderStringLiteralTooLong indicates a string literal on the encoder stream exceeds the size limit.
+	ErrCodeEncoderStringLiteralTooLong ErrorCode = 175
+	// ErrCodeEncoderHuffmanEncodingError indicates a Huffman encoding error on the encoder stream.
+	ErrCodeEncoderHuffmanEncodingError ErrorCode = 176
+	// ErrCodeEncoderInvalidStaticEntry indicates an invalid static table index on the encoder stream.
+	ErrCodeEncoderInvalidStaticEntry ErrorCode = 177
+	// ErrCodeEncoderErrorInsertingStatic indicates a failure inserting a static entry on the encoder stream.
+	ErrCodeEncoderErrorInsertingStatic ErrorCode = 178
+	// ErrCodeEncoderInsertionInvalidRelativeIndex indicates an invalid relative index during insertion.
 	ErrCodeEncoderInsertionInvalidRelativeIndex ErrorCode = 179
+	// ErrCodeEncoderInsertionDynamicEntryNotFound indicates a dynamic table entry was not found during insertion.
 	ErrCodeEncoderInsertionDynamicEntryNotFound ErrorCode = 180
-	ErrCodeEncoderErrorInsertingDynamic         ErrorCode = 181
-	ErrCodeEncoderErrorInsertingLiteral         ErrorCode = 182
+	// ErrCodeEncoderErrorInsertingDynamic indicates a failure inserting a dynamic entry.
+	ErrCodeEncoderErrorInsertingDynamic ErrorCode = 181
+	// ErrCodeEncoderErrorInsertingLiteral indicates a failure inserting a literal entry.
+	ErrCodeEncoderErrorInsertingLiteral ErrorCode = 182
+	// ErrCodeEncoderDuplicateInvalidRelativeIndex indicates an invalid relative index during duplication.
 	ErrCodeEncoderDuplicateInvalidRelativeIndex ErrorCode = 183
+	// ErrCodeEncoderDuplicateDynamicEntryNotFound indicates a dynamic table entry was not found during duplication.
 	ErrCodeEncoderDuplicateDynamicEntryNotFound ErrorCode = 184
-	ErrCodeEncoderSetDynamicTableCapacity       ErrorCode = 185
+	// ErrCodeEncoderSetDynamicTableCapacity indicates dynamic table capacity update failure.
+	ErrCodeEncoderSetDynamicTableCapacity ErrorCode = 185
 
-	// Detailed RFC 9204 / QUIC decoder stream error subcodes.
-	ErrCodeDecoderIntegerTooLarge          ErrorCode = 186
-	ErrCodeDecoderInvalidZeroIncrement     ErrorCode = 187
-	ErrCodeDecoderIncrementOverflow        ErrorCode = 188
-	ErrCodeDecoderImpossibleInsertCount    ErrorCode = 189
+	// ErrCodeDecoderIntegerTooLarge indicates an integer on the decoder stream exceeds representable bounds.
+	ErrCodeDecoderIntegerTooLarge ErrorCode = 186
+	// ErrCodeDecoderInvalidZeroIncrement indicates an invalid zero increment on the decoder stream.
+	ErrCodeDecoderInvalidZeroIncrement ErrorCode = 187
+	// ErrCodeDecoderIncrementOverflow indicates insert count increment overflowed on the decoder stream.
+	ErrCodeDecoderIncrementOverflow ErrorCode = 188
+	// ErrCodeDecoderImpossibleInsertCount indicates required insert count exceeds maximum possible.
+	ErrCodeDecoderImpossibleInsertCount ErrorCode = 189
+	// ErrCodeDecoderIncorrectAcknowledgement indicates an invalid stream acknowledgement on the decoder stream.
 	ErrCodeDecoderIncorrectAcknowledgement ErrorCode = 190
 )
 
@@ -71,6 +86,7 @@ var (
 )
 
 // Error represents a structured QPACK protocol error.
+// The zero value is ready to use, or instances may be created with [NewError] or [WrapError].
 type Error struct {
 	Code    ErrorCode
 	Message string
@@ -161,12 +177,12 @@ func (e *Error) Is(target error) bool {
 	return false
 }
 
-// NewError constructs a new *Error with code and message.
+// NewError creates a new [Error] with code and message.
 func NewError(code ErrorCode, message string) *Error {
 	return &Error{Code: code, Message: message}
 }
 
-// WrapError constructs a new *Error wrapping an underlying error.
+// WrapError creates a new [Error] wrapping an underlying error.
 func WrapError(code ErrorCode, message string, err error) *Error {
 	return &Error{Code: code, Message: message, Err: err}
 }

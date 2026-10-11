@@ -10,12 +10,13 @@ import (
 	"golang.org/x/net/http2/hpack"
 )
 
-// HuffmanEncoding specifies whether Huffman compression is attempted.
-// Direct 1:1 translation of Chromium's quiche::InstructionEncoder::HuffmanEncoding.
+// HuffmanEncoding specifies whether Huffman compression is attempted when encoding strings.
 type HuffmanEncoding int
 
 const (
+	// HuffmanEncodingEnabled enables Huffman compression when encoding literal strings.
 	HuffmanEncodingEnabled HuffmanEncoding = iota
+	// HuffmanEncodingDisabled disables Huffman compression when encoding literal strings.
 	HuffmanEncodingDisabled
 )
 
@@ -43,7 +44,7 @@ const (
 )
 
 // InstructionEncoder serializes QPACK instructions into wire bytes.
-// Direct 1:1 structural translation of Chromium's quiche::InstructionEncoder.
+// The zero value is not ready for use; initialize with [NewInstructionEncoder].
 type InstructionEncoder struct {
 	huffman HuffmanEncoding
 
@@ -56,7 +57,7 @@ type InstructionEncoder struct {
 	stringVal    string
 }
 
-// NewInstructionEncoder creates a new encoder with the specified Huffman encoding policy.
+// NewInstructionEncoder creates an initialized [InstructionEncoder] with the specified Huffman encoding policy.
 func NewInstructionEncoder(huffman HuffmanEncoding) *InstructionEncoder {
 	return &InstructionEncoder{
 		huffman: huffman,

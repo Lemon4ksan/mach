@@ -36,55 +36,49 @@ const (
 	QUIC_QPACK_DECODER_STREAM_INCORRECT_ACKNOWLEDGEMENT         = uint64(ErrCodeDecoderIncorrectAcknowledgement)
 )
 
-// InstructionOpcode represents the bitmask and value identifying an instruction in the first byte.
-// |Mask| determines which bits are part of the opcode.
-// |Value| is the expected value of those bits (all other bits must be zero).
-// Follows RFC 9204 instruction wire format definitions.
+// InstructionOpcode represents the bitmask and value identifying an instruction in the first byte (RFC 9204).
+// The zero value is ready to use.
 type InstructionOpcode struct {
 	Value byte
 	Mask  byte
 }
 
+// Equal reports whether o and other represent the same opcode value and mask.
 func (o InstructionOpcode) Equal(other InstructionOpcode) bool {
 	return o.Value == other.Value && o.Mask == other.Mask
 }
 
-// InstructionFieldType identifies the type of an instruction field.
-// Follows RFC 9204 stream instruction field definitions.
+// InstructionFieldType identifies the type of an instruction field (RFC 9204).
 type InstructionFieldType int
 
 const (
-	// InstructionFieldTypeSbit: A single bit indicating static table reference or sign of Delta Base.
+	// InstructionFieldTypeSbit represents a single bit indicating static table reference or sign of Delta Base.
 	InstructionFieldTypeSbit InstructionFieldType = iota
-	// InstructionFieldTypeVarint: Variable-length integer (index, stream ID, max capacity, RIC).
+	// InstructionFieldTypeVarint represents a variable-length integer.
 	InstructionFieldTypeVarint
-	// InstructionFieldTypeVarint2: Second variable-length integer (Delta Base).
+	// InstructionFieldTypeVarint2 represents a second variable-length integer (such as Delta Base).
 	InstructionFieldTypeVarint2
-	// InstructionFieldTypeName: Header name (Huffman flag + length prefix varint + string literal).
+	// InstructionFieldTypeName represents a header name field.
 	InstructionFieldTypeName
-	// InstructionFieldTypeValue: Header value (Huffman flag + length prefix varint + string literal).
+	// InstructionFieldTypeValue represents a header value field.
 	InstructionFieldTypeValue
 )
 
 // InstructionField describes a single field following an opcode.
-// For kSbit: param is mask with exactly one bit set.
-// For kVarint / kVarint2: param is prefix length in bits (1..8).
-// For kName / kValue: param is prefix length of string length varint.
-// The bit immediately preceding the prefix is interpreted as the Huffman flag.
+// The zero value is ready to use.
 type InstructionField struct {
 	Type  InstructionFieldType
 	Param uint8
 }
 
-// Instruction consists of an opcode followed by an ordered list of fields.
-// Follows RFC 9204 wire format specification.
+// Instruction consists of an opcode followed by an ordered list of fields (RFC 9204).
+// The zero value is ready to use.
 type Instruction struct {
 	Opcode InstructionOpcode
 	Fields []InstructionField
 }
 
-// Language represents a complete stream grammar.
-// In a valid language, every byte from 0 to 255 matches exactly one instruction opcode.
+// Language represents a complete stream grammar consisting of a list of [Instruction] definitions.
 type Language []*Instruction
 
 // Instructions returns the underlying slice of instructions.
@@ -368,8 +362,8 @@ func RequestStreamLanguage() *Language {
 // InstructionWithValues
 // -----------------------------------------------------------------------------
 
-// InstructionWithValues holds an instruction grammar reference and bound field values.
-// Follows RFC 9204 instruction definitions.
+// InstructionWithValues holds an instruction grammar reference and bound field values (RFC 9204).
+// The zero value is ready to use, or initialize with [NewInstructionWithValues].
 type InstructionWithValues struct {
 	instruction *Instruction
 	sBit        bool
@@ -379,6 +373,7 @@ type InstructionWithValues struct {
 	value       string
 }
 
+// NewInstructionWithValues creates an [InstructionWithValues] referencing the given [Instruction].
 func NewInstructionWithValues(instruction *Instruction) *InstructionWithValues {
 	return &InstructionWithValues{instruction: instruction}
 }

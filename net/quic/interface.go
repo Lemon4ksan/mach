@@ -183,7 +183,8 @@ type Config struct {
 	// Values below 1200 are invalid.
 	InitialPacketSize uint16
 	// DisablePathMTUDiscovery disables Path MTU Discovery (RFC 8899).
-	// This allows the sending of QUIC packets that fully utilize the available MTU of the path.
+	// When true, MTU probing is disabled and transmission is restricted to base MTU packets (RFC 9000 §14).
+	// When false (default), DPLPMTUD dynamically probes the path to fully utilize the available MTU.
 	// Path MTU discovery is only available on systems that allow setting of the Don't Fragment (DF) bit.
 	DisablePathMTUDiscovery bool
 	// Allow0RTT allows the application to decide if a 0-RTT connection attempt should be accepted.

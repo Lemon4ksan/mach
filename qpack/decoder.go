@@ -15,6 +15,7 @@ type EncoderStreamErrorHandler func(errorCode uint64, errorMessage string)
 
 // Decoder decodes QPACK header blocks and manages dynamic table state (RFC 9204).
 // Exactly one instance should exist per QUIC connection.
+// The zero value is not ready for use; initialize with [NewDecoder].
 type Decoder struct {
 	encoderStreamErrorHandler EncoderStreamErrorHandler
 	encoderStreamReceiver     *EncoderStreamReceiver
@@ -26,7 +27,7 @@ type Decoder struct {
 	lastErr                   error
 }
 
-// NewDecoder creates a new Decoder.
+// NewDecoder creates an initialized [Decoder] with specified capacity and limits.
 func NewDecoder(
 	maximumDynamicTableCapacity uint64,
 	maximumBlockedStreams uint64,
@@ -63,19 +64,19 @@ func (d *Decoder) OnStreamReset(streamID uint64) {
 	}
 }
 
-// OnStreamBlocked is called by ProgressiveDecoder when decoding is blocked.
+// OnStreamBlocked is called by [ProgressiveDecoder] when decoding is blocked.
 // Returns true if allowed, or false if the blocked stream limit is exceeded.
 func (d *Decoder) OnStreamBlocked(streamID uint64) bool {
 	d.blockedStreams[streamID] = struct{}{}
 	return uint64(len(d.blockedStreams)) <= d.maximumBlockedStreams
 }
 
-// OnStreamUnblocked is called by ProgressiveDecoder when the stream becomes unblocked.
+// OnStreamUnblocked is called by [ProgressiveDecoder] when the stream becomes unblocked.
 func (d *Decoder) OnStreamUnblocked(streamID uint64) {
 	delete(d.blockedStreams, streamID)
 }
 
-// OnDecodingCompleted implements DecodingCompletedVisitor.
+// OnDecodingCompleted implements [DecodingCompletedVisitor].
 func (d *Decoder) OnDecodingCompleted(streamID, requiredInsertCount uint64) {
 	if requiredInsertCount > 0 {
 		d.decoderStreamSender.SendHeaderAcknowledgement(streamID)
@@ -94,7 +95,7 @@ func (d *Decoder) OnDecodingCompleted(streamID, requiredInsertCount uint64) {
 	}
 }
 
-// CreateProgressiveDecoder creates a ProgressiveDecoder for decoding a header block on streamID.
+// CreateProgressiveDecoder creates a [ProgressiveDecoder] for decoding a header block on streamID.
 func (d *Decoder) CreateProgressiveDecoder(
 	streamID uint64,
 	handler HeadersHandlerInterface,
@@ -102,7 +103,7 @@ func (d *Decoder) CreateProgressiveDecoder(
 	return d.CreateProgressiveDecoderWithMaxBufferedData(streamID, 0, handler)
 }
 
-// CreateProgressiveDecoderWithMaxBufferedData creates a ProgressiveDecoder with an explicit buffer limit.
+// CreateProgressiveDecoderWithMaxBufferedData creates a [ProgressiveDecoder] with an explicit buffer limit.
 func (d *Decoder) CreateProgressiveDecoderWithMaxBufferedData(
 	streamID uint64,
 	maxBufferedData uint64,
@@ -248,7 +249,7 @@ func (d *Decoder) SetDynamicTableCapacity(capacity uint64) {
 	}
 }
 
-// Error receives decoder or wire parsing errors from EncoderStreamReceiver.
+// Error receives decoder or wire parsing errors from [EncoderStreamReceiver].
 func (d *Decoder) Error(qpackError uint64, errorMessage string) {
 	errorCode := qpackError
 	if qpackError == QPACK_ENCODER_STREAM_ERROR {

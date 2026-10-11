@@ -46,10 +46,9 @@ func (r *ServerRequest) Reset() {
 	r.Authority = ""
 	r.Headers.Reset()
 
+	r.Body = r.Body[:0]
 	if cap(r.Body) > 64*1024 {
 		r.Body = nil
-	} else {
-		r.Body = r.Body[:0]
 	}
 
 	r.RemoteAddr = ""
@@ -68,10 +67,9 @@ func (r *ServerResponse) Reset() {
 	r.StatusCode = http.StatusOK
 	r.Headers.Reset()
 
+	r.Body = r.Body[:0]
 	if cap(r.Body) > 64*1024 {
 		r.Body = nil
-	} else {
-		r.Body = r.Body[:0]
 	}
 }
 
@@ -173,34 +171,35 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 				return
 			}
 
-			if !hasSeenHeaders {
-				hasSeenHeaders = true
-
-				if frameLen <= uint64(len(stackHeaderBuf)) {
-					headerBlock = stackHeaderBuf[:frameLen]
-				} else {
-					heapHeaderBuf = h3HeaderBlockStorage.Get()
-
-					b := (*heapHeaderBuf)[:0]
-					if uint64(cap(b)) < frameLen {
-						b = make([]byte, frameLen)
-					} else {
-						b = b[:frameLen]
-					}
-
-					headerBlock = b
-				}
-
-				if _, err := io.ReadFull(br, headerBlock); err != nil {
-					return
-				}
-			} else {
+			if hasSeenHeaders {
 				hasSeenTrailer = true
 
 				if frameLen > 0 {
 					lr := io.LimitReader(br, int64(frameLen)) //nolint:gosec
 					_, _ = io.Copy(io.Discard, lr)
 				}
+				break
+			}
+
+			hasSeenHeaders = true
+
+			if frameLen <= uint64(len(stackHeaderBuf)) {
+				headerBlock = stackHeaderBuf[:frameLen]
+			} else {
+				heapHeaderBuf = h3HeaderBlockStorage.Get()
+
+				b := (*heapHeaderBuf)[:0]
+				if uint64(cap(b)) < frameLen {
+					b = make([]byte, frameLen)
+				} else {
+					b = b[:frameLen]
+				}
+
+				headerBlock = b
+			}
+
+			if _, err := io.ReadFull(br, headerBlock); err != nil {
+				return
 			}
 
 		case coreh3.FrameTypeData:

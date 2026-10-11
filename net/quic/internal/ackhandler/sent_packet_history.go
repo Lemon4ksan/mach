@@ -151,8 +151,12 @@ func (h *sentPacketHistory) NumOutstanding() int {
 	return h.numOutstanding
 }
 
-// Remove removes a packet from the sent packet history.
+// Remove removes a packet from the sent packet history upon acknowledgment (RFC 9002 §6 & §6.1).
 // It must not be used for skipped packet numbers.
+//
+// Complexity:
+//   - Time: O(1) amortized via direct array offset indexing and sliding window head truncation (cleanupStart).
+//   - Space: O(1) zero heap allocations.
 func (h *sentPacketHistory) Remove(pn protocol.PacketNumber) error {
 	idx, ok := h.getIndex(pn)
 	if !ok {
@@ -261,6 +265,11 @@ func (h *sentPacketHistory) LowestPacketNumber() protocol.PacketNumber {
 	return h.firstPacketNumber
 }
 
+// DeclareLost marks a packet as lost, adjusting the outstanding counter (RFC 9002 §6.1).
+//
+// Complexity:
+//   - Time: O(1) amortized via direct offset indexing and sliding window head truncation.
+//   - Space: O(1) zero heap allocations.
 func (h *sentPacketHistory) DeclareLost(pn protocol.PacketNumber) {
 	idx, ok := h.getIndex(pn)
 	if !ok {

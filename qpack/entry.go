@@ -4,17 +4,17 @@
 
 package qpack
 
-// EntrySizeOverhead is the constant 32-byte overhead added to the length
-// of an entry's name and value to compute its size, as defined in RFC 9204 §3.2.1.
+// EntrySizeOverhead is the 32-byte overhead added to the lengths of entry name and value (RFC 9204 §3.2.1).
 const EntrySizeOverhead uint64 = 32
 
-// Entry represents an entry in the static or dynamic header table.
+// Entry represents a key-value header field in the static or dynamic header table (RFC 9204 §3.2).
+// The zero value is ready to use.
 type Entry struct {
 	Name  string
 	Value string
 }
 
-// NewEntry constructs a new Entry.
+// NewEntry creates a new [Entry] with the given name and value.
 func NewEntry(name, value string) *Entry {
 	return &Entry{
 		Name:  name,
@@ -22,12 +22,12 @@ func NewEntry(name, value string) *Entry {
 	}
 }
 
-// Size returns the size of the entry including 32 bytes of overhead (RFC 9204 §3.2.1).
+// Size returns the entry size in octets including [EntrySizeOverhead] (RFC 9204 §3.2.1).
 func (e *Entry) Size() uint64 {
 	return uint64(len(e.Name)+len(e.Value)) + EntrySizeOverhead
 }
 
-// EntrySize computes the size of an entry given its name and value strings.
+// EntrySize calculates the size in octets of an entry with the given name and value (RFC 9204 §3.2.1).
 func EntrySize(name, value string) uint64 {
 	return uint64(len(name)+len(value)) + EntrySizeOverhead
 }

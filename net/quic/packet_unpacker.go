@@ -54,10 +54,16 @@ func newPacketUnpacker(cs handshake.CryptoSetup, shortHdrConnIDLen int) *packetU
 	}
 }
 
-// UnpackLongHeader unpacks a Long Header packet.
+// UnpackLongHeader unpacks a Long Header packet (RFC 9000 §17.2, RFC 9001 §5.3 & §5.4).
 // If the reserved bits are invalid, the error is wire.ErrInvalidReservedBits.
 // If any other error occurred when parsing the header, the error is of type headerParseError.
 // If decrypting the payload fails for any reason, the error is the error returned by the AEAD.
+//
+// Complexity:
+//   - Time: O(P) where P is payload byte length. Header unmasking and packet number decoding take O(1) time,
+//     followed by linear O(P) AEAD symmetric decryption and authentication tag verification. Constant-time
+//     execution is preserved across reserved bit errors to prevent timing side channels (RFC 9001 §5.4.1).
+//   - Space: O(1) auxiliary allocations; payload is decrypted in-place within the incoming buffer slice.
 func (u *packetUnpacker) UnpackLongHeader(hdr *wire.Header, data []byte) (*unpackedPacket, error) {
 	var (
 		encLevel  protocol.EncryptionLevel
@@ -124,6 +130,11 @@ func (u *packetUnpacker) UnpackLongHeader(hdr *wire.Header, data []byte) (*unpac
 	}, nil
 }
 
+// UnpackShortHeader unpacks a 1-RTT Short Header packet (RFC 9000 §17.3, RFC 9001 §5.3 & §5.4).
+//
+// Complexity:
+//   - Time: O(P) where P is payload byte length for AEAD symmetric decryption and Poly1305/GHASH tag verification.
+//   - Space: O(1) zero allocations; decrypts in-place over incoming packet buffer.
 func (u *packetUnpacker) UnpackShortHeader(
 	rcvTime monotime.Time,
 	data []byte,

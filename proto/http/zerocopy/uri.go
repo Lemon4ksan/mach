@@ -21,18 +21,19 @@ var uriStorage = pool.NewPerCorePool(func() *URI {
 	return &URI{}
 })
 
-// AcquireURI returns an empty URI from the pool.
+// AcquireURI returns an empty [URI] instance from the pool.
 func AcquireURI() *URI {
 	return uriStorage.Get()
 }
 
-// ReleaseURI clears and returns u to the pool.
+// ReleaseURI resets u and returns it to the pool.
 func ReleaseURI(u *URI) {
 	u.Reset()
 	uriStorage.Put(u)
 }
 
 // URI represents a Uniform Resource Identifier (RFC 3986).
+// The zero value is ready to use, or instances may be acquired from [AcquireURI].
 type URI struct {
 	noCopy NoCopy
 
@@ -391,6 +392,7 @@ func validUserinfo(userinfo []byte) bool {
 	return true
 }
 
+// IsValidScheme reports whether scheme adheres to RFC 3986 §3.1 URI scheme syntax.
 func IsValidScheme(scheme []byte) bool {
 	if len(scheme) == 0 {
 		return false
@@ -520,14 +522,18 @@ const (
 	encodeZone
 )
 
+// EscapeError reports an invalid percent-encoding escape sequence in a URL (RFC 3986 §2.1).
 type EscapeError string
 
+// Error returns the string representation of the escape error.
 func (e EscapeError) Error() string {
 	return "invalid url escape " + strconv.Quote(string(e))
 }
 
+// InvalidHostError reports an invalid character in a host name (RFC 3986 §3.2.2).
 type InvalidHostError string
 
+// Error returns the string representation of the invalid host error.
 func (e InvalidHostError) Error() string {
 	return "invalid character " + strconv.Quote(string(e)) + " in host name"
 }
@@ -673,6 +679,7 @@ func validOptionalPort(port []byte) bool {
 	return true
 }
 
+// NormalizePath canonicalizes URL path bytes from src into dst (RFC 3986 §5.2.4).
 func NormalizePath(dst, src []byte) []byte {
 	dst = dst[:0]
 	if len(src) == 0 || src[0] != '/' {
@@ -980,6 +987,7 @@ func (u *URI) String() string {
 	return string(u.FullURI())
 }
 
+// SplitHostURI parses scheme, host, and path/query components from host and uri byte slices (RFC 3986).
 func SplitHostURI(host, uri []byte) ([]byte, []byte, []byte) {
 	n := bytes.Index(uri, StrSlashSlash)
 	if n < 0 {

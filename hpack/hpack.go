@@ -31,13 +31,13 @@ const (
 )
 
 var (
-	// ErrIntegerTruncated indicates variable-length integer buffer ended before completion (RFC 7541 §5.1).
+	// ErrIntegerTruncated indicates that a variable-length integer buffer ended before completion (RFC 7541 §5.1).
 	ErrIntegerTruncated = errors.New("hpack: truncated integer (RFC 7541 §5.1)")
 
-	// ErrIntegerOverflow indicates variable-length integer exceeds implementation limits (RFC 7541 §5.1).
+	// ErrIntegerOverflow indicates that a variable-length integer representation exceeds implementation limits (RFC 7541 §5.1).
 	ErrIntegerOverflow = errors.New("hpack: integer representation exceeds implementation limits (RFC 7541 §5.1)")
 
-	// ErrIndexZero indicates forbidden index value 0 (RFC 7541 §6.1).
+	// ErrIndexZero indicates that a decoded index value was 0, which is forbidden (RFC 7541 §6.1).
 	ErrIndexZero = errors.New("hpack: index value of 0 is forbidden (RFC 7541 §6.1)")
 )
 
@@ -46,6 +46,7 @@ var headerStorage = pool.NewPerCorePool(func() *HeaderField {
 })
 
 // HeaderField represents an HTTP header key-value pair inside HPACK static and dynamic indexing tables (RFC 7541 §1.3 & §2.3).
+// The zero value is ready to use, or instances may be acquired from [AcquireHeaderField].
 type HeaderField struct {
 	key      []byte
 	value    []byte
@@ -55,12 +56,12 @@ type HeaderField struct {
 	static   bool
 }
 
-// AcquireHeaderField returns a HeaderField from the pool.
+// AcquireHeaderField retrieves an empty [HeaderField] from the pool.
 func AcquireHeaderField() *HeaderField {
 	return headerStorage.Get()
 }
 
-// ReleaseHeaderField clears and returns hf to the pool.
+// ReleaseHeaderField resets hf and returns it to the pool.
 func ReleaseHeaderField(hf *HeaderField) {
 	if hf != nil && !hf.static {
 		hf.Reset()
@@ -68,9 +69,13 @@ func ReleaseHeaderField(hf *HeaderField) {
 	}
 }
 
+// String returns the formatted representation of the header field as "key: value".
 func (hf *HeaderField) String() string { return string(hf.AppendBytes(nil)) }
-func (hf *HeaderField) Empty() bool    { return len(hf.key) == 0 && len(hf.value) == 0 }
 
+// Empty reports whether both key and value are empty.
+func (hf *HeaderField) Empty() bool { return len(hf.key) == 0 && len(hf.value) == 0 }
+
+// Reset clears the key, value, and sensitivity flags of the header field.
 func (hf *HeaderField) Reset() {
 	if hf.static {
 		return
@@ -83,25 +88,40 @@ func (hf *HeaderField) Reset() {
 	hf.sensible = false
 }
 
-// Size calculates the entry size in octets as len(name) + len(value) + 32 overhead (RFC 7541 §4.1).
+// Size returns the entry size in octets as the sum of key length, value length, and 32 octets of overhead (RFC 7541 §4.1).
 func (hf *HeaderField) Size() uint32       { return uint32(len(hf.key) + len(hf.value) + 32) } //nolint:gosec
+
+// Key returns the header field name as a string.
 func (hf *HeaderField) Key() string        { return string(hf.key) }
+
+// Value returns the header field value as a string.
 func (hf *HeaderField) Value() string      { return string(hf.value) }
+
+// KeyBytes returns the uncopied byte slice of the header field name.
 func (hf *HeaderField) KeyBytes() []byte   { return hf.key }
+
+// ValueBytes returns the uncopied byte slice of the header field value.
 func (hf *HeaderField) ValueBytes() []byte { return hf.value }
+
+// IsPseudo reports whether the header field is an HTTP/2 pseudo-header beginning with a colon ':'.
 func (hf *HeaderField) IsPseudo() bool     { return len(hf.key) > 0 && hf.key[0] == ':' }
+
+// IsSensible reports whether the header field is marked sensitive and must never be indexed (RFC 7541 §6.2.3).
 func (hf *HeaderField) IsSensible() bool   { return hf.sensible }
 
+// Set stores the key and value strings into the header field.
 func (hf *HeaderField) Set(k, v string) {
 	hf.SetKey(k)
 	hf.SetValue(v)
 }
 
+// SetBytes stores the key and value byte slices into the header field.
 func (hf *HeaderField) SetBytes(k, v []byte) {
 	hf.SetKeyBytes(k)
 	hf.SetValueBytes(v)
 }
 
+// SetKey sets the header field name from a string.
 func (hf *HeaderField) SetKey(key string) {
 	if ik := rodata.InternKey(key); ik != nil {
 		hf.key = ik
@@ -112,6 +132,7 @@ func (hf *HeaderField) SetKey(key string) {
 	hf.key = hf.keyBuf
 }
 
+// SetValue sets the header field value from a string.
 func (hf *HeaderField) SetValue(value string) {
 	if iv := rodata.InternValue(value); iv != nil {
 		hf.value = iv
@@ -122,6 +143,7 @@ func (hf *HeaderField) SetValue(value string) {
 	hf.value = hf.valBuf
 }
 
+// SetKeyBytes sets the header field name from a byte slice.
 func (hf *HeaderField) SetKeyBytes(key []byte) {
 	if ik := rodata.InternKeyBytes(key); ik != nil {
 		hf.key = ik
@@ -132,6 +154,7 @@ func (hf *HeaderField) SetKeyBytes(key []byte) {
 	hf.key = hf.keyBuf
 }
 
+// SetValueBytes sets the header field value from a byte slice.
 func (hf *HeaderField) SetValueBytes(value []byte) {
 	if iv := rodata.InternValueBytes(value); iv != nil {
 		hf.value = iv
@@ -142,6 +165,7 @@ func (hf *HeaderField) SetValueBytes(value []byte) {
 	hf.value = hf.valBuf
 }
 
+// CopyTo copies the key, value, and sensitivity flag to other.
 func (hf *HeaderField) CopyTo(other *HeaderField) {
 	if ik := rodata.InternKeyBytes(hf.key); ik != nil {
 		other.key = ik
@@ -160,6 +184,7 @@ func (hf *HeaderField) CopyTo(other *HeaderField) {
 	other.sensible = hf.sensible
 }
 
+// AppendBytes appends the formatted "key: value" representation to dst and returns the slice.
 func (hf *HeaderField) AppendBytes(dst []byte) []byte {
 	dst = append(dst, hf.key...)
 	dst = append(dst, ':', ' ')
@@ -176,7 +201,8 @@ var hpackStorage = pool.NewPerCorePool(func() *HPACK {
 	}
 })
 
-// HPACK manages static and dynamic header compression tables and HPACK encoding/decoding operations (RFC 7541).
+// HPACK manages static and dynamic header compression tables and codec operations (RFC 7541).
+// The zero value is ready to use with default settings, or instances may be acquired from [AcquireHPACK].
 type HPACK struct {
 	DisableCompression  bool
 	DisableDynamicTable bool
@@ -186,7 +212,7 @@ type HPACK struct {
 	MaxCapacity         uint32
 }
 
-// AcquireHPACK returns an HPACK context from the pool.
+// AcquireHPACK retrieves an [HPACK] instance from the pool.
 func AcquireHPACK() *HPACK {
 	hp := hpackStorage.Get()
 	hp.Reset()
@@ -194,13 +220,14 @@ func AcquireHPACK() *HPACK {
 	return hp
 }
 
-// ReleaseHPACK returns hp to the pool after clearing dynamic state.
+// ReleaseHPACK returns hp to the pool after clearing dynamic table entries.
 func ReleaseHPACK(hp *HPACK) {
 	if hp != nil {
 		hpackStorage.Put(hp)
 	}
 }
 
+// Reset clears dynamic table entries and restores table size defaults.
 func (hp *HPACK) Reset() {
 	hp.releaseDynamic()
 	hp.maxTableSize = 4096
@@ -219,8 +246,8 @@ func (hp *HPACK) releaseDynamic() {
 	hp.dynamicSize = 0
 }
 
-// SetMaxCapacity sets the upper bound on dynamic table size (RFC 7541 §4.2).
-// A dynamic table size update cannot exceed this capacity.
+// SetMaxCapacity sets the upper bound on dynamic table size in octets (RFC 7541 §4.2).
+// Dynamic table size updates cannot exceed this capacity.
 func (hp *HPACK) SetMaxCapacity(capacity uint32) {
 	hp.MaxCapacity = capacity
 	if hp.maxTableSize > capacity {
@@ -229,7 +256,7 @@ func (hp *HPACK) SetMaxCapacity(capacity uint32) {
 	}
 }
 
-// SetMaxTableSize updates the maximum dynamic table size capacity (RFC 7541 §4.2 & §6.3).
+// SetMaxTableSize updates the dynamic table size limit and evicts older entries if necessary (RFC 7541 §4.2 & §6.3).
 func (hp *HPACK) SetMaxTableSize(size uint32) {
 	hp.maxTableSize = size
 	if size > hp.MaxCapacity {
@@ -241,7 +268,7 @@ func (hp *HPACK) SetMaxTableSize(size uint32) {
 	}
 }
 
-// DynamicSize computes total dynamic table memory consumption in octets (RFC 7541 §4.1).
+// DynamicSize returns the current memory size in octets consumed by entries in the dynamic table (RFC 7541 §4.1).
 func (hp *HPACK) DynamicSize() uint32 {
 	return hp.dynamicSize
 }
@@ -429,7 +456,7 @@ func (hp *HPACK) search(hf *HeaderField) (n uint64, fullMatch bool) {
 	return n, false
 }
 
-// Decode yields all header fields decoded from b.
+// Decode returns an iterator yielding decoded [HeaderField] entries and any decoding errors encountered in b.
 func (hp *HPACK) Decode(b []byte) iter.Seq2[*HeaderField, error] {
 	return func(yield func(*HeaderField, error) bool) {
 		for len(b) > 0 {
@@ -459,7 +486,7 @@ func (hp *HPACK) Decode(b []byte) iter.Seq2[*HeaderField, error] {
 	}
 }
 
-// Next parses the next HPACK-encoded header field from byte stream b (RFC 7541 §3.2 & §6).
+// Next decodes the next header field from b into hf (RFC 7541 §3.2 & §6), returning the unconsumed slice.
 func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 	for len(b) > 0 {
 		c := b[0]
@@ -617,7 +644,7 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 	return b, nil
 }
 
-// AppendHeader encodes hf into dst using the optimal HPACK binary representation (RFC 7541 §6).
+// AppendHeader encodes hf into dst using HPACK binary representations (RFC 7541 §6).
 func (hp *HPACK) AppendHeader(dst []byte, hf *HeaderField, store bool) []byte {
 	c := !hp.DisableCompression
 	index, fullMatch := hp.search(hf)
@@ -725,12 +752,12 @@ func readIntFallback(n int, b []byte) ([]byte, uint64, error) {
 	return b, 0, ErrIntegerTruncated
 }
 
-// AppendInt encodes an unsigned variable-length integer index using an N-bit prefix into dst (RFC 7541 §5.1).
+// AppendInt encodes an unsigned integer index using an N-bit prefix into dst (RFC 7541 §5.1).
 func AppendInt(dst []byte, bits uint8, index uint64) []byte {
 	return appendInt(dst, bits, index)
 }
 
-// ReadInt decodes an unsigned variable-length integer from b using an N-bit prefix (RFC 7541 §5.1).
+// ReadInt decodes an unsigned integer from b using an N-bit prefix (RFC 7541 §5.1), returning the remaining bytes and value.
 func ReadInt(n int, b []byte) ([]byte, uint64) {
 	rem, val, _ := readInt(n, b)
 	return rem, val

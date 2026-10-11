@@ -69,11 +69,12 @@ func (h *header) AddTrailerBytes(trailer []byte) (err error) {
 		if cap(h.trailer) > len(h.trailer) {
 			h.trailer = h.trailer[:len(h.trailer)+1]
 			h.trailer[len(h.trailer)-1] = append(h.trailer[len(h.trailer)-1][:0], h.bufK...)
-		} else {
-			key = make([]byte, len(h.bufK))
-			copy(key, h.bufK)
-			h.trailer = append(h.trailer, key)
+			continue
 		}
+
+		key = make([]byte, len(h.bufK))
+		copy(key, h.bufK)
+		h.trailer = append(h.trailer, key)
 	}
 
 	return err
@@ -137,7 +138,7 @@ func (h *header) tryReadTrailer(r *bufio.Reader, n int) error {
 
 	b = mustPeekBuffered(r)
 
-	headersLen, errParse := parseTrailerHeaders(b, &h.h, h.disableNormalizing)
+	headersLen, errParse := parseTrailerHeaders(b, &h.h)
 	if errParse != nil {
 		if err == io.EOF {
 			return err
@@ -219,7 +220,7 @@ func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
 	return true, false
 }
 
-func parseTrailerHeaders(src []byte, dest *headkit.Headers, disableNormalizing bool) (int, error) {
+func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {
 	var err error
 
 	n := 0
@@ -319,19 +320,17 @@ func appendTrailerBytes(dst []byte, trailer [][]byte, sep []byte) []byte {
 }
 
 func copyTrailer(dst, src [][]byte) [][]byte {
-	if cap(dst) >= len(src) {
-		dst = dst[:len(src)]
-	} else {
+	if cap(dst) < len(src) {
 		dst = make([][]byte, len(src))
 	}
+	dst = dst[:len(src)]
 
 	for i := range dst {
 		l := len(src[i])
-		if cap(dst[i]) >= l {
-			dst[i] = dst[i][:l]
-		} else {
+		if cap(dst[i]) < l {
 			dst[i] = make([]byte, l)
 		}
+		dst[i] = dst[i][:l]
 
 		copy(dst[i], src[i])
 	}

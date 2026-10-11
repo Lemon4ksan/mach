@@ -32,7 +32,7 @@ func (f Frame) StreamID() uint32 {
 }
 
 // Payload returns the raw frame body without allocation or copying.
-// It panics if the underlying slice is smaller than Length() + 9.
+// Requires len(f) >= 9 + Length().
 func (f Frame) Payload() []byte {
 	return f[9 : 9+f.Length()]
 }

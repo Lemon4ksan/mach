@@ -19,15 +19,14 @@ import (
 var zeroTime time.Time
 
 var (
-	// CookieExpireDelete may be set on Cookie.Expire for expiring the given cookie.
+	// CookieExpireDelete specifies a past expiration time used to delete a cookie on the client (RFC 6265).
 	CookieExpireDelete = time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
-	// CookieExpireUnlimited indicates that the cookie doesn't expire.
+	// CookieExpireUnlimited indicates that the cookie does not have an expiration time (RFC 6265).
 	CookieExpireUnlimited = zeroTime
 )
 
-// CookieSameSite is an enum for the mode in which the SameSite flag should be set for the given cookie.
-// See https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-00 for details.
+// CookieSameSite specifies the SameSite policy mode for a cookie (RFC 6265bis).
 type CookieSameSite int
 
 const (
@@ -40,7 +39,6 @@ const (
 	// CookieSameSiteStrictMode sets the SameSite attribute to Strict.
 	CookieSameSiteStrictMode
 	// CookieSameSiteNoneMode sets the SameSite attribute to None.
-	// See https://tools.ietf.org/html/draft-west-cookie-incrementalism-00
 	CookieSameSiteNoneMode // third-party cookies are phasing out, use Partitioned cookies instead
 )
 
@@ -48,18 +46,19 @@ var cookieStorage = pool.NewPerCorePool(func() *Cookie {
 	return &Cookie{}
 })
 
-// AcquireCookie returns an empty Cookie from the pool.
+// AcquireCookie returns an empty [Cookie] instance from the pool.
 func AcquireCookie() *Cookie {
 	return cookieStorage.Get()
 }
 
-// ReleaseCookie clears and returns c to the pool.
+// ReleaseCookie resets c and returns it to the pool.
 func ReleaseCookie(c *Cookie) {
 	c.Reset()
 	cookieStorage.Put(c)
 }
 
-// Cookie represents an HTTP response cookie.
+// Cookie represents an HTTP response cookie (RFC 6265).
+// The zero value is ready to use, or instances may be acquired from [AcquireCookie].
 type Cookie struct {
 	noCopy NoCopy
 
@@ -393,17 +392,19 @@ func (c *Cookie) WriteTo(w io.Writer) (int64, error) {
 }
 
 var (
+	// ErrNoCookies indicates that no valid cookies were found.
 	ErrNoCookies          = errors.New("zerocopy: no cookies found")
+	// ErrInvalidCookieValue indicates that a cookie contains invalid characters (RFC 6265 §4.1.1).
 	ErrInvalidCookieValue = errors.New("zerocopy: invalid cookie value")
 )
 
-// Parse parses Set-Cookie header.
+// Parse parses a Set-Cookie header string into c (RFC 6265 §4.1).
 func (c *Cookie) Parse(src string) error {
 	c.bufK = append(c.bufK[:0], src...)
 	return c.ParseBytes(c.bufK)
 }
 
-// ParseBytes parses Set-Cookie header.
+// ParseBytes parses Set-Cookie header bytes into c (RFC 6265 §4.1).
 func (c *Cookie) ParseBytes(src []byte) error {
 	c.Reset()
 
@@ -530,6 +531,7 @@ func removeSemicolons(raw []byte) []byte {
 	return raw
 }
 
+// AppendCookiePart formats and appends an attribute "; key=value" pair to dst.
 func AppendCookiePart(dst, key, value []byte) []byte {
 	dst = append(dst, ';', ' ')
 	dst = append(dst, key...)
@@ -538,6 +540,7 @@ func AppendCookiePart(dst, key, value []byte) []byte {
 	return append(dst, value...)
 }
 
+// GetCookieKey extracts the cookie name from src and appends it to dst.
 func GetCookieKey(dst, src []byte) []byte {
 	n := bytes.IndexByte(src, '=')
 	if n >= 0 {
@@ -547,6 +550,7 @@ func GetCookieKey(dst, src []byte) []byte {
 	return decodeCookieArg(dst, src, false)
 }
 
+// AppendRequestCookieBytes formats cookies as a Cookie request header and appends them to dst (RFC 6265 §4.2).
 func AppendRequestCookieBytes(dst []byte, cookies []ArgsKV) []byte {
 	for i, n := 0, len(cookies); i < n; i++ {
 		kv := &cookies[i]
@@ -564,7 +568,7 @@ func AppendRequestCookieBytes(dst []byte, cookies []ArgsKV) []byte {
 	return dst
 }
 
-// AppendResponseCookieBytes appends the response cookie bytes to dst.
+// AppendResponseCookieBytes formats cookies as Set-Cookie response headers and appends them to dst (RFC 6265 §4.1).
 func AppendResponseCookieBytes(dst []byte, cookies []ArgsKV) []byte {
 	for i, n := 0, len(cookies); i < n; i++ {
 		kv := &cookies[i]
@@ -578,6 +582,7 @@ func AppendResponseCookieBytes(dst []byte, cookies []ArgsKV) []byte {
 	return dst
 }
 
+// ParseRequestCookies parses cookie pairs from a Cookie header byte slice into cookies (RFC 6265 §5.4).
 func ParseRequestCookies(cookies []ArgsKV, src []byte) []ArgsKV {
 	var s cookieScanner
 
