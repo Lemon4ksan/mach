@@ -57,6 +57,10 @@ func (s *uniStreamSender) onHasStreamControlFrame(id protocol.StreamID, str stre
 
 var _ streamSender = &uniStreamSender{}
 
+// Stream coordinates the sending and receiving halves of a bidirectional QUIC stream (RFC 9000 §2.1 & §3).
+// It implements net.Conn, io.ReadWriteCloser, and all methods required by HTTP/3 client and server stacks:
+//   - Read, Write, Close, CloseWrite, CloseRead, CancelWrite, CancelRead, StreamID, Context, SetPriority, FinalSize.
+// This abstraction cleanly aligns with the clean-room stream engine in net/quic/core/stream (stream.Stream / stream.StreamI).
 type Stream struct {
 	receiveStr *ReceiveStream
 	sendStr    *SendStream
