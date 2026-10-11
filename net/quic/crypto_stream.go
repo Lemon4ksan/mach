@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/lemon4ksan/mach/net/quic/core/stream"
 	"github.com/lemon4ksan/mach/net/quic/internal/protocol"
 	"github.com/lemon4ksan/mach/net/quic/internal/qerr"
 	"github.com/lemon4ksan/mach/net/quic/internal/wire"
@@ -23,7 +24,7 @@ const disableClientHelloScramblingEnv = "QUIC_GO_DISABLE_CLIENTHELLO_SCRAMBLING"
 // The baseCryptoStream is used by the cryptoStream and the initialCryptoStream.
 // This allows us to implement different logic for PopCryptoFrame for the two streams.
 type baseCryptoStream struct {
-	queue frameSorter
+	queue *stream.ReassemblyBuffer
 
 	highestOffset protocol.ByteCount
 	finished      bool
@@ -33,7 +34,7 @@ type baseCryptoStream struct {
 }
 
 func newCryptoStream() *cryptoStream {
-	return &cryptoStream{baseCryptoStream{queue: *acquireFrameSorter()}}
+	return &cryptoStream{baseCryptoStream{queue: stream.NewReassemblyBuffer()}}
 }
 
 func (s *baseCryptoStream) HandleCryptoFrame(f *wire.CryptoFrame) error {
@@ -65,17 +66,22 @@ func (s *baseCryptoStream) HandleCryptoFrame(f *wire.CryptoFrame) error {
 
 	s.highestOffset = max(s.highestOffset, highestOffset)
 
-	return s.queue.Push(f.Data, f.Offset, nil)
+	return s.queue.Push(uint64(f.Offset), f.Data, false)
 }
 
 // CryptoData retrieves data that was received in CRYPTO frames
 func (s *baseCryptoStream) CryptoData() []byte {
-	_, data, _ := s.queue.Pop()
-	return data
+	avail := s.queue.AvailableContiguous()
+	if avail == 0 {
+		return nil
+	}
+	buf := make([]byte, avail)
+	n, _ := s.queue.Read(buf)
+	return buf[:n]
 }
 
 func (s *baseCryptoStream) Finish() error {
-	if s.queue.HasMoreData() {
+	if s.queue.HighestOffset() > s.queue.ReadOffset() {
 		return &qerr.TransportError{
 			ErrorCode:    qerr.ProtocolViolation,
 			ErrorMessage: "encryption level changed, but crypto stream has more data to read",
@@ -137,8 +143,8 @@ func newInitialCryptoStream(isClient bool) *initialCryptoStream {
 	}
 
 	s := &initialCryptoStream{
-		queue:    *acquireFrameSorter(),
-		scramble: scramble,
+		baseCryptoStream: baseCryptoStream{queue: stream.NewReassemblyBuffer()},
+		scramble:         scramble,
 	}
 	for i := range len(s.cuts) {
 		s.cuts[i].start = protocol.InvalidByteCount

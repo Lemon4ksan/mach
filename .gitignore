@@ -33,3 +33,7 @@ states/
 .agents/audit_swarm/
 scratch/
 .agents/rfc/
+
+# Go workspace
+go.work
+go.work.sum
