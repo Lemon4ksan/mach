@@ -119,6 +119,9 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			return 0, ErrTruncatedFrame
 		}
 		offset += n
+		if firstRange > largestAcked {
+			return 0, ErrTruncatedFrame
+		}
 
 		f.Ack.LargestAcked = largestAcked
 		f.Ack.AckDelay = ackDelay

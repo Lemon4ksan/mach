@@ -51,11 +51,29 @@ func (sc *ServerConn) readLoop() error {
 // EventHandler implementation
 
 func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bool) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
+	// RFC 9113 §5.1: Receiving frames on idle stream is connection error of type PROTOCOL_ERROR
+	if streamID > sc.maxStreamID {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	sc.streamsMu.RLock()
 	st, ok := sc.streams[streamID]
 	sc.streamsMu.RUnlock()
 
 	if !ok {
+		_ = sc.writeRstStream(streamID, coreh2.StreamClosedError)
+		return
+	}
+
+	// RFC 9113 §5.1: If stream is in half-closed (remote) state, reject with STREAM_CLOSED
+	if st.state == streamHalfClosedRemote || st.state == streamClosed {
+		_ = sc.writeRstStream(streamID, coreh2.StreamClosedError)
 		return
 	}
 
@@ -72,11 +90,26 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 }
 
 func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, endStream bool) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	// RFC 9113 §5.1.1: Client-initiated streams MUST use non-zero, odd-numbered stream identifiers
 	if streamID == 0 || (streamID%2) == 0 {
-		sc.closeErr = coreh2.ProtocolError
-		sc.isClosed.Store(true)
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
 		return
+	}
+
+	// RFC 9113 §5.1.1: Stream identifiers MUST be strictly monotonically increasing
+	if streamID <= sc.maxStreamID {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+	sc.maxStreamID = streamID
+
+	if !endHeaders {
+		sc.continuationStream = streamID
 	}
 
 	st := sc.newServerStream(streamID, endHeaders, endStream)
@@ -96,26 +129,41 @@ func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, end
 				sc.streamsMu.Unlock()
 				return
 			}
-			sc.closeErr = err
-			sc.isClosed.Store(true)
+			if ec, ok := err.(coreh2.ErrorCode); ok {
+				sc.closeWithGoAway(sc.maxStreamID, ec)
+			} else {
+				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+			}
 		}
 	}
 }
 
 func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders bool) {
+	// RFC 9113 §6.10: CONTINUATION MUST follow a HEADERS frame without END_HEADERS on the same stream
+	if sc.continuationStream == 0 || sc.continuationStream != streamID {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	sc.streamsMu.RLock()
 	st, ok := sc.streams[streamID]
 	sc.streamsMu.RUnlock()
 
 	if !ok {
-		sc.closeErr = errors.New("h2: CONTINUATION on unknown stream")
-		sc.isClosed.Store(true)
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
+	// CONTINUATION flood protection (CVE-2024-27983): bound total header block size
+	if st.headerBlock.Len()+len(payload) > 65536 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.EnhanceYourCalm)
 		return
 	}
 
 	st.headerBlock.Write(payload)
 
 	if endHeaders {
+		sc.continuationStream = 0
 		st.endHeaders = true
 		if err := sc.finishHeaderBlock(st); err != nil {
 			// RFC 9113 §8.1.1: Malformed requests MUST be treated as a stream error of type PROTOCOL_ERROR.
@@ -126,13 +174,21 @@ func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders
 				sc.streamsMu.Unlock()
 				return
 			}
-			sc.closeErr = err
-			sc.isClosed.Store(true)
+			if ec, ok := err.(coreh2.ErrorCode); ok {
+				sc.closeWithGoAway(sc.maxStreamID, ec)
+			} else {
+				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+			}
 		}
 	}
 }
 
 func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	if ack {
 		return
 	}
@@ -148,9 +204,12 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 			}
 
 		case 4: // INITIAL_WINDOW_SIZE
-			if val > 0 && val <= 0x7fffffff {
-				sc.peerInitialWin = int32(val)
+			if val > 0x7fffffff {
+				// RFC 9113 §6.5.2: Values above 2^31-1 MUST be treated as FLOW_CONTROL_ERROR
+				sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
+				return
 			}
+			sc.peerInitialWin = int32(val)
 		}
 	}
 
@@ -161,6 +220,11 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 }
 
 func (sc *ServerConn) OnPing(payload []byte, ack bool) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	if ack {
 		return
 	}
@@ -172,9 +236,19 @@ func (sc *ServerConn) OnPing(payload []byte, ack bool) {
 }
 
 func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	if increment == 0 || increment > 0x7fffffff {
-		sc.closeErr = coreh2.ProtocolError
-		sc.isClosed.Store(true)
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
+	if streamID > sc.maxStreamID {
+		// RFC 9113 §5.1: WINDOW_UPDATE on idle stream is connection error PROTOCOL_ERROR
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
 		return
 	}
 
@@ -200,6 +274,17 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 }
 
 func (sc *ServerConn) OnStreamReset(streamID, errorCode uint32) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
+	if streamID == 0 || streamID > sc.maxStreamID {
+		// RFC 9113 §5.1: RST_STREAM on idle stream is connection error PROTOCOL_ERROR
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
 	sc.streamsMu.Lock()
 	if st, ok := sc.streams[streamID]; ok {
 		if st.cancel != nil {

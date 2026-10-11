@@ -43,6 +43,15 @@ var (
 
 	// ErrWhitespaceBeforeColon is returned when whitespace occurs between header name and colon (RFC 9112 §5.1).
 	ErrWhitespaceBeforeColon = errors.New("h1: whitespace between header name and colon prohibited (RFC 9112 §5.1)")
+
+	// ErrDuplicateContentLength is returned when duplicate conflicting Content-Length headers are present (RFC 9112 §6.3).
+	ErrDuplicateContentLength = errors.New("h1: duplicate conflicting content-length headers (RFC 9112 §6.3)")
+
+	// ErrMultipleHostHeaders is returned when multiple Host headers are present (RFC 9112 §3.2).
+	ErrMultipleHostHeaders = errors.New("h1: multiple host headers prohibited (RFC 9112 §3.2)")
+
+	// ErrInvalidContentLength is returned when Content-Length does not consist of only digits (RFC 9112 §6.3).
+	ErrInvalidContentLength = errors.New("h1: invalid content-length (RFC 9112 §6.3)")
 )
 
 // Request holds parsed HTTP/1.1 request data (RFC 9112, RFC 9110).
@@ -75,7 +84,7 @@ func (r *Request) initClosures() {
 }
 
 func (r *Request) writeEarlyHintsImpl(h http.Header) error {
-	if len(h) == 0 || r.Conn == nil || r.bw == nil {
+	if r.Proto != "HTTP/1.1" || len(h) == 0 || r.Conn == nil || r.bw == nil {
 		return nil
 	}
 
@@ -248,7 +257,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 	r.Headers.ParseHeaderBlockSWAR(r.headerBuf)
 
 	if err := r.Headers.Err(); err != nil {
-		return ErrWhitespaceBeforeColon
+		return mapHeaderError(err)
 	}
 
 	return r.finishRequestRead(br, bw, maxBodySize)
@@ -272,10 +281,26 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 	r.Headers.ParseHeaderBlockSWAR(headerBlock[crlfIdx+1:])
 
 	if err := r.Headers.Err(); err != nil {
-		return ErrWhitespaceBeforeColon
+		return mapHeaderError(err)
 	}
 
 	return nil
+}
+
+func mapHeaderError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, headkit.ErrDuplicateContentLength) {
+		return ErrDuplicateContentLength
+	}
+	if errors.Is(err, headkit.ErrMultipleHostHeaders) {
+		return ErrMultipleHostHeaders
+	}
+	if errors.Is(err, headkit.ErrWhitespaceBeforeColon) {
+		return ErrWhitespaceBeforeColon
+	}
+	return err
 }
 
 func (r *Request) parseRequestLine(line []byte) error {
@@ -348,7 +373,7 @@ func (r *Request) finishRequestBodyRead(
 	}
 
 	// Handle "Expect: 100-continue" (RFC 9110 §10.1.1)
-	if bytesconv.EqualFoldASCII(r.Headers.Get(headkit.Expect), headkit.Value100Continue) && bw != nil {
+	if r.Proto == "HTTP/1.1" && bytesconv.EqualFoldASCII(r.Headers.Get(headkit.Expect), headkit.Value100Continue) && bw != nil {
 		_, _ = bw.WriteString("HTTP/1.1 100 Continue\r\n\r\n")
 		if r.Conn != nil {
 			_, _ = bw.WriteTo(r.Conn)
@@ -358,9 +383,23 @@ func (r *Request) finishRequestBodyRead(
 
 	// Read body if present
 	if hasTE {
-		teVal := r.Headers.Get(headkit.TransferEncoding)
-		// RFC 9112 §6.3 Item 4: In requests, chunked MUST be the final transfer coding
-		if !strings.HasSuffix(strings.ToLower(teVal), headkit.ValueChunked) {
+		// RFC 9112 §6.1: Verify all Transfer-Encoding entries
+		teCount := 0
+		var teVal string
+		for k, v := range r.Headers.All() {
+			if bytesconv.EqualFoldASCII(k, headkit.TransferEncoding) {
+				teCount++
+				teVal = v
+			}
+		}
+
+		if teCount > 1 {
+			return ErrUnsupportedTransferEncoding
+		}
+
+		teVal = strings.TrimSpace(teVal)
+		// RFC 9112 §6.1 & §6.3: Must be exactly "chunked"
+		if !strings.EqualFold(teVal, headkit.ValueChunked) {
 			return ErrUnsupportedTransferEncoding
 		}
 
@@ -380,9 +419,16 @@ func (r *Request) finishRequestBodyRead(
 	}
 
 	// RFC 9112 §6.3 Item 5 & 6: Validate Content-Length decimal representation
+	for i := 0; i < len(clStr); i++ {
+		c := clStr[i]
+		if c < '0' || c > '9' {
+			return fmt.Errorf("%w: %q (RFC 9112 §6.3)", ErrInvalidContentLength, clStr)
+		}
+	}
+
 	contentLength, err := strconv.ParseInt(clStr, 10, 64)
 	if err != nil || contentLength < 0 {
-		return fmt.Errorf("h1: invalid content-length %q (RFC 9112 §6.3)", clStr)
+		return fmt.Errorf("%w: %q (RFC 9112 §6.3)", ErrInvalidContentLength, clStr)
 	}
 
 	if contentLength > maxBodySize {

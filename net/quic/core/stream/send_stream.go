@@ -435,6 +435,9 @@ func (s *SendStream) PopStreamFrame(maxBytes int) (data []byte, offset uint64, f
 	if take > 0 {
 		data = append([]byte(nil), s.writeBuffer[:take]...)
 		s.writeBuffer = s.writeBuffer[take:]
+		if len(s.writeBuffer) == 0 {
+			s.writeBuffer = s.writeBuffer[:0]
+		}
 		s.sentOffset += uint64(take)
 	}
 
@@ -450,26 +453,38 @@ func (s *SendStream) PopStreamFrame(maxBytes int) (data []byte, offset uint64, f
 // HandleAck processes an acknowledgment for transmitted data or FIN.
 func (s *SendStream) HandleAck(allDataAcked bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	var completed bool
+	var sender StreamSender
+	var streamID StreamID
 	if allDataAcked && s.finSent && s.state == SendStateDataSent {
 		s.state = SendStateDataRecvd
-		if s.sender != nil {
-			s.sender.OnStreamCompleted(s.streamID)
-		}
+		completed = true
+		sender = s.sender
+		streamID = s.streamID
+	}
+	s.mu.Unlock()
+
+	if completed && sender != nil {
+		sender.OnStreamCompleted(streamID)
 	}
 }
 
 // HandleResetAck acknowledges the RESET_STREAM frame.
 func (s *SendStream) HandleResetAck() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	var completed bool
+	var sender StreamSender
+	var streamID StreamID
 	if s.state == SendStateResetSent {
 		s.state = SendStateResetRecvd
-		if s.sender != nil {
-			s.sender.OnStreamCompleted(s.streamID)
-		}
+		completed = true
+		sender = s.sender
+		streamID = s.streamID
+	}
+	s.mu.Unlock()
+
+	if completed && sender != nil {
+		sender.OnStreamCompleted(streamID)
 	}
 }
 

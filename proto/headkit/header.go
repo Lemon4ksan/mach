@@ -16,6 +16,12 @@ import (
 var (
 	// ErrWhitespaceBeforeColon is returned when whitespace occurs between header name and colon (RFC 9112 §5.1).
 	ErrWhitespaceBeforeColon = errors.New("headkit: whitespace between header name and colon prohibited (RFC 9112 §5.1)")
+
+	// ErrDuplicateContentLength is returned when duplicate conflicting Content-Length headers are present (RFC 9112 §6.3).
+	ErrDuplicateContentLength = errors.New("headkit: duplicate conflicting content-length headers (RFC 9112 §6.3)")
+
+	// ErrMultipleHostHeaders is returned when multiple Host headers are present (RFC 9112 §3.2).
+	ErrMultipleHostHeaders = errors.New("headkit: multiple host headers prohibited (RFC 9112 §3.2)")
 )
 
 const (
@@ -236,6 +242,12 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 	switch len(key) {
 	case 4:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Host") {
+			if h.packed[IdxHost] != 0 {
+				if h.err == nil {
+					h.err = ErrMultipleHostHeaders
+				}
+				return
+			}
 			h.packed[IdxHost] = packed
 			return
 		}
@@ -260,6 +272,17 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 		}
 	case 14:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Content-Length") {
+			if h.packed[IdxContentLength] != 0 {
+				oldVal := h.getVal(h.packed[IdxContentLength])
+				newVal := bytesconv.B2S(h.buf[valStart:valEnd])
+				if oldVal != newVal {
+					if h.err == nil {
+						h.err = ErrDuplicateContentLength
+					}
+					return
+				}
+				return
+			}
 			h.packed[IdxContentLength] = packed
 			return
 		}

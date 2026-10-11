@@ -68,6 +68,8 @@ type Conn struct {
 	maxLocalBidiStreams uint64
 	maxLocalUniStreams  uint64
 
+	closedStreams map[StreamID]struct{}
+
 	// Incoming streams acceptance queues
 	acceptBidiCh chan *Stream
 	acceptUniCh  chan *ReceiveStream
@@ -136,6 +138,7 @@ func NewConn(cfg ConnConfig) *Conn {
 		maxLocalUniStreams:     cfg.InitialMaxStreamsUni,
 		acceptBidiCh:           make(chan *Stream, cfg.InitialMaxStreamsBidi),
 		acceptUniCh:            make(chan *ReceiveStream, cfg.InitialMaxStreamsUni),
+		closedStreams:          make(map[StreamID]struct{}),
 		closedCh:               make(chan struct{}),
 	}
 	return c
@@ -419,7 +422,15 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 	if id.IsBidi() {
 		str, exists := c.bidiStreams[id]
 		if !exists {
+			if _, isClosed := c.closedStreams[id]; isClosed {
+				c.mu.Unlock()
+				return nil
+			}
 			if !isPeerInitiated {
+				if id.StreamNum() < c.nextLocalBidiStreamNum {
+					c.mu.Unlock()
+					return nil
+				}
 				c.mu.Unlock()
 				return &TransportError{
 					ErrorCode:    StreamStateError,
@@ -444,7 +455,15 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 	}
 
 	// Unidirectional stream
+	if _, isClosed := c.closedStreams[id]; isClosed {
+		c.mu.Unlock()
+		return nil
+	}
 	if !isPeerInitiated {
+		if id.StreamNum() < c.nextLocalUniStreamNum {
+			c.mu.Unlock()
+			return nil
+		}
 		c.mu.Unlock()
 		return &TransportError{
 			ErrorCode:    StreamStateError,
@@ -484,16 +503,76 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 // HandleResetStreamFrame routes an incoming RESET_STREAM frame (RFC 9000 §3.2).
 func (c *Conn) HandleResetStreamFrame(id StreamID, code StreamErrorCode, finalSize uint64) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	if c.IsClosed() {
+		c.mu.Unlock()
+		return ErrConnClosed
+	}
 
+	isPeerInitiated := (id.IsClientInitiated() && c.config.Perspective == PerspectiveServer) ||
+		(id.IsServerInitiated() && c.config.Perspective == PerspectiveClient)
+
+	// Validate stream limits on RESET_STREAM per RFC 9000 §4.6
+	if isPeerInitiated {
+		if id.IsBidi() && id.StreamNum() > c.maxLocalBidiStreams {
+			c.mu.Unlock()
+			return &TransportError{
+				ErrorCode:    StreamLimitError,
+				ErrorMessage: fmt.Sprintf("RESET_STREAM for stream %d exceeded max bidirectional streams %d", id, c.maxLocalBidiStreams),
+			}
+		}
+		if !id.IsBidi() && id.StreamNum() > c.maxLocalUniStreams {
+			c.mu.Unlock()
+			return &TransportError{
+				ErrorCode:    StreamLimitError,
+				ErrorMessage: fmt.Sprintf("RESET_STREAM for stream %d exceeded max unidirectional streams %d", id, c.maxLocalUniStreams),
+			}
+		}
+	}
+
+	var recvStr *ReceiveStream
 	if id.IsBidi() {
 		if str, ok := c.bidiStreams[id]; ok {
-			return str.recvStr.HandleResetStreamFrame(code, finalSize)
+			recvStr = str.recvStr
+		} else if _, isClosed := c.closedStreams[id]; isClosed {
+			c.mu.Unlock()
+			return nil
+		} else if isPeerInitiated {
+			str = c.createBidiStreamLocked(id)
+			select {
+			case c.acceptBidiCh <- str:
+			default:
+			}
+			recvStr = str.recvStr
 		}
 	} else {
 		if rStr, ok := c.recvStreams[id]; ok {
-			return rStr.HandleResetStreamFrame(code, finalSize)
+			recvStr = rStr
+		} else if _, isClosed := c.closedStreams[id]; isClosed {
+			c.mu.Unlock()
+			return nil
+		} else if isPeerInitiated {
+			sfc := NewStreamFlowController(
+				id,
+				c.connFlowController,
+				c.config.InitialStreamReceiveWindow,
+				c.config.MaxStreamReceiveWindow,
+				c.config.InitialStreamReceiveWindow,
+				c.config.RTTProvider,
+				nil,
+			)
+			rStr = NewReceiveStream(c.ctx, id, c, sfc)
+			c.recvStreams[id] = rStr
+			select {
+			case c.acceptUniCh <- rStr:
+			default:
+			}
+			recvStr = rStr
 		}
+	}
+	c.mu.Unlock()
+
+	if recvStr != nil {
+		return recvStr.HandleResetStreamFrame(code, finalSize)
 	}
 	return nil
 }
@@ -573,6 +652,7 @@ func (c *Conn) OnStreamCompleted(id StreamID) {
 	delete(c.bidiStreams, id)
 	delete(c.sendStreams, id)
 	delete(c.recvStreams, id)
+	c.closedStreams[id] = struct{}{}
 }
 
 // GetSendStream retrieves the active SendStream for id (either bidirectional or unidirectional).
@@ -608,3 +688,9 @@ func (c *Conn) GetReceiveStream(id StreamID) (*ReceiveStream, bool) {
 	}
 	return nil, false
 }
+
+// MaybeGetConnWindowUpdate checks if a MAX_DATA frame should be sent, auto-tuning the connection receive window.
+func (c *Conn) MaybeGetConnWindowUpdate() (newWindow uint64, ok bool) {
+	return c.connFlowController.MaybeGetWindowUpdate()
+}
+

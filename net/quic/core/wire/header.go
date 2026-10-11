@@ -377,7 +377,7 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 			return h, ErrTruncatedHeader
 		}
 		offset += n
-		if len(b) < offset+int(tokenLen) {
+		if uint64(len(b)-offset) < tokenLen {
 			return h, ErrTruncatedHeader
 		}
 		h.Token = b[offset : offset+int(tokenLen)]
@@ -401,7 +401,7 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 	offset += h.PacketNumberLen
 
 	h.HeaderLen = offset
-	if uint64(len(b)-offset) < length-uint64(h.PacketNumberLen) {
+	if length < uint64(h.PacketNumberLen) || uint64(len(b)-offset) < length-uint64(h.PacketNumberLen) {
 		return h, ErrTruncatedPacket
 	}
 	h.PayloadLen = int(length) - h.PacketNumberLen
@@ -493,10 +493,11 @@ func ParseHeaderOffsets(b []byte, destConnIDLen int) (pnOffset int, isLong bool,
 		if err != nil {
 			return 0, true, typ, v, dcid, scid, ErrTruncatedHeader
 		}
-		offset += n + int(tokenLen)
-		if len(b) < offset {
+		offset += n
+		if uint64(len(b)-offset) < tokenLen {
 			return 0, true, typ, v, dcid, scid, ErrTruncatedHeader
 		}
+		offset += int(tokenLen)
 	}
 
 	_, n, err := varint.Decode(b[offset:])

@@ -8,11 +8,13 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"time"
 
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 var (
@@ -20,6 +22,12 @@ var (
 	_ mach.Conn   = (*ClientConn)(nil)
 	_ mach.Stream = (*Stream)(nil)
 	_ mach.Frame  = (*Frame)(nil)
+
+	// ErrConnClosed is returned when Do is called on a closed ClientConn.
+	ErrConnClosed = errors.New("h1: client connection is closed")
+
+	// ErrConnUpgraded is returned when Do is called on an upgraded ClientConn (RFC 9112 §9.3).
+	ErrConnUpgraded = errors.New("h1: client connection has been upgraded (RFC 9112 §9.3)")
 )
 
 // Engine implements mach.Engine for HTTP/1.1 connections.
@@ -62,10 +70,12 @@ func (e *Engine) Dial(ctx context.Context, addr string) (mach.Conn, error) {
 // A ClientConn wraps a net.Conn with dedicated 4KB-16KB bufio buffers. Once closed via Close(),
 // the underlying socket is closed and the ClientConn cannot be reused.
 type ClientConn struct {
-	conn   net.Conn
-	bw     *bufio.Writer
-	br     *bufio.Reader
-	stream Stream
+	conn       net.Conn
+	bw         *bufio.Writer
+	br         *bufio.Reader
+	stream     Stream
+	isClosed   bool
+	isUpgraded bool
 }
 
 // NewClientConn creates an HTTP/1.1 client connection wrapping the provided network socket c.
@@ -153,6 +163,14 @@ func (f *Frame) Payload() []byte {
 //
 // Do is not safe for concurrent execution on the same ClientConn instance.
 func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Response) error {
+	if cc.isClosed {
+		return ErrConnClosed
+	}
+
+	if cc.isUpgraded {
+		return ErrConnUpgraded
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -204,11 +222,23 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 		return ctxErr
 	}
 
+	// RFC 9112 §9.3: If response signaled Connection: close, close and mark connection non-reusable
+	if res.Header.ConnectionClose() {
+		cc.isClosed = true
+		_ = cc.conn.Close()
+	}
+
+	// RFC 9112 §9.3: 101 Switching Protocols upgrades connection away from HTTP/1.1
+	if res.StatusCode() == status.SwitchingProtocols {
+		cc.isUpgraded = true
+	}
+
 	return nil
 }
 
 // Close terminates the HTTP/1.1 client connection and releases the underlying socket (RFC 9112 §9.6).
 // Any active or pending Do operation on cc will immediately fail with a closed connection error.
 func (cc *ClientConn) Close() error {
+	cc.isClosed = true
 	return cc.conn.Close()
 }

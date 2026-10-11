@@ -83,6 +83,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	}
 
 	c.storeStream(ctx)
+	c.openStreams.Add(1)
 
 	c.writeMu.Lock()
 
@@ -96,7 +97,9 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	if err != nil {
 		c.lastErr = err
 		c.deleteStream(id)
-		ctx.SetState(streamClosed)
+		if ctx.Close() {
+			c.openStreams.Add(-1)
+		}
 
 		return err
 	}
@@ -114,11 +117,11 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	if err != nil {
 		c.lastErr = err
 		c.deleteStream(id)
-		ctx.SetState(streamClosed)
+		if ctx.Close() {
+			c.openStreams.Add(-1)
+		}
 		return err
 	}
-
-	c.openStreams.Add(1)
 
 	return nil
 }
@@ -175,7 +178,9 @@ func (c *Conn) writeData(fh *coreh2.FrameHeader, ctx *Context, body []byte) erro
 }
 
 func (c *Conn) finish(r *Context, stream uint32, err error) {
-	c.openStreams.Add(-1)
+	if r.Close() {
+		c.openStreams.Add(-1)
+	}
 
 	select {
 	case r.Err <- err:
@@ -184,4 +189,5 @@ func (c *Conn) finish(r *Context, stream uint32, err error) {
 
 	c.deleteStream(stream)
 	close(r.Err)
+	c.broadcastWindowUpdate()
 }

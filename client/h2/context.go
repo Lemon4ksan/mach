@@ -70,3 +70,10 @@ func (ctx *Context) State() streamState {
 func (ctx *Context) SetState(s streamState) {
 	ctx.state.Store(int32(s))
 }
+
+// Close atomically transitions the stream state to streamClosed and reports whether
+// this call transitioned the stream from a non-closed state.
+func (ctx *Context) Close() bool {
+	return ctx.state.Swap(int32(streamClosed)) != int32(streamClosed)
+}
+

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/lemon4ksan/mach/net/quic/varint"
 )
 
 // ErrDuplicateData is returned when incoming stream data is entirely redundant.
@@ -54,7 +56,26 @@ func (b *ReassemblyBuffer) Push(offset uint64, data []byte, fin bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// RFC 9000 §4.5: Validate 62-bit varint limit and integer overflow
+	if offset > varint.Max || uint64(len(data)) > varint.Max {
+		return &TransportError{
+			ErrorCode: FrameEncodingError,
+			ErrorMessage: fmt.Sprintf(
+				"stream offset %d or length %d exceeds max varint",
+				offset, len(data),
+			),
+		}
+	}
 	end := offset + uint64(len(data))
+	if end < offset || end > varint.Max {
+		return &TransportError{
+			ErrorCode: FrameEncodingError,
+			ErrorMessage: fmt.Sprintf(
+				"stream frame [offset %d, len %d] exceeds max representable offset (2^62 - 1)",
+				offset, len(data),
+			),
+		}
+	}
 
 	// RFC 9000 §4.5: Final Size Error validation
 	if b.hasFinalSize {
@@ -213,7 +234,12 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) {
 
 	numRemoved := lastOverlap - firstOverlap
 	if numRemoved > 0 {
-		b.chunks = append(b.chunks[:firstOverlap+1], b.chunks[lastOverlap+1:]...)
+		newLen := len(b.chunks) - numRemoved
+		copy(b.chunks[firstOverlap+1:], b.chunks[lastOverlap+1:])
+		for k := newLen; k < len(b.chunks); k++ {
+			b.chunks[k] = reassemblyChunk{}
+		}
+		b.chunks = b.chunks[:newLen]
 	}
 }
 
@@ -245,8 +271,12 @@ func (b *ReassemblyBuffer) Read(p []byte) (int, error) {
 	b.readOffset += uint64(toCopy)
 
 	if toCopy == available {
-		// Consumed entire first chunk.
+		// Consumed entire first chunk; zero out reference to prevent leaking memory
+		b.chunks[0] = reassemblyChunk{}
 		b.chunks = b.chunks[1:]
+		if len(b.chunks) == 0 {
+			b.chunks = b.chunks[:0]
+		}
 	} else {
 		// Partially consumed first chunk.
 		c.offset += uint64(toCopy)
@@ -318,6 +348,17 @@ func (b *ReassemblyBuffer) FinalSize() (uint64, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.finalSize, b.hasFinalSize
+}
+
+// SetFinalSize explicitly records the final stream size (e.g. from RESET_STREAM).
+func (b *ReassemblyBuffer) SetFinalSize(finalSize uint64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.finalSize = finalSize
+	b.hasFinalSize = true
+	if finalSize > b.highestOffset {
+		b.highestOffset = finalSize
+	}
 }
 
 // IsAllDataRead reports whether all stream data up to final size has been read.

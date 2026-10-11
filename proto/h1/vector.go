@@ -20,6 +20,12 @@ var (
 
 	// ErrChunkBoundaryError is returned when chunk data is not followed by CRLF (RFC 9112 §7.1).
 	ErrChunkBoundaryError = errors.New("h1: missing CRLF at chunk boundary")
+
+	// ErrForbiddenTrailer is returned when a trailer field contains a forbidden framing or routing field (RFC 9112 §7.1.2).
+	ErrForbiddenTrailer = errors.New("h1: forbidden trailer field in chunked encoding (RFC 9112 §7.1.2)")
+
+	// ErrInvalidTrailer is returned when the trailer section fails RFC 9112 syntax rules.
+	ErrInvalidTrailer = errors.New("h1: invalid trailer section in chunked encoding (RFC 9112 §7.1.2)")
 )
 
 // TrimSpace strips both leading and trailing ASCII spaces (' ') and tabs ('\t') from b

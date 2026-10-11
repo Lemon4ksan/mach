@@ -6,7 +6,6 @@ package h1
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -53,40 +52,79 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 
 		line = line[:len(line)-2]
 
-		// RFC 9112 §7.1.1: Strip chunk extensions (e.g., "1a;ext=val" or "1a ;ext=val")
+		// RFC 9112 §7.1.1: Parse and validate chunk extensions (e.g., "1a;ext=val" or "1a ;ext=val")
 		if idx := IndexByte(line, ';'); idx != -1 {
-			line = line[:idx]
+			extPart := line[idx:]
+			line = TrimTrailingSpace(line[:idx])
+			if err := validateChunkExtensions(extPart); err != nil {
+				return 0, err
+			}
 		}
 
-		// Strip trailing BWS (RFC 9112 §7.1.1: chunk-size [ BWS ";" ... ])
-		line = TrimTrailingSpace(line)
-
-		// RFC 9112 §7.1: chunk-size = 1*HEXDIG. Leading whitespace is prohibited.
+		// RFC 9112 §7.1: chunk-size = 1*HEXDIG. Leading and trailing whitespace without ';' is prohibited.
 		if len(line) == 0 {
 			return 0, ErrInvalidChunkSize
 		}
 
 		chunkSize, consumed, err := ParseHexUint(line)
 		if err != nil || chunkSize < 0 || consumed != len(line) {
-			return 0, fmt.Errorf("%w: %w", ErrInvalidChunkSize, err)
+			if err != nil {
+				return 0, fmt.Errorf("%w: %w", ErrInvalidChunkSize, err)
+			}
+			return 0, ErrInvalidChunkSize
 		}
 
 		if chunkSize == 0 {
 			cr.done = true
 			// RFC 9112 §7.1.2: Drain trailer section *( field-line CRLF ) terminated by empty CRLF line
+			trailerCount := 0
 			for {
 				tLine, tErr := cr.r.ReadBytes('\n')
 				if tErr != nil {
 					if errors.Is(tErr, io.EOF) {
-						return 0, io.EOF
+						return 0, io.ErrUnexpectedEOF
 					}
 
 					return 0, tErr
 				}
 
-				trimmed := bytes.TrimRight(tLine, "\r\n")
+				if len(tLine) < 2 || tLine[len(tLine)-2] != '\r' || tLine[len(tLine)-1] != '\n' {
+					return 0, ErrChunkBoundaryError
+				}
+
+				trimmed := tLine[:len(tLine)-2]
 				if len(trimmed) == 0 {
 					break
+				}
+
+				trailerCount++
+				if trailerCount > 64 {
+					return 0, ErrInvalidTrailer
+				}
+
+				// RFC 9112 §5.2: Obsolete line folding prohibited in trailers
+				if trimmed[0] == ' ' || trimmed[0] == '\t' {
+					return 0, ErrInvalidTrailer
+				}
+
+				colonIdx := IndexColon(trimmed)
+				if colonIdx <= 0 {
+					return 0, ErrInvalidTrailer
+				}
+
+				// RFC 9112 §5.1: Whitespace before colon prohibited
+				if trimmed[colonIdx-1] == ' ' || trimmed[colonIdx-1] == '\t' {
+					return 0, ErrInvalidTrailer
+				}
+
+				fieldName := trimmed[:colonIdx]
+				if !isValidHeaderKey(fieldName) {
+					return 0, ErrInvalidTrailer
+				}
+
+				// RFC 9112 §7.1.2: Reject forbidden trailer fields (Transfer-Encoding, Content-Length, Host, Trailer)
+				if isForbiddenTrailer(fieldName) {
+					return 0, ErrForbiddenTrailer
 				}
 			}
 
@@ -170,4 +208,127 @@ func (cw *ChunkedWriter) Write(p []byte) (int, error) {
 func (cw *ChunkedWriter) Close() error {
 	_, _ = cw.w.WriteString("0\r\n\r\n")
 	return cw.w.Flush()
+}
+
+func validateChunkExtensions(ext []byte) error {
+	// ext begins with ';'
+	for len(ext) > 0 {
+		if ext[0] != ';' {
+			return ErrInvalidChunkSize
+		}
+		ext = ext[1:]
+
+		// Skip BWS
+		for len(ext) > 0 && (ext[0] == ' ' || ext[0] == '\t') {
+			ext = ext[1:]
+		}
+
+		if len(ext) == 0 {
+			return ErrInvalidChunkSize
+		}
+
+		// Parse chunk-ext-name = token
+		nameLen := 0
+		for nameLen < len(ext) && ext[nameLen] != ';' && ext[nameLen] != '=' && ext[nameLen] != ' ' && ext[nameLen] != '\t' {
+			c := ext[nameLen]
+			if c >= 128 || validTokenTable[c] == 0 {
+				return ErrInvalidChunkSize
+			}
+			nameLen++
+		}
+		if nameLen == 0 {
+			return ErrInvalidChunkSize
+		}
+		ext = ext[nameLen:]
+
+		// Skip BWS
+		for len(ext) > 0 && (ext[0] == ' ' || ext[0] == '\t') {
+			ext = ext[1:]
+		}
+
+		if len(ext) == 0 {
+			break
+		}
+
+		if ext[0] == ';' {
+			continue
+		}
+
+		if ext[0] != '=' {
+			return ErrInvalidChunkSize
+		}
+		ext = ext[1:]
+
+		// Skip BWS
+		for len(ext) > 0 && (ext[0] == ' ' || ext[0] == '\t') {
+			ext = ext[1:]
+		}
+
+		if len(ext) == 0 {
+			return ErrInvalidChunkSize
+		}
+
+		// chunk-ext-val = token / quoted-string
+		if ext[0] == '"' {
+			ext = ext[1:]
+			closed := false
+			for len(ext) > 0 {
+				c := ext[0]
+				if c == '"' {
+					ext = ext[1:]
+					closed = true
+					break
+				}
+				if c == '\\' {
+					if len(ext) < 2 {
+						return ErrInvalidChunkSize
+					}
+					ext = ext[2:]
+					continue
+				}
+				if c < 0x20 && c != '\t' {
+					return ErrInvalidChunkSize
+				}
+				ext = ext[1:]
+			}
+			if !closed {
+				return ErrInvalidChunkSize
+			}
+		} else {
+			valLen := 0
+			for valLen < len(ext) && ext[valLen] != ';' && ext[valLen] != ' ' && ext[valLen] != '\t' {
+				c := ext[valLen]
+				if c >= 128 || validTokenTable[c] == 0 {
+					return ErrInvalidChunkSize
+				}
+				valLen++
+			}
+			if valLen == 0 {
+				return ErrInvalidChunkSize
+			}
+			ext = ext[valLen:]
+		}
+
+		// Skip BWS
+		for len(ext) > 0 && (ext[0] == ' ' || ext[0] == '\t') {
+			ext = ext[1:]
+		}
+	}
+
+	return nil
+}
+
+func isForbiddenTrailer(name []byte) bool {
+	switch len(name) {
+	case 4:
+		return bytesconv.EqualFoldASCII(bytesconv.B2S(name), "Host")
+	case 7:
+		return bytesconv.EqualFoldASCII(bytesconv.B2S(name), "Trailer")
+	case 14:
+		return bytesconv.EqualFoldASCII(bytesconv.B2S(name), "Content-Length")
+	case 17:
+		return bytesconv.EqualFoldASCII(bytesconv.B2S(name), "Transfer-Encoding")
+	}
+
+	return false
 }

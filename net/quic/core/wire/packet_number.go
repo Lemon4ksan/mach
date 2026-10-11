@@ -31,10 +31,13 @@ func DecodePacketNumber(largestPN uint64, truncatedPN uint64, pnLen int) uint64 
 
 	candidatePN := (expectedPN &^ pnMask) | truncatedPN
 	if candidatePN+pnHwin <= expectedPN && candidatePN < (uint64(1)<<62)-pnWin {
-		return candidatePN + pnWin
+		candidatePN += pnWin
+	} else if candidatePN > expectedPN+pnHwin && candidatePN >= pnWin {
+		candidatePN -= pnWin
 	}
-	if candidatePN > expectedPN+pnHwin && candidatePN >= pnWin {
-		return candidatePN - pnWin
+
+	if candidatePN > MaxPacketNumber {
+		return MaxPacketNumber
 	}
 	return candidatePN
 }
@@ -43,8 +46,10 @@ func DecodePacketNumber(largestPN uint64, truncatedPN uint64, pnLen int) uint64 
 // to safely encode pn given the largest acknowledged packet number (RFC 9000 §17.1).
 func PacketNumberLength(pn uint64, largestAcked uint64) int {
 	var diff uint64
-	if largestAcked == InvalidPacketNumber || pn < largestAcked {
+	if largestAcked == InvalidPacketNumber {
 		diff = pn + 1
+	} else if pn < largestAcked {
+		diff = largestAcked - pn
 	} else {
 		diff = pn - largestAcked
 	}

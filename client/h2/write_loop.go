@@ -5,10 +5,10 @@
 package h2
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/clock"
@@ -104,14 +104,18 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 	select {
 	case ctx, ok := <-c.in:
 		if !ok {
-			return true, nil
+			c.in = nil
+			return false, nil
 		}
 
 		if err := c.writeRequest(ctx); err != nil {
-			ctx.Err <- err
-
-			if errors.Is(err, coreh2.ErrNoAvailableStreams) {
+			if errors.Is(err, coreh2.ErrNoAvailableStreams) || errors.Is(err, coreh2.ErrStreamClosed) || errors.Is(err, context.Canceled) {
 				return false, nil
+			}
+
+			select {
+			case ctx.Err <- err:
+			default:
 			}
 
 			return true, err
@@ -155,11 +159,9 @@ func (c *Conn) recoverWriteLoop(lastErr *error) {
 		*lastErr = err
 	}
 
-	if *lastErr == nil {
-		*lastErr = io.ErrUnexpectedEOF
+	if *lastErr != nil {
+		c.broadcastErrorToAllStreams(*lastErr)
 	}
-
-	c.broadcastErrorToAllStreams(*lastErr)
 }
 
 func (c *Conn) writePing() error {

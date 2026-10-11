@@ -68,6 +68,9 @@ type ServerConn struct {
 	peerMaxFrameSize uint32
 	peerInitialWin   int32
 
+	maxStreamID        uint32
+	continuationStream uint32
+
 	_ cpu.CacheLinePad
 
 	isClosed       atomic.Bool
@@ -110,6 +113,8 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc.isClosed.Store(false)
 	sc.isReleased.Store(false)
 	sc.closeErr = nil
+	sc.maxStreamID = 0
+	sc.continuationStream = 0
 	sc.peerMaxFrameSize = coreh2.DefaultMaxLen
 	sc.peerInitialWin = 65535
 	sc.connSendWindow.Store(65535)
@@ -136,6 +141,9 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 func (sc *ServerConn) Serve() error {
 	defer func() {
 		sc.isClosed.Store(true)
+
+		// Wait for in-flight streams to complete (RFC 9113 §6.8 graceful shutdown)
+		sc.streamsWg.Wait()
 
 		if sc.cancelFn != nil {
 			sc.cancelFn()

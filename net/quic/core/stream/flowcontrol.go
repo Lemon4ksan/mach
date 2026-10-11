@@ -176,7 +176,10 @@ func (c *ConnectionFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	bytesRemaining := c.receiveWindow - c.bytesRead
+	var bytesRemaining uint64
+	if c.receiveWindow > c.bytesRead {
+		bytesRemaining = c.receiveWindow - c.bytesRead
+	}
 	threshold := uint64(float64(c.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
 	if bytesRemaining > threshold {
 		return 0, false
@@ -189,23 +192,21 @@ func (c *ConnectionFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok 
 
 func (c *ConnectionFlowController) maybeAdjustWindowSize(now time.Time) {
 	bytesReadInEpoch := c.bytesRead - c.epochStartOffset
-	if bytesReadInEpoch <= c.receiveWindowSize/2 {
+	if bytesReadInEpoch < c.receiveWindowSize/2 {
 		return
 	}
 
 	rtt := c.rttProvider.SmoothedRTT()
-	if rtt <= 0 {
-		return
-	}
+	if rtt > 0 {
+		fraction := float64(bytesReadInEpoch) / float64(c.receiveWindowSize)
+		thresholdDuration := time.Duration(4.0 * fraction * float64(rtt))
 
-	fraction := float64(bytesReadInEpoch) / float64(c.receiveWindowSize)
-	thresholdDuration := time.Duration(4.0 * fraction * float64(rtt))
-
-	if now.Sub(c.epochStartTime) < thresholdDuration {
-		newSize := min(2*c.receiveWindowSize, c.maxReceiveWindowSize)
-		if newSize > c.receiveWindowSize {
-			if c.allowWindowIncrease == nil || c.allowWindowIncrease(newSize-c.receiveWindowSize) {
-				c.receiveWindowSize = newSize
+		if now.Sub(c.epochStartTime) < thresholdDuration {
+			newSize := min(2*c.receiveWindowSize, c.maxReceiveWindowSize)
+			if newSize > c.receiveWindowSize {
+				if c.allowWindowIncrease == nil || c.allowWindowIncrease(newSize-c.receiveWindowSize) {
+					c.receiveWindowSize = newSize
+				}
 			}
 		}
 	}
@@ -386,7 +387,10 @@ func (s *StreamFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	bytesRemaining := s.receiveWindow - s.bytesRead
+	var bytesRemaining uint64
+	if s.receiveWindow > s.bytesRead {
+		bytesRemaining = s.receiveWindow - s.bytesRead
+	}
 	threshold := uint64(float64(s.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
 	if bytesRemaining > threshold {
 		return 0, false
@@ -399,23 +403,21 @@ func (s *StreamFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool
 
 func (s *StreamFlowController) maybeAdjustWindowSize(now time.Time) {
 	bytesReadInEpoch := s.bytesRead - s.epochStartOffset
-	if bytesReadInEpoch <= s.receiveWindowSize/2 {
+	if bytesReadInEpoch < s.receiveWindowSize/2 {
 		return
 	}
 
 	rtt := s.rttProvider.SmoothedRTT()
-	if rtt <= 0 {
-		return
-	}
+	if rtt > 0 {
+		fraction := float64(bytesReadInEpoch) / float64(s.receiveWindowSize)
+		thresholdDuration := time.Duration(4.0 * fraction * float64(rtt))
 
-	fraction := float64(bytesReadInEpoch) / float64(s.receiveWindowSize)
-	thresholdDuration := time.Duration(4.0 * fraction * float64(rtt))
-
-	if now.Sub(cStartTime(s.epochStartTime)) < thresholdDuration {
-		newSize := min(2*s.receiveWindowSize, s.maxReceiveWindowSize)
-		if newSize > s.receiveWindowSize {
-			if s.allowWindowIncrease == nil || s.allowWindowIncrease(newSize-s.receiveWindowSize) {
-				s.receiveWindowSize = newSize
+		if now.Sub(cStartTime(s.epochStartTime)) < thresholdDuration {
+			newSize := min(2*s.receiveWindowSize, s.maxReceiveWindowSize)
+			if newSize > s.receiveWindowSize {
+				if s.allowWindowIncrease == nil || s.allowWindowIncrease(newSize-s.receiveWindowSize) {
+					s.receiveWindowSize = newSize
+				}
 			}
 		}
 	}

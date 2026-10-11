@@ -130,3 +130,29 @@ func (sc *ServerConn) writeRstStream(streamID uint32, code coreh2.ErrorCode) err
 
 	return sc.bw.Flush()
 }
+
+// writeGoAway emits a GOAWAY frame to signal connection-level shutdown (RFC 9113 §6.8).
+func (sc *ServerConn) writeGoAway(lastStreamID uint32, code coreh2.ErrorCode) error {
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	gaFr := coreh2.AcquireFrameHeader()
+	defer coreh2.ReleaseFrameHeader(gaFr)
+
+	ga := coreh2.AcquireFrame(coreh2.FrameGoAway).(*coreh2.GoAway)
+	ga.SetStream(lastStreamID)
+	ga.SetCode(code)
+	gaFr.SetBody(ga)
+
+	if _, err := gaFr.WriteTo(sc.bw); err != nil {
+		return err
+	}
+
+	return sc.bw.Flush()
+}
+
+func (sc *ServerConn) closeWithGoAway(lastStreamID uint32, code coreh2.ErrorCode) {
+	_ = sc.writeGoAway(lastStreamID, code)
+	sc.closeErr = code
+	sc.isClosed.Store(true)
+}

@@ -252,6 +252,7 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 		reqCtx.Trailers = make(map[string][]string)
 	}
 
+	c.dec.BeginHeaderBlock()
 	for len(b) > 0 {
 		var err error
 
@@ -319,6 +320,7 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 
 	informationalHeader := make(http.Header)
 
+	c.dec.BeginHeaderBlock()
 	for len(b) > 0 {
 		b, err = c.dec.Next(hf, b)
 		if err != nil {

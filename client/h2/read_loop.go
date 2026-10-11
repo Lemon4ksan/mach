@@ -45,6 +45,16 @@ func (c *Conn) readLoop() {
 
 					h1.ReleaseResponse(resp)
 				}
+			} else if fr.Type() == coreh2.FrameData {
+				// RFC 9113 §5.2.2: DATA frames received on a closed stream count toward
+				// the connection flow-control window, even if the stream has been closed or reset.
+				dataLen := int32(fr.Len())
+				c.currentWindow -= dataLen
+				if c.currentWindow < c.maxWindow/2 {
+					inc := c.maxWindow - c.currentWindow
+					c.currentWindow = c.maxWindow
+					c.updateWindow(0, int(inc))
+				}
 			}
 
 			coreh2.ReleaseFrameHeader(fr)
@@ -63,6 +73,14 @@ func (c *Conn) readLoop() {
 			}
 
 			coreh2.ReleaseFrameHeader(fr)
+
+			c.inMu.Lock()
+			shuttingDown := c.inClosed
+			c.inMu.Unlock()
+			if shuttingDown && c.openStreams.Load() <= 0 {
+				break
+			}
+
 			continue
 		}
 
@@ -72,6 +90,13 @@ func (c *Conn) readLoop() {
 		}
 
 		coreh2.ReleaseFrameHeader(fr)
+
+		c.inMu.Lock()
+		shuttingDown := c.inClosed
+		c.inMu.Unlock()
+		if shuttingDown && c.openStreams.Load() <= 0 {
+			break
+		}
 	}
 }
 
@@ -171,7 +196,17 @@ func (c *Conn) handleGoAway(ga *coreh2.GoAway) {
 	// RFC 9113 §6.8 & §8.7: Streams with ID > lastStreamID were never processed and are safe for auto-retry.
 	c.purgeStreamsAfterID(lastStreamID, coreh2.ErrGoAwayRetryable)
 
-	_ = c.Close()
+	c.inMu.Lock()
+	if !c.inClosed {
+		c.inClosed = true
+		close(c.in)
+	}
+	c.inMu.Unlock()
+
+	// If no in-flight streams remain, close socket now; otherwise readLoop finishes remaining streams.
+	if c.openStreams.Load() <= 0 {
+		_ = c.Close()
+	}
 }
 
 // handleSettings applies incoming peer parameters and immediately emits an acknowledgment (RFC 9113 §6.5.3).

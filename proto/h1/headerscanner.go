@@ -105,7 +105,7 @@ func (s *HeaderScanner) Next() bool {
 	}
 
 	s.KeyVal = k
-	s.ValVal = TrimLeadingSpace(v)
+	s.ValVal = TrimSpace(v)
 
 	if err != nil {
 		s.ScanErr = err
@@ -142,15 +142,17 @@ func (s *HeaderScanner) readContinuedLineSlice() ([]byte, int, error) {
 		return nil, -1, fmt.Errorf("malformed mime header: missing colon: %q", line)
 	}
 
-	if len(s.B)-s.R > 1 {
-		peek := s.B[s.R : s.R+2]
-		if len(peek) > 0 && (isASCIILetter(peek[0]) || peek[0] == '\n') ||
-			len(peek) == 2 && peek[0] == '\r' && peek[1] == '\n' {
-			return TrimSpace(line), colon, nil
+	// RFC 9112 §5.2: Check if subsequent line begins with obs-fold (SP or HTAB)
+	if len(s.B)-s.R > 0 {
+		peekChar := s.B[s.R]
+		if peekChar != ' ' && peekChar != '\t' {
+			return line, colon, nil
 		}
+	} else {
+		return line, colon, nil
 	}
 
-	mline := TrimSpace(line)
+	mline := line
 
 	for s.skipSpace() {
 		mline = append(mline, ' ')

@@ -48,7 +48,8 @@ func (s *Stream) CloseRead() error {
 // CancelWrite aborts the send direction with RESET_STREAM.
 func (s *Stream) CancelWrite(code StreamErrorCode) {
 	s.Stream.CancelWrite(code)
-	_ = s.bridge.SendResetStream(s.StreamID(), code, 0)
+	_, finalSize, _ := s.Stream.SendStream().GetResetStreamFrame()
+	_ = s.bridge.SendResetStream(s.StreamID(), code, finalSize)
 }
 
 // CancelRead aborts the receive direction with STOP_SENDING.
@@ -102,7 +103,8 @@ func (s *SendStream) Close() error {
 // CancelWrite aborts the outbound unidirectional stream with RESET_STREAM.
 func (s *SendStream) CancelWrite(code StreamErrorCode) {
 	s.SendStream.CancelWrite(code)
-	_ = s.bridge.SendResetStream(s.StreamID(), code, 0)
+	_, finalSize, _ := s.SendStream.GetResetStreamFrame()
+	_ = s.bridge.SendResetStream(s.StreamID(), code, finalSize)
 }
 
 // ReceiveStream wraps an inbound unidirectional stream.

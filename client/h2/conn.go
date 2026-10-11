@@ -163,11 +163,10 @@ func (c *Conn) CancelStream(ctx *Context) {
 		return
 	}
 
-	if ctx.State() == streamClosed {
+	if !ctx.Close() {
 		return
 	}
 
-	ctx.SetState(streamClosed)
 	streamID := ctx.StreamID.Load()
 	c.deleteStream(streamID)
 	c.openStreams.Add(-1)

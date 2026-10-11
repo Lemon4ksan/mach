@@ -78,18 +78,23 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 	}
 
 	// 3. Connection Header
-	if !keepAlive {
+	if code == status.SwitchingProtocols {
+		if r.Headers.Get(headkit.Connection) == "" {
+			_, _ = bw.WriteString("Connection: Upgrade\r\n")
+		}
+	} else if !keepAlive {
 		_, _ = bw.Write(hdrConnectionClose)
 	} else if r.Headers.Get(headkit.Connection) == "" {
 		_, _ = bw.Write(hdrConnectionKeepAlive)
 	}
 
 	// 4. Transfer-Encoding or Content-Length
+	// RFC 9112 §6.3 Item 1: A server MUST NOT send a Content-Length header field in any response with a status code of 1xx or 204
 	if r.StreamWriter != nil {
 		if r.Headers.Get(headkit.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
-	} else if code != status.NoContent && code != status.NotModified &&
+	} else if code >= 200 && code != status.NoContent && code != status.NotModified &&
 		r.Headers.Get(headkit.ContentLength) == "" && r.Headers.Get(headkit.TransferEncoding) == "" {
 		var clBuf [24]byte
 

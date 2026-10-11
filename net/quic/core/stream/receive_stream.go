@@ -174,13 +174,18 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 		if n > 0 {
 			s.flowController.AddBytesRead(uint64(n))
 
+			var completed bool
 			if s.reassembly.IsAllDataRead() {
 				s.state = RecvStateDataRead
-				if s.sender != nil {
-					s.sender.OnStreamCompleted(s.streamID)
-				}
+				completed = true
 			}
+			sender := s.sender
+			streamID := s.streamID
 			s.mu.Unlock()
+
+			if completed && sender != nil {
+				sender.OnStreamCompleted(streamID)
+			}
 
 			s.maybeTriggerWindowUpdate()
 			return n, err
@@ -188,10 +193,13 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 
 		if errors.Is(err, io.EOF) {
 			s.state = RecvStateDataRead
-			if s.sender != nil {
-				s.sender.OnStreamCompleted(s.streamID)
-			}
+			sender := s.sender
+			streamID := s.streamID
 			s.mu.Unlock()
+
+			if sender != nil {
+				sender.OnStreamCompleted(streamID)
+			}
 			return 0, io.EOF
 		}
 
@@ -349,9 +357,9 @@ func (s *ReceiveStream) HandleStreamFrame(offset uint64, data []byte, fin bool) 
 // HandleResetStreamFrame processes an incoming RESET_STREAM frame from the peer (RFC 9000 §3.2).
 func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize uint64) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.state.IsTerminal() || s.state == RecvStateResetRecvd {
+		s.mu.Unlock()
 		return nil
 	}
 
@@ -359,6 +367,7 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 	if s.finalSizeKnown {
 		existingSz, _ := s.reassembly.FinalSize()
 		if finalSize != existingSz {
+			s.mu.Unlock()
 			return &TransportError{
 				ErrorCode: FinalSizeError,
 				ErrorMessage: fmt.Sprintf(
@@ -370,6 +379,7 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 	}
 
 	if finalSize < s.reassembly.HighestOffset() {
+		s.mu.Unlock()
 		return &TransportError{
 			ErrorCode: FinalSizeError,
 			ErrorMessage: fmt.Sprintf(
@@ -377,6 +387,22 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 				finalSize, s.reassembly.HighestOffset(),
 			),
 		}
+	}
+
+	// Flow control check (RFC 9000 §4.5)
+	if err := s.flowController.UpdateHighestReceived(finalSize); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	s.finalSizeKnown = true
+	s.reassembly.SetFinalSize(finalSize)
+
+	// Credit connection flow control for unread bytes up to final size
+	readOffset := s.reassembly.ReadOffset()
+	if finalSize > readOffset {
+		unread := finalSize - readOffset
+		s.flowController.AddBytesRead(unread)
 	}
 
 	s.state = RecvStateResetRecvd
@@ -389,8 +415,14 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 	s.ctxCancel(s.cancelErr)
 	s.signalDataReady()
 
-	if s.sender != nil {
-		s.sender.OnStreamCompleted(s.streamID)
+	sender := s.sender
+	streamID := s.streamID
+	s.mu.Unlock()
+
+	s.maybeTriggerWindowUpdate()
+
+	if sender != nil {
+		sender.OnStreamCompleted(streamID)
 	}
 	return nil
 }
@@ -403,10 +435,18 @@ func (s *ReceiveStream) signalDataReady() {
 }
 
 func (s *ReceiveStream) maybeTriggerWindowUpdate() {
+	streamUpdate := false
 	if _, ok := s.flowController.MaybeGetWindowUpdate(); ok {
-		if s.sender != nil {
-			s.sender.OnHasStreamControlFrame(s.streamID)
+		streamUpdate = true
+	}
+	connUpdate := false
+	if s.flowController.connection != nil {
+		if _, ok := s.flowController.connection.MaybeGetWindowUpdate(); ok {
+			connUpdate = true
 		}
+	}
+	if (streamUpdate || connUpdate) && s.sender != nil {
+		s.sender.OnHasStreamControlFrame(s.streamID)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/headkit"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 var (
@@ -192,6 +193,11 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 
 		if req.CloseConnection {
 			keepAlive = false
+		}
+
+		if res.StatusCode == status.SwitchingProtocols {
+			keepAlive = false
+			isHijacked = true
 		}
 
 		if res.Headers.Has(headkit.Connection) &&
