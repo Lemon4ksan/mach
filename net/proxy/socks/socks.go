@@ -150,7 +150,13 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	}
 	if ctx == nil {
 		proxy, dst, _ := d.pathAddrs(address)
-		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: errors.New("nil context")}
+		return nil, &net.OpError{
+			Op:     d.cmd.String(),
+			Net:    network,
+			Source: proxy,
+			Addr:   dst,
+			Err:    errors.New("nil context"),
+		}
 	}
 	var err error
 	var c net.Conn
@@ -186,7 +192,13 @@ func (d *Dialer) DialWithConn(ctx context.Context, c net.Conn, network, address 
 	}
 	if ctx == nil {
 		proxy, dst, _ := d.pathAddrs(address)
-		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: errors.New("nil context")}
+		return nil, &net.OpError{
+			Op:     d.cmd.String(),
+			Net:    network,
+			Source: proxy,
+			Addr:   dst,
+			Err:    errors.New("nil context"),
+		}
 	}
 	a, err := d.connect(ctx, c, address)
 	if err != nil {
@@ -212,7 +224,8 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 	if d.ProxyDial != nil {
 		c, err = d.ProxyDial(context.Background(), d.proxyNetwork, d.proxyAddress)
 	} else {
-		c, err = net.Dial(d.proxyNetwork, d.proxyAddress)
+		var dialer net.Dialer
+		c, err = dialer.DialContext(context.Background(), d.proxyNetwork, d.proxyAddress)
 	}
 	if err != nil {
 		proxy, dst, _ := d.pathAddrs(address)
@@ -278,7 +291,7 @@ type UsernamePassword struct {
 }
 
 // Authenticate authenticates a pair of username and password with the
-// proxy server.
+// proxy server (RFC 1929) with zero heap allocations.
 func (up *UsernamePassword) Authenticate(ctx context.Context, rw io.ReadWriter, auth AuthMethod) error {
 	switch auth {
 	case AuthMethodNotRequired:
@@ -287,14 +300,16 @@ func (up *UsernamePassword) Authenticate(ctx context.Context, rw io.ReadWriter, 
 		if len(up.Username) == 0 || len(up.Username) > 255 || len(up.Password) > 255 {
 			return errors.New("invalid username/password")
 		}
-		b := []byte{authUsernamePasswordVersion}
-		b = append(b, byte(len(up.Username)))
-		b = append(b, up.Username...)
-		b = append(b, byte(len(up.Password)))
-		b = append(b, up.Password...)
-		// TODO(mikio): handle IO deadlines and cancellation if
-		// necessary
-		if _, err := rw.Write(b); err != nil {
+		var b [514]byte
+		b[0] = authUsernamePasswordVersion
+		b[1] = byte(len(up.Username))
+		copy(b[2:], up.Username)
+		uEnd := 2 + len(up.Username)
+		b[uEnd] = byte(len(up.Password))
+		copy(b[uEnd+1:], up.Password)
+		tot := uEnd + 1 + len(up.Password)
+
+		if _, err := rw.Write(b[:tot]); err != nil {
 			return err
 		}
 		if _, err := io.ReadFull(rw, b[:2]); err != nil {

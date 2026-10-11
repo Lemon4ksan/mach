@@ -151,19 +151,6 @@ func isASCIILetter(b byte) bool {
 	return 'a' <= b && b <= 'z'
 }
 
-func isValidHeaderKey(a []byte) bool {
-	if len(a) == 0 {
-		return false
-	}
-
-	for _, c := range a {
-		if !ValidHeaderFieldByte(c) {
-			return false
-		}
-	}
-
-	return true
-}
 
 // trim returns s with leading and trailing spaces and tabs removed using SWAR vectorization.
 //

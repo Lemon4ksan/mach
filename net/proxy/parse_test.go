@@ -7,9 +7,10 @@ package proxy_test
 import (
 	"testing"
 
-	"github.com/lemon4ksan/mach/net/proxy"
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/net/proxy"
 )
 
 func TestParseProxy(t *testing.T) {

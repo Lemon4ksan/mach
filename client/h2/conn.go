@@ -18,10 +18,13 @@ import (
 	"github.com/lemon4ksan/foundation/sync/spinlock"
 	"golang.org/x/sys/cpu"
 
+	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
+
+var _ mach.Conn = (*Conn)(nil)
 
 // ConnOpts defines connection configuration options for client-side HTTP/2 sessions (RFC 9113 §6.5).
 type ConnOpts struct {
@@ -65,6 +68,7 @@ type Conn struct {
 	onDisconnect  func(ctx context.Context, c *Conn)
 	onRTT         func(time.Duration)
 	onPushPromise func(pushReq *h1.Request, pushResp *h1.Response)
+	errMu         sync.Mutex
 	lastErr       error
 	orderedKeys   []string
 	windowCond    *sync.Cond
@@ -358,3 +362,24 @@ func (c *Conn) Do(ctx context.Context, req *h1.Request, res *h1.Response) error 
 		return err
 	}
 }
+
+// OpenStream opens a new stream on Conn, satisfying mach.Conn.
+func (c *Conn) OpenStream(ctx context.Context) (mach.Stream, error) {
+	if c.Closed() {
+		return nil, coreh2.ErrStreamClosed
+	}
+
+	return NewStream(c, ctx), nil
+}
+
+func (c *Conn) setLastError(err error) {
+	if err == nil {
+		return
+	}
+	c.errMu.Lock()
+	if c.lastErr == nil {
+		c.lastErr = err
+	}
+	c.errMu.Unlock()
+}
+

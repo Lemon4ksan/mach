@@ -147,3 +147,68 @@ func TestInternValue_AllPrecompiledValues(t *testing.T) {
 		}
 	}
 }
+
+func TestInternCanonicalKey(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"host", headkit.Host},
+		{"Host", headkit.Host},
+		{"HOST", headkit.Host},
+		{"content-type", headkit.ContentType},
+		{"Content-Type", headkit.ContentType},
+		{"content-length", headkit.ContentLength},
+		{"transfer-encoding", headkit.TransferEncoding},
+		{"connection", headkit.Connection},
+		{"user-agent", headkit.UserAgent},
+		{"accept-encoding", headkit.AcceptEncoding},
+		{"accept", headkit.Accept},
+		{"vary", headkit.Vary},
+		{"authorization", headkit.Authorization},
+		{"cookie", headkit.Cookie},
+		{"set-cookie", headkit.SetCookie},
+		{"trailer", headkit.Trailer},
+		{"upgrade", headkit.Upgrade},
+		{"unknown-header-xyz", ""},
+	}
+
+	for _, tt := range tests {
+		got := headkit.InternCanonicalKey(tt.input)
+		gotBytes := headkit.InternCanonicalKey([]byte(tt.input))
+
+		if got != tt.expected {
+			t.Errorf("InternCanonicalKey(%q) = %q; want %q", tt.input, got, tt.expected)
+		}
+		if gotBytes != tt.expected {
+			t.Errorf("InternCanonicalKey([]byte(%q)) = %q; want %q", tt.input, gotBytes, tt.expected)
+		}
+	}
+}
+
+func TestInternValueString(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"chunked", "chunked"},
+		{"close", "close"},
+		{"keep-alive", "keep-alive"},
+		{"gzip", "gzip"},
+		{"application/json", "application/json"},
+		{"unknown-value-xyz", ""},
+	}
+
+	for _, tt := range tests {
+		got := headkit.InternValueString(tt.input)
+		gotBytes := headkit.InternValueString([]byte(tt.input))
+
+		if got != tt.expected {
+			t.Errorf("InternValueString(%q) = %q; want %q", tt.input, got, tt.expected)
+		}
+		if gotBytes != tt.expected {
+			t.Errorf("InternValueString([]byte(%q)) = %q; want %q", tt.input, gotBytes, tt.expected)
+		}
+	}
+}
+

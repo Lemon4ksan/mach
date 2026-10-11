@@ -95,7 +95,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	c.writeMu.Unlock()
 
 	if err != nil {
-		c.lastErr = err
+		c.setLastError(err)
 		c.deleteStream(id)
 		if ctx.Close() {
 			c.openStreams.Add(-1)
@@ -115,7 +115,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	}
 
 	if err != nil {
-		c.lastErr = err
+		c.setLastError(err)
 		c.deleteStream(id)
 		if ctx.Close() {
 			c.openStreams.Add(-1)

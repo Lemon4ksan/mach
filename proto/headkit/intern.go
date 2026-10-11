@@ -46,6 +46,8 @@ var (
 	KeyServer                  = []byte("server")
 	KeyDate                    = []byte("date")
 	KeyCacheControl            = []byte("cache-control")
+	KeyETag                    = []byte("etag")
+	KeyWWWAuthenticate         = []byte("www-authenticate")
 )
 
 // Precompiled common HTTP header values as byte slices.
@@ -83,6 +85,10 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 		case 'd':
 			if equalFoldSWAR(b, KeyDate) {
 				return KeyDate
+			}
+		case 'e':
+			if equalFoldSWAR(b, KeyETag) {
+				return KeyETag
 			}
 		}
 	case 5:
@@ -216,9 +222,14 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 			}
 		}
 	case 16:
-		if (b[0] | 0x20) == 's' {
+		switch b[0] | 0x20 {
+		case 's':
 			if equalFoldSWAR(b, KeySecChUaMobile) {
 				return KeySecChUaMobile
+			}
+		case 'w':
+			if equalFoldSWAR(b, KeyWWWAuthenticate) {
+				return KeyWWWAuthenticate
 			}
 		}
 	case 18:
@@ -238,6 +249,353 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 	return nil
 }
 
+// InternCanonicalKey returns the canonical MIME header string from headkit constants
+// if key matches a standard HTTP header (case-insensitively), or "" if not recognized.
+// Employs O(1) length dispatch and SWAR vector matching with zero heap allocations.
+func InternCanonicalKey[S ~string | ~[]byte](key S) string {
+	b := stringOrBytesToBytes(key)
+	n := len(b)
+	switch n {
+	case 2:
+		if equalFoldSWAR(b, []byte("te")) {
+			return TE
+		}
+	case 3:
+		if equalFoldSWAR(b, []byte("via")) {
+			return Via
+		}
+	case 4:
+		switch b[0] | 0x20 {
+		case 'h':
+			if equalFoldSWAR(b, []byte("host")) {
+				return Host
+			}
+		case 'd':
+			if equalFoldSWAR(b, []byte("date")) {
+				return Date
+			}
+		case 'v':
+			if equalFoldSWAR(b, []byte("vary")) {
+				return Vary
+			}
+		case 'f':
+			if equalFoldSWAR(b, []byte("from")) {
+				return From
+			}
+		case 'l':
+			if equalFoldSWAR(b, []byte("link")) {
+				return Link
+			}
+		case 'e':
+			if equalFoldSWAR(b, []byte("etag")) {
+				return ETag
+			}
+		}
+	case 5:
+		switch b[0] | 0x20 {
+		case 'r':
+			if equalFoldSWAR(b, []byte("range")) {
+				return Range
+			}
+		case 'a':
+			if equalFoldSWAR(b, []byte("allow")) {
+				return Allow
+			}
+		}
+	case 6:
+		switch b[0] | 0x20 {
+		case 'a':
+			if equalFoldSWAR(b, []byte("accept")) {
+				return Accept
+			}
+		case 'c':
+			if equalFoldSWAR(b, []byte("cookie")) {
+				return Cookie
+			}
+		case 's':
+			if equalFoldSWAR(b, []byte("server")) {
+				return Server
+			}
+		case 'e':
+			if equalFoldSWAR(b, []byte("expect")) {
+				return Expect
+			}
+		case 'o':
+			if equalFoldSWAR(b, []byte("origin")) {
+				return Origin
+			}
+		case 'p':
+			if equalFoldSWAR(b, []byte("pragma")) {
+				return Pragma
+			}
+		}
+	case 7:
+		switch b[0] | 0x20 {
+		case 'r':
+			if equalFoldSWAR(b, []byte("referer")) {
+				return Referer
+			}
+		case 't':
+			if equalFoldSWAR(b, []byte("trailer")) {
+				return Trailer
+			}
+		case 'u':
+			if equalFoldSWAR(b, []byte("upgrade")) {
+				return Upgrade
+			}
+		case 'a':
+			if equalFoldSWAR(b, []byte("alt-svc")) {
+				return AltSvc
+			}
+		case 'e':
+			if equalFoldSWAR(b, []byte("expires")) {
+				return Expires
+			}
+		}
+	case 8:
+		switch b[0] | 0x20 {
+		case 'l':
+			if equalFoldSWAR(b, []byte("location")) {
+				return Location
+			}
+		case 'i':
+			if equalFoldSWAR(b, []byte("if-match")) {
+				return IfMatch
+			} else if equalFoldSWAR(b, []byte("if-range")) {
+				return IfRange
+			}
+		}
+	case 10:
+		switch b[0] | 0x20 {
+		case 'c':
+			if equalFoldSWAR(b, []byte("connection")) {
+				return Connection
+			}
+		case 's':
+			if equalFoldSWAR(b, []byte("set-cookie")) {
+				return SetCookie
+			}
+		case 'u':
+			if equalFoldSWAR(b, []byte("user-agent")) {
+				return UserAgent
+			}
+		case 'k':
+			if equalFoldSWAR(b, []byte("keep-alive")) {
+				return KeepAlive
+			}
+		}
+	case 11:
+		if equalFoldSWAR(b, []byte("retry-after")) {
+			return RetryAfter
+		}
+	case 12:
+		if equalFoldSWAR(b, []byte("content-type")) {
+			return ContentType
+		}
+	case 13:
+		switch b[0] | 0x20 {
+		case 'a':
+			if equalFoldSWAR(b, []byte("authorization")) {
+				return Authorization
+			} else if equalFoldSWAR(b, []byte("accept-ranges")) {
+				return AcceptRanges
+			}
+		case 'c':
+			if equalFoldSWAR(b, []byte("cache-control")) {
+				return CacheControl
+			} else if equalFoldSWAR(b, []byte("content-range")) {
+				return ContentRange
+			}
+		case 'l':
+			if equalFoldSWAR(b, []byte("last-modified")) {
+				return LastModified
+			}
+		case 'i':
+			if equalFoldSWAR(b, []byte("if-none-match")) {
+				return IfNoneMatch
+			}
+		}
+	case 14:
+		switch b[0] | 0x20 {
+		case 'c':
+			if equalFoldSWAR(b, []byte("content-length")) {
+				return ContentLength
+			}
+		case 'a':
+			if equalFoldSWAR(b, []byte("accept-charset")) {
+				return AcceptCharset
+			}
+		}
+	case 15:
+		switch b[7] | 0x20 {
+		case 'e':
+			if equalFoldSWAR(b, []byte("accept-encoding")) {
+				return AcceptEncoding
+			}
+		case 'l':
+			if equalFoldSWAR(b, []byte("accept-language")) {
+				return AcceptLanguage
+			}
+		}
+	case 16:
+		switch b[0] | 0x20 {
+		case 'c':
+			switch b[8] | 0x20 {
+			case 'e':
+				if equalFoldSWAR(b, []byte("content-encoding")) {
+					return ContentEncoding
+				}
+			case 'l':
+				if equalFoldSWAR(b, []byte("content-language")) {
+					return ContentLanguage
+				} else if equalFoldSWAR(b, []byte("content-location")) {
+					return ContentLocation
+				}
+			}
+		case 'p':
+			if equalFoldSWAR(b, []byte("proxy-connection")) {
+				return ProxyConnection
+			}
+		case 'w':
+			if equalFoldSWAR(b, []byte("www-authenticate")) {
+				return WWWAuthenticate
+			}
+		}
+	case 17:
+		switch b[0] | 0x20 {
+		case 't':
+			if equalFoldSWAR(b, []byte("transfer-encoding")) {
+				return TransferEncoding
+			}
+		case 'i':
+			if equalFoldSWAR(b, []byte("if-modified-since")) {
+				return IfModifiedSince
+			}
+		}
+	case 18:
+		if equalFoldSWAR(b, []byte("proxy-authenticate")) {
+			return ProxyAuthenticate
+		}
+	case 19:
+		switch b[0] | 0x20 {
+		case 'p':
+			if equalFoldSWAR(b, []byte("proxy-authorization")) {
+				return ProxyAuthorization
+			}
+		case 'i':
+			if equalFoldSWAR(b, []byte("if-unmodified-since")) {
+				return IfUnmodifiedSince
+			}
+		case 'c':
+			if equalFoldSWAR(b, []byte("content-disposition")) {
+				return ContentDisposition
+			}
+		}
+	case 22:
+		if equalFoldSWAR(b, []byte("x-content-type-options")) {
+			return XContentTypeOptions
+		}
+	case 25:
+		if equalFoldSWAR(b, []byte("upgrade-insecure-requests")) {
+			return UpgradeInsecureRequests
+		}
+	}
+
+	return ""
+}
+
+// InternValueString returns a static string for val if recognized, or "" if not matched.
+// Zero heap allocations for both string and []byte inputs.
+func InternValueString[S ~string | ~[]byte](val S) string {
+	b := stringOrBytesToBytes(val)
+	switch len(b) {
+	case 2:
+		if b[0] == '?' {
+			switch b[1] {
+			case '1':
+				return "?1"
+			case '0':
+				return "?0"
+			}
+		} else if bytes.Equal(b, []byte("br")) {
+			return "br"
+		}
+	case 4:
+		switch string(b) {
+		case "gzip":
+			return "gzip"
+		case "zstd":
+			return "zstd"
+		case "none":
+			return "none"
+		}
+	case 5:
+		switch string(b) {
+		case "close":
+			return "close"
+		case "bytes":
+			return "bytes"
+		}
+	case 7:
+		switch string(b) {
+		case "chunked":
+			return "chunked"
+		case "deflate":
+			return "deflate"
+		}
+	case 8:
+		switch string(b) {
+		case "document":
+			return "document"
+		case "navigate":
+			return "navigate"
+		case "identity":
+			return "identity"
+		case "trailers":
+			return "trailers"
+		case "no-cache":
+			return "no-cache"
+		case "no-store":
+			return "no-store"
+		}
+	case 10:
+		switch string(b) {
+		case "keep-alive":
+			return "keep-alive"
+		case "cross-site":
+			return "cross-site"
+		}
+	case 11:
+		if bytes.Equal(b, []byte("same-origin")) {
+			return "same-origin"
+		}
+	case 12:
+		if bytes.Equal(b, []byte("100-continue")) {
+			return "100-continue"
+		}
+	case 16:
+		if bytes.Equal(b, ValApplicationJSON) {
+			return "application/json"
+		}
+	case 23:
+		if bytes.Equal(b, ValAcceptEncodingGzip) {
+			return "gzip, deflate, br, zstd"
+		}
+	case 24:
+		if bytes.Equal(b, []byte("text/plain; charset=utf-8")) {
+			return "text/plain; charset=utf-8"
+		}
+		if bytes.Equal(b, []byte("text/html; charset=utf-8")) {
+			return "text/html; charset=utf-8"
+		}
+	case 33:
+		if bytes.Equal(b, ValApplicationForm) {
+			return "application/x-www-form-urlencoded"
+		}
+	}
+
+	return ""
+}
 
 // InternValue returns a static .rodata byte slice for val if recognized, or nil if not matched.
 // Accelerated via O(1) length-dispatch and zero-allocation slice comparisons.

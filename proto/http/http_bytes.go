@@ -421,6 +421,8 @@ var (
 	ErrTooLargeHexNum = errors.New("too large hex number")
 )
 
+const maxHexIntChars = (strconv.IntSize / 4) - 1
+
 // ReadHexInt reads a hexadecimal integer from r.
 func ReadHexInt(r *bufio.Reader) (int, error) {
 	var k, i, n int
@@ -434,7 +436,7 @@ func ReadHexInt(r *bufio.Reader) (int, error) {
 			return -1, err
 		}
 
-		k = int(Hex2intTable[c])
+		k = int(uri.Hex2intTable[c])
 		if k == 16 {
 			if i == 0 {
 				return -1, ErrEmptyHexNum
@@ -478,22 +480,8 @@ func WriteHexInt(w *bufio.Writer, n int) error {
 // LowercaseBytes converts ASCII bytes in b to lowercase in place.
 func LowercaseBytes(b []byte) {
 	for i := range b {
-		p := &b[i]
-		*p = ToLowerTable[*p]
+		if b[i] >= 'A' && b[i] <= 'Z' {
+			b[i] += 'a' - 'A'
+		}
 	}
-}
-
-// AppendUnquotedArg decodes URL-encoded argument bytes from src, appends them to dst, and returns the slice.
-func AppendUnquotedArg(dst, src []byte) []byte {
-	return uri.AppendUnquotedArg(dst, src)
-}
-
-// AppendQuotedArg URL-encodes src bytes, appends them to dst, and returns the slice (RFC 3986 §2.1).
-func AppendQuotedArg(dst, src []byte) []byte {
-	return uri.AppendQuotedArg(dst, src)
-}
-
-// AppendQuotedPath encodes path bytes in src according to URL path escaping rules and appends them to dst (RFC 3986 §3.3).
-func AppendQuotedPath(dst, src []byte) []byte {
-	return uri.AppendQuotedPath(dst, src)
 }

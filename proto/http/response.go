@@ -10,6 +10,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
+	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
@@ -79,6 +80,20 @@ func (resp *Response) ConnectionClose() bool {
 // Thread-safe: No.
 func (resp *Response) SetConnectionClose() {
 	resp.Header.SetConnectionClose()
+}
+
+// Headkit returns a pointer to the underlying headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe; single-threaded execution required.
+func (resp *Response) Headkit() *headkit.Headers {
+	return resp.Header.Headkit()
+}
+
+// SetFromHeadkit populates response headers from a headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe.
+func (resp *Response) SetFromHeadkit(src *headkit.Headers) {
+	resp.Header.SetFromHeadkit(src)
 }
 
 // ParseNetConn extracts and caches the local and remote network addresses from conn.

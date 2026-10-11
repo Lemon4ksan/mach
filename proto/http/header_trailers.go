@@ -188,21 +188,7 @@ func (h *ResponseHeader) writeTrailer(w *bufio.Writer) error {
 }
 
 func isValidTrailerKey(key []byte) bool {
-	if len(key) == 0 {
-		return false
-	}
-
-	for _, c := range key {
-		if !ValidHeaderFieldByte(c) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func validHeaderValueByte(c byte) bool {
-	return ValidHeaderValueByteTable[c] == 1
+	return isValidHeaderKey(key)
 }
 
 func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {

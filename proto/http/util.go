@@ -7,20 +7,29 @@ package http
 import (
 	"errors"
 	"io"
+	"math/bits"
 	"net"
 	"os"
 	"sync"
+
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // NoCopy may be embedded into structs which must not be copied after the first use.
-// The zero value is ready to use.
-type NoCopy struct{}
+type NoCopy = uri.NoCopy
 
-// Lock is a no-op method used by the -copylocks checker from go vet.
-func (*NoCopy) Lock()   {}
+func roundUpForSliceCap(n int) int {
+	if n <= 0 {
+		return 0
+	}
 
-// Unlock is a no-op method used by the -copylocks checker from go vet.
-func (*NoCopy) Unlock() {}
+	// Above 100MB, we don't round up as the overhead is too large.
+	if n > 100*1024*1024 {
+		return n
+	}
+
+	return 1 << bits.Len(uint(n-1))
+}
 
 // CopyZeroAlloc copies data from r to w by invoking [io.ReaderFrom] or [io.WriterTo] when available.
 func CopyZeroAlloc(w io.Writer, r io.Reader) (int64, error) {

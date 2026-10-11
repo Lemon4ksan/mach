@@ -11,6 +11,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
+	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
@@ -155,6 +156,20 @@ func (req *Request) ParseURI() error {
 	req.uriParseErr = req.uri.ParseInternal(req.Header.Host(), req.Header.RequestURI(), req.isTLS)
 
 	return req.uriParseErr
+}
+
+// Headkit returns a pointer to the underlying headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe; single-threaded execution required.
+func (req *Request) Headkit() *headkit.Headers {
+	return req.Header.Headkit()
+}
+
+// SetFromHeadkit populates request headers from a headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe.
+func (req *Request) SetFromHeadkit(src *headkit.Headers) {
+	req.Header.SetFromHeadkit(src)
 }
 
 // ConnectionClose reports whether the "Connection: close" token is present in the request headers

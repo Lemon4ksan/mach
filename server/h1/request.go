@@ -213,6 +213,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 	}
 
 	// 2. Fallback Streaming Path: Read line by line
+	r.headerBuf = r.headerBuf[:0]
 	for {
 		line, err := br.ReadSlice('\n')
 		if err != nil && err != io.EOF {
@@ -228,14 +229,16 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 			continue
 		}
 
-		if err := r.parseRequestLine(trimmed); err != nil {
+		r.headerBuf = append(r.headerBuf, trimmed...)
+		reqLine := r.headerBuf[:len(trimmed)]
+		if err := r.parseRequestLine(reqLine); err != nil {
 			return err
 		}
 
 		break
 	}
 
-	r.headerBuf = r.headerBuf[:0]
+	headerStart := len(r.headerBuf)
 	for {
 		headerLine, err := br.ReadSlice('\n')
 		if err != nil && err != io.EOF {
@@ -254,7 +257,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 		}
 	}
 
-	r.Headers.ParseHeaderBlockSWAR(r.headerBuf)
+	r.Headers.ParseHeaderBlockSWAR(r.headerBuf[headerStart:])
 
 	if err := r.Headers.Err(); err != nil {
 		return mapHeaderError(err)

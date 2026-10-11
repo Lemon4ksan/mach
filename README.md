@@ -53,7 +53,7 @@ mach/
 │   └── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
 ├── scripts/                  # CI & Fuzzing suites
 │   └── fuzz_all.go           # Heavy automated fuzz harness
-├── server/                   # Server protocol engines (optimized for `sein`)
+├── server/                   # Unified multi-protocol L7 server (Server & Context)
 │   ├── h1/                   # HTTP/1.1 Server Engine. High-throughput edge listener
 │   ├── h2/                   # HTTP/2 Server Engine. Prioritized stream dispatch
 │   └── h3/                   # HTTP/3 Server Engine. Connection ID routing

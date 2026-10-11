@@ -139,7 +139,7 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 	}
 }
 
-func getFastHTTPCookieHeader(req *h1.Request) []byte {
+func getRequestCookieHeader(req *h1.Request) []byte {
 	sb := bufkit.NewChain()
 	defer sb.Release()
 
@@ -189,8 +189,10 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *hpac
 			continue
 		}
 
-		val := getFastHTTPCookieHeader(req)
-		if !bytesconv.EqualFoldASCII(key, "cookie") {
+		var val []byte
+		if bytesconv.EqualFoldASCII(key, "cookie") {
+			val = getRequestCookieHeader(req)
+		} else {
 			val = req.Header.Peek(key)
 			if len(val) == 0 && len(key) > 0 {
 				val = peekHeaderCaseInsensitive(req, key)

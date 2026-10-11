@@ -969,13 +969,7 @@ func isHTTPVersion(proto []byte) bool {
 }
 
 func isValidMethod(method []byte) bool {
-	for _, ch := range method {
-		if ValidMethodValueByteTable[ch] == 0 {
-			return false
-		}
-	}
-
-	return true
+	return isValidHeaderKey(method)
 }
 
 func validateRequestURI(method, requestURI []byte) error {

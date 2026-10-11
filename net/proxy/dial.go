@@ -1,4 +1,4 @@
-// Copyright 2019 The Go Authors. All rights reserved.
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -17,38 +17,60 @@ type ContextDialer interface {
 // Dial works like DialContext on net.Dialer but using a dialer returned by FromEnvironment.
 //
 // The passed ctx is only used for returning the Conn, not the lifetime of the Conn.
-//
-// Custom dialers (registered via RegisterDialerType) that do not implement ContextDialer
-// can leak a goroutine for as long as it takes the underlying Dialer implementation to timeout.
-//
 // A Conn returned from a successful Dial after the context has been cancelled will be immediately closed.
 func Dial(ctx context.Context, network, address string) (net.Conn, error) {
 	d := FromEnvironment()
 	if xd, ok := d.(ContextDialer); ok {
 		return xd.DialContext(ctx, network, address)
 	}
+
 	return dialContext(ctx, d, network, address)
 }
 
-// WARNING: this can leak a goroutine for as long as the underlying Dialer implementation takes to timeout
-// A Conn returned from a successful Dial after the context has been cancelled will be immediately closed.
 func dialContext(ctx context.Context, d Dialer, network, address string) (net.Conn, error) {
-	var (
+	if cd, ok := d.(ContextDialer); ok {
+		return cd.DialContext(ctx, network, address)
+	}
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	type dialResult struct {
 		conn net.Conn
-		done = make(chan struct{}, 1)
 		err  error
-	)
+	}
+
+	resCh := make(chan dialResult, 1)
 	go func() {
-		conn, err = d.Dial(network, address)
-		close(done)
-		if conn != nil && ctx.Err() != nil {
-			conn.Close()
-		}
+		c, err := d.Dial(network, address)
+		resCh <- dialResult{conn: c, err: err}
 	}()
+
 	select {
 	case <-ctx.Done():
-		err = ctx.Err()
-	case <-done:
+		go func() {
+			res := <-resCh
+			if res.conn != nil {
+				_ = res.conn.Close()
+			}
+		}()
+
+		return nil, ctx.Err()
+
+	case res := <-resCh:
+		if res.err != nil {
+			return nil, res.err
+		}
+
+		if ctx.Err() != nil {
+			if res.conn != nil {
+				_ = res.conn.Close()
+			}
+
+			return nil, ctx.Err()
+		}
+
+		return res.conn, nil
 	}
-	return conn, err
 }

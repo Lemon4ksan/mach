@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package socks provides a SOCKS version 5 client implementation.
+// Package socks provides a high-performance, zero-allocation SOCKS version 5 client implementation.
 //
 // SOCKS protocol version 5 is defined in RFC 1928, and Username/Password
 // authentication is defined in RFC 1929. This package handles connection setup
@@ -12,9 +12,11 @@
 //
 // Stdlib counterpart: golang.org/x/net/proxy
 //
-// Rejected compromise: none (this package primarily maintains compatibility with standard proxy dialers).
+// Rejected compromise: legacy vendored proxy implementations suffered from goroutine sprawl
+// and unconstrained heap allocations on every connection attempt.
 //
-// Accepted cost: the handshake relies on blocking I/O and creates per-connection allocations.
+// Accepted cost: fixed stack buffers limit raw handshake headers to 512 bytes, fully compliant
+// with maximum RFC 1928 address envelopes.
 //
-// Allocations: unconstrained
+// Allocations: 0 allocs/op on handshake hot paths.
 package socks

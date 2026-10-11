@@ -283,3 +283,38 @@ func TestDialer_Dial_And_Authenticate(t *testing.T) {
 		t.Fatalf("expected error for long password")
 	}
 }
+
+func TestSOCKS5_EXP1214_RogueServerUnofferedAuthRejected(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		var buf [256]byte
+		n, err := conn.Read(buf[:])
+		if err != nil || n < 3 {
+			return
+		}
+		// SOCKS version 5, server rogue response: select 0x02 (UsernamePassword)
+		_, _ = conn.Write([]byte{0x05, 0x02})
+	}()
+
+	d := socks.NewDialer("tcp", ln.Addr().String())
+	_, dialErr := d.DialContext(context.Background(), "tcp", "target.com:80")
+	if dialErr == nil {
+		t.Fatal("expected error when rogue server selects unoffered auth method")
+	}
+	if !strings.Contains(dialErr.Error(), "unsupported or unoffered authentication method") {
+		t.Fatalf("unexpected error message: %v", dialErr)
+	}
+}

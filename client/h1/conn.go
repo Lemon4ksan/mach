@@ -9,10 +9,13 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"net"
+	"net/url"
 	"time"
 
 	"github.com/lemon4ksan/mach"
+	"github.com/lemon4ksan/mach/net/proxy"
 	"github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
@@ -32,13 +35,95 @@ var (
 
 // Engine implements mach.Engine for HTTP/1.1 connections.
 type Engine struct {
-	Dialer    net.Dialer
-	TLSConfig *tls.Config
+	Dialer      net.Dialer
+	TLSConfig   *tls.Config
+	ProxyDialer proxy.Dialer
+}
+
+// EngineOption configures an HTTP/1.1 Engine instance.
+type EngineOption func(*Engine)
+
+// WithProxy configures the Engine to route outbound connections through a proxy.
+// The parameter p accepts a proxy.Dialer, *url.URL, proxy URL string, or client.ProxyOption.
+func WithProxy(p any) EngineOption {
+	return func(e *Engine) {
+		switch v := p.(type) {
+		case proxy.Dialer:
+			e.ProxyDialer = v
+		case *url.URL:
+			d, err := proxy.FromURL(v, proxy.Direct)
+			if err == nil {
+				e.ProxyDialer = d
+			}
+		case string:
+			u, err := proxy.Parse(v)
+			if err == nil {
+				d, err := proxy.FromURL(u, proxy.Direct)
+				if err == nil {
+					e.ProxyDialer = d
+				}
+			}
+
+		case proxy.Option:
+			cfg := &proxy.Config{Dialer: proxy.Direct}
+			v(cfg)
+			e.ProxyDialer = cfg.Dialer
+		}
+	}
+}
+
+// WithTLSConfig configures TLS on the Engine.
+func WithTLSConfig(conf *tls.Config) EngineOption {
+	return func(e *Engine) {
+		e.TLSConfig = conf
+	}
+}
+
+// NewEngine creates an HTTP/1.1 Engine configured with the provided options.
+// Accepts EngineOption (e.g. h1.WithProxy, h1.WithTLSConfig) or proxy.Option (e.g. proxy.WithProxy).
+func NewEngine(opts ...any) *Engine {
+	e := &Engine{}
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case EngineOption:
+			if v != nil {
+				v(e)
+			}
+
+		case proxy.Option:
+			if v != nil {
+				cfg := &proxy.Config{Dialer: proxy.Direct}
+				v(cfg)
+				e.ProxyDialer = cfg.Dialer
+			}
+
+		case func(*Engine):
+			if v != nil {
+				v(e)
+			}
+		}
+	}
+
+	return e
 }
 
 // Dial establishes an HTTP/1.1 connection to addr and returns a mach.Conn.
 func (e *Engine) Dial(ctx context.Context, addr string) (mach.Conn, error) {
-	c, err := e.Dialer.DialContext(ctx, "tcp", addr)
+	var (
+		c   net.Conn
+		err error
+	)
+
+	if e.ProxyDialer != nil {
+		if cd, ok := e.ProxyDialer.(proxy.ContextDialer); ok {
+			c, err = cd.DialContext(ctx, "tcp", addr)
+		} else {
+			c, err = e.ProxyDialer.Dial("tcp", addr)
+		}
+	} else {
+		c, err = e.Dialer.DialContext(ctx, "tcp", addr)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -241,4 +326,26 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 func (cc *ClientConn) Close() error {
 	cc.isClosed = true
 	return cc.conn.Close()
+}
+
+// IsClosed reports whether the client connection has closed or is non-reusable.
+// If the connection is idle, it performs a non-destructive probe to detect peer EOF (RFC 9112 §9.3).
+func (cc *ClientConn) IsClosed() bool {
+	if cc.isClosed {
+		return true
+	}
+
+	if cc.conn != nil && cc.br != nil && cc.br.Buffered() == 0 {
+		_ = cc.conn.SetReadDeadline(time.Now())
+		_, err := cc.br.Peek(1)
+		_ = cc.conn.SetReadDeadline(time.Time{})
+		if err == io.EOF || errors.Is(err, net.ErrClosed) {
+			cc.isClosed = true
+			_ = cc.conn.Close()
+
+			return true
+		}
+	}
+
+	return false
 }

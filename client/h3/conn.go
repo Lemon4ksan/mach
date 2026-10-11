@@ -11,10 +11,13 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/net/quic"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
+
+var _ mach.Conn = (*ClientConn)(nil)
 
 // errCodeH3RequestCancelled represents the HTTP/3 request cancellation error code (0x010c)
 // transmitted over QUIC streams when a request context is aborted (RFC 9114 §8.1).
@@ -130,6 +133,25 @@ func (cc *ClientConn) Close() error {
 	})
 
 	return nil
+}
+
+// QUICConn yields the underlying QUIC connection session.
+func (cc *ClientConn) QUICConn() *quic.Conn {
+	return cc.conn
+}
+
+// OpenStream creates a new bidirectional HTTP/3 stream satisfying mach.Conn.
+func (cc *ClientConn) OpenStream(ctx context.Context) (mach.Stream, error) {
+	if cc.conn == nil {
+		return nil, errors.New("h3: connection is nil")
+	}
+
+	str, err := cc.conn.OpenStreamSync(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewStream(str), nil
 }
 
 // readBidirectionalStreams rejects server-initiated bidirectional streams with H3_STREAM_CREATION_ERROR (RFC 9114 §6.1).

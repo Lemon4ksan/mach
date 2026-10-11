@@ -22,7 +22,7 @@ func (c *Conn) readLoop() {
 	for {
 		fr, err := c.readNext()
 		if err != nil {
-			c.lastErr = err
+			c.setLastError(err)
 			break
 		}
 
@@ -35,7 +35,7 @@ func (c *Conn) readLoop() {
 				if h, ok := fr.Body().(FrameWithHeaders); ok {
 					resp := h1.AcquireResponse()
 					if _, decErr := c.readHeader(h.Headers(), resp); decErr != nil {
-						c.lastErr = decErr
+						c.setLastError(decErr)
 
 						h1.ReleaseResponse(resp)
 						coreh2.ReleaseFrameHeader(fr)

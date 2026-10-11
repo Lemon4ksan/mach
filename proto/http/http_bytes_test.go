@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 func TestAppendHTMLEscape(t *testing.T) {
@@ -378,24 +379,24 @@ func TestByteEncodingAndHelpers(t *testing.T) {
 	}
 
 	// AppendUnquotedArg
-	unquoted := AppendUnquotedArg(nil, []byte("hello+world%21"))
+	unquoted := uri.AppendUnquotedArg(nil, []byte("hello+world%21"))
 	if string(unquoted) != "hello world!" {
 		t.Fatalf("AppendUnquotedArg failed: %s", unquoted)
 	}
 
 	// AppendQuotedArg
-	quoted := AppendQuotedArg(nil, []byte("hello world!"))
+	quoted := uri.AppendQuotedArg(nil, []byte("hello world!"))
 	if !bytes.Contains(quoted, []byte("+")) {
 		t.Fatalf("AppendQuotedArg missing +: %s", quoted)
 	}
 
 	// AppendQuotedPath
-	asterisk := AppendQuotedPath(nil, []byte("*"))
+	asterisk := uri.AppendQuotedPath(nil, []byte("*"))
 	if string(asterisk) != "*" {
 		t.Fatalf("AppendQuotedPath for * failed: %s", asterisk)
 	}
 
-	quotedPath := AppendQuotedPath(nil, []byte("/path with spaces/&special"))
+	quotedPath := uri.AppendQuotedPath(nil, []byte("/path with spaces/&special"))
 	if !bytes.Contains(quotedPath, []byte("%20")) {
 		t.Fatalf("AppendQuotedPath missing %%20: %s", quotedPath)
 	}

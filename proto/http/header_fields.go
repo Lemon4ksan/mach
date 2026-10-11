@@ -1328,35 +1328,22 @@ func peekArgBytesHeaders(h *headkit.Headers, key []byte) []byte {
 }
 
 func bytesHeaderKVToString(key, value []byte) (string, string) {
-	var kStr, vStr string
-	if ik := headkit.InternKey(key); ik != nil {
-		kStr = bytesconv.B2S(ik)
-	} else if bytes.Equal(key, StrTransferEncoding) {
-		kStr = headkit.TransferEncoding
-	} else if bytes.Equal(key, StrVary) {
-		kStr = headkit.Vary
-	} else if bytes.Equal(key, []byte("X-Checksum")) {
-		kStr = "X-Checksum"
-	} else {
-		kStr = string(key)
+	kStr := headkit.InternCanonicalKey(key)
+	if kStr == "" {
+		if ik := headkit.InternKey(key); ik != nil {
+			kStr = bytesconv.B2S(ik)
+		} else {
+			kStr = string(key)
+		}
 	}
 
-	if iv := headkit.InternValue(value); iv != nil {
-		vStr = bytesconv.B2S(iv)
-	} else if bytes.Equal(value, StrChunked) {
-		vStr = "chunked"
-	} else if bytes.Equal(value, StrClose) {
-		vStr = "close"
-	} else if bytes.Equal(value, StrKeepAlive) {
-		vStr = "keep-alive"
-	} else if bytes.Equal(value, []byte("Accept-Encoding")) {
-		vStr = headkit.AcceptEncoding
-	} else if bytes.Equal(value, []byte("User-Agent")) {
-		vStr = headkit.UserAgent
-	} else if bytes.Equal(value, []byte("sha256-abcdef")) {
-		vStr = "sha256-abcdef"
-	} else {
-		vStr = string(value)
+	vStr := headkit.InternValueString(value)
+	if vStr == "" {
+		if iv := headkit.InternValue(value); iv != nil {
+			vStr = bytesconv.B2S(iv)
+		} else {
+			vStr = string(value)
+		}
 	}
 
 	return kStr, vStr

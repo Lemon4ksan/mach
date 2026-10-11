@@ -6,6 +6,7 @@ package http
 
 import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/semantic/cookie"
 )
 
@@ -14,14 +15,40 @@ const (
 	nChar = '\n'
 )
 
+// validTokenMask defines the 128-bit bitset for RFC 9110 §5.6.2 token characters.
+var validTokenMask = [2]uint64{
+	0x03ff6cfa00000000,
+	0x57ffffffc7fffffe,
+}
+
 // CaseInsensitiveCompare reports whether byte slices a and b are equal under ASCII case-insensitivity.
 func CaseInsensitiveCompare(a, b []byte) bool {
 	return bytesconv.EqualFoldASCII(bytesconv.B2S(a), bytesconv.B2S(b))
 }
 
-// ValidHeaderFieldByte reports whether c is a valid HTTP header field byte (RFC 9110 §5.1).
+// ValidHeaderFieldByte reports whether c is a valid HTTP header field byte (RFC 9110 §5.1, §5.6.2).
 func ValidHeaderFieldByte(c byte) bool {
-	return c < 128 && ValidHeaderFieldByteTable[c] == 1
+	return c < 128 && ((validTokenMask[c/64] & (uint64(1) << (c % 64))) != 0)
+}
+
+// isValidHeaderKey reports whether b is a valid non-empty HTTP header token (RFC 9110 §5.6.2).
+func isValidHeaderKey(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+
+	for _, c := range b {
+		if !ValidHeaderFieldByte(c) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// validHeaderValueByte reports whether c is a valid HTTP header field value byte (RFC 9110 §5.5).
+func validHeaderValueByte(c byte) bool {
+	return c == '\t' || (c >= ' ' && c != 0x7f)
 }
 
 // InitHeaderKV initializes and normalizes header key and value buffers from strings.
@@ -81,22 +108,7 @@ func NormalizeHeaderKeyValidated(b []byte, disableNormalizing bool) {
 		return
 	}
 
-	n := len(b)
-	if n == 0 {
-		return
-	}
-
-	upper := true
-	for i, c := range b {
-		if upper {
-			c = ToUpperTable[c]
-		} else {
-			c = ToLowerTable[c]
-		}
-
-		upper = c == '-'
-		b[i] = c
-	}
+	headkit.CanonicalKeyBytes(b)
 }
 
 // RemoveNewLines will replace `\r` and `\n` with an empty space.

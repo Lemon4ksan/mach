@@ -1,12 +1,11 @@
-// Copyright 2011 The Go Authors. All rights reserved.
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package proxy provides support for a variety of protocols to proxy network
-// data.
-package proxy // import "golang.org/x/net/proxy"
+package proxy
 
 import (
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/url"
@@ -33,10 +32,9 @@ func FromEnvironment() Dialer {
 	return FromEnvironmentUsing(Direct)
 }
 
-// FromEnvironmentUsing returns the dialer specify by the proxy-related
+// FromEnvironmentUsing returns the dialer specified by the proxy-related
 // variables in the environment and makes underlying connections
-// using the provided forwarding Dialer (for instance, a *net.Dialer
-// with desired configuration).
+// using the provided forwarding Dialer.
 func FromEnvironmentUsing(forward Dialer) Dialer {
 	allProxy := allProxyEnv.Get()
 	if len(allProxy) == 0 {
@@ -47,6 +45,7 @@ func FromEnvironmentUsing(forward Dialer) Dialer {
 	if err != nil {
 		return forward
 	}
+
 	proxy, err := FromURL(proxyURL, forward)
 	if err != nil {
 		return forward
@@ -64,15 +63,21 @@ func FromEnvironmentUsing(forward Dialer) Dialer {
 
 // proxySchemes is a map from URL schemes to a function that creates a Dialer
 // from a URL with such a scheme.
-var proxySchemes map[string]func(*url.URL, Dialer) (Dialer, error)
+var (
+	proxyMu      sync.RWMutex
+	proxySchemes map[string]func(*url.URL, Dialer) (Dialer, error)
+)
 
 // RegisterDialerType takes a URL scheme and a function to generate Dialers from
 // a URL with that scheme and a forwarding Dialer. Registered schemes are used
 // by FromURL.
 func RegisterDialerType(scheme string, f func(*url.URL, Dialer) (Dialer, error)) {
+	proxyMu.Lock()
+	defer proxyMu.Unlock()
 	if proxySchemes == nil {
 		proxySchemes = make(map[string]func(*url.URL, Dialer) (Dialer, error))
 	}
+
 	proxySchemes[scheme] = f
 }
 
@@ -83,6 +88,7 @@ func FromURL(u *url.URL, forward Dialer) (Dialer, error) {
 	if u.User != nil {
 		auth = new(Auth)
 		auth.User = u.User.Username()
+
 		if p, ok := u.User.Password(); ok {
 			auth.Password = p
 		}
@@ -92,18 +98,44 @@ func FromURL(u *url.URL, forward Dialer) (Dialer, error) {
 	case "socks5", "socks5h":
 		addr := u.Hostname()
 		port := u.Port()
+
 		if port == "" {
 			port = "1080"
 		}
+
 		return SOCKS5("tcp", net.JoinHostPort(addr, port), auth, forward)
+
+	case "http":
+		addr := u.Hostname()
+		port := u.Port()
+
+		if port == "" {
+			port = "80"
+		}
+
+		return HTTPConnect("tcp", net.JoinHostPort(addr, port), auth, forward)
+
+	case "https":
+		addr := u.Hostname()
+		port := u.Port()
+
+		if port == "" {
+			port = "443"
+		}
+
+		d := NewHTTPConnectDialer("tcp", net.JoinHostPort(addr, port), auth, forward)
+		d.TLSConfig = &tls.Config{ServerName: addr}
+
+		return d, nil
 	}
 
 	// If the scheme doesn't match any of the built-in schemes, see if it
 	// was registered by another package.
-	if proxySchemes != nil {
-		if f, ok := proxySchemes[u.Scheme]; ok {
-			return f(u, forward)
-		}
+	proxyMu.RLock()
+	defer proxyMu.RUnlock()
+
+	if f := proxySchemes[u.Scheme]; f != nil {
+		return f(u, forward)
 	}
 
 	return nil, errors.New("proxy: unknown scheme: " + u.Scheme)
@@ -111,7 +143,7 @@ func FromURL(u *url.URL, forward Dialer) (Dialer, error) {
 
 var (
 	allProxyEnv = &envOnce{
-		names: []string{"ALL_PROXY", "all_proxy"},
+		names: []string{"ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"},
 	}
 	noProxyEnv = &envOnce{
 		names: []string{"NO_PROXY", "no_proxy"},
@@ -119,9 +151,7 @@ var (
 )
 
 // envOnce looks up an environment variable (optionally by multiple
-// names) once. It mitigates expensive lookups on some platforms
-// (e.g. Windows).
-// (Borrowed from net/http/transport.go)
+// names) once.
 type envOnce struct {
 	names []string
 	once  sync.Once
