@@ -84,7 +84,7 @@ type Conn struct {
 	maxWindow                int32
 	currentWindow            int32
 	openStreams              atomic.Int32
-	pingUnacks               int32
+	pingUnacks               atomic.Int32
 	consecutiveControlFrames int32
 	nextID                   atomic.Uint32
 

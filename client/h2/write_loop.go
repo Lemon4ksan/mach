@@ -36,7 +36,7 @@ func (c *Conn) writeLoop() {
 			break
 		}
 
-		if !c.disableAcks && c.pingUnacks >= 5 {
+		if !c.disableAcks && c.pingUnacks.Load() >= 5 {
 			lastErr = coreh2.ErrTimeout
 			break
 		}
@@ -179,7 +179,7 @@ func (c *Conn) writePing() error {
 		err = c.bw.Flush()
 	}
 	if err == nil {
-		c.pingUnacks++
+		c.pingUnacks.Add(1)
 	}
 
 	c.writeMu.Unlock()

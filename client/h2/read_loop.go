@@ -201,8 +201,8 @@ func (c *Conn) handleConnectionFrame(fr *coreh2.FrameHeader) error {
 }
 
 func (c *Conn) handlePingAck(ping *coreh2.Ping) {
-	if c.pingUnacks > 0 {
-		c.pingUnacks--
+	if c.pingUnacks.Load() > 0 {
+		c.pingUnacks.Add(-1)
 	}
 
 	pingTime := time.Unix(0, int64(binary.BigEndian.Uint64(ping.Data()))) //nolint:gosec // timestamp int64 conversion
