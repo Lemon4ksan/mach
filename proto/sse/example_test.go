@@ -13,14 +13,14 @@ import (
 
 func ExampleReader_All() {
 	raw := "event: notification\ndata: Server online\n\nevent: ping\ndata: keepalive\n\n"
-	reader := sse.NewReader[sse.Event](strings.NewReader(raw))
+	reader := sse.NewReader(strings.NewReader(raw))
 
 	for ev, err := range reader.All() {
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			return
 		}
-		fmt.Printf("Event: %s, Data: %s\n", ev.Event, ev.Data)
+		fmt.Printf("Event: %s, Data: %s\n", ev.EventString(), ev.DataString())
 	}
 
 	// Output:

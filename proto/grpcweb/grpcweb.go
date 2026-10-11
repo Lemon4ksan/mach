@@ -151,7 +151,7 @@ func (f *Framer) ReadFrameTo(r io.Reader, dst []byte) (flags byte, n int, err er
 }
 
 // AppendFrame appends a 5-byte gRPC-Web header [flags + uint32 length] and payload to dst, returning the extended buffer.
-func AppendFrame(dst []byte, flags byte, payload []byte) []byte {
+func AppendFrame[S ~string | ~[]byte](dst []byte, flags byte, payload S) []byte {
 	length := uint32(len(payload))
 
 	var header [5]byte
