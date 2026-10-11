@@ -6,6 +6,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -185,7 +186,7 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 			return n, err
 		}
 
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			s.state = RecvStateDataRead
 			if s.sender != nil {
 				s.sender.OnStreamCompleted(s.streamID)
@@ -240,11 +241,11 @@ func (s *ReceiveStream) Peek(b []byte) (int, error) {
 		}
 
 		n, err := s.reassembly.Peek(b)
-		if n == len(b) || (err == io.EOF && n > 0) {
+		if n == len(b) || (errors.Is(err, io.EOF) && n > 0) {
 			s.mu.Unlock()
 			return n, err
 		}
-		if err == io.EOF && n == 0 {
+		if errors.Is(err, io.EOF) && n == 0 {
 			s.mu.Unlock()
 			return 0, io.EOF
 		}

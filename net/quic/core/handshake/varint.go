@@ -12,7 +12,6 @@ import (
 const MaxVarint uint64 = (1 << 62) - 1
 
 var (
-	errVarintOverflow   = errors.New("quic: varint value exceeds 2^62-1")
 	errVarintUnexpected = errors.New("quic: unexpected EOF while reading varint")
 )
 

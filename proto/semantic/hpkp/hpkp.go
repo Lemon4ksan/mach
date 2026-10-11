@@ -348,7 +348,11 @@ func AppendSPKIFingerprint(dst []byte, rawSPKI []byte) []byte {
 	hash := sha256.Sum256(rawSPKI)
 	encLen := base64.StdEncoding.EncodedLen(len(hash))
 	start := len(dst)
-	dst = append(dst, make([]byte, encLen)...)
+	if cap(dst)-start >= encLen {
+		dst = dst[:start+encLen]
+	} else {
+		dst = append(dst, make([]byte, encLen)...)
+	}
 	base64.StdEncoding.Encode(dst[start:], hash[:])
 	return dst
 }

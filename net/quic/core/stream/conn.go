@@ -574,3 +574,37 @@ func (c *Conn) OnStreamCompleted(id StreamID) {
 	delete(c.sendStreams, id)
 	delete(c.recvStreams, id)
 }
+
+// GetSendStream retrieves the active SendStream for id (either bidirectional or unidirectional).
+func (c *Conn) GetSendStream(id StreamID) (*SendStream, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if id.IsBidi() {
+		if str, ok := c.bidiStreams[id]; ok {
+			return str.sendStr, true
+		}
+	} else {
+		if sStr, ok := c.sendStreams[id]; ok {
+			return sStr, true
+		}
+	}
+	return nil, false
+}
+
+// GetReceiveStream retrieves the active ReceiveStream for id (either bidirectional or unidirectional).
+func (c *Conn) GetReceiveStream(id StreamID) (*ReceiveStream, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if id.IsBidi() {
+		if str, ok := c.bidiStreams[id]; ok {
+			return str.recvStr, true
+		}
+	} else {
+		if rStr, ok := c.recvStreams[id]; ok {
+			return rStr, true
+		}
+	}
+	return nil, false
+}

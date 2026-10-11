@@ -77,10 +77,11 @@ type CoreSessionBridge struct {
 
 	handshakeDoneCh chan struct{}
 	closedCh        chan struct{}
-	closeErr        error
 
 	localAddr  net.Addr
 	remoteAddr net.Addr
+	packetConn net.PacketConn
+	ownsConn   bool
 
 	// Outgoing datagram channel for network transmission
 	outgoingPackets chan []byte
@@ -88,14 +89,17 @@ type CoreSessionBridge struct {
 
 // CoreBridgeConfig configures a CoreSessionBridge session.
 type CoreBridgeConfig struct {
-	Perspective handshake.Perspective
-	TLSConfig   *tls.Config
-	LocalParams handshake.TransportParameters
-	DestConnID  handshake.ConnectionID
-	SrcConnID   handshake.ConnectionID
-	Version     wire.Version
-	LocalAddr   net.Addr
-	RemoteAddr  net.Addr
+	Perspective        handshake.Perspective
+	TLSConfig          *tls.Config
+	LocalParams        handshake.TransportParameters
+	DestConnID         handshake.ConnectionID
+	OriginalDestConnID handshake.ConnectionID
+	SrcConnID          handshake.ConnectionID
+	Version            wire.Version
+	LocalAddr          net.Addr
+	RemoteAddr         net.Addr
+	PacketConn         net.PacketConn
+	OwnsConn           bool
 }
 
 // NewCoreSessionBridge initializes a clean-room QUIC session bridging core wire,
@@ -117,21 +121,26 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 		Perspective:                    persStream,
 		LocalAddr:                      cfg.LocalAddr,
 		RemoteAddr:                     cfg.RemoteAddr,
-		InitialStreamReceiveWindow:     stream.DefaultInitialStreamReceiveWindow,
-		MaxStreamReceiveWindow:         stream.DefaultMaxStreamReceiveWindow,
-		InitialConnectionReceiveWindow: stream.DefaultInitialConnReceiveWindow,
-		MaxConnectionReceiveWindow:     stream.DefaultMaxConnReceiveWindow,
-		InitialMaxStreamsBidi:          100,
-		InitialMaxStreamsUni:           100,
-		InitialPeerMaxStreamsBidi:      100,
-		InitialPeerMaxStreamsUni:       100,
-		InitialPeerMaxData:             stream.DefaultInitialConnReceiveWindow,
+		InitialStreamReceiveWindow:     64 * 1024 * 1024,
+		MaxStreamReceiveWindow:         64 * 1024 * 1024,
+		InitialConnectionReceiveWindow: 64 * 1024 * 1024,
+		MaxConnectionReceiveWindow:     64 * 1024 * 1024,
+		InitialMaxStreamsBidi:          1000,
+		InitialMaxStreamsUni:           1000,
+		InitialPeerMaxStreamsBidi:      1000,
+		InitialPeerMaxStreamsUni:       1000,
+		InitialPeerMaxData:             64 * 1024 * 1024,
 	})
+
+	initialCID := cfg.DestConnID
+	if cfg.Perspective == handshake.PerspectiveServer && cfg.OriginalDestConnID.Len() > 0 {
+		initialCID = cfg.OriginalDestConnID
+	}
 
 	handshakeCfg := &handshake.Config{
 		TLSConfig:   cfg.TLSConfig,
 		LocalParams: cfg.LocalParams,
-		DestConnID:  cfg.DestConnID,
+		DestConnID:  initialCID,
 		Version:     handshake.Version(cfg.Version),
 	}
 
@@ -157,6 +166,8 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 		closedCh:        make(chan struct{}),
 		localAddr:       cfg.LocalAddr,
 		remoteAddr:      cfg.RemoteAddr,
+		packetConn:      cfg.PacketConn,
+		ownsConn:        cfg.OwnsConn,
 		outgoingPackets: make(chan []byte, 64),
 	}
 
@@ -311,6 +322,9 @@ func (b *CoreSessionBridge) HandleIncomingPacket(packetData []byte) error {
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevelInitial, decryptedPayload); err != nil {
 			return err
 		}
+		if b.perspective == handshake.PerspectiveClient && len(hdr.SrcConnID) > 0 {
+			b.destConnID = handshake.NewConnectionID(hdr.SrcConnID)
+		}
 
 	case wire.PacketTypeHandshake:
 		b.ensureHandshakeKeysLocked()
@@ -347,6 +361,12 @@ func (b *CoreSessionBridge) HandleIncomingPacket(packetData []byte) error {
 	}
 
 	b.checkHandshakeProgressLocked()
+	if b.packetConn != nil && b.remoteAddr != nil {
+		packets := b.drainCryptoPacketsLocked()
+		for _, pkt := range packets {
+			_, _ = b.packetConn.WriteTo(pkt, b.remoteAddr)
+		}
+	}
 	return nil
 }
 
@@ -414,7 +434,7 @@ func (b *CoreSessionBridge) processDecryptedFramesLocked(level handshake.Encrypt
 			b.streamConn.HandleMaxStreamsFrame(stream.StreamTypeClientUni, f.MaxStreams.MaxStreams)
 
 		case f.Type == wire.FrameTypeConnectionCloseTransport || f.Type == wire.FrameTypeConnectionCloseApp:
-			b.streamConn.CloseWithError(
+			_ = b.streamConn.CloseWithError(
 				stream.ApplicationErrorCode(f.ConnectionClose.ErrorCode),
 				string(f.ConnectionClose.Reason),
 			)
@@ -481,11 +501,7 @@ func (b *CoreSessionBridge) ensure1RTTKeysLocked() {
 	}
 }
 
-// DrainOutgoingPackets extracts all pending packets ready for transmission.
-func (b *CoreSessionBridge) DrainOutgoingPackets() [][]byte {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
+func (b *CoreSessionBridge) drainCryptoPacketsLocked() [][]byte {
 	var packets [][]byte
 	levels := []handshake.EncryptionLevel{
 		handshake.EncryptionLevelInitial,
@@ -502,6 +518,34 @@ func (b *CoreSessionBridge) DrainOutgoingPackets() [][]byte {
 		}
 	}
 	return packets
+}
+
+// DrainOutgoingPackets extracts all pending packets ready for transmission.
+func (b *CoreSessionBridge) DrainOutgoingPackets() [][]byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.drainCryptoPacketsLocked()
+}
+
+// FlushPendingPackets sends all pending crypto/handshake packets to remoteAddr over packetConn.
+func (b *CoreSessionBridge) FlushPendingPackets() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	packets := b.drainCryptoPacketsLocked()
+	for _, pkt := range packets {
+		if b.packetConn != nil && b.remoteAddr != nil {
+			if _, err := b.packetConn.WriteTo(pkt, b.remoteAddr); err != nil {
+				return err
+			}
+		} else {
+			select {
+			case b.outgoingPackets <- pkt:
+			default:
+			}
+		}
+	}
+	return nil
 }
 
 func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel, cryptoData []byte) ([]byte, error) {
@@ -550,11 +594,7 @@ func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel
 	return protector.SealPacket(nil, &h, payload)
 }
 
-// PackStreamPacket serializes stream data into a protected 1-RTT short header packet.
-func (b *CoreSessionBridge) PackStreamPacket(id stream.StreamID, offset uint64, data []byte, fin bool) ([]byte, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
+func (b *CoreSessionBridge) packStreamPacketLocked(id stream.StreamID, offset uint64, data []byte, fin bool) ([]byte, error) {
 	b.ensure1RTTKeysLocked()
 	if b.oneRTTProtector == nil {
 		return nil, errors.New("quic: 1-RTT protector not ready")
@@ -582,6 +622,114 @@ func (b *CoreSessionBridge) PackStreamPacket(id stream.StreamID, offset uint64, 
 	return b.oneRTTProtector.SealPacket(nil, &h, payload)
 }
 
+// PackStreamPacket serializes stream data into a protected 1-RTT short header packet.
+func (b *CoreSessionBridge) PackStreamPacket(id stream.StreamID, offset uint64, data []byte, fin bool) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.packStreamPacketLocked(id, offset, data, fin)
+}
+
+// FlushStreamData pops pending stream frames and transmits them as 1-RTT packets.
+func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.ensure1RTTKeysLocked()
+	if b.oneRTTProtector == nil {
+		return nil
+	}
+
+	str, ok := b.streamConn.GetSendStream(id)
+	if !ok {
+		return nil
+	}
+
+	for {
+		data, offset, fin, ok := str.PopStreamFrame(1150)
+		if !ok {
+			break
+		}
+		pkt, err := b.packStreamPacketLocked(id, offset, data, fin)
+		if err != nil {
+			return err
+		}
+		if b.packetConn != nil && b.remoteAddr != nil {
+			if _, err := b.packetConn.WriteTo(pkt, b.remoteAddr); err != nil {
+				return err
+			}
+		} else {
+			select {
+			case b.outgoingPackets <- pkt:
+			default:
+			}
+		}
+	}
+	return nil
+}
+
+// SendResetStream transmits a RESET_STREAM frame over the network.
+func (b *CoreSessionBridge) SendResetStream(id stream.StreamID, code stream.StreamErrorCode, finalSize uint64) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.ensure1RTTKeysLocked()
+	if b.oneRTTProtector == nil || b.packetConn == nil || b.remoteAddr == nil {
+		return nil
+	}
+
+	rsf := wire.ResetStreamFrame{
+		StreamID:  uint64(id),
+		ErrorCode: uint64(code),
+		FinalSize: finalSize,
+	}
+	payload := wire.AppendResetStreamFrame(nil, &rsf)
+
+	var h wire.Header
+	h.IsLong = false
+	h.Type = wire.PacketType1RTT
+	h.DestConnID = b.destConnID.Bytes()
+	h.PacketNumber = b.nextPacketNumber.Add(1) - 1
+	h.PacketNumberLen = 4
+
+	pkt, err := b.oneRTTProtector.SealPacket(nil, &h, payload)
+	if err != nil {
+		return err
+	}
+	_, err = b.packetConn.WriteTo(pkt, b.remoteAddr)
+	return err
+}
+
+// SendStopSending transmits a STOP_SENDING frame over the network.
+func (b *CoreSessionBridge) SendStopSending(id stream.StreamID, code stream.StreamErrorCode) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.ensure1RTTKeysLocked()
+	if b.oneRTTProtector == nil || b.packetConn == nil || b.remoteAddr == nil {
+		return nil
+	}
+
+	ssf := wire.StopSendingFrame{
+		StreamID:  uint64(id),
+		ErrorCode: uint64(code),
+	}
+	payload := wire.AppendStopSendingFrame(nil, &ssf)
+
+	var h wire.Header
+	h.IsLong = false
+	h.Type = wire.PacketType1RTT
+	h.DestConnID = b.destConnID.Bytes()
+	h.PacketNumber = b.nextPacketNumber.Add(1) - 1
+	h.PacketNumberLen = 4
+
+	pkt, err := b.oneRTTProtector.SealPacket(nil, &h, payload)
+	if err != nil {
+		return err
+	}
+	_, err = b.packetConn.WriteTo(pkt, b.remoteAddr)
+	return err
+}
+
 // Close gracefully closes the session and underlying clean-room stream multiplexer.
 func (b *CoreSessionBridge) Close() error {
 	b.mu.Lock()
@@ -592,6 +740,10 @@ func (b *CoreSessionBridge) Close() error {
 		return nil
 	default:
 		close(b.closedCh)
+	}
+
+	if b.ownsConn && b.packetConn != nil {
+		_ = b.packetConn.Close()
 	}
 
 	_ = b.handshakeDriver.Close()
