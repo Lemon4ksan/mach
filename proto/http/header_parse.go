@@ -579,6 +579,11 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		}
 	}
 
+	// RFC 9112 §2.2 & Chromium NullFails: Reject null bytes and bare CRs in status-line
+	if bytes.IndexByte(b, 0) != -1 || bytes.IndexByte(b, '\r') != -1 {
+		return 0, ErrUnexpectedStatusCodeChar
+	}
+
 	n := bytes.IndexByte(b, ' ')
 	if n < 0 {
 		if h.SecureErrorLogMessage {
@@ -632,6 +637,19 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 
 	h.protocol = append(h.protocol[:0], protoStr...)
 	if len(statusMessage) > 0 {
+		// Normalize status message: strip leading/trailing spaces (Chromium HttpResponseHeaders Normalize whitespace)
+		for len(statusMessage) > 0 && (statusMessage[0] == ' ' || statusMessage[0] == '\t') {
+			statusMessage = statusMessage[1:]
+		}
+		statusMessage = trimTrailingSpace(statusMessage)
+
+		// RFC 9112 §3.1.2: reason-phrase = *( HTAB / SP / VCHAR / obs-text )
+		for _, ch := range statusMessage {
+			if ch == 0 || ch == '\r' || (ch < 0x20 && ch != '\t') || ch == 0x7f {
+				return 0, fmt.Errorf("invalid character in status message %q", statusMessage)
+			}
+		}
+
 		h.SetStatusMessage(statusMessage)
 	}
 

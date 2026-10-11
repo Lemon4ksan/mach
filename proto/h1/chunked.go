@@ -33,6 +33,44 @@ func NewChunkedReader(r *bufio.Reader) *ChunkedReader {
 	return &ChunkedReader{r: r}
 }
 
+const maxChunkLineLen = 16384 // RFC 9112 §7.1 and Chromium kMaxLineBufLen
+
+// Reset resets the ChunkedReader with reader r, clearing internal state (RFC 9112 §7.1).
+func (cr *ChunkedReader) Reset(r *bufio.Reader) {
+	cr.r = r
+	cr.remaining = 0
+	cr.done = false
+}
+
+func (cr *ChunkedReader) readChunkLine() ([]byte, error) {
+	line, err := cr.r.ReadSlice('\n')
+	if err == nil {
+		if len(line) > maxChunkLineLen {
+			return nil, ErrInvalidChunkSize
+		}
+		return line, nil
+	}
+
+	if errors.Is(err, bufio.ErrBufferFull) {
+		total := len(line)
+		for {
+			part, pErr := cr.r.ReadSlice('\n')
+			total += len(part)
+			if total > maxChunkLineLen {
+				return nil, ErrInvalidChunkSize
+			}
+			if pErr == nil {
+				return nil, ErrInvalidChunkSize
+			}
+			if !errors.Is(pErr, bufio.ErrBufferFull) {
+				return nil, pErr
+			}
+		}
+	}
+
+	return nil, err
+}
+
 // Read reads decoded data from the chunked stream into p (RFC 9112 §7.1).
 func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 	if cr.done {
@@ -40,7 +78,7 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 	}
 
 	if cr.remaining == 0 {
-		line, err := cr.r.ReadBytes('\n')
+		line, err := cr.readChunkLine()
 		if err != nil {
 			return 0, err
 		}
@@ -79,7 +117,7 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 			// RFC 9112 §7.1.2: Drain trailer section *( field-line CRLF ) terminated by empty CRLF line
 			trailerCount := 0
 			for {
-				tLine, tErr := cr.r.ReadBytes('\n')
+				tLine, tErr := cr.r.ReadSlice('\n')
 				if tErr != nil {
 					if errors.Is(tErr, io.EOF) {
 						return 0, io.ErrUnexpectedEOF

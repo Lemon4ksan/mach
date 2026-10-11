@@ -47,6 +47,20 @@ var (
 	})
 )
 
+// AcquireRequest returns an empty Request instance from the per-core pool.
+func AcquireRequest() *Request {
+	return reqStorage.Get()
+}
+
+// ReleaseRequest returns r to the pool.
+func ReleaseRequest(r *Request) {
+	if cap(r.Body) > 64*1024 {
+		r.Body = make([]byte, 0, 1024)
+	}
+	r.Reset()
+	reqStorage.Put(r)
+}
+
 // HandlerFunc is the core callback for dispatching an incoming H1 request to the server router (RFC 9110 §3).
 // Handlers must not retain references to req, res, or their buffers after HandlerFunc returns.
 type HandlerFunc func(req *Request, res *Response) error
