@@ -14,6 +14,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/pathkit"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/seal/text/encoding/htmlindex"
 )
 
@@ -42,14 +43,15 @@ type ContentDisposition struct {
 	Parameters map[string]string
 }
 
-// FileName cleans a string by stripping path traversal sequences, null bytes,
+// FileName cleans a string or byte slice by stripping path traversal sequences, null bytes,
 // control characters, and Windows reserved device names per RFC 6266 §4.3.
-func FileName(filename string) string {
+func FileName[S ~string | ~[]byte](filename S) string {
+	raw := stringOrBytes(filename)
 	var sb strings.Builder
-	sb.Grow(len(filename))
+	sb.Grow(len(raw))
 
-	for i := range len(filename) {
-		b := filename[i]
+	for i := range len(raw) {
+		b := raw[i]
 		if b >= 32 && b != 127 {
 			sb.WriteByte(b)
 		}
@@ -61,28 +63,29 @@ func FileName(filename string) string {
 		cleaned = cleaned[2:]
 	}
 
-	filename = pathkit.New(pathkit.Clean(strings.TrimSpace(cleaned))).Base()
+	res := pathkit.New(pathkit.Clean(strings.TrimSpace(cleaned))).Base()
 
-	for strings.HasPrefix(filename, "..") || strings.HasPrefix(filename, ".") {
-		filename = strings.TrimPrefix(filename, "..")
-		filename = strings.TrimPrefix(filename, ".")
+	for strings.HasPrefix(res, "..") || strings.HasPrefix(res, ".") {
+		res = strings.TrimPrefix(res, "..")
+		res = strings.TrimPrefix(res, ".")
 	}
 
-	filename = strings.ReplaceAll(filename, ":", "_")
-	filename = strings.TrimSpace(filename)
+	res = strings.ReplaceAll(res, ":", "_")
+	res = strings.TrimSpace(res)
 
-	if IsWindowsReservedName(filename) || filename == "" || filename == "." || filename == "/" ||
-		filename == "\\" {
+	if IsWindowsReservedName(res) || res == "" || res == "." || res == "/" ||
+		res == "\\" {
 		return "downloaded_file"
 	}
 
-	return filename
+	return res
 }
 
-// ParseContentDisposition parses a Content-Disposition header string per RFC 6266 §4.1–§4.4.
+// Parse parses a Content-Disposition header ([string] or [[]byte]) per RFC 6266 §4.1–§4.4.
 // Unknown or unhandled disposition types are normalized to "attachment" (RFC 6266 §4.2).
 // When both "filename*" and "filename" parameters are present, "filename*" takes precedence (RFC 6266 §4.3).
-func ParseContentDisposition(contentDispositionHeader string) ContentDisposition {
+func Parse[S ~string | ~[]byte](header S) ContentDisposition {
+	contentDispositionHeader := stringOrBytes(header)
 	if contentDispositionHeader == "" {
 		return ContentDisposition{
 			Type:       DispositionAttachment,
@@ -125,10 +128,16 @@ func ParseContentDisposition(contentDispositionHeader string) ContentDisposition
 	}
 }
 
+// ParseContentDisposition parses a Content-Disposition header ([string] or [[]byte]) per RFC 6266 §4.1–§4.4.
+// Deprecated: use [Parse] instead.
+func ParseContentDisposition[S ~string | ~[]byte](contentDispositionHeader S) ContentDisposition {
+	return Parse(contentDispositionHeader)
+}
+
 // ExtractFilename extracts, RFC 8187-decodes, and cleans the filename parameter
-// from a Content-Disposition HTTP header according to RFC 6266 §4.3.
-func ExtractFilename(contentDispositionHeader string) string {
-	cd := ParseContentDisposition(contentDispositionHeader)
+// from a Content-Disposition HTTP header ([string] or [[]byte]) according to RFC 6266 §4.3.
+func ExtractFilename[S ~string | ~[]byte](contentDispositionHeader S) string {
+	cd := Parse(contentDispositionHeader)
 	return cd.Filename
 }
 
@@ -220,24 +229,25 @@ func EncodeRFC8187(value, language string) string {
 	return string(b)
 }
 
-// DecodeRFC8187 decodes an RFC 8187 extended parameter value string ("charset'language'value-chars")
+// DecodeRFC8187 decodes an RFC 8187 extended parameter value ([string] or [[]byte]) ("charset'language'value-chars")
 // into its constituent charset, language, and decoded value (RFC 8187 §3.2.1).
-func DecodeRFC8187(extValue string) (charset, language, value string, err error) {
-	firstQuote := strings.IndexByte(extValue, '\'')
+func DecodeRFC8187[S ~string | ~[]byte](extValue S) (charset, language, value string, err error) {
+	raw := stringOrBytes(extValue)
+	firstQuote := strings.IndexByte(raw, '\'')
 	if firstQuote == -1 {
-		return "", "", extValue, nil
+		return "", "", raw, nil
 	}
 
-	secondQuote := strings.IndexByte(extValue[firstQuote+1:], '\'')
+	secondQuote := strings.IndexByte(raw[firstQuote+1:], '\'')
 	if secondQuote == -1 {
-		return "", "", extValue, nil
+		return "", "", raw, nil
 	}
 
 	secondQuote += firstQuote + 1
 
-	charset = strings.ToLower(strings.TrimSpace(extValue[:firstQuote]))
-	language = extValue[firstQuote+1 : secondQuote]
-	rawEncoded := extValue[secondQuote+1:]
+	charset = strings.ToLower(strings.TrimSpace(raw[:firstQuote]))
+	language = raw[firstQuote+1 : secondQuote]
+	rawEncoded := raw[secondQuote+1:]
 
 	unescaped, unescapeErr := url.PathUnescape(rawEncoded)
 	if unescapeErr != nil {
@@ -273,17 +283,18 @@ func DecodeRFC8187(extValue string) (charset, language, value string, err error)
 	return charset, language, value, nil
 }
 
-// DecodeRFC8187Value decodes an RFC 8187 extended parameter value string, returning the decoded text value
+// DecodeRFC8187Value decodes an RFC 8187 extended parameter value ([string] or [[]byte]), returning the decoded text value
 // with robust error recovery (RFC 8187 §3.2.1 & §4.2).
-func DecodeRFC8187Value(extValue string) string {
+func DecodeRFC8187Value[S ~string | ~[]byte](extValue S) string {
 	_, _, val, _ := DecodeRFC8187(extValue)
 	return val
 }
 
-// AppendISO88591ToUTF8 converts ISO-8859-1 raw bytes to UTF-8 and appends them to dst.
-func AppendISO88591ToUTF8(dst []byte, s string) []byte {
-	for i := range len(s) {
-		r := rune(s[i])
+// AppendISO88591ToUTF8 converts ISO-8859-1 raw bytes ([string] or [[]byte]) to UTF-8 and appends them to dst.
+func AppendISO88591ToUTF8[S ~string | ~[]byte](dst []byte, s S) []byte {
+	str := stringOrBytes(s)
+	for i := range len(str) {
+		r := rune(str[i])
 		var buf [utf8.UTFMax]byte
 		n := utf8.EncodeRune(buf[:], r)
 		dst = append(dst, buf[:n]...)
@@ -291,20 +302,21 @@ func AppendISO88591ToUTF8(dst []byte, s string) []byte {
 	return dst
 }
 
-// ISO88591ToUTF8 translates ISO-8859-1 raw bytes into UTF-8 representation.
-func ISO88591ToUTF8(s string) string {
+// ISO88591ToUTF8 translates ISO-8859-1 raw bytes ([string] or [[]byte]) into UTF-8 representation.
+func ISO88591ToUTF8[S ~string | ~[]byte](s S) string {
 	var buf [256]byte
 	b := AppendISO88591ToUTF8(buf[:0], s)
 	return string(b)
 }
 
 // IsWindowsReservedName checks whether filename stem conflicts with Win32 legacy DOS devices (RFC 6266 §4.3).
-func IsWindowsReservedName(filename string) bool {
-	if before, _, ok := strings.Cut(filename, "."); ok {
-		filename = before
+func IsWindowsReservedName[S ~string | ~[]byte](filename S) bool {
+	raw := stringOrBytes(filename)
+	if before, _, ok := strings.Cut(raw, "."); ok {
+		raw = before
 	}
 
-	switch strings.ToUpper(strings.TrimSpace(filename)) {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
 	case "CON", "PRN", "AUX", "NUL",
 		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
 		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
@@ -312,4 +324,15 @@ func IsWindowsReservedName(filename string) bool {
 	}
 
 	return false
+}
+
+func stringOrBytes[S ~string | ~[]byte](s S) string {
+	switch v := any(s).(type) {
+	case string:
+		return v
+	case []byte:
+		return bytesconv.B2S(v)
+	default:
+		return string(s)
+	}
 }

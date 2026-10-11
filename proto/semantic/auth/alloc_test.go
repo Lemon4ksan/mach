@@ -13,17 +13,17 @@ import (
 func TestAlloc(t *testing.T) {
 	header := "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
 
-	t.Run("ParseBasicBytes", func(t *testing.T) {
+	t.Run("ParseBasic", func(t *testing.T) {
 		buf := make([]byte, len(header))
 		allocs := testing.AllocsPerRun(1000, func() {
 			copy(buf, header)
-			user, pass, err := auth.ParseBasicBytes(buf)
+			user, pass, err := auth.ParseBasic(buf)
 			if err != nil || string(user) != "Aladdin" || string(pass) != "open sesame" {
 				t.Fatalf("unexpected parse: user=%s pass=%s err=%v", user, pass, err)
 			}
 		})
 		if allocs != 0 {
-			t.Errorf("expected 0 allocs for ParseBasicBytes, got %v", allocs)
+			t.Errorf("expected 0 allocs for ParseBasic, got %v", allocs)
 		}
 	})
 
@@ -40,16 +40,16 @@ func TestAlloc(t *testing.T) {
 		}
 	})
 
-	t.Run("ParseBearerBytes", func(t *testing.T) {
+	t.Run("ParseBearer_Bytes", func(t *testing.T) {
 		bearerHeaderBytes := []byte("Bearer mF_9.B5f-4.1JqM")
 		allocs := testing.AllocsPerRun(1000, func() {
-			token, ok := auth.ParseBearerBytes(bearerHeaderBytes)
+			token, ok := auth.ParseBearer(bearerHeaderBytes)
 			if !ok || string(token) != "mF_9.B5f-4.1JqM" {
 				t.Fatalf("unexpected parse: token=%s ok=%v", token, ok)
 			}
 		})
 		if allocs != 0 {
-			t.Errorf("expected 0 allocs for ParseBearerBytes, got %v", allocs)
+			t.Errorf("expected 0 allocs for ParseBearer (bytes), got %v", allocs)
 		}
 	})
 

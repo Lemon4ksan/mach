@@ -93,8 +93,8 @@ func (p Priority) String() string {
 	return p.Format()
 }
 
-// ParsePriority deserializes an RFC 9218 §4 priority header value ([string] or [[]byte]) without heap allocations.
-func ParsePriority[S ~string | ~[]byte](s S) (Priority, error) {
+// Parse deserializes an RFC 9218 §4 priority header value ([string] or [[]byte]) without heap allocations.
+func Parse[S ~string | ~[]byte](s S) (Priority, error) {
 	p := Priority{Urgency: 3, Incremental: false}
 	raw := s
 
@@ -167,15 +167,6 @@ func ParsePriority[S ~string | ~[]byte](s S) (Priority, error) {
 	return p, nil
 }
 
-// Parse deserializes an RFC 9218 §4 priority header string (e.g. "u=1, i", "u=3", "i, u=0") with zero allocations.
-func Parse(s string) (Priority, error) {
-	return ParsePriority(s)
-}
-
-// ParseBytes deserializes an RFC 9218 §4 priority header byte slice with zero allocations.
-func ParseBytes(b []byte) (Priority, error) {
-	return ParsePriority(b)
-}
 
 func equalStr[S ~string | ~[]byte](s S, target string) bool {
 	if len(s) != len(target) {

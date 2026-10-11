@@ -26,7 +26,7 @@ import (
 
 	"github.com/lemon4ksan/mach/proto/codec/qpack"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/server/h3"
 )
 

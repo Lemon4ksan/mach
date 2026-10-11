@@ -13,8 +13,6 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
-
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // ReadCloserWithError extends io.Reader with an error-propagating CloseWithError method.
@@ -102,11 +100,11 @@ func copyBodyStream(w io.Writer, r io.Reader) (int64, error) {
 			return bwt.WriteTo(w)
 		}
 
-		vbuf := zerocopy.CopyBufPool.Get()
+		vbuf := CopyBufPool.Get()
 		buf := vbuf.([]byte)
-		n, err := zerocopy.CopyBuffer(w, r, buf)
+		n, err := io.CopyBuffer(w, r, buf)
 
-		zerocopy.CopyBufPool.Put(vbuf)
+		CopyBufPool.Put(vbuf)
 
 		return n, err
 	}
@@ -120,7 +118,7 @@ func copyZeroAlloc(w io.Writer, r io.Reader) (int64, error) {
 
 // ErrBodyTooLarge is returned if a request or response body exceeds the configured
 // maximum body size limit.
-var ErrBodyTooLarge = zerocopy.ErrBodyTooLarge
+var ErrBodyTooLarge = bytesconv.ErrBodyTooLarge
 
 // CopyZeroAllocWithLimit copies up to maxBodySize bytes from r to w without heap allocations,
 // using foundation silicon buffer pools.

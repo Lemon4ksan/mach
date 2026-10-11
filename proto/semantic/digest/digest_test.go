@@ -321,3 +321,115 @@ func TestRFC7616_Section3_9_2_TestVectors(t *testing.T) {
 	}())
 	assert.Equal(t, "3798d4131c277846293534c3edc11bd8a5e4cdcbff78b05db9d95eeb1cec68a5", resp)
 }
+
+func TestParseChallenge(t *testing.T) {
+	t.Parallel()
+
+	raw := `Digest realm="http-auth@example.org", qop="auth, auth-int", algorithm=SHA-256, nonce="7yp转/近代...", opaque="fqh/转...", charset=UTF-8, userhash=true`
+
+	t.Run("string", func(t *testing.T) {
+		ch, err := digest.ParseChallenge(raw)
+		require.NoError(t, err)
+		assert.Equal(t, "http-auth@example.org", ch.Realm)
+		assert.Equal(t, "SHA-256", ch.Algorithm)
+		assert.Equal(t, "7yp转/近代...", ch.Nonce)
+		assert.Equal(t, "fqh/转...", ch.Opaque)
+		assert.Equal(t, "UTF-8", ch.Charset)
+		assert.Equal(t, "true", ch.UserHash)
+		assert.Equal(t, []string{"auth", "auth-int"}, ch.Qop)
+	})
+
+	t.Run("bytes", func(t *testing.T) {
+		ch, err := digest.ParseChallenge([]byte(raw))
+		require.NoError(t, err)
+		assert.Equal(t, "http-auth@example.org", ch.Realm)
+		assert.Equal(t, "SHA-256", ch.Algorithm)
+		assert.Equal(t, "7yp转/近代...", ch.Nonce)
+		assert.Equal(t, "fqh/转...", ch.Opaque)
+		assert.Equal(t, "UTF-8", ch.Charset)
+		assert.Equal(t, "true", ch.UserHash)
+		assert.Equal(t, []string{"auth", "auth-int"}, ch.Qop)
+	})
+
+	t.Run("invalid_charset", func(t *testing.T) {
+		_, err := digest.ParseChallenge(`Digest realm="test", nonce="123", charset=ASCII`)
+		require.ErrorIs(t, err, digest.ErrDigestInvalidCharset)
+	})
+
+	t.Run("bad_challenge", func(t *testing.T) {
+		_, err := digest.ParseChallenge(`Basic realm="test"`)
+		require.ErrorIs(t, err, digest.ErrDigestBadChallenge)
+	})
+}
+
+func TestParseCredentials(t *testing.T) {
+	t.Parallel()
+
+	raw := `Digest username="Mufasa", realm="http-auth@example.org", uri="/dir/index.html", algorithm=SHA-256, nonce="7yp转/近代...", nc=00000001, cnonce="f2n983nc3", qop=auth, response="753927...", opaque="fqh/转..."`
+
+	t.Run("string", func(t *testing.T) {
+		cred, err := digest.ParseCredentials(raw)
+		require.NoError(t, err)
+		assert.Equal(t, "Mufasa", cred.Username)
+		assert.Equal(t, "http-auth@example.org", cred.Realm)
+		assert.Equal(t, "/dir/index.html", cred.URI)
+		assert.Equal(t, "SHA-256", cred.Algorithm)
+		assert.Equal(t, "7yp转/近代...", cred.Nonce)
+		assert.Equal(t, 1, cred.NC)
+		assert.Equal(t, "f2n983nc3", cred.Cnonce)
+		assert.Equal(t, "auth", cred.Qop)
+		assert.Equal(t, "753927...", cred.Response)
+		assert.Equal(t, "fqh/转...", cred.Opaque)
+	})
+
+	t.Run("bytes", func(t *testing.T) {
+		cred, err := digest.ParseCredentials([]byte(raw))
+		require.NoError(t, err)
+		assert.Equal(t, "Mufasa", cred.Username)
+		assert.Equal(t, "http-auth@example.org", cred.Realm)
+		assert.Equal(t, "/dir/index.html", cred.URI)
+		assert.Equal(t, "SHA-256", cred.Algorithm)
+		assert.Equal(t, "7yp转/近代...", cred.Nonce)
+		assert.Equal(t, 1, cred.NC)
+		assert.Equal(t, "f2n983nc3", cred.Cnonce)
+		assert.Equal(t, "auth", cred.Qop)
+		assert.Equal(t, "753927...", cred.Response)
+		assert.Equal(t, "fqh/转...", cred.Opaque)
+	})
+
+	t.Run("bad_credentials", func(t *testing.T) {
+		_, err := digest.ParseCredentials(`Basic realm="test"`)
+		require.ErrorIs(t, err, digest.ErrDigestBadCredentials)
+	})
+}
+
+func TestParseAuthenticationInfo(t *testing.T) {
+	t.Parallel()
+
+	raw := `nextnonce="d248451fc358f4c199c52b6d610541e5", qop=auth, rspauth="2058f7d0f34f7d96416db24c7bdf32b8", cnonce="0a4f113b", nc=00000001`
+
+	t.Run("string", func(t *testing.T) {
+		ai, err := digest.ParseAuthenticationInfo(raw)
+		require.NoError(t, err)
+		assert.Equal(t, "d248451fc358f4c199c52b6d610541e5", ai.NextNonce)
+		assert.Equal(t, "auth", ai.Qop)
+		assert.Equal(t, "2058f7d0f34f7d96416db24c7bdf32b8", ai.RspAuth)
+		assert.Equal(t, "0a4f113b", ai.CNonce)
+		assert.Equal(t, 1, ai.NC)
+	})
+
+	t.Run("bytes", func(t *testing.T) {
+		ai, err := digest.ParseAuthenticationInfo([]byte(raw))
+		require.NoError(t, err)
+		assert.Equal(t, "d248451fc358f4c199c52b6d610541e5", ai.NextNonce)
+		assert.Equal(t, "auth", ai.Qop)
+		assert.Equal(t, "2058f7d0f34f7d96416db24c7bdf32b8", ai.RspAuth)
+		assert.Equal(t, "0a4f113b", ai.CNonce)
+		assert.Equal(t, 1, ai.NC)
+	})
+
+	t.Run("bad_auth_info", func(t *testing.T) {
+		_, err := digest.ParseAuthenticationInfo(``)
+		require.ErrorIs(t, err, digest.ErrDigestBadAuthInfo)
+	})
+}

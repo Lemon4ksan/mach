@@ -24,8 +24,8 @@ import (
 
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -587,8 +587,8 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	}
 }
 
-func createTestCookie(name, value, path []byte) *zerocopy.Cookie {
-	c := zerocopy.AcquireCookie()
+func createTestCookie(name, value, path []byte) *cookie.Cookie {
+	c := cookie.AcquireCookie()
 	c.SetKeyBytes(name)
 	c.SetValueBytes(value)
 	c.SetPathBytes(path)

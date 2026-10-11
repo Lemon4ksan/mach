@@ -10,10 +10,10 @@ import (
 	"github.com/lemon4ksan/mach/proto/semantic/contentdisposition"
 )
 
-func ExampleParseContentDisposition() {
+func ExampleParse() {
 	header := `attachment; filename="data.csv"`
 
-	cd := contentdisposition.ParseContentDisposition(header)
+	cd := contentdisposition.Parse(header)
 	fmt.Printf("Type: %s, Filename: %s\n", cd.Type, cd.Filename)
 
 	// Output:

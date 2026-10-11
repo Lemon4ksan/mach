@@ -19,15 +19,20 @@ func TestContentDisposition_RFC6266_And_RFC8187(t *testing.T) {
 	asciiFormatted := contentdisposition.FormatContentDisposition("attachment", "document.pdf")
 	assert.Equal(t, `attachment; filename="document.pdf"`, asciiFormatted)
 
-	cdAscii := contentdisposition.ParseContentDisposition(asciiFormatted)
+	cdAscii := contentdisposition.Parse(asciiFormatted)
 	assert.Equal(t, contentdisposition.DispositionAttachment, cdAscii.Type)
 	assert.Equal(t, "document.pdf", cdAscii.Filename)
+
+	// Byte slice parsing
+	cdBytes := contentdisposition.Parse([]byte(asciiFormatted))
+	assert.Equal(t, contentdisposition.DispositionAttachment, cdBytes.Type)
+	assert.Equal(t, "document.pdf", cdBytes.Filename)
 
 	// UTF-8 filename with RFC 8187 encoding
 	utf8Formatted := contentdisposition.FormatContentDisposition("attachment", "отчет_2026.pdf")
 	assert.Contains(t, utf8Formatted, `filename*=UTF-8''`)
 
-	cdUtf8 := contentdisposition.ParseContentDisposition(utf8Formatted)
+	cdUtf8 := contentdisposition.Parse(utf8Formatted)
 	assert.Equal(t, "отчет_2026.pdf", cdUtf8.Filename)
 
 	// Path traversal protection

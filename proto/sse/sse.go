@@ -16,6 +16,8 @@ import (
 	"iter"
 	"strconv"
 	"strings"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 // Event represents a single parsed W3C Server-Sent Event frame.
@@ -192,8 +194,8 @@ func parseSSELine(line []byte, ev *Event) {
 		key = line
 	}
 
-	switch {
-	case bytes.Equal(key, []byte("data")):
+	switch string(key) {
+	case "data":
 		if ev.Data != "" {
 			ev.Data += "\n" + string(value)
 			return
@@ -201,13 +203,13 @@ func parseSSELine(line []byte, ev *Event) {
 
 		ev.Data = string(value)
 
-	case bytes.Equal(key, []byte("event")):
+	case "event":
 		ev.Event = string(value)
 
-	case bytes.Equal(key, []byte("id")):
+	case "id":
 		ev.ID = string(value)
 
-	case bytes.Equal(key, []byte("retry")):
+	case "retry":
 		if r, err := strconv.Atoi(string(bytes.TrimSpace(value))); err == nil {
 			ev.Retry = r
 		}
@@ -224,7 +226,7 @@ func decodePayload[T any](ev Event) (T, error) {
 	}
 
 	var val T
-	if err := json.Unmarshal([]byte(ev.Data), &val); err != nil {
+	if err := json.Unmarshal(bytesconv.S2B(ev.Data), &val); err != nil {
 		return val, fmt.Errorf("sse: unmarshal failed: %w", err)
 	}
 

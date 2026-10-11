@@ -14,9 +14,10 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/altsvc"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/altsvc"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // SetByteRange sets 'Range: bytes=startPos-endPos' header (RFC 9110 Section 14.1.2).
@@ -27,11 +28,11 @@ import (
 // Thread-safe: No.
 func (h *RequestHeader) SetByteRange(startPos, endPos int) {
 	b := h.bufV[:0]
-	b = append(b, zerocopy.StrBytes...)
+	b = append(b, StrBytes...)
 
 	b = append(b, '=')
 	if startPos >= 0 {
-		b = zerocopy.AppendUint(b, startPos)
+		b = AppendUint(b, startPos)
 	}
 	if startPos < 0 {
 		endPos = -startPos
@@ -39,18 +40,18 @@ func (h *RequestHeader) SetByteRange(startPos, endPos int) {
 
 	b = append(b, '-')
 	if endPos >= 0 {
-		b = zerocopy.AppendUint(b, endPos)
+		b = AppendUint(b, endPos)
 	}
 
 	h.bufV = b
-	h.setNonSpecial(zerocopy.StrRange, h.bufV)
+	h.setNonSpecial(StrRange, h.bufV)
 }
 
 // ConnectionUpgrade returns true if 'Connection: Upgrade' header is set (RFC 9110 Section 7.8).
 //
 // Thread-safe: No.
 func (h *RequestHeader) ConnectionUpgrade() bool {
-	return hasHeaderValue(h.Peek(HeaderConnection), zerocopy.StrUpgrade)
+	return hasHeaderValue(h.Peek(HeaderConnection), StrUpgrade)
 }
 
 // ContentLength returns Content-Length header value as an integer (RFC 9110 Section 8.6, RFC 9112 Section 6.2).
@@ -60,18 +61,6 @@ func (h *RequestHeader) ConnectionUpgrade() bool {
 //
 // Thread-safe: No.
 func (h *RequestHeader) ContentLength() int {
-	if h.contentLength >= 0 {
-		return h.contentLength
-	}
-
-	return h.realContentLength()
-}
-
-func (h *RequestHeader) realContentLength() int {
-	if h.contentLength >= 0 {
-		return h.contentLength
-	}
-
 	return h.contentLength
 }
 
@@ -88,7 +77,7 @@ func (h *RequestHeader) SetContentLength(contentLength int) {
 	}
 
 	h.contentLength = contentLength
-	h.contentLengthBytes = zerocopy.AppendUint(h.contentLengthBytes[:0], contentLength)
+	h.contentLengthBytes = AppendUint(h.contentLengthBytes[:0], contentLength)
 }
 
 // ContentType returns Content-Type header value (RFC 9110 Section 8.3).
@@ -106,21 +95,21 @@ func (h *RequestHeader) ContentType() []byte {
 //
 // Thread-safe: No.
 func (h *RequestHeader) ContentEncoding() []byte {
-	return peekArgBytesHeaders(&h.h, zerocopy.StrContentEncoding)
+	return peekArgBytesHeaders(&h.h, StrContentEncoding)
 }
 
 // SetContentEncoding sets Content-Encoding header value (RFC 9110 Section 8.4).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetContentEncoding(contentEncoding string) {
-	h.setNonSpecial(zerocopy.StrContentEncoding, bytesconv.S2B(contentEncoding))
+	h.setNonSpecial(StrContentEncoding, bytesconv.S2B(contentEncoding))
 }
 
 // SetContentEncodingBytes sets Content-Encoding header value (RFC 9110 Section 8.4).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetContentEncodingBytes(contentEncoding []byte) {
-	h.setNonSpecial(zerocopy.StrContentEncoding, contentEncoding)
+	h.setNonSpecial(StrContentEncoding, contentEncoding)
 }
 
 // SetMultipartFormBoundary sets the following Content-Type:
@@ -129,9 +118,9 @@ func (h *RequestHeader) SetContentEncodingBytes(contentEncoding []byte) {
 // Thread-safe: No.
 func (h *RequestHeader) SetMultipartFormBoundary(boundary string) {
 	b := h.bufV[:0]
-	b = append(b, zerocopy.StrMultipartFormData...)
+	b = append(b, StrMultipartFormData...)
 	b = append(b, ';', ' ')
-	b = append(b, zerocopy.StrBoundary...)
+	b = append(b, StrBoundary...)
 	b = append(b, '=')
 	b = append(b, boundary...)
 	h.bufV = b
@@ -144,9 +133,9 @@ func (h *RequestHeader) SetMultipartFormBoundary(boundary string) {
 // Thread-safe: No.
 func (h *RequestHeader) SetMultipartFormBoundaryBytes(boundary []byte) {
 	b := h.bufV[:0]
-	b = append(b, zerocopy.StrMultipartFormData...)
+	b = append(b, StrMultipartFormData...)
 	b = append(b, ';', ' ')
-	b = append(b, zerocopy.StrBoundary...)
+	b = append(b, StrBoundary...)
 	b = append(b, '=')
 	b = append(b, boundary...)
 	h.bufV = b
@@ -158,11 +147,11 @@ func (h *RequestHeader) SetMultipartFormBoundaryBytes(boundary []byte) {
 // Thread-safe: No.
 func (h *RequestHeader) MultipartFormBoundary() []byte {
 	b := h.ContentType()
-	if !bytes.HasPrefix(b, zerocopy.StrMultipartFormData) {
+	if !bytes.HasPrefix(b, StrMultipartFormData) {
 		return nil
 	}
 
-	b = b[len(zerocopy.StrMultipartFormData):]
+	b = b[len(StrMultipartFormData):]
 	if len(b) == 0 || b[0] != ';' {
 		return nil
 	}
@@ -175,7 +164,7 @@ func (h *RequestHeader) MultipartFormBoundary() []byte {
 		}
 
 		b = b[n:]
-		if !bytes.HasPrefix(b, zerocopy.StrBoundary) {
+		if !bytes.HasPrefix(b, StrBoundary) {
 			if n = bytes.IndexByte(b, ';'); n < 0 {
 				return nil
 			}
@@ -183,7 +172,7 @@ func (h *RequestHeader) MultipartFormBoundary() []byte {
 			continue
 		}
 
-		b = b[len(zerocopy.StrBoundary):]
+		b = b[len(StrBoundary):]
 		if len(b) == 0 || b[0] != '=' {
 			return nil
 		}
@@ -218,14 +207,14 @@ func (h *RequestHeader) Host() []byte {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetHost(host string) {
-	h.host = zerocopy.InitHeaderValueString(h.host, host)
+	h.host = cookie.InitHeaderValueString(h.host, host)
 }
 
 // SetHostBytes sets Host header value (RFC 9112 Section 7.2, RFC 9110 Section 7.2).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetHostBytes(host []byte) {
-	h.host = zerocopy.InitHeaderValueBytes(h.host, host)
+	h.host = cookie.InitHeaderValueBytes(h.host, host)
 }
 
 // UserAgent returns User-Agent header value (RFC 9110 Section 10.1.5).
@@ -243,35 +232,35 @@ func (h *RequestHeader) UserAgent() []byte {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetUserAgent(userAgent string) {
-	h.userAgent = zerocopy.InitHeaderValueString(h.userAgent, userAgent)
+	h.userAgent = cookie.InitHeaderValueString(h.userAgent, userAgent)
 }
 
 // SetUserAgentBytes sets User-Agent header value (RFC 9110 Section 10.1.5).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetUserAgentBytes(userAgent []byte) {
-	h.userAgent = zerocopy.InitHeaderValueBytes(h.userAgent, userAgent)
+	h.userAgent = cookie.InitHeaderValueBytes(h.userAgent, userAgent)
 }
 
 // Referer returns Referer header value (RFC 9110 Section 10.1.3).
 //
 // Thread-safe: No.
 func (h *RequestHeader) Referer() []byte {
-	return peekArgBytesHeaders(&h.h, zerocopy.StrReferer)
+	return peekArgBytesHeaders(&h.h, StrReferer)
 }
 
 // SetReferer sets Referer header value (RFC 9110 Section 10.1.3).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetReferer(referer string) {
-	h.setNonSpecial(zerocopy.StrReferer, bytesconv.S2B(referer))
+	h.setNonSpecial(StrReferer, bytesconv.S2B(referer))
 }
 
 // SetRefererBytes sets Referer header value (RFC 9110 Section 10.1.3).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetRefererBytes(referer []byte) {
-	h.setNonSpecial(zerocopy.StrReferer, referer)
+	h.setNonSpecial(StrReferer, referer)
 }
 
 // Method returns HTTP request method (RFC 9110 Section 9).
@@ -289,30 +278,30 @@ func (h *RequestHeader) Method() []byte {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetMethod(method string) {
-	h.method = zerocopy.InitHeaderValueString(h.method, method)
+	h.method = cookie.InitHeaderValueString(h.method, method)
 }
 
 // SetMethodBytes sets HTTP request method (RFC 9110 Section 9).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetMethodBytes(method []byte) {
-	h.method = zerocopy.InitHeaderValueBytes(h.method, method)
+	h.method = cookie.InitHeaderValueBytes(h.method, method)
 }
 
 // SetProtocol sets HTTP request protocol (RFC 9112 Section 2.3).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetProtocol(protocol string) {
-	h.protocol = zerocopy.InitHeaderValueString(h.protocol, protocol)
-	h.noHTTP11 = !bytes.Equal(h.protocol, zerocopy.StrHTTP11)
+	h.protocol = cookie.InitHeaderValueString(h.protocol, protocol)
+	h.noHTTP11 = !bytes.Equal(h.protocol, StrHTTP11)
 }
 
 // SetProtocolBytes sets HTTP request protocol (RFC 9112 Section 2.3).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetProtocolBytes(protocol []byte) {
-	h.protocol = zerocopy.InitHeaderValueBytes(h.protocol, protocol)
-	h.noHTTP11 = !bytes.Equal(h.protocol, zerocopy.StrHTTP11)
+	h.protocol = cookie.InitHeaderValueBytes(h.protocol, protocol)
+	h.noHTTP11 = !bytes.Equal(h.protocol, StrHTTP11)
 }
 
 // RequestURI returns RequestURI from the first HTTP request line (RFC 9112 Section 3.2).
@@ -321,7 +310,7 @@ func (h *RequestHeader) SetProtocolBytes(protocol []byte) {
 func (h *RequestHeader) RequestURI() []byte {
 	requestURI := h.requestURI
 	if len(requestURI) == 0 {
-		requestURI = zerocopy.StrSlash
+		requestURI = StrSlash
 	}
 
 	return requestURI
@@ -331,14 +320,14 @@ func (h *RequestHeader) RequestURI() []byte {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetRequestURI(requestURI string) {
-	h.requestURI = zerocopy.InitHeaderValueString(h.requestURI, requestURI)
+	h.requestURI = cookie.InitHeaderValueString(h.requestURI, requestURI)
 }
 
 // SetRequestURIBytes sets RequestURI for the first HTTP request line (RFC 9112 Section 3.2).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetRequestURIBytes(requestURI []byte) {
-	h.requestURI = zerocopy.InitHeaderValueBytes(h.requestURI, requestURI)
+	h.requestURI = cookie.InitHeaderValueBytes(h.requestURI, requestURI)
 }
 
 // IsGet returns true if request method is GET (RFC 9110 Section 9.3.1).
@@ -398,7 +387,7 @@ func (h *RequestHeader) HasAcceptEncoding(acceptEncoding string) bool {
 //
 // Thread-safe: No.
 func (h *RequestHeader) HasAcceptEncodingBytes(acceptEncoding []byte) bool {
-	ae := h.peek(zerocopy.StrAcceptEncoding)
+	ae := h.peek(StrAcceptEncoding)
 
 	n := bytes.Index(ae, acceptEncoding)
 	if n < 0 {
@@ -444,45 +433,45 @@ func (h *RequestHeader) All() iter.Seq2[[]byte, []byte] {
 		}
 
 		if len(h.host) > 0 {
-			if !yield(zerocopy.StrHost, h.host) {
+			if !yield(StrHost, h.host) {
 				return
 			}
 		}
 
 		if len(h.contentType) > 0 {
-			if !yield(zerocopy.StrContentType, h.contentType) {
+			if !yield(StrContentType, h.contentType) {
 				return
 			}
 		}
 
 		if len(h.userAgent) > 0 {
-			if !yield(zerocopy.StrUserAgent, h.userAgent) {
+			if !yield(StrUserAgent, h.userAgent) {
 				return
 			}
 		}
 
 		if h.contentLength >= 0 {
-			if !yield(zerocopy.StrContentLength, h.contentLengthBytes) {
+			if !yield(StrContentLength, h.contentLengthBytes) {
 				return
 			}
 		}
 
 		if h.connectionClose {
-			if !yield(zerocopy.StrConnection, zerocopy.StrClose) {
+			if !yield(StrConnection, StrClose) {
 				return
 			}
 		}
 
 		if len(h.cookies) > 0 {
 			for i := range h.cookies {
-				if !yield(zerocopy.StrCookie, h.cookies[i].Value) {
+				if !yield(StrCookie, h.cookies[i].Value) {
 					return
 				}
 			}
 		}
 
 		if len(h.trailer) > 0 {
-			if !yield(zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)) {
+			if !yield(StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace)) {
 				return
 			}
 		}
@@ -534,7 +523,7 @@ func (h *RequestHeader) Del(key string) {
 // Thread-safe: No.
 func (h *RequestHeader) DelBytes(key []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.del(h.bufK)
 }
 
@@ -569,10 +558,10 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 	switch key[0] | 0x20 {
 	case 'c':
 		switch {
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentType, key):
+		case CaseInsensitiveCompare(StrContentType, key):
 			h.SetContentTypeBytes(value)
 			return true
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentLength, key):
+		case CaseInsensitiveCompare(StrContentLength, key):
 			if contentLength, err := parseContentLength(value); err == nil {
 				h.contentLength = contentLength
 				h.contentLengthBytes = append(h.contentLengthBytes[:0], value...)
@@ -580,8 +569,8 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 
 			return true
 
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
-			if hasHeaderValue(value, zerocopy.StrClose) {
+		case CaseInsensitiveCompare(StrConnection, key):
+			if hasHeaderValue(value, StrClose) {
 				h.SetConnectionClose()
 				return true
 			}
@@ -590,27 +579,27 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 			h.setNonSpecial(key, value)
 			return true
 
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrCookie, key):
+		case CaseInsensitiveCompare(StrCookie, key):
 			h.collectCookies()
-			h.cookies = zerocopy.ParseRequestCookies(h.cookies, value)
+			h.cookies = cookie.ParseRequestCookies(h.cookies, value)
 			return true
 		}
 
 	case 't':
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrTransferEncoding, key) {
+		if CaseInsensitiveCompare(StrTransferEncoding, key) {
 			return true
-		} else if zerocopy.CaseInsensitiveCompare(zerocopy.StrTrailer, key) {
+		} else if CaseInsensitiveCompare(StrTrailer, key) {
 			_ = h.SetTrailerBytes(value)
 			return true
 		}
 
 	case 'h':
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrHost, key) {
+		if CaseInsensitiveCompare(StrHost, key) {
 			h.SetHostBytes(value)
 			return true
 		}
 	case 'u':
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrUserAgent, key) {
+		if CaseInsensitiveCompare(StrUserAgent, key) {
 			h.SetUserAgentBytes(value)
 			return true
 		}
@@ -624,7 +613,7 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 //
 // Thread-safe: No.
 func (h *RequestHeader) Add(key, value string) {
-	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	h.bufK, h.bufV = InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
 	if h.setSpecialHeader(h.bufK, h.bufV) {
 		return
 	}
@@ -650,7 +639,7 @@ func (h *RequestHeader) AddBytesV(key string, value []byte) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) AddBytesKV(key, value []byte) {
-	h.bufK, h.bufV = zerocopy.InitHeaderKV(
+	h.bufK, h.bufV = InitHeaderKV(
 		h.bufK,
 		h.bufV,
 		bytesconv.B2S(key),
@@ -669,7 +658,7 @@ func (h *RequestHeader) AddBytesKV(key, value []byte) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) Set(key, value string) {
-	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	h.bufK, h.bufV = InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
 	if h.setSpecialHeader(h.bufK, h.bufV) {
 		return
 	}
@@ -689,7 +678,7 @@ func (h *RequestHeader) SetBytesK(key []byte, value string) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetBytesV(key string, value []byte) {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
@@ -698,7 +687,7 @@ func (h *RequestHeader) SetBytesV(key string, value []byte) {
 // Thread-safe: No.
 func (h *RequestHeader) SetBytesKV(key, value []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
@@ -706,7 +695,7 @@ func (h *RequestHeader) SetBytesKV(key, value []byte) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetCanonical(key, value []byte) {
-	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, value)
+	h.bufV = cookie.InitHeaderValueBytes(h.bufV, value)
 	if h.setSpecialHeader(key, h.bufV) {
 		return
 	}
@@ -719,7 +708,7 @@ func (h *RequestHeader) SetCanonical(key, value []byte) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) Peek(key string) []byte {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -728,7 +717,7 @@ func (h *RequestHeader) Peek(key string) []byte {
 // Thread-safe: No.
 func (h *RequestHeader) PeekBytes(key []byte) []byte {
 	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -750,7 +739,7 @@ func (h *RequestHeader) peek(key []byte) []byte {
 		return h.UserAgent()
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			return zerocopy.StrClose
+			return StrClose
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
@@ -759,13 +748,13 @@ func (h *RequestHeader) peek(key []byte) []byte {
 		return h.contentLengthBytes
 	case HeaderCookie:
 		if h.cookiesCollected {
-			return zerocopy.AppendRequestCookieBytes(nil, h.cookies)
+			return cookie.AppendRequestCookieBytes(nil, h.cookies)
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
 
 	case HeaderTrailer:
-		return appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)
+		return appendTrailerBytes(nil, h.trailer, StrCommaSpace)
 	default:
 		return peekArgBytesHeaders(&h.h, key)
 	}
@@ -776,7 +765,7 @@ func (h *RequestHeader) peek(key []byte) []byte {
 //
 // Thread-safe: No.
 func (h *RequestHeader) PeekAll(key string) [][]byte {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peekAll(h.bufK)
 }
 
@@ -797,7 +786,7 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 		}
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			h.mulHeader = append(h.mulHeader, zerocopy.StrClose)
+			h.mulHeader = append(h.mulHeader, StrClose)
 			return h.mulHeader
 		}
 
@@ -807,14 +796,14 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
 	case HeaderCookie:
 		if h.cookiesCollected {
-			h.mulHeader = append(h.mulHeader, zerocopy.AppendRequestCookieBytes(nil, h.cookies))
+			h.mulHeader = append(h.mulHeader, cookie.AppendRequestCookieBytes(nil, h.cookies))
 			return h.mulHeader
 		}
 
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
 	case HeaderTrailer:
-		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
+		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
 	default:
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 	}
@@ -840,15 +829,15 @@ func (h *RequestHeader) PeekKeys() [][]byte {
 // Thread-safe: No.
 func (h *ResponseHeader) SetContentRange(startPos, endPos, contentLength int) {
 	b := h.bufV[:0]
-	b = append(b, zerocopy.StrBytes...)
+	b = append(b, StrBytes...)
 	b = append(b, ' ')
-	b = zerocopy.AppendUint(b, startPos)
+	b = AppendUint(b, startPos)
 	b = append(b, '-')
-	b = zerocopy.AppendUint(b, endPos)
+	b = AppendUint(b, endPos)
 	b = append(b, '/')
-	b = zerocopy.AppendUint(b, contentLength)
+	b = AppendUint(b, contentLength)
 	h.bufV = b
-	h.setNonSpecial(zerocopy.StrContentRange, h.bufV)
+	h.setNonSpecial(StrContentRange, h.bufV)
 }
 
 // StatusCode returns response status code (RFC 9110 Section 15).
@@ -880,29 +869,29 @@ func (h *ResponseHeader) StatusMessage() []byte {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetStatusMessage(statusMessage []byte) {
-	h.statusMessage = zerocopy.InitHeaderValueBytes(h.statusMessage, statusMessage)
+	h.statusMessage = cookie.InitHeaderValueBytes(h.statusMessage, statusMessage)
 }
 
 // SetProtocol sets response protocol bytes (RFC 9112 Section 2.3).
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetProtocol(protocol []byte) {
-	h.protocol = zerocopy.InitHeaderValueBytes(h.protocol, protocol)
+	h.protocol = cookie.InitHeaderValueBytes(h.protocol, protocol)
 }
 
 // SetLastModified sets 'Last-Modified' header to the given timestamp (RFC 9110 Section 8.8.2).
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetLastModified(t time.Time) {
-	h.bufV = zerocopy.AppendHTTPDate(h.bufV[:0], t)
-	h.setNonSpecial(zerocopy.StrLastModified, h.bufV)
+	h.bufV = AppendHTTPDate(h.bufV[:0], t)
+	h.setNonSpecial(StrLastModified, h.bufV)
 }
 
 // ConnectionUpgrade returns true if 'Connection: Upgrade' header is set (RFC 9110 Section 7.8).
 //
 // Thread-safe: No.
 func (h *ResponseHeader) ConnectionUpgrade() bool {
-	return hasHeaderValue(h.Peek(HeaderConnection), zerocopy.StrUpgrade)
+	return hasHeaderValue(h.Peek(HeaderConnection), StrUpgrade)
 }
 
 // ContentLength returns Content-Length header value as an integer (RFC 9110 Section 8.6, RFC 9112 Section 6.2).
@@ -928,7 +917,7 @@ func (h *ResponseHeader) SetContentLength(contentLength int) {
 	}
 
 	h.contentLength = contentLength
-	h.contentLengthBytes = zerocopy.AppendUint(h.contentLengthBytes[:0], contentLength)
+	h.contentLengthBytes = AppendUint(h.contentLengthBytes[:0], contentLength)
 }
 
 func (h *ResponseHeader) realContentLength() int {
@@ -955,12 +944,12 @@ func (h *ResponseHeader) mustSkipContentLength() bool {
 func (h *ResponseHeader) isCompressibleContentType() bool {
 	contentType := h.ContentType()
 
-	return bytes.HasPrefix(contentType, zerocopy.StrTextSlash) ||
-		bytes.HasPrefix(contentType, zerocopy.StrApplicationSlash) ||
-		bytes.HasPrefix(contentType, zerocopy.StrImageSVG) ||
-		bytes.HasPrefix(contentType, zerocopy.StrImageIcon) ||
-		bytes.HasPrefix(contentType, zerocopy.StrFontSlash) ||
-		bytes.HasPrefix(contentType, zerocopy.StrMultipartSlash)
+	return bytes.HasPrefix(contentType, StrTextSlash) ||
+		bytes.HasPrefix(contentType, StrApplicationSlash) ||
+		bytes.HasPrefix(contentType, StrImageSVG) ||
+		bytes.HasPrefix(contentType, StrImageIcon) ||
+		bytes.HasPrefix(contentType, StrFontSlash) ||
+		bytes.HasPrefix(contentType, StrMultipartSlash)
 }
 
 // ContentType returns Content-Type header value (RFC 9110 Section 8.3).
@@ -969,7 +958,7 @@ func (h *ResponseHeader) isCompressibleContentType() bool {
 func (h *ResponseHeader) ContentType() []byte {
 	contentType := h.contentType
 	if !h.noDefaultContentType && len(h.contentType) == 0 {
-		contentType = zerocopy.DefaultContentType
+		contentType = DefaultContentType
 	}
 
 	return contentType
@@ -986,19 +975,19 @@ func (h *ResponseHeader) ContentEncoding() []byte {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetContentEncoding(contentEncoding string) {
-	h.contentEncoding = zerocopy.InitHeaderValueString(h.contentEncoding, contentEncoding)
+	h.contentEncoding = cookie.InitHeaderValueString(h.contentEncoding, contentEncoding)
 }
 
 // SetContentEncodingBytes sets Content-Encoding header value (RFC 9110 Section 8.4).
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetContentEncodingBytes(contentEncoding []byte) {
-	h.contentEncoding = zerocopy.InitHeaderValueBytes(h.contentEncoding, contentEncoding)
+	h.contentEncoding = cookie.InitHeaderValueBytes(h.contentEncoding, contentEncoding)
 }
 
 // addVaryBytes adds value to the 'Vary' header if it's not included (RFC 9110 Section 12.5.5).
 func (h *ResponseHeader) addVaryBytes(value []byte) {
-	v := h.peek(zerocopy.StrVary)
+	v := h.peek(StrVary)
 	if len(v) == 0 {
 		h.SetBytesV(HeaderVary, value)
 		return
@@ -1025,21 +1014,21 @@ func (h *ResponseHeader) AltSvc() []altsvc.Service {
 		return nil
 	}
 
-	return altsvc.Parse(bytesconv.B2S(altSvcHeader))
+	return altsvc.Parse(altSvcHeader)
 }
 
 // SetServer sets Server header value (RFC 9110 Section 10.2.4).
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetServer(server string) {
-	h.server = zerocopy.InitHeaderValueString(h.server, server)
+	h.server = cookie.InitHeaderValueString(h.server, server)
 }
 
 // SetServerBytes sets Server header value (RFC 9110 Section 10.2.4).
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetServerBytes(server []byte) {
-	h.server = zerocopy.InitHeaderValueBytes(h.server, server)
+	h.server = cookie.InitHeaderValueBytes(h.server, server)
 }
 
 // Len returns the number of headers set.
@@ -1069,45 +1058,45 @@ func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 		}
 
 		if len(h.contentType) > 0 {
-			if !yield(zerocopy.StrContentType, h.contentType) {
+			if !yield(StrContentType, h.contentType) {
 				return
 			}
 		}
 
 		if len(h.contentEncoding) > 0 {
-			if !yield(zerocopy.StrContentEncoding, h.contentEncoding) {
+			if !yield(StrContentEncoding, h.contentEncoding) {
 				return
 			}
 		}
 
 		if len(h.server) > 0 {
-			if !yield(zerocopy.StrServer, h.server) {
+			if !yield(StrServer, h.server) {
 				return
 			}
 		}
 
 		if len(h.contentLengthBytes) > 0 {
-			if !yield(zerocopy.StrContentLength, h.contentLengthBytes) {
+			if !yield(StrContentLength, h.contentLengthBytes) {
 				return
 			}
 		}
 
 		if h.connectionClose {
-			if !yield(zerocopy.StrConnection, zerocopy.StrClose) {
+			if !yield(StrConnection, StrClose) {
 				return
 			}
 		}
 
 		if len(h.cookies) > 0 {
 			for i := range h.cookies {
-				if !yield(zerocopy.StrSetCookie, h.cookies[i].Value) {
+				if !yield(StrSetCookie, h.cookies[i].Value) {
 					return
 				}
 			}
 		}
 
 		if len(h.trailer) > 0 {
-			if !yield(zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)) {
+			if !yield(StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace)) {
 				return
 			}
 		}
@@ -1144,7 +1133,7 @@ func (h *ResponseHeader) Del(key string) {
 // Thread-safe: No.
 func (h *ResponseHeader) DelBytes(key []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.del(h.bufK)
 }
 
@@ -1179,10 +1168,10 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 	switch key[0] | 0x20 {
 	case 'c':
 		switch {
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentType, key):
+		case CaseInsensitiveCompare(StrContentType, key):
 			h.SetContentTypeBytes(value)
 			return true
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentLength, key):
+		case CaseInsensitiveCompare(StrContentLength, key):
 			if contentLength, err := parseContentLength(value); err == nil {
 				h.contentLength = contentLength
 				h.contentLengthBytes = append(h.contentLengthBytes[:0], value...)
@@ -1190,11 +1179,11 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 
 			return true
 
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrContentEncoding, key):
+		case CaseInsensitiveCompare(StrContentEncoding, key):
 			h.SetContentEncodingBytes(value)
 			return true
-		case zerocopy.CaseInsensitiveCompare(zerocopy.StrConnection, key):
-			if hasHeaderValue(value, zerocopy.StrClose) {
+		case CaseInsensitiveCompare(StrConnection, key):
+			if hasHeaderValue(value, StrClose) {
 				h.SetConnectionClose()
 				return true
 			}
@@ -1205,30 +1194,30 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 		}
 
 	case 's':
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrServer, key) {
+		if CaseInsensitiveCompare(StrServer, key) {
 			h.SetServerBytes(value)
 			return true
 		}
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrSetCookie, key) {
-			var kv *zerocopy.ArgsKV
+		if CaseInsensitiveCompare(StrSetCookie, key) {
+			var kv *uri.ArgsKV
 
-			h.cookies, kv = zerocopy.AllocArg(h.cookies)
-			kv.Key = zerocopy.GetCookieKey(kv.Key, value)
+			h.cookies, kv = uri.AllocArg(h.cookies)
+			kv.Key = cookie.GetCookieKey(kv.Key, value)
 			kv.Value = append(kv.Value[:0], value...)
 
 			return true
 		}
 
 	case 't':
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrTransferEncoding, key) {
+		if CaseInsensitiveCompare(StrTransferEncoding, key) {
 			return true
-		} else if zerocopy.CaseInsensitiveCompare(zerocopy.StrTrailer, key) {
+		} else if CaseInsensitiveCompare(StrTrailer, key) {
 			_ = h.SetTrailerBytes(value)
 			return true
 		}
 
 	case 'd':
-		if zerocopy.CaseInsensitiveCompare(zerocopy.StrDate, key) {
+		if CaseInsensitiveCompare(StrDate, key) {
 			return true
 		}
 	}
@@ -1241,7 +1230,7 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) Add(key, value string) {
-	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	h.bufK, h.bufV = InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
 	if h.setSpecialHeader(h.bufK, h.bufV) {
 		return
 	}
@@ -1267,7 +1256,7 @@ func (h *ResponseHeader) AddBytesV(key string, value []byte) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) AddBytesKV(key, value []byte) {
-	h.bufK, h.bufV = zerocopy.InitHeaderKV(
+	h.bufK, h.bufV = InitHeaderKV(
 		h.bufK,
 		h.bufV,
 		bytesconv.B2S(key),
@@ -1286,7 +1275,7 @@ func (h *ResponseHeader) AddBytesKV(key, value []byte) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) Set(key, value string) {
-	h.bufK, h.bufV = zerocopy.InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
+	h.bufK, h.bufV = InitHeaderKV(h.bufK, h.bufV, key, value, h.disableNormalizing)
 	if h.setSpecialHeader(h.bufK, h.bufV) {
 		return
 	}
@@ -1306,7 +1295,7 @@ func (h *ResponseHeader) SetBytesK(key []byte, value string) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetBytesV(key string, value []byte) {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
@@ -1315,7 +1304,7 @@ func (h *ResponseHeader) SetBytesV(key string, value []byte) {
 // Thread-safe: No.
 func (h *ResponseHeader) SetBytesKV(key, value []byte) {
 	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	h.SetCanonical(h.bufK, value)
 }
 
@@ -1323,7 +1312,7 @@ func (h *ResponseHeader) SetBytesKV(key, value []byte) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) SetCanonical(key, value []byte) {
-	h.bufV = zerocopy.InitHeaderValueBytes(h.bufV, value)
+	h.bufV = cookie.InitHeaderValueBytes(h.bufV, value)
 	if h.setSpecialHeader(key, h.bufV) {
 		return
 	}
@@ -1336,7 +1325,7 @@ func (h *ResponseHeader) SetCanonical(key, value []byte) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) Peek(key string) []byte {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -1345,7 +1334,7 @@ func (h *ResponseHeader) Peek(key string) []byte {
 // Thread-safe: No.
 func (h *ResponseHeader) PeekBytes(key []byte) []byte {
 	h.bufK = append(h.bufK[:0], key...)
-	zerocopy.NormalizeHeaderKey(h.bufK, h.disableNormalizing)
+	NormalizeHeaderKey(h.bufK, h.disableNormalizing)
 	return h.peek(h.bufK)
 }
 
@@ -1367,7 +1356,7 @@ func (h *ResponseHeader) peek(key []byte) []byte {
 		return h.Server()
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			return zerocopy.StrClose
+			return StrClose
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
@@ -1375,9 +1364,9 @@ func (h *ResponseHeader) peek(key []byte) []byte {
 	case HeaderContentLength:
 		return h.contentLengthBytes
 	case HeaderSetCookie:
-		return zerocopy.AppendResponseCookieBytes(nil, h.cookies)
+		return cookie.AppendResponseCookieBytes(nil, h.cookies)
 	case HeaderTrailer:
-		return appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace)
+		return appendTrailerBytes(nil, h.trailer, StrCommaSpace)
 	default:
 		return peekArgBytesHeaders(&h.h, key)
 	}
@@ -1388,7 +1377,7 @@ func (h *ResponseHeader) peek(key []byte) []byte {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) PeekAll(key string) [][]byte {
-	h.bufK = zerocopy.GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
+	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
 	return h.peekAll(h.bufK)
 }
 
@@ -1409,7 +1398,7 @@ func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 		}
 	case HeaderConnection:
 		if h.ConnectionClose() {
-			h.mulHeader = append(h.mulHeader, zerocopy.StrClose)
+			h.mulHeader = append(h.mulHeader, StrClose)
 			return h.mulHeader
 		}
 
@@ -1418,9 +1407,9 @@ func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 	case HeaderContentLength:
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
 	case HeaderSetCookie:
-		h.mulHeader = append(h.mulHeader, zerocopy.AppendResponseCookieBytes(nil, h.cookies))
+		h.mulHeader = append(h.mulHeader, cookie.AppendResponseCookieBytes(nil, h.cookies))
 	case HeaderTrailer:
-		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
+		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
 	default:
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 	}
@@ -1464,17 +1453,17 @@ var (
 )
 
 func refreshServerDate() {
-	b := zerocopy.AppendHTTPDate(nil, time.Now())
+	b := AppendHTTPDate(nil, time.Now())
 	serverDate.Store(&b)
 }
 
 func appendHeaderLine(dst, key, value []byte) []byte {
 	dst = append(dst, key...)
-	dst = append(dst, zerocopy.StrColonSpace...)
+	dst = append(dst, StrColonSpace...)
 
 	if bytes.IndexByte(value, '\n') < 0 && bytes.IndexByte(value, '\r') < 0 {
 		dst = append(dst, value...)
-		return append(dst, zerocopy.StrCRLF...)
+		return append(dst, StrCRLF...)
 	}
 
 	for _, c := range value {
@@ -1485,56 +1474,22 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 		dst = append(dst, c)
 	}
 
-	return append(dst, zerocopy.StrCRLF...)
-}
-
-func stripSpace(b []byte) []byte {
-	for len(b) > 0 && b[0] == ' ' {
-		b = b[1:]
-	}
-
-	for len(b) > 0 && b[len(b)-1] == ' ' {
-		b = b[:len(b)-1]
-	}
-
-	return b
+	return append(dst, StrCRLF...)
 }
 
 func hasHeaderValue(s, value []byte) bool {
-	var vs headerValueScanner
-
-	vs.b = s
-	for vs.next() {
-		if zerocopy.CaseInsensitiveCompare(vs.value, value) {
+	for len(s) > 0 {
+		before, after, ok := bytes.Cut(s, []byte{','})
+		if CaseInsensitiveCompare(bytes.Trim(before, " \t"), value) {
 			return true
 		}
+		if !ok {
+			break
+		}
+		s = after
 	}
 
 	return false
-}
-
-type headerValueScanner struct {
-	b     []byte
-	value []byte
-}
-
-func (s *headerValueScanner) next() bool {
-	b := s.b
-	if len(b) == 0 {
-		return false
-	}
-
-	before, after, ok := bytes.Cut(b, []byte{','})
-	if !ok {
-		s.value = stripSpace(b)
-		s.b = b[len(b):]
-		return true
-	}
-
-	s.value = stripSpace(before)
-	s.b = after
-
-	return true
 }
 
 // AppendNormalizedHeaderKey appends normalized header key (name) to dst and returns the resulting dst.
@@ -1543,7 +1498,7 @@ func (s *headerValueScanner) next() bool {
 // All other letters are lowercased.
 func AppendNormalizedHeaderKey(dst []byte, key string) []byte {
 	dst = append(dst, key...)
-	zerocopy.NormalizeHeaderKey(dst[len(dst)-len(key):], false)
+	NormalizeHeaderKey(dst[len(dst)-len(key):], false)
 	return dst
 }
 
@@ -1577,12 +1532,12 @@ func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 		}
 
 		n := 0
-		if len(b) == 0 || !zerocopy.ValidHeaderFieldByte(b[n]) {
+		if len(b) == 0 || !ValidHeaderFieldByte(b[n]) {
 			return
 		}
 
 		n++
-		for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
+		for n < len(b) && ValidHeaderFieldByte(b[n]) {
 			n++
 		}
 
@@ -1594,11 +1549,11 @@ func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
 
 		n++
 		switch {
-		case zerocopy.ValidHeaderFieldByte(b[n]):
+		case ValidHeaderFieldByte(b[n]):
 			m := n
 
 			n++
-			for n < len(b) && zerocopy.ValidHeaderFieldByte(b[n]) {
+			for n < len(b) && ValidHeaderFieldByte(b[n]) {
 				n++
 			}
 

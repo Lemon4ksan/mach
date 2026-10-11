@@ -231,10 +231,10 @@ func (c Chain) String() string {
 }
 
 // All returns an iterator over parsed Cache-Status entries without accumulating a slice.
-func All(header string) iter.Seq2[Entry, error] {
+func All[S ~string | ~[]byte](header S) iter.Seq2[Entry, error] {
 	return func(yield func(Entry, error) bool) {
-		header = strings.TrimSpace(header)
-		if header == "" {
+		hdr := strings.TrimSpace(string(header))
+		if hdr == "" {
 			yield(Entry{}, ErrEmptyHeader)
 			return
 		}
@@ -243,9 +243,9 @@ func All(header string) iter.Seq2[Entry, error] {
 		inQuote := false
 		found := false
 
-		for i := 0; i < len(header); i++ {
-			c := header[i]
-			if c == '\\' && inQuote && i+1 < len(header) {
+		for i := 0; i < len(hdr); i++ {
+			c := hdr[i]
+			if c == '\\' && inQuote && i+1 < len(hdr) {
 				i++
 
 				continue
@@ -254,7 +254,7 @@ func All(header string) iter.Seq2[Entry, error] {
 			if c == '"' {
 				inQuote = !inQuote
 			} else if c == ',' && !inQuote {
-				member := strings.TrimSpace(header[start:i])
+				member := strings.TrimSpace(hdr[start:i])
 				if member != "" {
 					found = true
 
@@ -268,8 +268,8 @@ func All(header string) iter.Seq2[Entry, error] {
 			}
 		}
 
-		if start < len(header) {
-			member := strings.TrimSpace(header[start:])
+		if start < len(hdr) {
+			member := strings.TrimSpace(hdr[start:])
 			if member != "" {
 				entry, err := parseEntry(member)
 
@@ -285,11 +285,16 @@ func All(header string) iter.Seq2[Entry, error] {
 	}
 }
 
-// Parse extracts and parses all cache status entries from a Cache-Status HTTP header string (RFC 9211 §2).
-func Parse(header string) (Chain, error) {
+// Parse extracts and parses all cache status entries from a Cache-Status HTTP header (RFC 9211 §2).
+func Parse[S ~string | ~[]byte](header S) (Chain, error) {
+	hdr := strings.TrimSpace(string(header))
+	if hdr == "" {
+		return nil, ErrEmptyHeader
+	}
+
 	var chain Chain
 
-	for entry, err := range All(header) {
+	for entry, err := range All(hdr) {
 		if err != nil {
 			return nil, err
 		}

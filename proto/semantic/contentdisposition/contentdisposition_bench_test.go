@@ -10,10 +10,17 @@ import (
 	"github.com/lemon4ksan/mach/proto/semantic/contentdisposition"
 )
 
-func BenchmarkParseContentDisposition(b *testing.B) {
+func BenchmarkParse(b *testing.B) {
 	header := `attachment; filename="document.pdf"; filename*=UTF-8''document_%D1%82%D0%B5%D1%81%D1%82.pdf`
 	for b.Loop() {
-		_ = contentdisposition.ParseContentDisposition(header)
+		_ = contentdisposition.Parse(header)
+	}
+}
+
+func BenchmarkParseBytes(b *testing.B) {
+	header := []byte(`attachment; filename="document.pdf"; filename*=UTF-8''document_%D1%82%D0%B5%D1%81%D1%82.pdf`)
+	for b.Loop() {
+		_ = contentdisposition.Parse(header)
 	}
 }
 

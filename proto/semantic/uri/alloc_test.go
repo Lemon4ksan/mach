@@ -44,3 +44,32 @@ func TestDecodeArgAppend_ZeroAlloc(t *testing.T) {
 		t.Fatalf("expected 0 allocations on DecodeArgAppend, got %v", allocs)
 	}
 }
+
+func TestParseArgs_ZeroAlloc(t *testing.T) {
+	t.Run("String", func(t *testing.T) {
+		query := "foo=bar&baz=qux&num=12345"
+		allocs := testing.AllocsPerRun(1000, func() {
+			args := uri.AcquireArgs()
+			uri.ParseArgs(args, query)
+			_ = args.Peek("foo")
+			uri.ReleaseArgs(args)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on ParseArgs string, got %v", allocs)
+		}
+	})
+
+	t.Run("Bytes", func(t *testing.T) {
+		query := []byte("foo=bar&baz=qux&num=12345")
+		allocs := testing.AllocsPerRun(1000, func() {
+			args := uri.AcquireArgs()
+			uri.ParseArgs(args, query)
+			_ = args.Peek("foo")
+			uri.ReleaseArgs(args)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on ParseArgs bytes, got %v", allocs)
+		}
+	})
+}
+

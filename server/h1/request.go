@@ -20,7 +20,6 @@ import (
 
 	protoh1 "github.com/lemon4ksan/mach/proto/h1"
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/header"
 )
 
 var (
@@ -315,15 +314,15 @@ func (r *Request) parseRequestLine(line []byte) error {
 }
 
 func (r *Request) finishRequestRead(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBodySize int64) error {
-	r.Host = r.Headers.Get(header.Host)
+	r.Host = r.Headers.Get(headkit.Host)
 
 	// RFC 9112 §3.2: HTTP/1.1 requests MUST include a valid Host header
 	if r.Proto == "HTTP/1.1" && r.Host == "" {
 		return ErrMissingHostHeader
 	}
 
-	hasTE := r.Headers.Has(header.TransferEncoding)
-	hasCL := r.Headers.Has(header.ContentLength)
+	hasTE := r.Headers.Has(headkit.TransferEncoding)
+	hasCL := r.Headers.Has(headkit.ContentLength)
 
 	// Fast Path: no body payload (GET, HEAD, DELETE, OPTIONS)
 	if !hasTE && !hasCL {
@@ -345,11 +344,11 @@ func (r *Request) finishRequestBodyRead(
 	// RFC 9112 §11.2 mandates that the server MUST close the connection after the response.
 	if hasTE && hasCL {
 		r.CloseConnection = true
-		r.Headers.Del(header.ContentLength)
+		r.Headers.Del(headkit.ContentLength)
 	}
 
 	// Handle "Expect: 100-continue" (RFC 9110 §10.1.1)
-	if bytesconv.EqualFoldASCII(r.Headers.Get(header.Expect), header.Value100Continue) && bw != nil {
+	if bytesconv.EqualFoldASCII(r.Headers.Get(headkit.Expect), headkit.Value100Continue) && bw != nil {
 		_, _ = bw.WriteString("HTTP/1.1 100 Continue\r\n\r\n")
 		if r.Conn != nil {
 			_, _ = bw.WriteTo(r.Conn)
@@ -359,9 +358,9 @@ func (r *Request) finishRequestBodyRead(
 
 	// Read body if present
 	if hasTE {
-		teVal := r.Headers.Get(header.TransferEncoding)
+		teVal := r.Headers.Get(headkit.TransferEncoding)
 		// RFC 9112 §6.3 Item 4: In requests, chunked MUST be the final transfer coding
-		if !strings.HasSuffix(strings.ToLower(teVal), header.ValueChunked) {
+		if !strings.HasSuffix(strings.ToLower(teVal), headkit.ValueChunked) {
 			return ErrUnsupportedTransferEncoding
 		}
 
@@ -375,7 +374,7 @@ func (r *Request) finishRequestBodyRead(
 		return nil
 	}
 
-	clStr := r.Headers.Get(header.ContentLength)
+	clStr := r.Headers.Get(headkit.ContentLength)
 	if clStr == "" {
 		return nil
 	}

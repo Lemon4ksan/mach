@@ -24,7 +24,7 @@ import (
 	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	machhttp "github.com/lemon4ksan/mach/proto/http"
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/server/h2"
 )
 

@@ -110,8 +110,8 @@ func ForEachChallengeParam[S ~string | ~[]byte](header S, scheme string, yield f
 	return true
 }
 
-// ExtractChallengeParams parses auth-param key-value pairs into a map from an authentication challenge header (RFC 9110 §11.2 & RFC 7616 §3.3).
-func ExtractChallengeParams(header, scheme string) (map[string]string, bool) {
+// ExtractChallengeParams parses auth-param key-value pairs into a map from an authentication challenge header ([string] or [[]byte]) (RFC 9110 §11.2 & RFC 7616 §3.3).
+func ExtractChallengeParams[S ~string | ~[]byte](header S, scheme string) (map[string]string, bool) {
 	m := make(map[string]string)
 	ok := ForEachChallengeParam(header, scheme, func(key, val string) bool {
 		m[key] = val

@@ -9,7 +9,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 type discardConn struct {

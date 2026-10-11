@@ -7,7 +7,7 @@ package http
 import (
 	"github.com/lemon4ksan/foundation/borrow"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
 )
 
 // PeekScoped borrows the header value associated with key into scope s (RFC 9110 Section 5.1).
@@ -71,7 +71,7 @@ func (h *ResponseHeader) PeekScoped(s *borrow.Scope, key string) borrow.Bytes {
 
 // CookieScoped borrows the response cookie value associated with key into scope s (RFC 6265 Section 4.1).
 func (h *ResponseHeader) CookieScoped(s *borrow.Scope, key string) borrow.Bytes {
-	var c zerocopy.Cookie
+	var c cookie.Cookie
 	c.SetKey(key)
 
 	if !h.Cookie(&c) {

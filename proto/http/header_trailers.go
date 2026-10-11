@@ -15,7 +15,6 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // SetTrailer specifies a trailer header field to be sent after a chunked message body (RFC 9112 Section 7.1.2).
@@ -64,7 +63,7 @@ func (h *header) AddTrailerBytes(trailer []byte) (err error) {
 		}
 
 		h.bufK = append(h.bufK[:0], key...)
-		zerocopy.NormalizeHeaderKeyValidated(h.bufK, h.disableNormalizing)
+		NormalizeHeaderKeyValidated(h.bufK, h.disableNormalizing)
 
 		if cap(h.trailer) > len(h.trailer) {
 			h.trailer = h.trailer[:len(h.trailer)+1]
@@ -160,7 +159,7 @@ func (h *RequestHeader) TrailerHeader() []byte {
 		h.bufV = appendHeaderLine(h.bufV, t, value)
 	}
 
-	h.bufV = append(h.bufV, zerocopy.StrCRLF...)
+	h.bufV = append(h.bufV, StrCRLF...)
 
 	return h.bufV
 }
@@ -178,7 +177,7 @@ func (h *ResponseHeader) TrailerHeader() []byte {
 		h.bufV = appendHeaderLine(h.bufV, t, value)
 	}
 
-	h.bufV = append(h.bufV, zerocopy.StrCRLF...)
+	h.bufV = append(h.bufV, StrCRLF...)
 
 	return h.bufV
 }
@@ -194,7 +193,7 @@ func isValidTrailerKey(key []byte) bool {
 	}
 
 	for _, c := range key {
-		if !zerocopy.ValidHeaderFieldByte(c) {
+		if !ValidHeaderFieldByte(c) {
 			return false
 		}
 	}
@@ -203,22 +202,7 @@ func isValidTrailerKey(key []byte) bool {
 }
 
 func validHeaderValueByte(c byte) bool {
-	return zerocopy.ValidHeaderValueByteTable[c] == 1
-}
-
-// isValidHeaderKey validates whether a header field name contains only valid token characters (RFC 9110 §5.6.2 and RFC 9112 §5.1).
-func isValidHeaderKey(a []byte) (valid, innerSpace bool) {
-	if len(a) == 0 {
-		return false, false
-	}
-
-	for _, c := range a {
-		if !zerocopy.ValidHeaderFieldByte(c) {
-			return false, false
-		}
-	}
-
-	return true, false
+	return ValidHeaderValueByteTable[c] == 1
 }
 
 func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {
@@ -250,8 +234,7 @@ func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {
 			if k[len(k)-1] == ' ' || k[len(k)-1] == '\t' {
 				return n, errors.New("http: whitespace before colon in trailer (RFC 9112 §5.1)")
 			}
-			valid, _ := isValidHeaderKey(k)
-			if !valid {
+			if !isValidTrailerKey(k) {
 				return n, errors.New("http: malformed trailer key (RFC 9112 §5.1)")
 			}
 			v := bytes.TrimSpace(line[idxColon+1:])
@@ -270,49 +253,49 @@ func isBadTrailer(key []byte) bool {
 
 	switch key[0] | 0x20 {
 	case 'a':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrAuthorization)
+		return CaseInsensitiveCompare(key, StrAuthorization)
 	case 'c':
-		if len(key) >= len(HeaderContentType) && zerocopy.CaseInsensitiveCompare(key[:8], zerocopy.StrContentType[:8]) {
-			return zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentEncoding[8:]) ||
-				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentLength[8:]) ||
-				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentType[8:]) ||
-				zerocopy.CaseInsensitiveCompare(key[8:], zerocopy.StrContentRange[8:])
+		if len(key) >= len(HeaderContentType) && CaseInsensitiveCompare(key[:8], StrContentType[:8]) {
+			return CaseInsensitiveCompare(key[8:], StrContentEncoding[8:]) ||
+				CaseInsensitiveCompare(key[8:], StrContentLength[8:]) ||
+				CaseInsensitiveCompare(key[8:], StrContentType[8:]) ||
+				CaseInsensitiveCompare(key[8:], StrContentRange[8:])
 		}
 
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrConnection) ||
-			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrCookie)
+		return CaseInsensitiveCompare(key, StrConnection) ||
+			CaseInsensitiveCompare(key, StrCookie)
 
 	case 'e':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrExpect)
+		return CaseInsensitiveCompare(key, StrExpect)
 	case 'h':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrHost)
+		return CaseInsensitiveCompare(key, StrHost)
 	case 'k':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrKeepAlive)
+		return CaseInsensitiveCompare(key, StrKeepAlive)
 	case 'l':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrLocation)
+		return CaseInsensitiveCompare(key, StrLocation)
 	case 'm':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrMaxForwards)
+		return CaseInsensitiveCompare(key, StrMaxForwards)
 	case 'p':
 		if len(key) >= len(HeaderProxyConnection) &&
-			zerocopy.CaseInsensitiveCompare(key[:6], zerocopy.StrProxyConnection[:6]) {
-			return zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyConnection[6:]) ||
-				zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthenticate[6:]) ||
-				zerocopy.CaseInsensitiveCompare(key[6:], zerocopy.StrProxyAuthorization[6:])
+			CaseInsensitiveCompare(key[:6], StrProxyConnection[:6]) {
+			return CaseInsensitiveCompare(key[6:], StrProxyConnection[6:]) ||
+				CaseInsensitiveCompare(key[6:], StrProxyAuthenticate[6:]) ||
+				CaseInsensitiveCompare(key[6:], StrProxyAuthorization[6:])
 		}
 
 	case 'r':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrRange)
+		return CaseInsensitiveCompare(key, StrRange)
 	case 's':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrSetCookie)
+		return CaseInsensitiveCompare(key, StrSetCookie)
 	case 't':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTE) ||
-			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTrailer) ||
-			zerocopy.CaseInsensitiveCompare(key, zerocopy.StrTransferEncoding)
+		return CaseInsensitiveCompare(key, StrTE) ||
+			CaseInsensitiveCompare(key, StrTrailer) ||
+			CaseInsensitiveCompare(key, StrTransferEncoding)
 	case 'w':
-		return zerocopy.CaseInsensitiveCompare(key, zerocopy.StrWWWAuthenticate)
+		return CaseInsensitiveCompare(key, StrWWWAuthenticate)
 	case 'x':
-		return (len(key) >= 11 && zerocopy.CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) ||
-			(len(key) >= 9 && zerocopy.CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
+		return (len(key) >= 11 && CaseInsensitiveCompare(key[:11], []byte("x-forwarded"))) ||
+			(len(key) >= 9 && CaseInsensitiveCompare(key[:9], []byte("x-real-ip")))
 	}
 
 	return false

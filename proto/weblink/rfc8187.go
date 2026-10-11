@@ -46,15 +46,15 @@ func encodeRFC8187(value, language string) string {
 	return sb.String()
 }
 
-func decodeRFC8187(extValue string) (charset, language, value string, err error) {
+func decodeRFC8187(extValue string) (charset, language, value string) {
 	firstQuote := strings.IndexByte(extValue, '\'')
 	if firstQuote == -1 {
-		return "", "", extValue, nil
+		return "", "", extValue
 	}
 
 	secondQuote := strings.IndexByte(extValue[firstQuote+1:], '\'')
 	if secondQuote == -1 {
-		return "", "", extValue, nil
+		return "", "", extValue
 	}
 
 	secondQuote += firstQuote + 1
@@ -74,10 +74,6 @@ func decodeRFC8187(extValue string) (charset, language, value string, err error)
 		value = strings.ToValidUTF8(unescaped, "")
 	}
 
-	return charset, language, value, nil
+	return charset, language, value
 }
 
-func decodeRFC8187Value(extValue string) string {
-	_, _, val, _ := decodeRFC8187(extValue)
-	return val
-}

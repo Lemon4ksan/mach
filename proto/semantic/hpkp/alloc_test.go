@@ -26,6 +26,29 @@ func TestAlloc(t *testing.T) {
 		}
 	})
 
+	t.Run("ParseGeneric", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			policy, err := hpkp.Parse(header)
+			if err != nil || len(policy.Pins) == 0 {
+				t.Fatalf("unexpected parse result: policy=%v, err=%v", policy, err)
+			}
+		})
+		if allocs > 10 {
+			t.Errorf("expected minimal allocs, got %v", allocs)
+		}
+
+		headerBytes := []byte(header)
+		allocsBytes := testing.AllocsPerRun(1000, func() {
+			policy, err := hpkp.Parse(headerBytes)
+			if err != nil || len(policy.Pins) == 0 {
+				t.Fatalf("unexpected parse result: policy=%v, err=%v", policy, err)
+			}
+		})
+		if allocsBytes > 10 {
+			t.Errorf("expected minimal allocs for bytes, got %v", allocsBytes)
+		}
+	})
+
 	t.Run("PinMatches", func(t *testing.T) {
 		pin, err := hpkp.NewPinSHA256("cUPcTAZWKaASuYWhhneDttWpY3oBAkE3h2+soZS7sWs=")
 		if err != nil {

@@ -36,7 +36,7 @@ func TestAlloc(t *testing.T) {
 	t.Run("ParseBytes", func(t *testing.T) {
 		raw := []byte("u=1, i")
 		allocs := testing.AllocsPerRun(1000, func() {
-			_, _ = priority.ParseBytes(raw)
+			_, _ = priority.Parse(raw)
 		})
 		if allocs != 0 {
 			t.Errorf("expected 0 allocs for ParseBytes, got %v", allocs)

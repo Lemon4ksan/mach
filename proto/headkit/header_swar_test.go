@@ -11,7 +11,7 @@ import (
 func TestParseHeaderBlockSWAR(t *testing.T) {
 	h := NewWithCapacity(8)
 
-	block := []byte("Host: localhost\r\nConnection: keep-alive\r\nX-Custom: val123\r\n")
+	block := []byte("Host: localhost\r\nConnection: keep-alive\r\nUser-Agent: test-agent/1.0\r\nX-Custom: val123\r\n")
 
 	h.ParseHeaderBlockSWAR(block)
 
@@ -21,6 +21,10 @@ func TestParseHeaderBlockSWAR(t *testing.T) {
 
 	if h.Get("Connection") != "keep-alive" {
 		t.Errorf("Expected Connection=keep-alive, got %q", h.Get("Connection"))
+	}
+
+	if h.Get("User-Agent") != "test-agent/1.0" {
+		t.Errorf("Expected User-Agent=test-agent/1.0, got %q", h.Get("User-Agent"))
 	}
 
 	if h.Get("X-Custom") != "val123" {

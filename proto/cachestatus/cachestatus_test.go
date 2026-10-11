@@ -160,3 +160,26 @@ func TestCacheStatus_FormatRoundtrip(t *testing.T) {
 	assert.Equal(t, entry.Key, parsed[0].Key)
 	assert.Equal(t, entry.Detail, parsed[0].Detail)
 }
+
+func TestGenericParseAndAll(t *testing.T) {
+	t.Parallel()
+
+	raw := `OriginCache; hit; ttl=120, EdgeCache; fwd=uri-miss; key="abc"`
+
+	// Parse with []byte
+	chain, err := cachestatus.Parse([]byte(raw))
+	require.NoError(t, err)
+	require.Len(t, chain, 2)
+	assert.Equal(t, "OriginCache", chain[0].CacheName)
+	assert.Equal(t, "EdgeCache", chain[1].CacheName)
+
+	// All with []byte
+	count := 0
+	for entry, err := range cachestatus.All([]byte(raw)) {
+		require.NoError(t, err)
+		assert.NotEmpty(t, entry.CacheName)
+		count++
+	}
+	assert.Equal(t, 2, count)
+}
+

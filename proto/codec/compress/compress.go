@@ -47,37 +47,6 @@ func (w *byteSliceWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (w *byteSliceWriter) WriteString(s string) (int, error) {
-	w.b = append(w.b, s...)
-	return len(s), nil
-}
-
-type byteSliceReader struct {
-	b []byte
-}
-
-func (r *byteSliceReader) Read(p []byte) (int, error) {
-	if len(r.b) == 0 {
-		return 0, io.EOF
-	}
-
-	n := copy(p, r.b)
-	r.b = r.b[n:]
-
-	return n, nil
-}
-
-func (r *byteSliceReader) ReadByte() (byte, error) {
-	if len(r.b) == 0 {
-		return 0, io.EOF
-	}
-
-	n := r.b[0]
-	r.b = r.b[1:]
-
-	return n, nil
-}
-
 // normalizeCompressLevel normalizes compression level into [0..11] to index into PerCorePool tables.
 func normalizeCompressLevel(level int) int {
 	if level < -2 || level > 9 {

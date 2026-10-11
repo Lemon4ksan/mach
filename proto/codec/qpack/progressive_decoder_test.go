@@ -275,26 +275,26 @@ func TestProgressiveDecoder_PrefixErrors(t *testing.T) {
 
 		// Sign=1, DeltaBase=MaxUint64 -> underflow
 		d.requiredInsertCount = 10
-		_, ok := d.deltaBaseToBase(true, math.MaxUint64).Value()
+		_, ok := d.deltaBaseToBase(true, math.MaxUint64)
 		assert.False(t, ok)
 
 		// Sign=1, RIC < DeltaBase + 1 -> underflow
 		d.requiredInsertCount = 5
-		_, ok = d.deltaBaseToBase(true, 5).Value()
+		_, ok = d.deltaBaseToBase(true, 5)
 		assert.False(t, ok)
 
 		// Sign=1, RIC == DeltaBase + 1 -> Base = 0 (allowed)
-		base, ok := d.deltaBaseToBase(true, 4).Value()
+		base, ok := d.deltaBaseToBase(true, 4)
 		assert.True(t, ok)
 		assert.Equal(t, uint64(0), base)
 
 		// Sign=0, RIC + DeltaBase overflows MaxUint64
 		d.requiredInsertCount = 10
-		_, ok = d.deltaBaseToBase(false, math.MaxUint64-5).Value()
+		_, ok = d.deltaBaseToBase(false, math.MaxUint64-5)
 		assert.False(t, ok)
 
 		// Sign=0, RIC + DeltaBase == MaxUint64
-		base, ok = d.deltaBaseToBase(false, math.MaxUint64-10).Value()
+		base, ok = d.deltaBaseToBase(false, math.MaxUint64-10)
 		assert.True(t, ok)
 		assert.Equal(t, uint64(math.MaxUint64), base)
 	})

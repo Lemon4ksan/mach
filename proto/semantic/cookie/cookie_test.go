@@ -578,3 +578,24 @@ func TestTrimCookieArgAndDecodeArg(t *testing.T) {
 		t.Fatalf("trimCookieArgNoCopy with quotes failed: %s", tc2)
 	}
 }
+
+func TestParseGeneric(t *testing.T) {
+	c := AcquireCookie()
+	defer ReleaseCookie(c)
+
+	raw := "id=a3fWa; Max-Age=3600; Domain=example.com"
+	if err := Parse(c, raw); err != nil {
+		t.Fatalf("Parse string failed: %v", err)
+	}
+	if string(c.Key()) != "id" || string(c.Value()) != "a3fWa" {
+		t.Fatalf("unexpected key/val: %s=%s", c.Key(), c.Value())
+	}
+
+	if err := Parse(c, []byte(raw)); err != nil {
+		t.Fatalf("Parse bytes failed: %v", err)
+	}
+	if string(c.Key()) != "id" || string(c.Value()) != "a3fWa" {
+		t.Fatalf("unexpected key/val: %s=%s", c.Key(), c.Value())
+	}
+}
+

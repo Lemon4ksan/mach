@@ -107,11 +107,25 @@ func (a *Args) Len() int {
 	return len(a.args)
 }
 
+// ParseArgs parses query args from a [string] or [[]byte] into a.
+func ParseArgs[S ~string | ~[]byte](a *Args, src S) {
+	switch v := any(src).(type) {
+	case string:
+		a.Parse(v)
+	case []byte:
+		a.ParseBytes(v)
+	default:
+		a.buf = append(a.buf[:0], src...)
+		a.ParseBytes(a.buf)
+	}
+}
+
 // Parse parses the given string containing query args.
 func (a *Args) Parse(s string) {
 	a.buf = append(a.buf[:0], s...)
 	a.ParseBytes(a.buf)
 }
+
 
 // ParseBytes parses the given b containing query args.
 func (a *Args) ParseBytes(b []byte) {

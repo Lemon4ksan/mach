@@ -24,7 +24,7 @@ func TestBasicAuth_RFC7617(t *testing.T) {
 	assert.Equal(t, "aladdin", u)
 	assert.Equal(t, "opensesame", p)
 
-	uB, pB, errB := auth.ParseBasicBytes([]byte(formatted))
+	uB, pB, errB := auth.ParseBasic([]byte(formatted))
 	assert.NoError(t, errB)
 	assert.Equal(t, "aladdin", string(uB))
 	assert.Equal(t, "opensesame", string(pB))
@@ -34,6 +34,11 @@ func TestBasicAuth_RFC7617(t *testing.T) {
 	assert.Equal(t, "WallyWorld", ch.Realm)
 	assert.Equal(t, "UTF-8", ch.Charset)
 	assert.Equal(t, `Basic realm="WallyWorld", charset="UTF-8"`, ch.String())
+
+	chB, okB := auth.ParseBasicChallenge([]byte(`Basic realm="WallyWorld", charset="UTF-8"`))
+	assert.True(t, okB)
+	assert.Equal(t, "WallyWorld", chB.Realm)
+	assert.Equal(t, "UTF-8", chB.Charset)
 
 	assert.True(t, auth.InScope("https://example.com/api/v1/users", "https://example.com/api"))
 	assert.False(t, auth.InScope("https://other.com/api/v1", "https://example.com/api"))
@@ -53,7 +58,7 @@ func TestBearerAuth_RFC6750(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, token, parsed)
 
-	parsedB, okB := auth.ParseBearerBytes([]byte(formatted))
+	parsedB, okB := auth.ParseBearer([]byte(formatted))
 	assert.True(t, okB)
 	assert.Equal(t, token, string(parsedB))
 
@@ -63,5 +68,13 @@ func TestBearerAuth_RFC6750(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "example", ch.Realm)
 	assert.Equal(t, "invalid_token", ch.Error)
+	assert.Equal(t, "The access token expired", ch.ErrorDescription)
+
+	chB, okB := auth.ParseBearerChallenge(
+		[]byte(`Bearer realm="example", error="invalid_token", error_description="The access token expired"`),
+	)
+	require.True(t, okB)
+	assert.Equal(t, "example", chB.Realm)
+	assert.Equal(t, "invalid_token", chB.Error)
 	assert.Equal(t, "The access token expired", ch.ErrorDescription)
 }

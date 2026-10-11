@@ -355,12 +355,11 @@ func AppendSPKIFingerprint(dst []byte, rawSPKI []byte) []byte {
 
 // ComputeSPKIFingerprint calculates the Base64 SHA-256 fingerprint of a certificate's SPKI (RFC 7469 §2.4 & Appendix A).
 func ComputeSPKIFingerprint(cert *x509.Certificate) string {
-	if cert == nil || len(cert.RawSubjectPublicKeyInfo) == 0 {
+	if cert == nil {
 		return ""
 	}
 
-	var buf [64]byte
-	return bytesconv.B2S(AppendSPKIFingerprint(buf[:0], cert.RawSubjectPublicKeyInfo))
+	return ComputeSPKIFingerprintFromSPKI(cert.RawSubjectPublicKeyInfo)
 }
 
 // ComputeSPKIPin returns the formatted `pin-sha256="<base64>"` directive value for cert (RFC 7469 §2.1.1).
@@ -393,9 +392,14 @@ func ComputeSPKIFingerprintFromSPKI(rawSPKI []byte) string {
 	return bytesconv.B2S(AppendSPKIFingerprint(buf[:0], rawSPKI))
 }
 
-// ParseHeader parses an RFC 7469 Public-Key-Pins or Public-Key-Pins-Report-Only header string into a [Policy].
-func ParseHeader(headerValue string) (*Policy, error) {
-	headerValue = strings.TrimSpace(headerValue)
+// Parse parses an RFC 7469 Public-Key-Pins or Public-Key-Pins-Report-Only header ([string] or [[]byte]) into a [Policy].
+func Parse[S ~string | ~[]byte](headerValue S) (*Policy, error) {
+	return ParseHeader(headerValue)
+}
+
+// ParseHeader parses an RFC 7469 Public-Key-Pins or Public-Key-Pins-Report-Only header ([string] or [[]byte]) into a [Policy].
+func ParseHeader[S ~string | ~[]byte](headerVal S) (*Policy, error) {
+	headerValue := strings.TrimSpace(string(headerVal))
 	if headerValue == "" {
 		return nil, ErrEmptyPinningHeader
 	}

@@ -15,13 +15,26 @@ func TestAlloc(t *testing.T) {
 
 	t.Run("Parse", func(t *testing.T) {
 		allocs := testing.AllocsPerRun(1000, func() {
-			cd := contentdisposition.ParseContentDisposition(header)
+			cd := contentdisposition.Parse(header)
 			if cd.Type != "attachment" || cd.Filename != "report.pdf" {
 				t.Fatalf("unexpected parse: cd=%v", cd)
 			}
 		})
 		if allocs > 10 {
 			t.Errorf("expected minimal allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("ParseBytes", func(t *testing.T) {
+		headerBytes := []byte(header)
+		allocs := testing.AllocsPerRun(1000, func() {
+			cd := contentdisposition.Parse(headerBytes)
+			if cd.Type != "attachment" || cd.Filename != "report.pdf" {
+				t.Fatalf("unexpected parse: cd=%v", cd)
+			}
+		})
+		if allocs > 10 {
+			t.Errorf("expected minimal allocs for ParseBytes, got %v", allocs)
 		}
 	})
 

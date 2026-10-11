@@ -437,12 +437,25 @@ var (
 	// ErrInvalidCookieValue indicates that a cookie contains invalid characters (RFC 6265 §4.1.1).
 	ErrInvalidCookieValue = errors.New("zerocopy: invalid cookie value")
 )
+// Parse parses a Set-Cookie header ([string] or [[]byte]) into c (RFC 6265 §4.1).
+func Parse[S ~string | ~[]byte](c *Cookie, src S) error {
+	switch v := any(src).(type) {
+	case string:
+		return c.Parse(v)
+	case []byte:
+		return c.ParseBytes(v)
+	default:
+		c.bufK = append(c.bufK[:0], src...)
+		return c.ParseBytes(c.bufK)
+	}
+}
 
 // Parse parses a Set-Cookie header string into c (RFC 6265 §4.1).
 func (c *Cookie) Parse(src string) error {
 	c.bufK = append(c.bufK[:0], src...)
 	return c.ParseBytes(c.bufK)
 }
+
 
 // ParseBytes parses Set-Cookie header bytes into c (RFC 6265 §4.1).
 func (c *Cookie) ParseBytes(src []byte) error {

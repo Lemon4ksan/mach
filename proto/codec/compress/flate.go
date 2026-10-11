@@ -5,6 +5,7 @@
 package compress
 
 import (
+	"bytes"
 	"compress/zlib"
 	"fmt"
 	"io"
@@ -124,7 +125,7 @@ func WriteInflate(w io.Writer, p []byte) (int, error) {
 
 // WriteInflateLimit decompresses zlib/deflate payload p and writes up to maxBodySize uncompressed bytes to w (RFC 1950 §2.2, RFC 1951 §3.1.1).
 func WriteInflateLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
-	r := &byteSliceReader{b: p}
+	r := bytes.NewReader(p)
 
 	zr, err := acquireFlateReader(r)
 	if err != nil {

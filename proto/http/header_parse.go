@@ -14,8 +14,9 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // Read reads an HTTP request header block from r up to and including the CRLFCRLF terminator (RFC 9112 Section 2.1).
@@ -170,7 +171,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("unsupported HTTP version %q", protoStr)
 	}
 
-	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
+	h.noHTTP11 = !bytes.Equal(protoStr, StrHTTP11)
 
 	uriStr := trimTrailingSpace(b[:n])
 	if len(uriStr) == 0 {
@@ -189,7 +190,7 @@ func (h *RequestHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("invalid request uri %q in %q: %w", uriStr, buf, err)
 	}
 
-	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
+	h.noHTTP11 = !bytes.Equal(protoStr, StrHTTP11)
 	h.protocol = append(h.protocol[:0], protoStr...)
 	h.requestURI = append(h.requestURI[:0], uriStr...)
 
@@ -225,7 +226,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			return 0, fmt.Errorf("invalid header key %q", s.key)
 		}
 
-		zerocopy.NormalizeHeaderKeyValidated(s.key, h.disableNormalizing || s.keyHasSpace)
+		NormalizeHeaderKeyValidated(s.key, h.disableNormalizing || s.keyHasSpace)
 
 		for _, ch := range s.value {
 			if !validHeaderValueByte(ch) {
@@ -240,7 +241,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 		contentLength := 0
 		switch s.key[0] | 0x20 {
 		case 'c':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentLength) {
+			if CaseInsensitiveCompare(s.key, StrContentLength) {
 				isContentLength = true
 				if contentLengthSeen {
 					parsed, err := parseContentLength(s.value)
@@ -265,7 +266,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			}
 
 		case 't':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTransferEncoding) {
+			if CaseInsensitiveCompare(s.key, StrTransferEncoding) {
 				isTransferEncoding = true
 
 				if h.noHTTP11 {
@@ -293,7 +294,7 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 		switch s.key[0] | 0x20 {
 		case 'h':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrHost) {
+			if CaseInsensitiveCompare(s.key, StrHost) {
 				if hostSeen {
 					h.connectionClose = true
 					return 0, errors.New("too many host headers")
@@ -307,12 +308,12 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 			}
 
 		case 'u':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrUserAgent) {
+			if CaseInsensitiveCompare(s.key, StrUserAgent) {
 				h.userAgent = append(h.userAgent[:0], s.value...)
 				continue
 			}
 		case 'c':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentType) {
+			if CaseInsensitiveCompare(s.key, StrContentType) {
 				h.contentType = append(h.contentType[:0], s.value...)
 				continue
 			}
@@ -326,8 +327,8 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
-				if hasHeaderValue(s.value, zerocopy.StrClose) {
+			if CaseInsensitiveCompare(s.key, StrConnection) {
+				if hasHeaderValue(s.value, StrClose) {
 					h.connectionClose = true
 					continue
 				}
@@ -340,8 +341,8 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 		case 't':
 			if isTransferEncoding {
-				isIdentity := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrIdentity)
-				isChunked := zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked)
+				isIdentity := CaseInsensitiveCompare(s.value, StrIdentity)
+				isChunked := CaseInsensitiveCompare(s.value, StrChunked)
 
 				if !isIdentity && !isChunked {
 					h.connectionClose = true
@@ -354,13 +355,13 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 
 				if isChunked {
 					h.contentLength = -1
-					setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked)
+					setArgBytesHeaders(&h.h, StrTransferEncoding, StrChunked)
 				}
 
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTrailer) {
+			if CaseInsensitiveCompare(s.key, StrTrailer) {
 				err := h.SetTrailerBytes(s.value)
 				if err != nil {
 					h.connectionClose = true
@@ -389,8 +390,8 @@ func (h *RequestHeader) parseHeaders(buf []byte, blockEnd int) (int, error) {
 	}
 
 	if h.noHTTP11 && !h.connectionClose {
-		v := peekArgBytesHeaders(&h.h, zerocopy.StrConnection)
-		h.connectionClose = !hasHeaderValue(v, zerocopy.StrKeepAlive)
+		v := peekArgBytesHeaders(&h.h, StrConnection)
+		h.connectionClose = !hasHeaderValue(v, StrKeepAlive)
 	}
 
 	return s.r, nil
@@ -435,64 +436,65 @@ func (h *RequestHeader) AppendBytes(dst []byte) []byte {
 	dst = append(dst, h.RequestURI()...)
 	dst = append(dst, ' ')
 	dst = append(dst, h.Protocol()...)
-	dst = append(dst, zerocopy.StrCRLF...)
+	dst = append(dst, StrCRLF...)
 
 	userAgent := h.UserAgent()
 	if len(userAgent) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, zerocopy.StrUserAgent, userAgent)
+		dst = appendHeaderLine(dst, StrUserAgent, userAgent)
 	}
 
 	host := h.Host()
 	if len(host) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, zerocopy.StrHost, host)
+		dst = appendHeaderLine(dst, StrHost, host)
 	}
 
 	contentType := h.ContentType()
 	if !h.noDefaultContentType && len(contentType) == 0 && h.ContentLength() > 0 {
-		contentType = zerocopy.StrDefaultContentType
+		contentType = StrDefaultContentType
 	}
 
 	if len(contentType) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, zerocopy.StrContentType, contentType)
+		dst = appendHeaderLine(dst, StrContentType, contentType)
 	}
 
 	if len(h.contentLengthBytes) > 0 && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, zerocopy.StrContentLength, h.contentLengthBytes)
+		dst = appendHeaderLine(dst, StrContentLength, h.contentLengthBytes)
 	}
 
-	for _, _e := range h.h.Entries() {
-		kv := &zerocopy.ArgsKV{Key: bytesconv.S2B(_e.Key), Value: bytesconv.S2B(_e.Value)}
+	for k, v := range h.h.All() {
+		kb := bytesconv.S2B(k)
+		vb := bytesconv.S2B(v)
 
 		exclude := false
 		for _, t := range h.trailer {
-			if bytes.Equal(kv.Key, t) {
+			if bytes.Equal(kb, t) {
 				exclude = true
 				break
 			}
 		}
 
 		if !exclude {
-			dst = appendHeaderLine(dst, kv.Key, kv.Value)
+			dst = appendHeaderLine(dst, kb, vb)
 		}
 	}
 
 	if len(h.trailer) > 0 {
-		dst = appendHeaderLine(dst, zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
+		dst = appendHeaderLine(dst, StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
 	}
 
 	n := len(h.cookies)
 	if n > 0 && !h.disableSpecialHeader {
-		dst = append(dst, zerocopy.StrCookie...)
-		dst = append(dst, zerocopy.StrColonSpace...)
-		dst = zerocopy.AppendRequestCookieBytes(dst, h.cookies)
-		dst = append(dst, zerocopy.StrCRLF...)
+		dst = append(dst, StrCookie...)
+		dst = append(dst, StrColonSpace...)
+		dst = cookie.AppendRequestCookieBytes(dst, h.cookies)
+		dst = append(dst, StrCRLF...)
 	}
 
 	if h.ConnectionClose() && !h.disableSpecialHeader {
-		dst = appendHeaderLine(dst, zerocopy.StrConnection, zerocopy.StrClose)
+		dst = appendHeaderLine(dst, StrConnection, StrClose)
 	}
 
-	return append(dst, zerocopy.StrCRLF...)
+	return append(dst, StrCRLF...)
 }
 
 // Read reads an HTTP response header block from r up to and including the CRLFCRLF terminator (RFC 9112 Section 2.1).
@@ -608,7 +610,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("invalid response status code %q: response %q", statusCode, buf)
 	}
 
-	h.statusCode, n, err = zerocopy.ParseUintBuf(statusCode)
+	h.statusCode, n, err = ParseUintBuf(statusCode)
 	if err != nil || n != 3 {
 		if h.SecureErrorLogMessage {
 			return 0, ErrUnexpectedStatusCodeChar
@@ -625,7 +627,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		return 0, fmt.Errorf("unsupported http version %q in %q", protoStr, buf)
 	}
 
-	h.noHTTP11 = !bytes.Equal(protoStr, zerocopy.StrHTTP11)
+	h.noHTTP11 = !bytes.Equal(protoStr, StrHTTP11)
 
 	h.protocol = append(h.protocol[:0], protoStr...)
 	if len(statusMessage) > 0 {
@@ -640,7 +642,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 	var (
 		s                    headerScanner
-		kv                   *zerocopy.ArgsKV
+		kv                   *uri.ArgsKV
 		transferEncodingSeen bool
 		contentLengthSeen    bool
 	)
@@ -662,7 +664,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			disableNormalizing = true
 		}
 
-		zerocopy.NormalizeHeaderKeyValidated(s.key, disableNormalizing)
+		NormalizeHeaderKeyValidated(s.key, disableNormalizing)
 
 		for _, ch := range s.value {
 			if !validHeaderValueByte(ch) {
@@ -673,17 +675,17 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 		switch s.key[0] | 0x20 {
 		case 'c':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentType) {
+			if CaseInsensitiveCompare(s.key, StrContentType) {
 				h.contentType = append(h.contentType[:0], s.value...)
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentEncoding) {
+			if CaseInsensitiveCompare(s.key, StrContentEncoding) {
 				h.contentEncoding = append(h.contentEncoding[:0], s.value...)
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrContentLength) {
+			if CaseInsensitiveCompare(s.key, StrContentLength) {
 				if contentLengthSeen {
 					parsed, err := parseContentLength(s.value)
 					if err != nil || parsed != h.contentLength {
@@ -711,8 +713,8 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrConnection) {
-				if hasHeaderValue(s.value, zerocopy.StrClose) {
+			if CaseInsensitiveCompare(s.key, StrConnection) {
+				if hasHeaderValue(s.value, StrClose) {
 					h.connectionClose = true
 					continue
 				}
@@ -724,21 +726,21 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 			}
 
 		case 's':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrServer) {
+			if CaseInsensitiveCompare(s.key, StrServer) {
 				h.server = append(h.server[:0], s.value...)
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrSetCookie) {
-				h.cookies, kv = zerocopy.AllocArg(h.cookies)
-				kv.Key = zerocopy.GetCookieKey(kv.Key, s.value)
+			if CaseInsensitiveCompare(s.key, StrSetCookie) {
+				h.cookies, kv = uri.AllocArg(h.cookies)
+				kv.Key = cookie.GetCookieKey(kv.Key, s.value)
 				kv.Value = append(kv.Value[:0], s.value...)
 
 				continue
 			}
 
 		case 't':
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTransferEncoding) {
+			if CaseInsensitiveCompare(s.key, StrTransferEncoding) {
 				if h.noHTTP11 {
 					continue
 				}
@@ -754,7 +756,7 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 
 				transferEncodingSeen = true
 
-				if !zerocopy.CaseInsensitiveCompare(s.value, zerocopy.StrChunked) {
+				if !CaseInsensitiveCompare(s.value, StrChunked) {
 					h.connectionClose = true
 					if h.SecureErrorLogMessage {
 						return 0, ErrUnsupportedTransferEncoding
@@ -764,12 +766,12 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 				}
 
 				h.contentLength = -1
-				setArgBytesHeaders(&h.h, zerocopy.StrTransferEncoding, zerocopy.StrChunked)
+				setArgBytesHeaders(&h.h, StrTransferEncoding, StrChunked)
 
 				continue
 			}
 
-			if zerocopy.CaseInsensitiveCompare(s.key, zerocopy.StrTrailer) {
+			if CaseInsensitiveCompare(s.key, StrTrailer) {
 				err := h.SetTrailerBytes(s.value)
 				if err != nil {
 					h.connectionClose = true
@@ -806,8 +808,8 @@ func (h *ResponseHeader) parseHeaders(buf []byte) (int, error) {
 	}
 
 	if h.noHTTP11 && !h.connectionClose {
-		v := peekArgBytesHeaders(&h.h, zerocopy.StrConnection)
-		h.connectionClose = !hasHeaderValue(v, zerocopy.StrKeepAlive)
+		v := peekArgBytesHeaders(&h.h, StrConnection)
+		h.connectionClose = !hasHeaderValue(v, StrKeepAlive)
 	}
 
 	return s.r, nil
@@ -851,64 +853,65 @@ func (h *ResponseHeader) AppendBytes(dst []byte) []byte {
 
 	server := h.Server()
 	if len(server) != 0 {
-		dst = appendHeaderLine(dst, zerocopy.StrServer, server)
+		dst = appendHeaderLine(dst, StrServer, server)
 	}
 
 	if !h.noDefaultDate {
 		serverDateOnce.Do(updateServerDate)
 
-		dst = appendHeaderLine(dst, zerocopy.StrDate, *serverDate.Load())
+		dst = appendHeaderLine(dst, StrDate, *serverDate.Load())
 	}
 
 	if h.ContentLength() != 0 || len(h.contentType) > 0 {
 		contentType := h.ContentType()
 		if len(contentType) > 0 {
-			dst = appendHeaderLine(dst, zerocopy.StrContentType, contentType)
+			dst = appendHeaderLine(dst, StrContentType, contentType)
 		}
 	}
 
 	contentEncoding := h.ContentEncoding()
 	if len(contentEncoding) > 0 {
-		dst = appendHeaderLine(dst, zerocopy.StrContentEncoding, contentEncoding)
+		dst = appendHeaderLine(dst, StrContentEncoding, contentEncoding)
 	}
 
 	if len(h.contentLengthBytes) > 0 {
-		dst = appendHeaderLine(dst, zerocopy.StrContentLength, h.contentLengthBytes)
+		dst = appendHeaderLine(dst, StrContentLength, h.contentLengthBytes)
 	}
 
-	for _, _e := range h.h.Entries() {
-		kv := &zerocopy.ArgsKV{Key: bytesconv.S2B(_e.Key), Value: bytesconv.S2B(_e.Value)}
+	for k, v := range h.h.All() {
+		kb := bytesconv.S2B(k)
+		vb := bytesconv.S2B(v)
 
 		exclude := false
 		for _, t := range h.trailer {
-			if bytes.Equal(kv.Key, t) {
+			if bytes.Equal(kb, t) {
 				exclude = true
 				break
 			}
 		}
 
-		if !exclude && (h.noDefaultDate || !bytes.Equal(kv.Key, zerocopy.StrDate)) {
-			dst = appendHeaderLine(dst, kv.Key, kv.Value)
+		if !exclude && (h.noDefaultDate || !bytes.Equal(kb, StrDate)) {
+			dst = appendHeaderLine(dst, kb, vb)
 		}
 	}
 
 	if len(h.trailer) > 0 {
-		dst = appendHeaderLine(dst, zerocopy.StrTrailer, appendTrailerBytes(nil, h.trailer, zerocopy.StrCommaSpace))
+		dst = appendHeaderLine(dst, StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
 	}
 
 	n := len(h.cookies)
 	if n > 0 {
 		for i := range n {
 			kv := &h.cookies[i]
-			dst = appendHeaderLine(dst, zerocopy.StrSetCookie, kv.Value)
+			dst = appendHeaderLine(dst, StrSetCookie, kv.Value)
 		}
 	}
 
 	if h.ConnectionClose() {
-		dst = appendHeaderLine(dst, zerocopy.StrConnection, zerocopy.StrClose)
+		dst = appendHeaderLine(dst, StrConnection, StrClose)
 	}
 
-	return append(dst, zerocopy.StrCRLF...)
+	return append(dst, StrCRLF...)
 }
 
 func readRawHeaders(dst, buf []byte) ([]byte, int, error) {
@@ -935,7 +938,7 @@ func readRawHeaders(dst, buf []byte) ([]byte, int, error) {
 }
 
 func parseContentLength(b []byte) (int, error) {
-	v, n, err := zerocopy.ParseUintBuf(b)
+	v, n, err := ParseUintBuf(b)
 	if err != nil {
 		return -1, fmt.Errorf("cannot parse content-length: %w", err)
 	}
@@ -962,7 +965,7 @@ func nextLine(b []byte) ([]byte, []byte, error) {
 }
 
 func isHTTPVersion(proto []byte) bool {
-	return len(proto) == len(zerocopy.StrHTTP11) && bytes.HasPrefix(proto, zerocopy.StrHTTP11[:5]) && proto[6] == '.' &&
+	return len(proto) == len(StrHTTP11) && bytes.HasPrefix(proto, StrHTTP11[:5]) && proto[6] == '.' &&
 		proto[5] >= '0' &&
 		proto[5] <= '9' &&
 		proto[7] >= '0' &&
@@ -971,7 +974,7 @@ func isHTTPVersion(proto []byte) bool {
 
 func isValidMethod(method []byte) bool {
 	for _, ch := range method {
-		if zerocopy.ValidMethodValueByteTable[ch] == 0 {
+		if ValidMethodValueByteTable[ch] == 0 {
 			return false
 		}
 	}
@@ -980,12 +983,12 @@ func isValidMethod(method []byte) bool {
 }
 
 func validateRequestURI(method, requestURI []byte) error {
-	if zerocopy.StringContainsCTLByte(requestURI) {
-		return zerocopy.ErrorInvalidURI
+	if uri.StringContainsCTLByte(requestURI) {
+		return uri.ErrorInvalidURI
 	}
 
 	if bytes.IndexByte(requestURI, ' ') >= 0 {
-		return zerocopy.ErrorInvalidURI
+		return uri.ErrorInvalidURI
 	}
 
 	if len(requestURI) == 1 && requestURI[0] == '*' {
@@ -996,19 +999,19 @@ func validateRequestURI(method, requestURI []byte) error {
 		return nil
 	}
 
-	if before, _, ok := bytes.Cut(requestURI, zerocopy.StrColonSlashSlash); ok {
-		if !zerocopy.IsValidScheme(before) {
-			return zerocopy.ErrorInvalidURI
+	if before, _, ok := bytes.Cut(requestURI, StrColonSlashSlash); ok {
+		if !uri.IsValidScheme(before) {
+			return uri.ErrorInvalidURI
 		}
 
 		return nil
 	}
 
-	if bytes.Equal(method, zerocopy.StrConnect) {
+	if bytes.Equal(method, StrConnect) {
 		return nil
 	}
 
-	return zerocopy.ErrorInvalidURI
+	return uri.ErrorInvalidURI
 }
 
 func headerError(typ string, err, errParse error, b []byte, secureErrorLogMessage bool) error {

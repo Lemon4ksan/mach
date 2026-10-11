@@ -118,14 +118,7 @@ func ForEach[S ~string | ~[]byte](header S, yield func(Service) bool) bool {
 
 // All returns an iterator over alternative services without allocating slices (RFC 7838 §3).
 // Handles the special "clear" keyword to invalidate all alternative services.
-func All(header string) iter.Seq[Service] {
-	return func(yield func(Service) bool) {
-		ForEach(header, yield)
-	}
-}
-
-// AllBytes returns an iterator over alternative services from a raw byte slice (RFC 7838 §3).
-func AllBytes(header []byte) iter.Seq[Service] {
+func All[S ~string | ~[]byte](header S) iter.Seq[Service] {
 	return func(yield func(Service) bool) {
 		ForEach(header, yield)
 	}
@@ -140,13 +133,8 @@ func AppendParse[S ~string | ~[]byte](dst []Service, header S) []Service {
 	return dst
 }
 
-// Parse parses an Alt-Svc header string into a slice of services (RFC 7838 §3).
-func Parse(header string) []Service {
-	return AppendParse(nil, header)
-}
-
-// ParseBytes parses an Alt-Svc header byte slice into a slice of services (RFC 7838 §3).
-func ParseBytes(header []byte) []Service {
+// Parse parses an Alt-Svc header ([string] or [[]byte]) into a slice of services (RFC 7838 §3).
+func Parse[S ~string | ~[]byte](header S) []Service {
 	return AppendParse(nil, header)
 }
 

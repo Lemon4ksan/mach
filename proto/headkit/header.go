@@ -53,14 +53,6 @@ func NewWithCapacity(cap int) Headers {
 	}
 }
 
-func (h *Headers) SetRawBuf(b []byte) {
-	h.buf = b
-}
-
-func (h *Headers) GetRawBuf() []byte {
-	return h.buf
-}
-
 func (h *Headers) Reset() {
 	h.buf = h.buf[:0]
 	h.err = nil
@@ -257,6 +249,10 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 			h.packed[IdxConnection] = packed
 			return
 		}
+		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "User-Agent") {
+			h.packed[IdxUserAgent] = packed
+			return
+		}
 	case 12:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Content-Type") {
 			h.packed[IdxContentType] = packed
@@ -300,6 +296,11 @@ func (h *Headers) Get(key string) string {
 	case 10:
 		if bytesconv.EqualFoldASCII(key, "Connection") {
 			if v := h.getVal(h.packed[IdxConnection]); v != "" {
+				return v
+			}
+		}
+		if bytesconv.EqualFoldASCII(key, "User-Agent") {
+			if v := h.getVal(h.packed[IdxUserAgent]); v != "" {
 				return v
 			}
 		}

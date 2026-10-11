@@ -183,3 +183,24 @@ func TestWebLink_FormatRoundtrip(t *testing.T) {
 	assert.Equal(t, l.Type, parsed[0].Type)
 	assert.Equal(t, "value", parsed[0].Params["custom"])
 }
+
+func TestGenericParseAndAll(t *testing.T) {
+	raw := `</page/2>; rel="next", </page/1>; rel="prev"`
+
+	// Parse with []byte
+	group, err := weblink.Parse([]byte(raw))
+	require.NoError(t, err)
+	require.Len(t, group, 2)
+	assert.Equal(t, "/page/2", group[0].Target)
+	assert.Equal(t, "/page/1", group[1].Target)
+
+	// All with []byte
+	count := 0
+	for link, err := range weblink.All([]byte(raw)) {
+		require.NoError(t, err)
+		assert.NotEmpty(t, link.Target)
+		count++
+	}
+	assert.Equal(t, 2, count)
+}
+

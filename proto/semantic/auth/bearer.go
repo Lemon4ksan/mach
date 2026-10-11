@@ -5,7 +5,6 @@
 package auth
 
 import (
-	"bytes"
 	"strings"
 )
 
@@ -125,44 +124,57 @@ func IsValidBearerToken[S ~string | ~[]byte](token S) bool {
 	return true
 }
 
-// ParseBearer extracts the bearer token from an HTTP Authorization or Proxy-Authorization header (RFC 6750 §2.1).
-func ParseBearer(authHeader string) (token string, ok bool) {
-	authHeader = strings.TrimSpace(authHeader)
-	if len(authHeader) < 7 || !strings.EqualFold(authHeader[:7], "Bearer ") {
-		return "", false
+// ParseBearer extracts the bearer token from an HTTP Authorization or Proxy-Authorization header ([string] or [[]byte]) (RFC 6750 §2.1).
+func ParseBearer[S ~string | ~[]byte](authHeader S) (token S, ok bool) {
+	authHeader = trimSpaceGeneric(authHeader)
+	if !hasBearerPrefix(authHeader) {
+		var zero S
+		return zero, false
 	}
 
-	token = strings.TrimSpace(authHeader[7:])
-	if token == "" || !IsValidBearerToken(token) {
-		return "", false
-	}
-
-	return token, true
-}
-
-// ParseBearerBytes extracts the bearer token byte slice with zero allocations (RFC 6750 §2.1).
-func ParseBearerBytes(authHeader []byte) (token []byte, ok bool) {
-	authHeader = bytes.TrimSpace(authHeader)
-	if len(authHeader) < 7 || !bytes.EqualFold(authHeader[:7], []byte("Bearer ")) {
-		return nil, false
-	}
-
-	token = bytes.TrimSpace(authHeader[7:])
+	token = trimSpaceGeneric(authHeader[7:])
 	if len(token) == 0 || !IsValidBearerToken(token) {
-		return nil, false
+		var zero S
+		return zero, false
 	}
 
 	return token, true
 }
 
-// ParseBearerChallenge parses a WWW-Authenticate header containing a Bearer challenge (RFC 6750 §3).
-func ParseBearerChallenge(challengeHeader string) (BearerChallenge, bool) {
-	challengeHeader = strings.TrimSpace(challengeHeader)
-	if len(challengeHeader) < 6 || !strings.EqualFold(challengeHeader[:6], "Bearer") {
+func trimSpaceGeneric[S ~string | ~[]byte](s S) S {
+	start := 0
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n') {
+		start++
+	}
+	end := len(s)
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\r' || s[end-1] == '\n') {
+		end--
+	}
+	return s[start:end]
+}
+
+func hasBearerPrefix[S ~string | ~[]byte](s S) bool {
+	if len(s) < 7 {
+		return false
+	}
+	return (s[0] == 'B' || s[0] == 'b') &&
+		(s[1] == 'e' || s[1] == 'E') &&
+		(s[2] == 'a' || s[2] == 'A') &&
+		(s[3] == 'r' || s[3] == 'R') &&
+		(s[4] == 'e' || s[4] == 'E') &&
+		(s[5] == 'r' || s[5] == 'R') &&
+		s[6] == ' '
+}
+
+// ParseBearerChallenge parses a WWW-Authenticate header ([string] or [[]byte]) containing a Bearer challenge (RFC 6750 §3).
+func ParseBearerChallenge[S ~string | ~[]byte](challengeHeader S) (BearerChallenge, bool) {
+	ch := stringOrBytes(challengeHeader)
+	ch = strings.TrimSpace(ch)
+	if len(ch) < 6 || !strings.EqualFold(ch[:6], "Bearer") {
 		return BearerChallenge{}, false
 	}
 
-	rest := strings.TrimSpace(challengeHeader[6:])
+	rest := strings.TrimSpace(ch[6:])
 	var challenge BearerChallenge
 	if rest == "" {
 		return challenge, true

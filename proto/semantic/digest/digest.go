@@ -19,12 +19,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lemon4ksan/mach/proto/semantic/auth"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
 var (
 	// ErrDigestBadChallenge is returned when the server responds with a malformed Digest WWW-Authenticate challenge.
 	ErrDigestBadChallenge = errors.New("digest: bad challenge")
+
+	// ErrDigestBadCredentials is returned when the client sends malformed Digest Authorization credentials.
+	ErrDigestBadCredentials = errors.New("digest: bad credentials")
+
+	// ErrDigestBadAuthInfo is returned when the server sends malformed Authentication-Info.
+	ErrDigestBadAuthInfo = errors.New("digest: bad authentication info")
 
 	// ErrDigestInvalidCharset is returned when the server challenge specifies an unsupported character encoding.
 	ErrDigestInvalidCharset = errors.New("digest: invalid charset")
@@ -146,21 +152,103 @@ func (dt *Transport) cloneReq(r *http.Request) *http.Request {
 	return r.Clone(r.Context())
 }
 
-// ParseChallenge parses WWW-Authenticate challenge parameters (RFC 7616 §3.3).
-func ParseChallenge(input string) (*Challenge, error) {
-	params, ok := auth.ExtractChallengeParams(input, "Digest")
-	if !ok {
-		return nil, ErrDigestBadChallenge
-	}
-
+// ParseChallenge parses WWW-Authenticate challenge parameters ([string] or [[]byte]) (RFC 7616 §3.3).
+func ParseChallenge[S ~string | ~[]byte](input S) (*Challenge, error) {
 	c := &Challenge{}
-	for key, val := range params {
-		if err := c.setValue(key, val); err != nil {
-			return nil, err
-		}
+	if err := ParseChallengeInto(c, input); err != nil {
+		return nil, err
 	}
-
 	return c, nil
+}
+
+// ParseChallengeInto parses WWW-Authenticate challenge parameters into dst without heap allocations.
+func ParseChallengeInto[S ~string | ~[]byte](dst *Challenge, input S) error {
+	raw := stringOrBytes(input)
+	var parseErr error
+	foundAny := false
+
+	ok := forEachAuthParam(raw, "Digest", func(key, val string) bool {
+		foundAny = true
+		if err := dst.setValue(key, val); err != nil {
+			parseErr = err
+			return false
+		}
+		return true
+	})
+
+	if parseErr != nil {
+		return parseErr
+	}
+	if !ok || !foundAny {
+		return ErrDigestBadChallenge
+	}
+	return nil
+}
+
+// ParseCredentials parses Digest Authorization credentials ([string] or [[]byte]) (RFC 7616 §3.4).
+func ParseCredentials[S ~string | ~[]byte](input S) (*Credentials, error) {
+	cred := &Credentials{}
+	if err := ParseCredentialsInto(cred, input); err != nil {
+		return nil, err
+	}
+	return cred, nil
+}
+
+// ParseCredentialsInto parses Digest Authorization credentials into dst without heap allocations.
+func ParseCredentialsInto[S ~string | ~[]byte](dst *Credentials, input S) error {
+	raw := stringOrBytes(input)
+	var parseErr error
+	foundAny := false
+
+	ok := forEachAuthParam(raw, "Digest", func(key, val string) bool {
+		foundAny = true
+		if err := dst.setValue(key, val); err != nil {
+			parseErr = err
+			return false
+		}
+		return true
+	})
+
+	if parseErr != nil {
+		return parseErr
+	}
+	if !ok || !foundAny {
+		return ErrDigestBadCredentials
+	}
+	return nil
+}
+
+// ParseAuthenticationInfo parses Authentication-Info header parameters ([string] or [[]byte]) (RFC 7616 §3.5).
+func ParseAuthenticationInfo[S ~string | ~[]byte](input S) (*AuthenticationInfo, error) {
+	ai := &AuthenticationInfo{}
+	if err := ParseAuthenticationInfoInto(ai, input); err != nil {
+		return nil, err
+	}
+	return ai, nil
+}
+
+// ParseAuthenticationInfoInto parses Authentication-Info header parameters into dst without heap allocations.
+func ParseAuthenticationInfoInto[S ~string | ~[]byte](dst *AuthenticationInfo, input S) error {
+	raw := stringOrBytes(input)
+	var parseErr error
+	foundAny := false
+
+	ok := forEachAuthParam(raw, "", func(key, val string) bool {
+		foundAny = true
+		if err := dst.setValue(key, val); err != nil {
+			parseErr = err
+			return false
+		}
+		return true
+	})
+
+	if parseErr != nil {
+		return parseErr
+	}
+	if !ok || !foundAny {
+		return ErrDigestBadAuthInfo
+	}
+	return nil
 }
 
 // createCredentials constructs digest credentials for the request (RFC 7616 §3.4).
@@ -244,7 +332,15 @@ type Challenge struct {
 	Qop       []string
 	NC        int
 	UserHash  string
+	Charset   string
 }
+
+var (
+	qopAuthSlice        = []string{qopAuth}
+	qopAuthIntSlice     = []string{qopAuthInt}
+	qopAuthBothSlice    = []string{qopAuth, qopAuthInt}
+	qopAuthBothRevSlice = []string{qopAuthInt, qopAuth}
+)
 
 func (dc *Challenge) isQopSupported(qop string) bool {
 	for _, item := range dc.Qop {
@@ -256,42 +352,152 @@ func (dc *Challenge) isQopSupported(qop string) bool {
 }
 
 func (dc *Challenge) setValue(k, v string) error {
-	switch k {
-	case "realm":
+	switch {
+	case strings.EqualFold(k, "realm"):
 		dc.Realm = v
-	case "domain":
+	case strings.EqualFold(k, "domain"):
 		dc.Domain = v
-	case "nonce":
+	case strings.EqualFold(k, "nonce"):
 		dc.Nonce = v
-	case "opaque":
+	case strings.EqualFold(k, "opaque"):
 		dc.Opaque = v
-	case "stale":
+	case strings.EqualFold(k, "stale"):
 		dc.Stale = v
-	case "algorithm":
+	case strings.EqualFold(k, "algorithm"):
 		dc.Algorithm = v
-	case "qop":
-		if v != "" {
-			parts := strings.Split(v, ",")
-			dc.Qop = make([]string, len(parts))
-			for i, p := range parts {
-				dc.Qop[i] = strings.TrimSpace(p)
+	case strings.EqualFold(k, "qop"):
+		vTrim := strings.TrimSpace(v)
+		switch {
+		case strings.EqualFold(vTrim, "auth"):
+			dc.Qop = qopAuthSlice
+		case strings.EqualFold(vTrim, "auth-int"):
+			dc.Qop = qopAuthIntSlice
+		case strings.EqualFold(vTrim, "auth, auth-int") || strings.EqualFold(vTrim, "auth,auth-int"):
+			dc.Qop = qopAuthBothSlice
+		case strings.EqualFold(vTrim, "auth-int, auth") || strings.EqualFold(vTrim, "auth-int,auth"):
+			dc.Qop = qopAuthBothRevSlice
+		default:
+			if vTrim != "" {
+				parts := strings.Split(vTrim, ",")
+				dc.Qop = make([]string, len(parts))
+				for i, p := range parts {
+					dc.Qop[i] = strings.TrimSpace(p)
+				}
 			}
 		}
-	case "charset":
-		if v != "" && strings.ToUpper(v) != "UTF-8" {
-			return ErrDigestInvalidCharset
+	case strings.EqualFold(k, "charset"):
+		if v != "" {
+			if !strings.EqualFold(v, "UTF-8") {
+				return ErrDigestInvalidCharset
+			}
+			dc.Charset = "UTF-8"
 		}
-	case "nc":
+	case strings.EqualFold(k, "nc"):
 		nc, err := strconv.ParseInt(v, 16, 32)
 		if err != nil {
 			return fmt.Errorf("digest: invalid nc: %w", err)
 		}
 		dc.NC = int(nc)
-	case "userhash":
-		dc.UserHash = strings.ToLower(v)
+	case strings.EqualFold(k, "userhash"):
+		if strings.EqualFold(v, "true") {
+			dc.UserHash = "true"
+		} else if strings.EqualFold(v, "false") {
+			dc.UserHash = "false"
+		} else {
+			dc.UserHash = v
+		}
 	default:
 		// RFC 7616 §3.3: Unknown parameters MUST be ignored
 		return nil
+	}
+	return nil
+}
+
+// Credentials represents parsed RFC 7616 Digest Authorization credentials.
+type Credentials struct {
+	Username  string
+	Realm     string
+	Nonce     string
+	URI       string
+	Response  string
+	Algorithm string
+	Cnonce    string
+	Opaque    string
+	Qop       string
+	NC        int
+	UserHash  string
+}
+
+func (c *Credentials) setValue(k, v string) error {
+	switch {
+	case strings.EqualFold(k, "username"):
+		c.Username = v
+	case strings.EqualFold(k, "realm"):
+		c.Realm = v
+	case strings.EqualFold(k, "nonce"):
+		c.Nonce = v
+	case strings.EqualFold(k, "uri"):
+		c.URI = v
+	case strings.EqualFold(k, "response"):
+		c.Response = v
+	case strings.EqualFold(k, "algorithm"):
+		c.Algorithm = v
+	case strings.EqualFold(k, "cnonce"):
+		c.Cnonce = v
+	case strings.EqualFold(k, "opaque"):
+		c.Opaque = v
+	case strings.EqualFold(k, "qop"):
+		c.Qop = v
+	case strings.EqualFold(k, "nc"):
+		nc, err := strconv.ParseInt(v, 16, 32)
+		if err == nil {
+			c.NC = int(nc)
+		}
+	case strings.EqualFold(k, "userhash"):
+		if strings.EqualFold(v, "true") {
+			c.UserHash = "true"
+		} else if strings.EqualFold(v, "false") {
+			c.UserHash = "false"
+		} else {
+			c.UserHash = v
+		}
+	}
+	return nil
+}
+
+// AuthenticationInfo represents parsed RFC 7616 Authentication-Info parameters.
+type AuthenticationInfo struct {
+	NextNonce string
+	Qop       string
+	RspAuth   string
+	CNonce    string
+	NC        int
+	UserHash  string
+}
+
+func (ai *AuthenticationInfo) setValue(k, v string) error {
+	switch {
+	case strings.EqualFold(k, "nextnonce"):
+		ai.NextNonce = v
+	case strings.EqualFold(k, "qop"):
+		ai.Qop = v
+	case strings.EqualFold(k, "rspauth"):
+		ai.RspAuth = v
+	case strings.EqualFold(k, "cnonce"):
+		ai.CNonce = v
+	case strings.EqualFold(k, "nc"):
+		nc, err := strconv.ParseInt(v, 16, 32)
+		if err == nil {
+			ai.NC = int(nc)
+		}
+	case strings.EqualFold(k, "userhash"):
+		if strings.EqualFold(v, "true") {
+			ai.UserHash = "true"
+		} else if strings.EqualFold(v, "false") {
+			ai.UserHash = "false"
+		} else {
+			ai.UserHash = v
+		}
 	}
 	return nil
 }
@@ -467,4 +673,131 @@ func newHashFunc(algorithm string) hash.Hash {
 	h := hf()
 	h.Reset()
 	return h
+}
+
+func stringOrBytes[S ~string | ~[]byte](s S) string {
+	switch v := any(s).(type) {
+	case string:
+		return v
+	case []byte:
+		return bytesconv.B2S(v)
+	default:
+		return string(s)
+	}
+}
+
+func findScheme(raw, scheme string) (int, bool) {
+	sLen := len(scheme)
+	for i := 0; i <= len(raw)-sLen; i++ {
+		if (i == 0 || raw[i-1] == ' ' || raw[i-1] == ',' || raw[i-1] == '\t') &&
+			strings.EqualFold(raw[i:i+sLen], scheme) {
+			rest := raw[i+sLen:]
+			if len(rest) == 0 || rest[0] == ' ' || rest[0] == '\t' || rest[0] == ',' || rest[0] == '=' {
+				return i, true
+			}
+		}
+	}
+	return -1, false
+}
+
+func forEachAuthParam(raw string, scheme string, yield func(key, val string) bool) bool {
+	raw = strings.TrimSpace(raw)
+	if scheme != "" {
+		idx, found := findScheme(raw, scheme)
+		if !found {
+			return false
+		}
+		raw = strings.TrimSpace(raw[idx+len(scheme):])
+	} else {
+		trimmed := strings.TrimSpace(raw)
+		if len(trimmed) >= 7 && strings.EqualFold(trimmed[:7], "Digest ") {
+			raw = strings.TrimSpace(trimmed[7:])
+		}
+	}
+
+	for len(raw) > 0 {
+		raw = strings.TrimLeft(raw, " ,\t\r\n")
+		if len(raw) == 0 {
+			break
+		}
+
+		eqIdx := strings.IndexByte(raw, '=')
+		if eqIdx < 0 {
+			break
+		}
+
+		spaceIdx := strings.IndexByte(raw, ' ')
+		if spaceIdx >= 0 && spaceIdx < eqIdx {
+			break
+		}
+
+		key := strings.TrimSpace(raw[:eqIdx])
+		raw = strings.TrimSpace(raw[eqIdx+1:])
+
+		var val string
+		if len(raw) > 0 && raw[0] == '"' {
+			raw = raw[1:]
+			quoteIdx := strings.IndexByte(raw, '"')
+			if quoteIdx == -1 {
+				val = raw
+				raw = ""
+			} else {
+				hasEscape := false
+				for i := 0; i < quoteIdx; i++ {
+					if raw[i] == '\\' {
+						hasEscape = true
+						break
+					}
+				}
+				if !hasEscape {
+					val = raw[:quoteIdx]
+					raw = raw[quoteIdx+1:]
+				} else {
+					var sb strings.Builder
+					escaped := false
+					foundQuote := false
+					for i, c := range raw {
+						if escaped {
+							sb.WriteRune(c)
+							escaped = false
+							continue
+						}
+						if c == '\\' {
+							escaped = true
+							continue
+						}
+						if c == '"' {
+							raw = raw[i+1:]
+							foundQuote = true
+							break
+						}
+						sb.WriteRune(c)
+					}
+					if !foundQuote {
+						raw = ""
+					}
+					val = sb.String()
+				}
+			}
+		} else {
+			commaIdx := strings.IndexByte(raw, ',')
+			spaceIdx2 := strings.IndexByte(raw, ' ')
+			endIdx := commaIdx
+			if spaceIdx2 >= 0 && (endIdx < 0 || spaceIdx2 < endIdx) {
+				endIdx = spaceIdx2
+			}
+			if endIdx < 0 {
+				val = strings.TrimSpace(raw)
+				raw = ""
+			} else {
+				val = strings.TrimSpace(raw[:endIdx])
+				raw = raw[endIdx:]
+			}
+		}
+
+		if !yield(key, val) {
+			return false
+		}
+	}
+	return true
 }

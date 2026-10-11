@@ -113,6 +113,18 @@ func TestArgsQueryParsing(t *testing.T) {
 	if !bytes.Equal(a.Peek("x"), []byte("10")) || !bytes.Equal(a.Peek("y"), []byte("20")) {
 		t.Fatalf("unexpected ParseBytes: x=%s, y=%s", a.Peek("x"), a.Peek("y"))
 	}
+
+	// ParseArgs generic
+	a.Reset()
+	uri.ParseArgs(a, "x=10&y=20")
+	if !bytes.Equal(a.Peek("x"), []byte("10")) || !bytes.Equal(a.Peek("y"), []byte("20")) {
+		t.Fatalf("unexpected ParseArgs string: x=%s, y=%s", a.Peek("x"), a.Peek("y"))
+	}
+	a.Reset()
+	uri.ParseArgs(a, []byte("x=10&y=20"))
+	if !bytes.Equal(a.Peek("x"), []byte("10")) || !bytes.Equal(a.Peek("y"), []byte("20")) {
+		t.Fatalf("unexpected ParseArgs bytes: x=%s, y=%s", a.Peek("x"), a.Peek("y"))
+	}
 }
 
 func TestArgsCRUD(t *testing.T) {

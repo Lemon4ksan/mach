@@ -13,8 +13,6 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
-
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 type bodyStreamHeader interface {
@@ -242,7 +240,7 @@ func (req *Request) ContinueReadBodyStream(r *bufio.Reader, maxBodySize int, pre
 	if contentLength > 0 {
 		if len(preParseMultipartForm) == 0 || preParseMultipartForm[0] {
 			req.multipartFormBoundary = bytesconv.B2S(req.Header.MultipartFormBoundary())
-			if req.multipartFormBoundary != "" && len(req.Header.peek(zerocopy.StrContentEncoding)) == 0 {
+			if req.multipartFormBoundary != "" && len(req.Header.peek(StrContentEncoding)) == 0 {
 				req.multipartForm, err = readMultipartForm(
 					r,
 					req.multipartFormBoundary,

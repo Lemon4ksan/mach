@@ -34,4 +34,27 @@ func TestAlloc(t *testing.T) {
 			t.Errorf("expected minimal allocs, got %v", allocs)
 		}
 	})
+
+	t.Run("AllIteratorBytes", func(t *testing.T) {
+		headerBytes := []byte(header)
+		allocs := testing.AllocsPerRun(1000, func() {
+			count := 0
+			for entry, err := range cachestatus.All(headerBytes) {
+				if err != nil {
+					t.Fatalf("unexpected parse error: %v", err)
+				}
+				if entry.CacheName == "" {
+					t.Fatal("empty cache name")
+				}
+				count++
+			}
+			if count != 2 {
+				t.Fatalf("expected 2 entries, got %d", count)
+			}
+		})
+		if allocs > 15 {
+			t.Errorf("expected minimal allocs, got %v", allocs)
+		}
+	})
 }
+

@@ -259,3 +259,23 @@ func TestRFC7469_ValidationReport(t *testing.T) {
 	assert.Contains(t, jsonStr, `"known-pins"`)
 	assert.Contains(t, jsonStr, "-----BEGIN CERTIFICATE-----")
 }
+
+func TestParse_Generic(t *testing.T) {
+	header := `pin-sha256="cUPcTAZWKaASuYWhhneDttWpY3oBAkE3h2+soZS7sWs="; max-age=5184000; includeSubDomains`
+
+	// String
+	policyStr, err := hpkp.Parse(header)
+	require.NoError(t, err)
+	assert.Len(t, policyStr.Pins, 1)
+
+	// Bytes
+	policyBytes, err := hpkp.Parse([]byte(header))
+	require.NoError(t, err)
+	assert.Len(t, policyBytes.Pins, 1)
+
+	// ParseHeader with bytes
+	policyHdrBytes, err := hpkp.ParseHeader([]byte(header))
+	require.NoError(t, err)
+	assert.Len(t, policyHdrBytes.Pins, 1)
+}
+

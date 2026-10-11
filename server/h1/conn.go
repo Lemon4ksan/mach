@@ -17,7 +17,6 @@ import (
 
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/header"
 )
 
 var (
@@ -156,7 +155,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		keepAlive := req.Headers.IsKeepAlive(req.Proto)
 		// RFC 9112 §6.3 Item 3 & §11.2: To mitigate Request Smuggling when both Transfer-Encoding
 		// and Content-Length were received, or when forced by CloseConnection, close the connection.
-		if req.CloseConnection || (req.Headers.Has(header.TransferEncoding) && req.Headers.Has(header.ContentLength)) {
+		if req.CloseConnection || (req.Headers.Has(headkit.TransferEncoding) && req.Headers.Has(headkit.ContentLength)) {
 			keepAlive = false
 		}
 
@@ -195,8 +194,8 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			keepAlive = false
 		}
 
-		if res.Headers.Has(header.Connection) &&
-			bytesconv.EqualFoldASCII(res.Headers.Get(header.Connection), header.ValueClose) {
+		if res.Headers.Has(headkit.Connection) &&
+			bytesconv.EqualFoldASCII(res.Headers.Get(headkit.Connection), headkit.ValueClose) {
 			keepAlive = false
 		}
 

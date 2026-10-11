@@ -12,7 +12,6 @@ import (
 	"io"
 
 	protoh1 "github.com/lemon4ksan/mach/proto/h1"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 var errChunkedStream = errors.New("chunked stream")
@@ -81,7 +80,7 @@ func (cw *chunkedBodyWriter) Write(p []byte) (int, error) {
 
 func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 	var wt io.WriterTo
-	// Frame WriteTo output directly, skipping zerocopy.CopyBufPool, for bodies whose
+	// Frame WriteTo output directly, skipping CopyBufPool, for bodies whose
 	// WriteTo is known to match reading.
 	switch v := r.(type) {
 	case *bytes.Reader:
@@ -107,7 +106,7 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 		return writeChunk(w, nil)
 	}
 
-	vbuf := zerocopy.CopyBufPool.Get()
+	vbuf := CopyBufPool.Get()
 	buf := vbuf.([]byte)
 
 	var (
@@ -137,7 +136,7 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 		}
 	}
 
-	zerocopy.CopyBufPool.Put(vbuf)
+	CopyBufPool.Put(vbuf)
 
 	return err
 }
@@ -151,7 +150,7 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 		return err
 	}
 
-	if _, err := w.Write(zerocopy.StrCRLF); err != nil {
+	if _, err := w.Write(StrCRLF); err != nil {
 		return err
 	}
 
@@ -160,7 +159,7 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 	}
 
 	if n > 0 {
-		if _, err := w.Write(zerocopy.StrCRLF); err != nil {
+		if _, err := w.Write(StrCRLF); err != nil {
 			return err
 		}
 	}
@@ -189,16 +188,16 @@ func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, erro
 			return dst, ErrBodyTooLarge
 		}
 
-		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(zerocopy.StrCRLF))
+		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(StrCRLF))
 		if err != nil {
 			return dst, err
 		}
 
-		if !bytes.Equal(dst[len(dst)-len(zerocopy.StrCRLF):], zerocopy.StrCRLF) {
+		if !bytes.Equal(dst[len(dst)-len(StrCRLF):], StrCRLF) {
 			return dst, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
 		}
 
-		dst = dst[:len(dst)-len(zerocopy.StrCRLF)]
+		dst = dst[:len(dst)-len(StrCRLF)]
 	}
 }
 

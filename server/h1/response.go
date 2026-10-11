@@ -11,9 +11,8 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/header"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire (RFC 9112 §2.1, RFC 9110 §15).
@@ -23,7 +22,7 @@ type Response struct {
 	// Headers holds response header fields (RFC 9110 §6.3).
 	Headers headkit.Headers
 	// Cookies holds Set-Cookie attributes (RFC 6265 §4.1).
-	Cookies []*zerocopy.Cookie
+	Cookies []*cookie.Cookie
 	// Body holds the static response payload bytes.
 	Body []byte
 	// StreamWriter provides chunked streaming response generation (RFC 9112 §7.1).
@@ -71,7 +70,7 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 	}
 
 	// 2. Atomic Cached Date Header
-	if r.Headers.Get(header.Date) == "" {
+	if r.Headers.Get(headkit.Date) == "" {
 		dateBytes := cachedDateHeader.Load()
 		if dateBytes != nil {
 			_, _ = bw.Write(*dateBytes)
@@ -81,17 +80,17 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 	// 3. Connection Header
 	if !keepAlive {
 		_, _ = bw.Write(hdrConnectionClose)
-	} else if r.Headers.Get(header.Connection) == "" {
+	} else if r.Headers.Get(headkit.Connection) == "" {
 		_, _ = bw.Write(hdrConnectionKeepAlive)
 	}
 
 	// 4. Transfer-Encoding or Content-Length
 	if r.StreamWriter != nil {
-		if r.Headers.Get(header.TransferEncoding) == "" {
+		if r.Headers.Get(headkit.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
 	} else if code != status.NoContent && code != status.NotModified &&
-		r.Headers.Get(header.ContentLength) == "" && r.Headers.Get(header.TransferEncoding) == "" {
+		r.Headers.Get(headkit.ContentLength) == "" && r.Headers.Get(headkit.TransferEncoding) == "" {
 		var clBuf [24]byte
 
 		_, _ = bw.Write(hdrContentLengthPrefix)

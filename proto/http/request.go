@@ -11,7 +11,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // Request represents an HTTP request message adhering to RFC 9110 Section 3 and RFC 9112 Section 2.
@@ -26,16 +26,16 @@ import (
 // Instances should be acquired via AcquireRequest and recycled via ReleaseRequest to avoid
 // heap allocations. Copying Request by value is forbidden; use CopyTo instead.
 type Request struct {
-	noCopy                zerocopy.NoCopy
+	noCopy                uri.NoCopy
 	bodyStream            io.Reader
 	w                     requestBodyWriter
 	body                  *bytesconv.ByteBuffer
 	multipartForm         *multipart.Form
 	multipartFormBoundary string
-	postArgs              zerocopy.Args
+	postArgs              uri.Args
 	bodyRaw               []byte
 
-	uri zerocopy.URI
+	uri uri.URI
 
 	// Header is the request header.
 	//
@@ -115,20 +115,20 @@ func (req *Request) RequestURI() []byte {
 	return req.Header.RequestURI()
 }
 
-// URI returns a pointer to the parsed zerocopy.URI representation of the request-target (RFC 3986, RFC 9112 Section 3.2).
+// URI returns a pointer to the parsed uri.URI representation of the request-target (RFC 3986, RFC 9112 Section 3.2).
 // The returned pointer is valid until the request is modified or released.
 //
 // Thread-safe: No.
-func (req *Request) URI() *zerocopy.URI {
+func (req *Request) URI() *uri.URI {
 	_ = req.ParseURI()
 	return &req.uri
 }
 
-// SetURI sets the request URI by copying from the provided zerocopy.URI instance (RFC 3986).
+// SetURI sets the request URI by copying from the provided uri.URI instance (RFC 3986).
 // If newURI is nil, the request URI is cleared.
 //
 // Thread-safe: No.
-func (req *Request) SetURI(newURI *zerocopy.URI) {
+func (req *Request) SetURI(newURI *uri.URI) {
 	if newURI != nil {
 		newURI.CopyTo(&req.uri)
 		req.parsedURI = true

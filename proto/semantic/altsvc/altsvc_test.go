@@ -35,7 +35,7 @@ func TestParse(t *testing.T) {
 
 func TestParseBytes(t *testing.T) {
 	header := []byte(`h3=":443"; ma=2592000, h2="alt.example.com:8443"; persist=1`)
-	services := altsvc.ParseBytes(header)
+	services := altsvc.Parse(header)
 
 	assert.Equal(t, 2, len(services))
 	assert.Equal(t, "h3", services[0].ProtocolID)

@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
@@ -35,9 +34,6 @@ var (
 
 	// ErrTruncatedPayload is returned when the frame payload stream is truncated.
 	ErrTruncatedPayload = errors.New("grpcweb: truncated frame payload")
-
-	// ErrInvalidFrame is returned when the gRPC-Web frame is malformed.
-	ErrInvalidFrame = errors.New("grpcweb: invalid frame format")
 
 	// ErrBufferTooSmall is returned when the destination buffer cannot fit the frame payload.
 	ErrBufferTooSmall = errors.New("grpcweb: destination buffer too small")
@@ -251,20 +247,21 @@ func VerifyTrailer(trailerPayload []byte) error {
 			trailerPayload = nil
 		}
 
-		keyBytes, valBytes, ok := parseTrailerKeyValue(line)
+		key, val, ok := bytes.Cut(line, []byte{':'})
 		if !ok {
 			continue
 		}
 
-		keyStr := bytesconv.B2S(keyBytes)
+		key = bytes.TrimSpace(key)
+		val = bytes.TrimSpace(val)
 
 		switch {
-		case strings.EqualFold(keyStr, "grpc-status"):
-			statusCode = bytesconv.B2S(valBytes)
-		case strings.EqualFold(keyStr, "grpc-message"):
-			statusMsg = bytesconv.B2S(valBytes)
-		case strings.EqualFold(keyStr, "grpc-status-details-bin"):
-			valStr := bytesconv.B2S(valBytes)
+		case bytesconv.EqualFoldASCII(bytesconv.B2S(key), "grpc-status"):
+			statusCode = string(val)
+		case bytesconv.EqualFoldASCII(bytesconv.B2S(key), "grpc-message"):
+			statusMsg = string(val)
+		case bytesconv.EqualFoldASCII(bytesconv.B2S(key), "grpc-status-details-bin"):
+			valStr := bytesconv.B2S(val)
 			if decoded, err := base64.RawStdEncoding.DecodeString(valStr); err == nil {
 				statusDetails = decoded
 			} else if decoded, err := base64.StdEncoding.DecodeString(valStr); err == nil {
@@ -283,15 +280,6 @@ func VerifyTrailer(trailerPayload []byte) error {
 	}
 
 	return nil
-}
-
-func parseTrailerKeyValue(line []byte) (keyBytes, valBytes []byte, ok bool) {
-	before, after, ok := bytes.Cut(line, []byte{':'})
-	if !ok {
-		return nil, nil, false
-	}
-
-	return bytes.TrimSpace(before), bytes.TrimSpace(after), true
 }
 
 // IsBase64Header checks whether a 5-byte header prefix matches Base64 text encoding.

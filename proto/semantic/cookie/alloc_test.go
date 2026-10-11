@@ -11,14 +11,41 @@ import (
 )
 
 func TestAlloc(t *testing.T) {
-	allocs := testing.AllocsPerRun(1000, func() {
-		c := cookie.AcquireCookie()
-		c.Parse("session_id=abc123xyz; Path=/; Secure; HttpOnly")
-		_ = c.Value()
-		cookie.ReleaseCookie(c)
+	t.Run("ParseMethod", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			c := cookie.AcquireCookie()
+			c.Parse("session_id=abc123xyz; Path=/; Secure; HttpOnly")
+			_ = c.Value()
+			cookie.ReleaseCookie(c)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on cookie Parse, got %v", allocs)
+		}
 	})
 
-	if allocs > 0 {
-		t.Fatalf("expected 0 allocations on cookie hot path, got %v", allocs)
-	}
+	t.Run("ParseGenericStr", func(t *testing.T) {
+		str := "session_id=abc123xyz; Path=/; Secure; HttpOnly"
+		allocs := testing.AllocsPerRun(1000, func() {
+			c := cookie.AcquireCookie()
+			_ = cookie.Parse(c, str)
+			_ = c.Value()
+			cookie.ReleaseCookie(c)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on cookie generic Parse string, got %v", allocs)
+		}
+	})
+
+	t.Run("ParseGenericBytes", func(t *testing.T) {
+		raw := []byte("session_id=abc123xyz; Path=/; Secure; HttpOnly")
+		allocs := testing.AllocsPerRun(1000, func() {
+			c := cookie.AcquireCookie()
+			_ = cookie.Parse(c, raw)
+			_ = c.Value()
+			cookie.ReleaseCookie(c)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on cookie generic Parse bytes, got %v", allocs)
+		}
+	})
 }

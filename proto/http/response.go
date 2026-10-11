@@ -10,7 +10,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // Response represents an HTTP response message adhering to RFC 9110 Section 3 and RFC 9112 Section 2.
@@ -25,7 +25,7 @@ import (
 // Instances should be acquired via AcquireResponse and recycled via ReleaseResponse to avoid
 // heap allocations. Copying Response by value is forbidden; use CopyTo instead.
 type Response struct {
-	noCopy     zerocopy.NoCopy
+	noCopy     uri.NoCopy
 	bodyStream io.Reader
 	raddr      net.Addr
 	laddr      net.Addr

@@ -10,12 +10,8 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
-)
-
-const (
-	rChar = byte('\r')
-	nChar = byte('\n')
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 var (
@@ -82,7 +78,7 @@ func (e *ErrSmallBuffer) Unwrap() error { return e.error }
 // header represents common HTTP header state shared between RequestHeader and ResponseHeader.
 type header struct {
 	h                     headkit.Headers
-	cookies               []zerocopy.ArgsKV
+	cookies               []uri.ArgsKV
 	bufK                  []byte
 	bufV                  []byte
 	contentLengthBytes    []byte
@@ -118,18 +114,18 @@ func (h *header) ResetConnectionClose() {
 
 // SetContentType sets Content-Type header value (RFC 9110 Section 8.3).
 func (h *header) SetContentType(contentType string) {
-	h.contentType = zerocopy.InitHeaderValueString(h.contentType, contentType)
+	h.contentType = cookie.InitHeaderValueString(h.contentType, contentType)
 }
 
 // SetContentTypeBytes sets Content-Type header value (RFC 9110 Section 8.3).
 func (h *header) SetContentTypeBytes(contentType []byte) {
-	h.contentType = zerocopy.InitHeaderValueBytes(h.contentType, contentType)
+	h.contentType = cookie.InitHeaderValueBytes(h.contentType, contentType)
 }
 
 // Protocol returns HTTP protocol version bytes (RFC 9112 Section 2.3).
 func (h *header) Protocol() []byte {
 	if len(h.protocol) == 0 {
-		return zerocopy.StrHTTP11
+		return StrHTTP11
 	}
 
 	return h.protocol
@@ -177,7 +173,7 @@ func (h *header) copyTo(dst *header) {
 	dst.protocol = append(dst.protocol[:0], h.protocol...)
 	dst.contentType = append(dst.contentType[:0], h.contentType...)
 	dst.trailer = copyTrailer(dst.trailer, h.trailer)
-	dst.cookies = zerocopy.CopyArgs(dst.cookies, h.cookies)
+	dst.cookies = uri.CopyArgs(dst.cookies, h.cookies)
 	copyHeaders(&dst.h, &h.h)
 }
 
@@ -193,7 +189,7 @@ func (h *header) setNonSpecial(key, value []byte) {
 // RequestHeader instance MUST NOT be used from concurrently running goroutines.
 type RequestHeader struct {
 	header
-	noCopy zerocopy.NoCopy
+	noCopy uri.NoCopy
 	method []byte
 
 	requestURI []byte
@@ -295,7 +291,7 @@ func (h *RequestHeader) EnableSpecialHeader() bool {
 // ResponseHeader instance MUST NOT be used from concurrently running goroutines.
 type ResponseHeader struct {
 	header
-	noCopy        zerocopy.NoCopy
+	noCopy        uri.NoCopy
 	statusMessage []byte
 
 	contentEncoding []byte

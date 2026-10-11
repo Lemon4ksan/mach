@@ -56,13 +56,13 @@ func TestPriority_Parse(t *testing.T) {
 			t.Errorf("Parse(%q) = {%d, %v}, want {%d, %v}", tt.input, got.Urgency, got.Incremental, tt.wantU, tt.wantI)
 		}
 
-		// Also verify ParseBytes
-		gotBytes, errBytes := priority.ParseBytes([]byte(tt.input))
+		// Also verify Parse with []byte
+		gotBytes, errBytes := priority.Parse([]byte(tt.input))
 		if errBytes != nil {
-			t.Errorf("ParseBytes(%q) returned error: %v", tt.input, errBytes)
+			t.Errorf("Parse([]byte(%q)) returned error: %v", tt.input, errBytes)
 		}
 		if gotBytes != got {
-			t.Errorf("ParseBytes mismatch for %q: got %v, want %v", tt.input, gotBytes, got)
+			t.Errorf("Parse([]byte) mismatch for %q: got %v, want %v", tt.input, gotBytes, got)
 		}
 	}
 }

@@ -344,10 +344,10 @@ func (g Group) String() string {
 }
 
 // All returns an iterator over parsed Web Links according to RFC 8288 without accumulating a slice.
-func All(header string) iter.Seq2[Link, error] {
+func All[S ~string | ~[]byte](header S) iter.Seq2[Link, error] {
 	return func(yield func(Link, error) bool) {
-		header = strings.TrimSpace(header)
-		if header == "" {
+		hdr := strings.TrimSpace(string(header))
+		if hdr == "" {
 			yield(Link{}, ErrEmptyHeader)
 			return
 		}
@@ -357,9 +357,9 @@ func All(header string) iter.Seq2[Link, error] {
 		inAngle := false
 		found := false
 
-		for i := 0; i < len(header); i++ {
-			c := header[i]
-			if c == '\\' && inQuote && i+1 < len(header) {
+		for i := 0; i < len(hdr); i++ {
+			c := hdr[i]
+			if c == '\\' && inQuote && i+1 < len(hdr) {
 				i++
 				continue
 			}
@@ -372,7 +372,7 @@ func All(header string) iter.Seq2[Link, error] {
 			case c == '"' && !inAngle:
 				inQuote = !inQuote
 			case c == ',' && !inQuote && !inAngle:
-				candidate := strings.TrimSpace(header[start:i])
+				candidate := strings.TrimSpace(hdr[start:i])
 				if candidate != "" {
 					found = true
 
@@ -388,8 +388,8 @@ func All(header string) iter.Seq2[Link, error] {
 			}
 		}
 
-		if start < len(header) {
-			candidate := strings.TrimSpace(header[start:])
+		if start < len(hdr) {
+			candidate := strings.TrimSpace(hdr[start:])
 			if candidate != "" {
 				link, err := parseLinkValue(candidate)
 				if err == nil {
@@ -406,15 +406,15 @@ func All(header string) iter.Seq2[Link, error] {
 	}
 }
 
-// Parse extracts Web Links from a Link HTTP header string according to RFC 8288 Appendix B algorithms.
-func Parse(header string) (Group, error) {
-	header = strings.TrimSpace(header)
-	if header == "" {
+// Parse extracts Web Links from a Link HTTP header according to RFC 8288 Appendix B algorithms.
+func Parse[S ~string | ~[]byte](header S) (Group, error) {
+	hdr := strings.TrimSpace(string(header))
+	if hdr == "" {
 		return nil, ErrEmptyHeader
 	}
 
 	var links Group
-	for link, err := range All(header) {
+	for link, err := range All(hdr) {
 		if err != nil {
 			return nil, err
 		}
@@ -519,13 +519,7 @@ func parseLinkValue(raw string) (Link, error) {
 			titlePlain = v
 
 		case k == "title*" && titleStar == "":
-			_, lang, val, err := decodeRFC8187(v)
-			if err == nil {
-				titleStar = val
-				titleStarLang = lang
-			} else {
-				titleStar = decodeRFC8187Value(v)
-			}
+			_, titleStarLang, titleStar = decodeRFC8187(v)
 		}
 	}
 

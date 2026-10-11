@@ -5,21 +5,13 @@
 package compress
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/seal/codec/compress"
-	"github.com/lemon4ksan/seal/codec/compress/zstd"
 )
-
-func acquireZstdReader(r io.Reader) (*zstd.Decoder, error) {
-	return compress.AcquireZstdReader(r)
-}
-
-func releaseZstdReader(zr *zstd.Decoder) {
-	compress.ReleaseZstdReader(zr)
-}
 
 // AppendZstdBytesLevel compresses src using Zstandard at the specified level and appends the result to dst (RFC 8878).
 func AppendZstdBytesLevel(dst, src []byte, level int) []byte {
@@ -60,13 +52,13 @@ func WriteUnzstd(w io.Writer, p []byte) (int, error) {
 
 // WriteUnzstdLimit decompresses Zstandard payload p and writes up to maxBodySize uncompressed bytes to w (RFC 8878).
 func WriteUnzstdLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
-	r := &byteSliceReader{b: p}
+	r := bytes.NewReader(p)
 
-	zr, err := acquireZstdReader(r)
+	zr, err := compress.AcquireZstdReader(r)
 	if err != nil {
 		return 0, err
 	}
-	defer releaseZstdReader(zr)
+	defer compress.ReleaseZstdReader(zr)
 
 	n, err := bytesconv.CopyZeroAllocWithLimit(w, zr, maxBodySize)
 

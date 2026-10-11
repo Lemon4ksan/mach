@@ -34,4 +34,26 @@ func TestAlloc(t *testing.T) {
 			t.Errorf("expected minimal allocs, got %v", allocs)
 		}
 	})
+
+	t.Run("AllIteratorBytes", func(t *testing.T) {
+		headerBytes := []byte(header)
+		allocs := testing.AllocsPerRun(1000, func() {
+			count := 0
+			for link, err := range weblink.All(headerBytes) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if link.Target == "" {
+					t.Fatal("empty target")
+				}
+				count++
+			}
+			if count != 2 {
+				t.Fatalf("expected 2 links, got %d", count)
+			}
+		})
+		if allocs > 15 {
+			t.Errorf("expected minimal allocs, got %v", allocs)
+		}
+	})
 }

@@ -52,6 +52,43 @@ func TestAlloc(t *testing.T) {
 		}
 	})
 
+	t.Run("All", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			count := 0
+			for svc := range altsvc.All(header) {
+				if svc.ProtocolID == "" || svc.Port == 0 {
+					t.Fatal("invalid service")
+				}
+				count++
+			}
+			if count != 2 {
+				t.Fatalf("expected 2 services, got %d", count)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for All, got %v", allocs)
+		}
+	})
+
+	t.Run("AllBytes", func(t *testing.T) {
+		headerBytes := []byte(header)
+		allocs := testing.AllocsPerRun(1000, func() {
+			count := 0
+			for svc := range altsvc.All(headerBytes) {
+				if svc.ProtocolID == "" || svc.Port == 0 {
+					t.Fatal("invalid service")
+				}
+				count++
+			}
+			if count != 2 {
+				t.Fatalf("expected 2 services, got %d", count)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for AllBytes, got %v", allocs)
+		}
+	})
+
 	t.Run("AppendFormat", func(t *testing.T) {
 		services := []altsvc.Service{
 			{ProtocolID: "h3", Host: "", Port: 443},

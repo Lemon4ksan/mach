@@ -5,6 +5,7 @@
 package compress
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
@@ -92,7 +93,7 @@ func WriteGunzip(w io.Writer, p []byte) (int, error) {
 
 // WriteGunzipLimit decompresses gzipped payload p and writes up to maxBodySize uncompressed bytes to w (RFC 1952).
 func WriteGunzipLimit(w io.Writer, p []byte, maxBodySize int) (int, error) {
-	r := &byteSliceReader{b: p}
+	r := bytes.NewReader(p)
 
 	zr, err := compress.AcquireGzipReader(r)
 	if err != nil {

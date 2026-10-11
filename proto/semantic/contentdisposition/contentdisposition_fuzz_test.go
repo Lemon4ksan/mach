@@ -19,7 +19,7 @@ func FuzzContentDisposition(f *testing.F) {
 	f.Add(`attachment; filename="../../etc/passwd"`)
 
 	f.Fuzz(func(t *testing.T, s string) {
-		cd := contentdisposition.ParseContentDisposition(s)
+		cd := contentdisposition.Parse(s)
 		_ = contentdisposition.FileName(s)
 		_ = contentdisposition.FormatContentDisposition(cd.Type, cd.Filename)
 	})

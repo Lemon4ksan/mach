@@ -101,86 +101,102 @@ func FormatBasic(username, password string) string {
 	return "Basic " + base64.StdEncoding.EncodeToString(bytesconv.S2B(auth))
 }
 
+var (
+	errNotBasicScheme = errors.New("auth: not a Basic scheme")
+	errMissingColon   = errors.New("auth: missing colon in credentials")
+)
+
 // ParseBasic extracts the username and password from a standard "Authorization: Basic <credentials>" header (RFC 7617 §2).
-func ParseBasic(authHeader string) (username, password string, err error) {
-	authHeader = strings.TrimSpace(authHeader)
-	if len(authHeader) < 6 || !strings.EqualFold(authHeader[:6], "Basic ") {
-		return "", "", errors.New("auth: not a Basic scheme")
-	}
-
-	payload := strings.TrimSpace(authHeader[6:])
-	var buf [256]byte
-	var decoded []byte
-
-	if base64.StdEncoding.DecodedLen(len(payload)) <= len(buf) {
-		n, errDecode := base64.StdEncoding.Decode(buf[:], bytesconv.S2B(payload))
-		if errDecode != nil {
-			return "", "", ErrInvalidBase64
+// When authHeader is []byte, in-place base64 decoding is performed with zero allocations.
+func ParseBasic[S ~string | ~[]byte](authHeader S) (username, password S, err error) {
+	var zero S
+	switch h := any(authHeader).(type) {
+	case []byte:
+		h = bytes.TrimSpace(h)
+		if len(h) < 6 || !bytes.EqualFold(h[:6], []byte("Basic ")) {
+			return zero, zero, errNotBasicScheme
 		}
-		decoded = buf[:n]
-	} else {
-		var errDecode error
-		decoded, errDecode = base64.StdEncoding.DecodeString(payload)
+
+		payload := bytes.TrimSpace(h[6:])
+		n, errDecode := base64.StdEncoding.Decode(payload, payload)
 		if errDecode != nil {
-			return "", "", ErrInvalidBase64
+			return zero, zero, ErrInvalidBase64
 		}
+
+		decoded := payload[:n]
+		before, after, ok := bytes.Cut(decoded, []byte{':'})
+		if !ok {
+			return zero, zero, errMissingColon
+		}
+
+		return any(before).(S), any(after).(S), nil
+
+	case string:
+		h = strings.TrimSpace(h)
+		if len(h) < 6 || !strings.EqualFold(h[:6], "Basic ") {
+			return zero, zero, errNotBasicScheme
+		}
+
+		payload := strings.TrimSpace(h[6:])
+		var buf [256]byte
+		var decoded []byte
+
+		if base64.StdEncoding.DecodedLen(len(payload)) <= len(buf) {
+			n, errDecode := base64.StdEncoding.Decode(buf[:], bytesconv.S2B(payload))
+			if errDecode != nil {
+				return zero, zero, ErrInvalidBase64
+			}
+			decoded = buf[:n]
+		} else {
+			var errDecode error
+			decoded, errDecode = base64.StdEncoding.DecodeString(payload)
+			if errDecode != nil {
+				return zero, zero, ErrInvalidBase64
+			}
+		}
+
+		raw := bytesconv.B2S(decoded)
+		before, after, ok := strings.Cut(raw, ":")
+		if !ok {
+			return zero, zero, errMissingColon
+		}
+
+		return any(before).(S), any(after).(S), nil
+
+	default:
+		str := stringOrBytes(authHeader)
+		u, p, err := ParseBasic(str)
+		if err != nil {
+			return zero, zero, err
+		}
+		return S(u), S(p), nil
 	}
-
-	raw := bytesconv.B2S(decoded)
-	before, after, ok := strings.Cut(raw, ":")
-	if !ok {
-		return "", "", errors.New("auth: missing colon in credentials")
-	}
-
-	return before, after, nil
-}
-
-// ParseBasicBytes extracts username and password from a raw Authorization header byte slice with zero allocations.
-// In-place decoding is performed directly on payload when possible.
-func ParseBasicBytes(authHeader []byte) (username, password []byte, err error) {
-	authHeader = bytes.TrimSpace(authHeader)
-	if len(authHeader) < 6 || !bytes.EqualFold(authHeader[:6], []byte("Basic ")) {
-		return nil, nil, errors.New("auth: not a Basic scheme")
-	}
-
-	payload := bytes.TrimSpace(authHeader[6:])
-	n, errDecode := base64.StdEncoding.Decode(payload, payload)
-	if errDecode != nil {
-		return nil, nil, ErrInvalidBase64
-	}
-
-	decoded := payload[:n]
-	before, after, ok := bytes.Cut(decoded, []byte{':'})
-	if !ok {
-		return nil, nil, errors.New("auth: missing colon in credentials")
-	}
-
-	return before, after, nil
 }
 
 // ParseBasicChallenge extracts the realm and optional charset parameter from a "WWW-Authenticate: Basic ..." header (RFC 7617 §2).
-func ParseBasicChallenge(challengeHeader string) (BasicChallenge, bool) {
-	challengeHeader = strings.TrimSpace(challengeHeader)
-	if len(challengeHeader) < 6 || !strings.EqualFold(challengeHeader[:6], "Basic ") {
+func ParseBasicChallenge[S ~string | ~[]byte](challengeHeader S) (BasicChallenge, bool) {
+	ch := stringOrBytes(challengeHeader)
+	ch = strings.TrimSpace(ch)
+	if len(ch) < 6 || !strings.EqualFold(ch[:6], "Basic ") {
 		return BasicChallenge{}, false
 	}
 
-	parsedParams, _ := ExtractChallengeParams(challengeHeader, "Basic")
-	var ch BasicChallenge
+	parsedParams, _ := ExtractChallengeParams(ch, "Basic")
+	var res BasicChallenge
 	foundRealm := false
 
 	if realm, ok := parsedParams["realm"]; ok {
-		ch.Realm = realm
+		res.Realm = realm
 		foundRealm = true
 	}
 
 	if charset, ok := parsedParams["charset"]; ok {
 		if strings.EqualFold(charset, "UTF-8") {
-			ch.Charset = "UTF-8"
+			res.Charset = "UTF-8"
 		}
 	}
 
-	return ch, foundRealm
+	return res, foundRealm
 }
 
 // InScope verifies whether a target request URI falls within the canonical protection space (RFC 7617 §2.2).

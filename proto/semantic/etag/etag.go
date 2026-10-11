@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 	"sync"
-
-	"github.com/lemon4ksan/foundation/generic"
 )
 
 // StrongMatch checks whether two ETags match under strong comparison semantics (RFC 9110 §8.8.2.1, obsoleting RFC 7232 §2.3.2).
@@ -187,25 +185,3 @@ func (a *Automaton) Reconstruct304(key string) *http.Response {
 	}
 }
 
-// GetETagOptional returns the stored ETag wrapped in generic.Optional.
-func (a *Automaton) GetETagOptional(key string) generic.Optional[string] {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	entry, ok := a.entries[key]
-	if !ok || entry.etag == "" {
-		return generic.None[string]()
-	}
-
-	return generic.Some(entry.etag)
-}
-
-// Reconstruct304Optional returns a reconstructed 200 OK http.Response wrapped in generic.Optional.
-func (a *Automaton) Reconstruct304Optional(key string) generic.Optional[*http.Response] {
-	resp := a.Reconstruct304(key)
-	if resp == nil {
-		return generic.None[*http.Response]()
-	}
-
-	return generic.Some(resp)
-}

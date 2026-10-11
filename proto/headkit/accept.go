@@ -27,11 +27,6 @@ func Accepts(header string) iter.Seq[AcceptItem] {
 		if header == "" {
 			return
 		}
-
-		for _, rawToken := range Directives(header) {
-			_ = rawToken // unused in key/val split
-		}
-
 		// Direct iteration over comma-separated chunks
 		s := header
 		for len(s) > 0 {
