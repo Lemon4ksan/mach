@@ -33,8 +33,25 @@ func (c *Conn) readLoop() {
 		if r == nil || r.State() == streamClosed {
 			if fr.Type() == coreh2.FrameHeaders || fr.Type() == coreh2.FrameContinuation {
 				if h, ok := fr.Body().(FrameWithHeaders); ok {
+					endHeaders := fr.Flags().Has(coreh2.FlagEndHeaders)
+					if !endHeaders {
+						c.continuationStream = fr.Stream()
+						c.headerBuf = append(c.headerBuf, h.Headers()...)
+						coreh2.ReleaseFrameHeader(fr)
+						continue
+					}
+					var fullHeaders []byte
+					if c.continuationStream != 0 {
+						c.continuationStream = 0
+						c.headerBuf = append(c.headerBuf, h.Headers()...)
+						fullHeaders = c.headerBuf
+					} else {
+						fullHeaders = h.Headers()
+					}
 					resp := h1.AcquireResponse()
-					if _, decErr := c.readHeader(h.Headers(), resp); decErr != nil {
+					_, decErr := c.readHeader(fullHeaders, resp)
+					c.headerBuf = c.headerBuf[:0]
+					if decErr != nil {
 						c.setLastError(decErr)
 
 						h1.ReleaseResponse(resp)
@@ -67,7 +84,7 @@ func (c *Conn) readLoop() {
 			r.SetState(streamClosed)
 			c.finish(r, fr.Stream(), err)
 
-			if errors.Is(err, coreh2.FlowControlError) {
+			if errors.Is(err, coreh2.FlowControlError) && fr.Stream() == 0 {
 				coreh2.ReleaseFrameHeader(fr)
 				break
 			}
@@ -85,6 +102,13 @@ func (c *Conn) readLoop() {
 		}
 
 		if fr.Flags().Has(coreh2.FlagEndStream) {
+			if c.continuationStream != 0 {
+				r.endStreamPending = true
+			} else {
+				r.SetState(streamClosed)
+				c.finish(r, fr.Stream(), nil)
+			}
+		} else if c.continuationStream == 0 && r.endStreamPending {
 			r.SetState(streamClosed)
 			c.finish(r, fr.Stream(), nil)
 		}
@@ -107,7 +131,18 @@ func (c *Conn) readNext() (*coreh2.FrameHeader, error) {
 			return nil, err
 		}
 
-		if fr.Type() == coreh2.FrameData || fr.Type() == coreh2.FrameHeaders {
+		// RFC 9113 §6.10: CONTINUATION sequence validation
+		if c.continuationStream != 0 {
+			if fr.Type() != coreh2.FrameContinuation || fr.Stream() != c.continuationStream {
+				coreh2.ReleaseFrameHeader(fr)
+				return nil, coreh2.ProtocolError
+			}
+		} else if fr.Type() == coreh2.FrameContinuation {
+			coreh2.ReleaseFrameHeader(fr)
+			return nil, coreh2.ProtocolError
+		}
+
+		if fr.Type() == coreh2.FrameData || fr.Type() == coreh2.FrameHeaders || fr.Type() == coreh2.FrameContinuation {
 			c.consecutiveControlFrames = 0
 		} else {
 			c.consecutiveControlFrames++
@@ -136,7 +171,9 @@ func (c *Conn) handleConnectionFrame(fr *coreh2.FrameHeader) error {
 		if fr.Body() != nil {
 			st := fr.Body().(*coreh2.Settings)
 			if !st.IsAck() {
-				c.handleSettings(st)
+				if err := c.handleSettings(st); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -210,9 +247,49 @@ func (c *Conn) handleGoAway(ga *coreh2.GoAway) {
 }
 
 // handleSettings applies incoming peer parameters and immediately emits an acknowledgment (RFC 9113 §6.5.3).
-func (c *Conn) handleSettings(st *coreh2.Settings) {
+func (c *Conn) handleSettings(st *coreh2.Settings) error {
+	oldInitialWin := c.serverS.MaxWindowSize()
+	newInitialWin := st.MaxWindowSize()
+	delta := int32(newInitialWin) - int32(oldInitialWin)
+
+	if delta != 0 {
+		for i := range streamTableSize {
+			if ctx := c.reqStreams[i].Load(); ctx != nil {
+				for {
+					cur := ctx.streamWindow.Load()
+					if int64(cur)+int64(delta) > int64(1<<31-1) {
+						return coreh2.ErrWindowAboveLimits
+					}
+					if ctx.streamWindow.CompareAndSwap(cur, cur+delta) {
+						break
+					}
+				}
+			}
+		}
+		for i := range streamNumShards {
+			shard := &c.reqShards[i]
+			shard.mu.RLock()
+			for _, ctx := range shard.overflow {
+				if ctx != nil {
+					for {
+						cur := ctx.streamWindow.Load()
+						if int64(cur)+int64(delta) > int64(1<<31-1) {
+							shard.mu.RUnlock()
+							return coreh2.ErrWindowAboveLimits
+						}
+						if ctx.streamWindow.CompareAndSwap(cur, cur+delta) {
+							break
+						}
+					}
+				}
+			}
+			shard.mu.RUnlock()
+		}
+		c.broadcastWindowUpdate()
+	}
+
 	st.CopyTo(&c.serverS)
-	c.serverStreamWindow += c.serverS.MaxWindowSize()
+	c.serverStreamWindow = newInitialWin
 	c.enc.SetMaxTableSize(st.HeaderTableSize())
 
 	fr := coreh2.AcquireFrameHeader()
@@ -221,6 +298,7 @@ func (c *Conn) handleSettings(st *coreh2.Settings) {
 	fr.SetBody(stRes)
 
 	c.out <- fr
+	return nil
 }
 
 // handlePing replies to received PING frames with an identical payload and ACK bit set (RFC 9113 §6.7).
@@ -236,14 +314,44 @@ func (c *Conn) handlePing(ping *coreh2.Ping) {
 func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 	switch fr.Type() {
 	case coreh2.FrameHeaders, coreh2.FrameContinuation:
-		h := fr.Body().(FrameWithHeaders)
-		if reqCtx.headersParsed {
-			return c.readTrailers(h.Headers(), reqCtx)
+		h, ok := fr.Body().(FrameWithHeaders)
+		if !ok {
+			return coreh2.ErrUnknownFrameType
 		}
 
-		statusCode, err := c.readHeader(h.Headers(), reqCtx.Response)
+		endHeaders := fr.Flags().Has(coreh2.FlagEndHeaders)
+		var fullHeaders []byte
+		if !endHeaders {
+			c.continuationStream = fr.Stream()
+			c.headerBuf = append(c.headerBuf, h.Headers()...)
+			return nil
+		}
+
+		if c.continuationStream != 0 {
+			c.continuationStream = 0
+			c.headerBuf = append(c.headerBuf, h.Headers()...)
+			fullHeaders = c.headerBuf
+		} else {
+			fullHeaders = h.Headers()
+		}
+
+		if reqCtx.headersParsed {
+			if reqCtx.trailersReceived {
+				c.headerBuf = c.headerBuf[:0]
+				return coreh2.ProtocolError
+			}
+			err := c.readTrailers(fullHeaders, reqCtx)
+			c.headerBuf = c.headerBuf[:0]
+			if err == nil {
+				reqCtx.trailersReceived = true
+			}
+			return err
+		}
+
+		statusCode, err := c.readHeader(fullHeaders, reqCtx.Response)
+		c.headerBuf = c.headerBuf[:0]
 		if err == nil {
-			if (statusCode < 100 || statusCode >= 200 || statusCode == 101) && fr.Flags().Has(coreh2.FlagEndHeaders) {
+			if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
 				reqCtx.headersParsed = true
 			}
 		}
@@ -259,6 +367,10 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 		return c.handlePushPromise(pp)
 
 	case coreh2.FrameData:
+		if reqCtx.trailersReceived {
+			return coreh2.ProtocolError
+		}
+
 		data := fr.Body().(*coreh2.Data)
 		dataLen := int32(fr.Len()) //nolint:gosec // H2 frame length is 24-bit max (<= 16MB)
 

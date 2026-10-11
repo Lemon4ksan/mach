@@ -225,6 +225,7 @@ type HPACK struct {
 	DisableCompression     bool
 	DisableDynamicTable    bool
 	tableSizeUpdateAllowed bool
+	pendingTableSizeUpdate bool
 	dynamic                []*HeaderField
 	maxTableSize           uint32
 	dynamicSize            uint32
@@ -253,6 +254,7 @@ func (hp *HPACK) Reset() {
 	hp.MaxCapacity = 4096
 	hp.dynamicSize = 0
 	hp.tableSizeUpdateAllowed = true
+	hp.pendingTableSizeUpdate = false
 	hp.DisableCompression = false
 	hp.DisableDynamicTable = false
 }
@@ -283,6 +285,9 @@ func (hp *HPACK) SetMaxCapacity(capacity uint32) {
 
 // SetMaxTableSize updates the dynamic table size limit and evicts older entries if necessary (RFC 7541 §4.2 & §6.3).
 func (hp *HPACK) SetMaxTableSize(size uint32) {
+	if hp.maxTableSize != size {
+		hp.pendingTableSizeUpdate = true
+	}
 	hp.maxTableSize = size
 	if size > hp.MaxCapacity {
 		hp.MaxCapacity = size
@@ -534,7 +539,7 @@ func (hp *HPACK) Next(hf *HeaderField, b []byte) ([]byte, error) {
 				return b, err
 			}
 
-			if uint32(n) > hp.MaxCapacity {
+			if n > uint64(hp.MaxCapacity) {
 				return b, ErrTableSizeLimitExceeded
 			}
 
@@ -668,6 +673,14 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 
 // AppendHeader encodes hf into dst using HPACK binary representations (RFC 7541 §6).
 func (hp *HPACK) AppendHeader(dst []byte, hf *HeaderField, store bool) []byte {
+	if hp.pendingTableSizeUpdate {
+		hp.pendingTableSizeUpdate = false
+		var tmp [8]byte
+		b := appendInt(tmp[:0], 5, uint64(hp.maxTableSize))
+		b[0] |= 0x20
+		dst = append(dst, b...)
+	}
+
 	c := !hp.DisableCompression
 	index, fullMatch := hp.search(hf)
 

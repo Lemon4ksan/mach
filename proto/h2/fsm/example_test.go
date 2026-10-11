@@ -16,6 +16,8 @@ func (h *exampleHandler) OnPing(payload []byte, ack bool)                       
 func (h *exampleHandler) OnWindowUpdate(streamID, increment uint32)                             {}
 func (h *exampleHandler) OnStreamReset(streamID, errorCode uint32)                              {}
 func (h *exampleHandler) OnGoAway(lastStreamID, errorCode uint32)                               {}
+func (h *exampleHandler) OnPriority(streamID uint32, payload []byte)                            {}
+func (h *exampleHandler) OnUnknownFrame(streamID uint32, frameType uint8, flags uint8, payload []byte) {}
 func (h *exampleHandler) OnWrite(payload []byte) {
 	fmt.Printf("write: %d bytes\n", len(payload))
 }

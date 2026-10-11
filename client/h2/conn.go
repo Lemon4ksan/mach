@@ -7,6 +7,7 @@ package h2
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -93,6 +94,9 @@ type Conn struct {
 	serverS    coreh2.Settings
 	reqStreams [streamTableSize]atomic.Pointer[Context]
 	reqShards  [streamNumShards]streamShard
+
+	continuationStream uint32
+	headerBuf          []byte
 
 	in           chan *Context
 	out          chan *coreh2.FrameHeader
@@ -211,8 +215,25 @@ func (c *Conn) Close() error {
 	defer coreh2.ReleaseFrameHeader(fr)
 
 	ga := coreh2.AcquireFrame(coreh2.FrameGoAway).(*coreh2.GoAway)
-	ga.SetStream(0)
-	ga.SetCode(coreh2.NoError)
+	var errCode coreh2.ErrorCode = coreh2.NoError
+	c.errMu.Lock()
+	streamErr := c.lastErr
+	if streamErr == nil {
+		streamErr = coreh2.ErrStreamClosed
+	} else {
+		var h2Err coreh2.Error
+		if errors.As(c.lastErr, &h2Err) {
+			errCode = h2Err.Code()
+		} else {
+			var code coreh2.ErrorCode
+			if errors.As(c.lastErr, &code) {
+				errCode = code
+			}
+		}
+	}
+	c.errMu.Unlock()
+
+	ga.SetCode(errCode)
 	fr.SetBody(ga)
 
 	c.writeMu.Lock()
@@ -226,7 +247,7 @@ func (c *Conn) Close() error {
 
 	_ = c.c.Close()
 	c.broadcastWindowUpdate()
-	c.broadcastErrorToAllStreams(coreh2.ErrStreamClosed)
+	c.broadcastErrorToAllStreams(streamErr)
 
 	if c.onDisconnect != nil {
 		c.onDisconnect(context.Background(), c)
@@ -268,7 +289,6 @@ func (c *Conn) Handshake() error {
 	st := fr.Body().(*coreh2.Settings)
 	if !st.IsAck() {
 		st.CopyTo(&c.serverS)
-		c.serverStreamWindow += c.serverS.MaxWindowSize()
 
 		c.enc.SetMaxTableSize(st.HeaderTableSize())
 

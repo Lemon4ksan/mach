@@ -67,12 +67,20 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 	sc.streamsMu.RUnlock()
 
 	if !ok {
+		// RFC 9113 §5.4.2 & §5.2.2: Even if stream is closed, DATA frames consume connection window
+		// and MUST be replenished to prevent connection window leaks!
+		if len(payload) > 0 && !sc.Closed() {
+			_ = sc.sendWindowUpdateFrame(0, uint32(len(payload)))
+		}
 		_ = sc.writeRstStream(streamID, coreh2.StreamClosedError)
 		return
 	}
 
 	// RFC 9113 §5.1: If stream is in half-closed (remote) state, reject with STREAM_CLOSED
 	if st.state == streamHalfClosedRemote || st.state == streamClosed {
+		if len(payload) > 0 && !sc.Closed() {
+			_ = sc.sendWindowUpdateFrame(0, uint32(len(payload)))
+		}
 		_ = sc.writeRstStream(streamID, coreh2.StreamClosedError)
 		return
 	}
@@ -190,6 +198,18 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 	}
 
 	if ack {
+		// RFC 9113 §6.5: Receipt of a SETTINGS frame with the ACK flag set and a length
+		// field value other than 0 MUST be treated as a connection error of type FRAME_SIZE_ERROR.
+		if len(payload) > 0 {
+			sc.closeWithGoAway(sc.maxStreamID, coreh2.FrameSizeError)
+		}
+		return
+	}
+
+	// RFC 9113 §6.5: A SETTINGS frame with a length other than a multiple of 6 octets
+	// MUST be treated as a connection error of type FRAME_SIZE_ERROR.
+	if len(payload)%6 != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.FrameSizeError)
 		return
 	}
 
@@ -198,9 +218,14 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 		val := uint32(payload[i+2])<<24 | uint32(payload[i+3])<<16 | uint32(payload[i+4])<<8 | uint32(payload[i+5])
 
 		switch id {
-		case 5: // MAX_FRAME_SIZE
-			if val >= 16384 && val <= 16777215 {
-				sc.peerMaxFrameSize = val
+		case 1: // HEADER_TABLE_SIZE
+			sc.hpackDec.SetMaxTableSize(val)
+
+		case 2: // ENABLE_PUSH
+			if val != 0 && val != 1 {
+				// RFC 9113 §6.5.2: Any value other than 0 or 1 MUST be treated as PROTOCOL_ERROR
+				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+				return
 			}
 
 		case 4: // INITIAL_WINDOW_SIZE
@@ -209,7 +234,29 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 				sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
 				return
 			}
-			sc.peerInitialWin = int32(val)
+			newWin := int32(val)
+			delta := newWin - sc.peerInitialWin
+			sc.peerInitialWin = newWin
+
+			// RFC 9113 §6.9.2: Adjust flow-control window of all active streams by delta
+			sc.streamsMu.Lock()
+			for _, st := range sc.streams {
+				if int64(st.sendWindow)+int64(delta) > int64(1<<31-1) {
+					sc.streamsMu.Unlock()
+					sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
+					return
+				}
+				st.sendWindow += delta
+			}
+			sc.streamsMu.Unlock()
+
+		case 5: // MAX_FRAME_SIZE
+			if val < 16384 || val > 16777215 {
+				// RFC 9113 §6.5.2: Values outside 2^14 to 2^24-1 MUST be treated as PROTOCOL_ERROR
+				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+				return
+			}
+			sc.peerMaxFrameSize = val
 		}
 	}
 
@@ -242,7 +289,11 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 	}
 
 	if increment == 0 || increment > 0x7fffffff {
-		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		if streamID == 0 {
+			sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		} else {
+			_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
+		}
 		return
 	}
 
@@ -254,8 +305,7 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 
 	if streamID == 0 {
 		if err := sc.updateConnSendWindow(int32(increment)); err != nil {
-			sc.closeErr = err
-			sc.isClosed.Store(true)
+			sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
 		}
 
 		return
@@ -267,9 +317,35 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 
 	if ok {
 		if err := sc.updateStreamSendWindow(st, int32(increment)); err != nil {
-			sc.closeErr = err
-			sc.isClosed.Store(true)
+			// RFC 9113 §6.9.1: Stream flow control overflow is a STREAM ERROR of type FLOW_CONTROL_ERROR
+			_ = sc.writeRstStream(streamID, coreh2.FlowControlError)
+			sc.streamsMu.Lock()
+			if st.cancel != nil {
+				st.cancel()
+			}
+			delete(sc.streams, streamID)
+			sc.streamsMu.Unlock()
 		}
+	}
+}
+
+func (sc *ServerConn) OnPriority(streamID uint32, payload []byte) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+}
+
+func (sc *ServerConn) OnUnknownFrame(streamID uint32, frameType uint8, flags uint8, payload []byte) {
+	if sc.continuationStream != 0 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
+	}
+
+	// RFC 9113 §6.6: A client MUST NOT send a PUSH_PROMISE frame
+	if frameType == 0x05 {
+		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
+		return
 	}
 }
 

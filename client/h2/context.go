@@ -47,8 +47,10 @@ type Context struct {
 	StreamID       atomic.Uint32
 	streamWindow   atomic.Int32
 	streamRxWindow atomic.Int32
-	state          atomic.Int32
-	headersParsed  bool
+	state            atomic.Int32
+	headersParsed    bool
+	trailersReceived bool
+	endStreamPending bool
 }
 
 // ID returns the active stream identifier (RFC 9113 §5.1.1).
