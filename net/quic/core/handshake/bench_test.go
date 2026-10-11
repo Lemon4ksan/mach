@@ -22,10 +22,10 @@ func BenchmarkTransportParametersAppend(b *testing.B) {
 	tp.InitialMaxStreamsBidi = 100
 
 	buf := make([]byte, 256)
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = tp.Append(buf[:0], PerspectiveClient)
 	}
 }
@@ -42,20 +42,20 @@ func BenchmarkTransportParametersUnmarshal(b *testing.B) {
 
 	data := tp.Marshal(PerspectiveClient)
 	var parsed TransportParameters
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = parsed.Unmarshal(data, PerspectiveClient)
 	}
 }
 
 func BenchmarkInitialKeyDerivation(b *testing.B) {
 	cid := []byte{0x83, 0x94, 0xc8, 0xf0, 0x3e, 0x51, 0x57, 0x08}
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = NewInitialKeys(cid, Version1)
 	}
 }
@@ -71,10 +71,9 @@ func BenchmarkLoopbackHandshake(b *testing.B) {
 		EncryptionLevel1RTT,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		serverCfg := &Config{
 			TLSConfig: &tls.Config{
 				Certificates: []tls.Certificate{cert},
@@ -104,7 +103,7 @@ func BenchmarkLoopbackHandshake(b *testing.B) {
 		_ = client.Start(ctx)
 		_ = server.Start(ctx)
 
-		for r := 0; r < 20; r++ {
+		for range 20 {
 			if client.IsHandshakeDone() && server.IsHandshakeDone() {
 				break
 			}
