@@ -52,6 +52,9 @@ var (
 
 	// ErrInvalidContentLength is returned when Content-Length does not consist of only digits (RFC 9112 §6.3).
 	ErrInvalidContentLength = errors.New("h1: invalid content-length (RFC 9112 §6.3)")
+
+	// ErrExpectationFailed is returned when Expect header contains an unknown expectation (RFC 9110 §10.1.1).
+	ErrExpectationFailed = errors.New("h1: expectation failed (RFC 9110 §10.1.1)")
 )
 
 // Request holds parsed HTTP/1.1 request data (RFC 9112, RFC 9110).
@@ -220,6 +223,10 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 			return err
 		}
 
+		if protoh1.IndexByte(line, 0) != -1 {
+			return ErrMalformedRequestLine
+		}
+
 		trimmed := bytes.TrimRight(line, "\r\n")
 		if len(trimmed) == 0 {
 			if err == io.EOF {
@@ -245,6 +252,10 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 			return err
 		}
 
+		if protoh1.IndexByte(headerLine, 0) != -1 {
+			return ErrMalformedRequestLine
+		}
+
 		r.headerBuf = append(r.headerBuf, headerLine...)
 
 		trimmed := bytes.TrimRight(headerLine, "\r\n")
@@ -267,6 +278,11 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 }
 
 func (r *Request) parseHeaderBlock(headerBlock []byte) error {
+	// Chromium NullFails: Reject null bytes anywhere in the headers
+	if protoh1.IndexByte(headerBlock, 0) != -1 {
+		return ErrMalformedRequestLine
+	}
+
 	crlfIdx := protoh1.IndexByte(headerBlock, '\n')
 	if crlfIdx <= 0 {
 		return r.parseRequestLine(headerBlock)
@@ -307,6 +323,11 @@ func mapHeaderError(err error) error {
 }
 
 func (r *Request) parseRequestLine(line []byte) error {
+	// RFC 9112 §2.2 & Chromium NullFails: Reject null bytes and bare CRs in request-line
+	if protoh1.IndexByte(line, 0) != -1 || protoh1.IndexByte(line, '\r') != -1 {
+		return ErrMalformedRequestLine
+	}
+
 	s1 := protoh1.IndexByte(line, ' ')
 	if s1 <= 0 {
 		return ErrMalformedRequestLine
@@ -321,13 +342,27 @@ func (r *Request) parseRequestLine(line []byte) error {
 
 	s2 := s1 + 1 + s2Offset
 
-	if s2+1 > len(line) {
+	if s2+1 >= len(line) {
 		return ErrMalformedRequestLine
+	}
+
+	protoBytes := line[s2+1:]
+	// RFC 9112 §3.1.1: Whitespace other than single SP prohibited between elements or trailing
+	if protoBytes[0] == ' ' || protoBytes[0] == '\t' || protoh1.IndexByte(protoBytes, ' ') != -1 || protoh1.IndexByte(protoBytes, '\t') != -1 {
+		return ErrMalformedRequestLine
+	}
+
+	// RFC 9112 §2.3: Validate HTTP version
+	if bytes.Equal(protoBytes, []byte("HTTP/1.1")) {
+		r.Proto = "HTTP/1.1"
+	} else if bytes.Equal(protoBytes, []byte("HTTP/1.0")) {
+		r.Proto = "HTTP/1.0"
+	} else {
+		return ErrUnsupportedProtocol
 	}
 
 	r.Method = bytesconv.B2S(line[:s1])
 	r.URI = bytesconv.B2S(line[s1+1 : s2])
-	r.Proto = bytesconv.B2S(line[s2+1:])
 
 	uriBytes := line[s1+1 : s2]
 	if qIdx := protoh1.IndexByte(uriBytes, '?'); qIdx != -1 {
@@ -375,12 +410,18 @@ func (r *Request) finishRequestBodyRead(
 		r.Headers.Del(headkit.ContentLength)
 	}
 
-	// Handle "Expect: 100-continue" (RFC 9110 §10.1.1)
-	if r.Proto == "HTTP/1.1" && bytesconv.EqualFoldASCII(r.Headers.Get(headkit.Expect), headkit.Value100Continue) && bw != nil {
-		_, _ = bw.WriteString("HTTP/1.1 100 Continue\r\n\r\n")
-		if r.Conn != nil {
-			_, _ = bw.WriteTo(r.Conn)
-			bw.Reset()
+	// Handle "Expect" header (RFC 9110 §10.1.1)
+	expectVal := r.Headers.Get(headkit.Expect)
+	if expectVal != "" {
+		if !bytesconv.EqualFoldASCII(expectVal, headkit.Value100Continue) {
+			return ErrExpectationFailed
+		}
+		if r.Proto == "HTTP/1.1" && bw != nil {
+			_, _ = bw.WriteString("HTTP/1.1 100 Continue\r\n\r\n")
+			if r.Conn != nil {
+				_, _ = bw.WriteTo(r.Conn)
+				bw.Reset()
+			}
 		}
 	}
 

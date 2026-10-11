@@ -22,6 +22,15 @@ var (
 
 	// ErrMultipleHostHeaders is returned when multiple Host headers are present (RFC 9112 §3.2).
 	ErrMultipleHostHeaders = errors.New("headkit: multiple host headers prohibited (RFC 9112 §3.2)")
+
+	// ErrObsFold is returned when obsolete line folding is encountered (RFC 9112 §5.2).
+	ErrObsFold = errors.New("headkit: obsolete line folding prohibited (RFC 9112 §5.2)")
+
+	// ErrMalformedHeader is returned when a header line fails RFC 9112 §5 syntax rules.
+	ErrMalformedHeader = errors.New("headkit: malformed header line (RFC 9112 §5)")
+
+	// ErrBareCR is returned when a bare CR not immediately followed by LF is detected (RFC 9112 §2.2).
+	ErrBareCR = errors.New("headkit: bare CR prohibited (RFC 9112 §2.2)")
 )
 
 const (
@@ -98,6 +107,13 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 	keyEnd := -1
 	valStart := -1
 
+	// Check if message begins with obsolete line folding (RFC 9112 §5.2)
+	if len(block) > 0 && (block[0] == ' ' || block[0] == '\t') {
+		if h.err == nil {
+			h.err = ErrObsFold
+		}
+	}
+
 	i := 0
 	for i+8 <= len(block) {
 		v := binary.LittleEndian.Uint64(block[i:])
@@ -119,6 +135,12 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 			c := block[idx]
 
 			if c == ':' && keyEnd == -1 {
+				// RFC 9112 §5.1: Field name cannot be empty
+				if idx == keyStart {
+					if h.err == nil {
+						h.err = ErrMalformedHeader
+					}
+				}
 				// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
 				// A server MUST reject, with a response status code of 400 (Bad Request),
 				// any received request message that contains whitespace between a header field name and colon.
@@ -142,11 +164,37 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 
 				if keyEnd != -1 {
 					h.addPacked(keyStart, keyEnd, valStart, valEnd)
+				} else if keyStart < valEnd {
+					// RFC 9112 §5: Non-empty line without a colon
+					if h.err == nil {
+						h.err = ErrMalformedHeader
+					}
+				}
+
+				// RFC 9112 §2.2: Bare CR check and null byte check
+				for j := keyStart; j < valEnd; j++ {
+					b := block[j]
+					if b == 0 {
+						if h.err == nil {
+							h.err = ErrMalformedHeader
+						}
+					} else if b == '\r' {
+						if h.err == nil {
+							h.err = ErrBareCR
+						}
+					}
 				}
 
 				keyStart = idx + 1
 				keyEnd = -1
 				valStart = -1
+
+				// RFC 9112 §5.2: Obsolete line folding: line cannot start with SP or HTAB
+				if keyStart < len(block) && (block[keyStart] == ' ' || block[keyStart] == '\t') {
+					if h.err == nil {
+						h.err = ErrObsFold
+					}
+				}
 			}
 
 			// Clear the bit and continue
@@ -169,6 +217,11 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 	for ; i < len(block); i++ {
 		c := block[i]
 		if c == ':' && keyEnd == -1 {
+			if i == keyStart {
+				if h.err == nil {
+					h.err = ErrMalformedHeader
+				}
+			}
 			// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
 			if i > keyStart && (block[i-1] == ' ' || block[i-1] == '\t') {
 				if h.err == nil {
@@ -190,11 +243,34 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 
 			if keyEnd != -1 {
 				h.addPacked(keyStart, keyEnd, valStart, valEnd)
+			} else if keyStart < valEnd {
+				if h.err == nil {
+					h.err = ErrMalformedHeader
+				}
+			}
+
+			for j := keyStart; j < valEnd; j++ {
+				b := block[j]
+				if b == 0 {
+					if h.err == nil {
+						h.err = ErrMalformedHeader
+					}
+				} else if b == '\r' {
+					if h.err == nil {
+						h.err = ErrBareCR
+					}
+				}
 			}
 
 			keyStart = i + 1
 			keyEnd = -1
 			valStart = -1
+
+			if keyStart < len(block) && (block[keyStart] == ' ' || block[keyStart] == '\t') {
+				if h.err == nil {
+					h.err = ErrObsFold
+				}
+			}
 		}
 	}
 
@@ -206,6 +282,28 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 		}
 
 		h.addPacked(keyStart, keyEnd, valStart, valEnd)
+		for j := keyStart; j < valEnd; j++ {
+			b := block[j]
+			if b == 0 {
+				if h.err == nil {
+					h.err = ErrMalformedHeader
+				}
+			} else if b == '\r' {
+				if h.err == nil {
+					h.err = ErrBareCR
+				}
+			}
+		}
+	} else if keyStart < len(block) {
+		valEnd := len(block)
+		if valEnd > 0 && block[valEnd-1] == '\r' {
+			valEnd--
+		}
+		if keyStart < valEnd {
+			if h.err == nil {
+				h.err = ErrMalformedHeader
+			}
+		}
 	}
 }
 
@@ -229,6 +327,9 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 	}
 
 	if keyEnd <= keyStart || valEnd < valStart {
+		if h.err == nil && keyEnd <= keyStart {
+			h.err = ErrMalformedHeader
+		}
 		return
 	}
 
