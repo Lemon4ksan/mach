@@ -45,3 +45,32 @@ type Frame interface {
 	// Payload yields the zero-copy slice of the frame body.
 	Payload() []byte
 }
+
+// Standard protocol-agnostic frame type identifiers.
+const (
+	FrameData         uint8 = 0x00
+	FrameHeaders      uint8 = 0x01
+	FramePriority     uint8 = 0x02
+	FrameReset        uint8 = 0x03
+	FrameSettings     uint8 = 0x04
+	FramePushPromise  uint8 = 0x05
+	FramePing         uint8 = 0x06
+	FrameGoAway       uint8 = 0x07
+	FrameWindowUpdate uint8 = 0x08
+	FrameContinuation uint8 = 0x09
+)
+
+// Handler defines the universal contract for protocol-agnostic request dispatching.
+type Handler interface {
+	// Serve processes an incoming request/response stream across H1, H2, or H3.
+	Serve(stream Stream) error
+}
+
+// HandlerFunc is an adapter to allow the use of ordinary functions as universal Handlers.
+type HandlerFunc func(stream Stream) error
+
+// Serve calls f(stream).
+func (f HandlerFunc) Serve(stream Stream) error {
+	return f(stream)
+}
+

@@ -22,6 +22,7 @@ import (
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
 
+	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/status"
 	"github.com/lemon4ksan/mach/proto/http/zerocopy"
@@ -484,7 +485,6 @@ func TestChunkedReader_RFC9112Compliance(t *testing.T) {
 	})
 }
 
-
 func TestHeaders_Comprehensive(t *testing.T) {
 	h := headkit.NewWithCapacity(8)
 	h.Set("Content-Type", "application/json")
@@ -903,4 +903,50 @@ func TestAdversarial_H1_Smuggling_PerPStorage_NoCrossContamination(t *testing.T)
 		assert.False(t, resp.Close, "keep-alive connection falsely marked Close!")
 		assert.NotEqual(t, "close", resp.Header.Get("Connection"), "unexpected Connection: close header")
 	}
+}
+
+func TestConnHandler_StreamHandler(t *testing.T) {
+	t.Parallel()
+
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	ch := &h1.ConnHandler{
+		StreamHandler: mach.HandlerFunc(func(stream mach.Stream) error {
+			s, ok := stream.(*h1.ServerStream)
+			assert.True(t, ok)
+			assert.Equal(t, "GET", s.Request().Method)
+			assert.Equal(t, "/universal", s.Request().Path)
+
+			s.Response().StatusCode = 200
+			s.Response().Body = []byte("universal-mach-engine")
+			return nil
+		}),
+	}
+
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			defer conn.Close()
+			_ = ch.ServeConn(conn)
+		}
+	}()
+
+	var d net.Dialer
+	c, err := d.DialContext(context.Background(), "tcp", ln.Addr().String())
+	require.NoError(t, err)
+	defer c.Close()
+
+	_, err = c.Write([]byte("GET /universal HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"))
+	require.NoError(t, err)
+
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "universal-mach-engine", string(body))
 }

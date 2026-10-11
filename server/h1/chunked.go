@@ -10,9 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/hexkit"
+	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
 var (
@@ -27,69 +28,33 @@ var (
 
 // ParseHexUint parses a hex-encoded uint from src for chunk-size decoding (RFC 9112 §7.1).
 // Anticipates large numerals and prevents parsing errors due to integer overflow (RFC 9112 §7.1).
+// Modernized using foundation/silicon/hexkit LUT and branchless nibble decoding.
 // Returns the parsed integer, number of bytes consumed, or an error.
+//
+//go:inline
 func ParseHexUint(src []byte) (int, int, error) {
-	if len(src) == 0 {
-		return 0, 0, errEmptyHexNum
-	}
-
-	var (
-		val int
-		i   int
-	)
-	for i = 0; i < len(src); i++ {
-		c := src[i]
-
-		var d int
-		switch {
-		case c >= '0' && c <= '9':
-			d = int(c - '0')
-		case c >= 'a' && c <= 'f':
-			d = int(c - 'a' + 10)
-		case c >= 'A' && c <= 'F':
-			d = int(c - 'A' + 10)
-		default:
-			if i == 0 {
-				return 0, 0, errEmptyHexNum
-			}
-
-			return val, i, nil
-		}
-
-		if val > (math.MaxInt-d)>>4 {
+	val, consumed, err := hexkit.ParseHexUint(src)
+	if err != nil {
+		if errors.Is(err, hexkit.ErrHexOverflow) {
 			return 0, 0, ErrInvalidChunkSize
 		}
 
-		val = (val << 4) | d
+		if errors.Is(err, hexkit.ErrEmptyHexNum) {
+			return 0, 0, errEmptyHexNum
+		}
+
+		return 0, 0, err
 	}
 
-	return val, i, nil
+	return val, consumed, nil
 }
 
 // FormatHexUint writes the hex representation of val into buf for chunk-size encoding (RFC 9112 §7.1).
-// Operates with zero heap allocations.
+// Operates with zero heap allocations using foundation/silicon/hexkit.
+//
+//go:inline
 func FormatHexUint(buf *[16]byte, val int) int {
-	if val == 0 {
-		buf[0] = '0'
-		return 1
-	}
-
-	idx := 15
-	for val > 0 {
-		nib := byte(val & 0x0F)
-		buf[idx] = '0' + nib
-		if nib >= 10 {
-			buf[idx] = 'a' + (nib - 10)
-		}
-
-		idx--
-		val >>= 4
-	}
-
-	count := 15 - idx
-	copy(buf[:count], buf[idx+1:16])
-
-	return count
+	return hexkit.FormatHexUint(buf, val)
 }
 
 // ChunkedReader decodes an HTTP/1.1 chunked transfer-encoded byte stream (RFC 9112 §7.1).
@@ -122,6 +87,7 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 		if len(line) < 2 || line[len(line)-2] != '\r' || line[len(line)-1] != '\n' {
 			return 0, ErrChunkBoundaryError
 		}
+
 		line = line[:len(line)-2]
 
 		// RFC 9112 §7.1.1: Strip chunk extensions (e.g., "1a;ext=val" or "1a ;ext=val")
@@ -130,9 +96,7 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 		}
 
 		// Strip trailing BWS (RFC 9112 §7.1.1: chunk-size [ BWS ";" ... ])
-		for len(line) > 0 && (line[len(line)-1] == ' ' || line[len(line)-1] == '\t') {
-			line = line[:len(line)-1]
-		}
+		line = simd.TrimTrailingSpaceSWAR(line)
 
 		// RFC 9112 §7.1: chunk-size = 1*HEXDIG. Leading whitespace is prohibited.
 		if len(line) == 0 {
@@ -153,8 +117,10 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 					if errors.Is(tErr, io.EOF) {
 						return 0, io.EOF
 					}
+
 					return 0, tErr
 				}
+
 				trimmed := bytes.TrimRight(tLine, "\r\n")
 				if len(trimmed) == 0 {
 					break

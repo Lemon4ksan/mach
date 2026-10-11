@@ -118,6 +118,9 @@ func (resp *Response) Reset() {
 	resp.laddr = nil
 	resp.ImmediateHeaderFlush = false
 	resp.StreamBody = false
+	resp.SecureErrorLogMessage = false
+	resp.KeepBodyBuffer = false
+	resp.OnInterimResponse = nil
 }
 
 func (resp *Response) resetSkipHeader() {

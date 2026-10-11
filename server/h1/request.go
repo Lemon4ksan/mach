@@ -62,6 +62,53 @@ type Request struct {
 	HijackFn        func() (net.Conn, *bufio.ReadWriter, error)
 	EarlyHintsFn    func(h http.Header) error
 	CloseConnection bool // RFC 9112 §6.3 / §11.2 forced connection close indicator
+
+	// Internal zero-allocation state
+	headerBuf  []byte
+	bw         *bytesconv.ByteBuffer
+	br         *bufio.Reader
+	isHijacked bool
+}
+
+func (r *Request) initClosures() {
+	r.EarlyHintsFn = r.writeEarlyHintsImpl
+	r.HijackFn = r.hijackImpl
+}
+
+func (r *Request) writeEarlyHintsImpl(h http.Header) error {
+	if len(h) == 0 || r.Conn == nil || r.bw == nil {
+		return nil
+	}
+
+	_, _ = r.bw.WriteString("HTTP/1.1 103 Early Hints\r\n")
+	for k, vv := range h {
+		for _, v := range vv {
+			_, _ = r.bw.WriteString(k)
+			_, _ = r.bw.WriteString(": ")
+			_, _ = r.bw.WriteString(v)
+			_, _ = r.bw.WriteString("\r\n")
+		}
+	}
+
+	_, _ = r.bw.WriteString("\r\n")
+	if _, err := r.bw.WriteTo(r.Conn); err != nil {
+		return err
+	}
+
+	r.bw.ResetWriter(r.Conn)
+
+	return nil
+}
+
+func (r *Request) hijackImpl() (net.Conn, *bufio.ReadWriter, error) {
+	if r.isHijacked {
+		return nil, nil, errors.New("h1: connection already hijacked")
+	}
+
+	r.isHijacked = true
+	rw := bufio.NewReadWriter(r.br, bufio.NewWriter(r.Conn))
+
+	return r.Conn, rw, nil
 }
 
 // WriteEarlyHints sends an intermediate 103 Early Hints informational response to the client (RFC 8297).
@@ -70,12 +117,15 @@ func (r *Request) WriteEarlyHints(h http.Header) error {
 		return r.EarlyHintsFn(h)
 	}
 
-	return nil
+	return r.writeEarlyHintsImpl(h)
 }
 
 // Reset clears the request structure for reuse.
 func (r *Request) Reset() {
-	r.EarlyHintsFn = nil
+	if r.EarlyHintsFn == nil || r.HijackFn == nil {
+		r.initClosures()
+	}
+
 	r.Method = ""
 	r.URI = ""
 	r.Path = ""
@@ -89,19 +139,30 @@ func (r *Request) Reset() {
 		r.Body = make([]byte, 0, 1024)
 	}
 
+	r.headerBuf = r.headerBuf[:0]
+	if cap(r.headerBuf) > 64*1024 {
+		r.headerBuf = make([]byte, 0, 1024)
+	}
+
 	r.RemoteAddr = ""
 	r.TLS = nil
-	r.HijackFn = nil
 	r.CloseConnection = false
+	r.bw = nil
+	r.br = nil
+	r.isHijacked = false
 }
 
 // Hijack takes over the raw network connection from the server (RFC 9110 §15.2.2).
 func (r *Request) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	if r.HijackFn == nil {
+	if r.HijackFn != nil {
+		return r.HijackFn()
+	}
+
+	if r.Conn == nil {
 		return nil, nil, ErrHijackNotSupported
 	}
 
-	return r.HijackFn()
+	return r.hijackImpl()
 }
 
 // ReadRequest parses an incoming HTTP/1.1 request from the buffered stream using SIMD acceleration.
@@ -166,14 +227,14 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 		break
 	}
 
-	var fallbackBuf []byte
+	r.headerBuf = r.headerBuf[:0]
 	for {
 		headerLine, err := br.ReadSlice('\n')
 		if err != nil && err != io.EOF {
 			return err
 		}
 
-		fallbackBuf = append(fallbackBuf, headerLine...)
+		r.headerBuf = append(r.headerBuf, headerLine...)
 
 		trimmed := bytes.TrimRight(headerLine, "\r\n")
 		if len(trimmed) == 0 {
@@ -185,7 +246,8 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 		}
 	}
 
-	r.Headers.ParseHeaderBlockSWAR(fallbackBuf)
+	r.Headers.ParseHeaderBlockSWAR(r.headerBuf)
+
 	if err := r.Headers.Err(); err != nil {
 		return ErrWhitespaceBeforeColon
 	}
@@ -209,6 +271,7 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 	}
 
 	r.Headers.ParseHeaderBlockSWAR(headerBlock[crlfIdx+1:])
+
 	if err := r.Headers.Err(); err != nil {
 		return ErrWhitespaceBeforeColon
 	}
@@ -217,21 +280,21 @@ func (r *Request) parseHeaderBlock(headerBlock []byte) error {
 }
 
 func (r *Request) parseRequestLine(line []byte) error {
-	s1, s2 := -1, -1
-
-	_ = line[len(line)-1] // BCE
-	for i := range line {
-		if line[i] == ' ' {
-			if s1 == -1 {
-				s1 = i
-			} else {
-				s2 = i
-				break
-			}
-		}
+	s1 := simd.ScanByteVector(line, ' ')
+	if s1 <= 0 {
+		return ErrMalformedRequestLine
 	}
 
-	if s1 == -1 || s2 == -1 {
+	rem := line[s1+1:]
+
+	s2Offset := simd.ScanByteVector(rem, ' ')
+	if s2Offset <= 0 {
+		return ErrMalformedRequestLine
+	}
+
+	s2 := s1 + 1 + s2Offset
+
+	if s2+1 > len(line) {
 		return ErrMalformedRequestLine
 	}
 
@@ -239,11 +302,13 @@ func (r *Request) parseRequestLine(line []byte) error {
 	r.URI = bytesconv.B2S(line[s1+1 : s2])
 	r.Proto = bytesconv.B2S(line[s2+1:])
 
-	r.Path = r.URI
-	r.Query = ""
-	if qIdx := strings.IndexByte(r.URI, '?'); qIdx != -1 {
-		r.Path = r.URI[:qIdx]
-		r.Query = r.URI[qIdx+1:]
+	uriBytes := line[s1+1 : s2]
+	if qIdx := simd.ScanByteVector(uriBytes, '?'); qIdx != -1 {
+		r.Path = bytesconv.B2S(uriBytes[:qIdx])
+		r.Query = bytesconv.B2S(uriBytes[qIdx+1:])
+	} else {
+		r.Path = r.URI
+		r.Query = ""
 	}
 
 	return nil
@@ -306,6 +371,7 @@ func (r *Request) finishRequestBodyRead(
 		}
 
 		r.Body = chunkedBody
+
 		return nil
 	}
 
@@ -341,10 +407,22 @@ func (r *Request) finishRequestBodyRead(
 
 // ClientIP extracts the client IP address from RemoteAddr, stripping any port number.
 func (r *Request) ClientIP() string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
-		return host
+	addr := r.RemoteAddr
+	if addr == "" && r.Conn != nil {
+		ra := r.Conn.RemoteAddr()
+		if ra != nil {
+			addr = ra.String()
+		}
 	}
 
-	return r.RemoteAddr
+	if addr != "" {
+		host, _, err := net.SplitHostPort(addr)
+		if err == nil {
+			return host
+		}
+
+		return addr
+	}
+
+	return ""
 }

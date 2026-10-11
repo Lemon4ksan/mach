@@ -82,11 +82,8 @@ func (s *headerScanner) next() bool {
 
 	s.keyHasSpace = innerSpace
 
-	// Skip initial spaces in value, without bytes.TrimLeft: it would
-	// rebuild its ASCII set on every call.
-	for len(v) > 0 && (v[0] == ' ' || v[0] == '\t') {
-		v = v[1:]
-	}
+	// Skip initial spaces in value using SWAR vectorization.
+	v = simd.TrimLeadingSpaceSWAR(v)
 
 	s.key = k
 	s.value = v
@@ -130,7 +127,7 @@ func (s *headerScanner) readContinuedLineSlice() ([]byte, int, error) {
 		return line, -1, nil
 	}
 
-	colon := simd.IndexByteVector(line, ':')
+	colon := simd.IndexColonSWAR(line)
 	if colon < 0 {
 		return nil, -1, fmt.Errorf("malformed mime header: missing colon: %q", line)
 	}
@@ -156,20 +153,21 @@ func (s *headerScanner) readContinuedLineSlice() ([]byte, int, error) {
 	return mline, colon, nil
 }
 
-// skipSpace skips one or multiple spaces and tabs in b.
+// skipSpace skips one or multiple spaces and tabs in b using SWAR vectorization.
 func (s *headerScanner) skipSpace() bool {
-	skipped := false
-	for {
-		c := s.b[s.r]
-		if c != ' ' && c != '\t' {
-			break
-		}
-
-		s.r++
-		skipped = true
+	if s.r >= len(s.b) {
+		return false
 	}
 
-	return skipped
+	trimmed := simd.TrimLeadingSpaceSWAR(s.b[s.r:])
+	skipped := len(s.b[s.r:]) - len(trimmed)
+	if skipped > 0 {
+		s.r += skipped
+
+		return true
+	}
+
+	return false
 }
 
 func isASCIILetter(b byte) bool {
@@ -177,31 +175,16 @@ func isASCIILetter(b byte) bool {
 	return 'a' <= b && b <= 'z'
 }
 
-// trim returns s with leading and trailing spaces and tabs removed.
-// It does not assume Unicode or UTF-8.
+// trim returns s with leading and trailing spaces and tabs removed using SWAR vectorization.
+//
+//go:inline
 func trim(s []byte) []byte {
-	i := 0
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-		i++
-	}
-
-	n := len(s)
-	for n > i && (s[n-1] == ' ' || s[n-1] == '\t') {
-		n--
-	}
-
-	return s[i:n]
+	return simd.TrimSpaceSWAR(s)
 }
 
+// trimTrailingSpace returns s with trailing spaces and tabs removed using SWAR vectorization.
+//
+//go:inline
 func trimTrailingSpace(s []byte) []byte {
-	for len(s) > 0 {
-		c := s[len(s)-1]
-		if c != ' ' && c != '\t' {
-			break
-		}
-
-		s = s[:len(s)-1]
-	}
-
-	return s
+	return simd.TrimTrailingSpaceSWAR(s)
 }

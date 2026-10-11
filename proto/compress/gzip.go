@@ -5,17 +5,38 @@
 package compress
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/pool"
 	"github.com/lemon4ksan/seal/codec/compress"
 	"github.com/lemon4ksan/seal/codec/compress/gzip"
 
 	"github.com/lemon4ksan/mach/internal/stackless"
 )
+
+var gzipWriterPoolMap = newGzipWriterPoolMap()
+
+func newGzipWriterPoolMap() [12]*pool.PerCorePool[*gzip.Writer] {
+	var m [12]*pool.PerCorePool[*gzip.Writer]
+	for i := range 12 {
+		lvl := i - 2
+		m[i] = pool.NewPerCorePool[*gzip.Writer](func() *gzip.Writer {
+			zw, err := gzip.NewWriterLevel(io.Discard, lvl)
+			if err != nil {
+				if lvl < gzip.HuffmanOnly {
+					lvl = gzip.HuffmanOnly
+				} else {
+					lvl = gzip.BestCompression
+				}
+				zw, _ = gzip.NewWriterLevel(io.Discard, lvl)
+			}
+			return zw
+		})
+	}
+	return m
+}
 
 func acquireGzipReader(r io.Reader) (*gzip.Reader, error) {
 	return compress.AcquireGzipReader(r)
@@ -25,78 +46,35 @@ func releaseGzipReader(zr *gzip.Reader) {
 	compress.ReleaseGzipReader(zr)
 }
 
-// AcquireStacklessGzipWriter acquires an asynchronous stackless Gzip writer targeting w at the given compression level (RFC 1952).
-//
-// It offloads compression work to a dedicated worker pool, avoiding stack expansion on the caller goroutine.
-// Callers must release the returned writer using [ReleaseStacklessGzipWriter] when finished.
+// AcquireStacklessGzipWriter acquires a zero-alloc pooled Gzip writer targeting w at the given compression level (RFC 1952).
 func AcquireStacklessGzipWriter(w io.Writer, level int) stackless.Writer {
-	nLevel := normalizeCompressLevel(level)
-	p := stacklessGzipWriterPoolMap[nLevel]
-
-	v := p.Get()
-	if v == nil {
-		return stackless.NewWriter(w, func(w io.Writer) stackless.Writer {
-			return acquireRealGzipWriter(w, level)
-		})
-	}
-
-	sw := v.(stackless.Writer) //nolint:forcetypeassert
-	sw.Reset(w)
-
-	return sw
+	return acquireRealGzipWriter(w, level)
 }
 
 // ReleaseStacklessGzipWriter closes sw and returns it to the corresponding compression level pool (RFC 1952).
-//
-// Callers must not use sw after calling ReleaseStacklessGzipWriter.
 func ReleaseStacklessGzipWriter(sw stackless.Writer, level int) {
-	_ = sw.Close()
-
-	nLevel := normalizeCompressLevel(level)
-	p := stacklessGzipWriterPoolMap[nLevel]
-	p.Put(sw)
+	if zw, ok := sw.(*gzip.Writer); ok {
+		releaseRealGzipWriter(zw, level)
+	} else if sw != nil {
+		_ = sw.Close()
+	}
 }
 
 func acquireRealGzipWriter(w io.Writer, level int) *gzip.Writer {
 	nLevel := normalizeCompressLevel(level)
-	p := realGzipWriterPoolMap[nLevel]
-
-	v := p.Get()
-	if v == nil {
-		zw, err := gzip.NewWriterLevel(w, level)
-		if err != nil {
-			// gzip.NewWriterLevel only errors for invalid
-			// compression levels. Clamp it to be min or max.
-			if level < gzip.HuffmanOnly {
-				level = gzip.HuffmanOnly
-			} else {
-				level = gzip.BestCompression
-			}
-
-			zw, _ = gzip.NewWriterLevel(w, level)
-		}
-
-		return zw
-	}
-
-	zw := v.(*gzip.Writer) //nolint:forcetypeassert
+	zw := gzipWriterPoolMap[nLevel].Get()
 	zw.Reset(w)
-
 	return zw
 }
 
 func releaseRealGzipWriter(zw *gzip.Writer, level int) {
+	if zw == nil {
+		return
+	}
 	_ = zw.Close()
-
 	nLevel := normalizeCompressLevel(level)
-	p := realGzipWriterPoolMap[nLevel]
-	p.Put(zw)
+	gzipWriterPoolMap[nLevel].Put(zw)
 }
-
-var (
-	stacklessGzipWriterPoolMap = newCompressWriterPoolMap()
-	realGzipWriterPoolMap      = newCompressWriterPoolMap()
-)
 
 // AppendGzipBytesLevel appends gzipped src to dst using the given
 // compression level and returns the resulting slice (RFC 1952).
@@ -126,48 +104,10 @@ func AppendGzipBytesLevel(dst, src []byte, level int) []byte {
 //   - [CompressDefaultCompression]
 //   - [CompressHuffmanOnly]
 func WriteGzipLevel(w io.Writer, p []byte, level int) (int, error) {
-	switch w.(type) {
-	case *byteSliceWriter,
-		*bytes.Buffer,
-		*bytesconv.ByteBuffer:
-		// These writers don't block, so we can just use stacklessWriteGzip
-		ctx := &compressCtx{
-			w:     w,
-			p:     p,
-			level: level,
-		}
-		stacklessWriteGzip(ctx)
-
-		return len(p), nil
-
-	default:
-		zw := AcquireStacklessGzipWriter(w, level)
-		n, err := zw.Write(p)
-		ReleaseStacklessGzipWriter(zw, level)
-
-		return n, err
-	}
-}
-
-var (
-	stacklessWriteGzipOnce sync.Once
-	stacklessWriteGzipFunc func(ctx any) bool
-)
-
-func stacklessWriteGzip(ctx any) {
-	stacklessWriteGzipOnce.Do(func() {
-		stacklessWriteGzipFunc = stackless.NewFunc(nonblockingWriteGzip)
-	})
-	stacklessWriteGzipFunc(ctx)
-}
-
-func nonblockingWriteGzip(ctxv any) {
-	ctx := ctxv.(*compressCtx) //nolint:forcetypeassert
-	zw := acquireRealGzipWriter(ctx.w, ctx.level)
-
-	_, _ = zw.Write(ctx.p)
-
-	releaseRealGzipWriter(zw, ctx.level)
+	zw := acquireRealGzipWriter(w, level)
+	n, err := zw.Write(p)
+	releaseRealGzipWriter(zw, level)
+	return n, err
 }
 
 // WriteGzip writes gzipped p to w using [CompressDefaultCompression] and returns the number of compressed

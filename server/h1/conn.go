@@ -10,12 +10,12 @@ import (
 	"errors"
 	"io"
 	"net"
-	"net/http"
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
+	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/http/header"
 )
@@ -25,18 +25,25 @@ var (
 		return bufio.NewReaderSize(nil, 4096)
 	})
 	writerStorage = pool.NewPerCorePool(func() *bytesconv.ByteBuffer {
-		return &bytesconv.ByteBuffer{}
+		return &bytesconv.ByteBuffer{B: make([]byte, 0, 4096)}
 	})
 	reqStorage = pool.NewPerCorePool(func() *Request {
-		return &Request{
-			Body:    make([]byte, 0, 1024),
-			Headers: headkit.NewWithCapacity(16),
+		r := &Request{
+			Body:      make([]byte, 0, 1024),
+			headerBuf: make([]byte, 0, 1024),
+			Headers:   headkit.NewWithCapacity(16),
 		}
+		r.initClosures()
+
+		return r
 	})
 	resStorage = pool.NewPerCorePool(func() *Response {
 		return &Response{
 			Body: make([]byte, 0, 1024),
 		}
+	})
+	streamStorage = pool.NewPerCorePool(func() *ServerStream {
+		return &ServerStream{}
 	})
 )
 
@@ -56,6 +63,8 @@ type ConnHandler struct {
 	MaxBodySize int64
 	// Handler is the callback invoked for each received HTTP request.
 	Handler HandlerFunc
+	// StreamHandler is the universal protocol-agnostic callback (mach.Handler).
+	StreamHandler mach.Handler
 }
 
 // ServeConn processes HTTP/1.1 requests sequentially on conn until closed, timed out, or error occurs (RFC 9112 §9.3).
@@ -76,35 +85,14 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			br.Reset(nil)
 			readerStorage.Put(br)
 
+			if cap(bw.B) > 64*1024 {
+				bw.B = make([]byte, 0, 4096)
+			}
+
 			bw.Reset()
 			writerStorage.Put(bw)
 		}
 	}()
-
-	earlyHintsFn := func(h http.Header) error {
-		if len(h) == 0 {
-			return nil
-		}
-
-		_, _ = bw.WriteString("HTTP/1.1 103 Early Hints\r\n")
-		for k, vv := range h {
-			for _, v := range vv {
-				_, _ = bw.WriteString(k)
-				_, _ = bw.WriteString(": ")
-				_, _ = bw.WriteString(v)
-				_, _ = bw.WriteString("\r\n")
-			}
-		}
-
-		_, _ = bw.WriteString("\r\n")
-		if _, err := bw.WriteTo(conn); err != nil {
-			return err
-		}
-
-		bw.ResetWriter(conn)
-
-		return nil
-	}
 
 	req := reqStorage.Get()
 	defer func() {
@@ -126,8 +114,6 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		resStorage.Put(res)
 	}()
 
-	remoteAddr := conn.RemoteAddr().String()
-
 	var tlsState *tls.ConnectionState
 	if tlsConn, ok := conn.(*tls.Conn); ok {
 		state := tlsConn.ConnectionState()
@@ -139,32 +125,21 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		maxBody = 32 << 20 // 32MB default
 	}
 
-	hijackFn := func() (net.Conn, *bufio.ReadWriter, error) {
-		if isHijacked {
-			return nil, nil, errors.New("h1: connection already hijacked")
-		}
-
-		isHijacked = true
-		rw := bufio.NewReadWriter(br, bufio.NewWriter(conn))
-
-		return conn, rw, nil
-	}
-
 	for {
 		req.Reset()
 		res.Reset()
 
 		req.Conn = conn
-		req.RemoteAddr = remoteAddr
+		req.bw = bw
+		req.br = br
 		req.TLS = tlsState
-		req.HijackFn = hijackFn
-		req.EarlyHintsFn = earlyHintsFn
 
 		// Set read timeout
 		readDeadline := ch.ReadTimeout
 		if readDeadline <= 0 {
 			readDeadline = ch.IdleTimeout
 		}
+
 		if readDeadline > 0 {
 			_ = conn.SetReadDeadline(time.Now().Add(readDeadline))
 		}
@@ -195,6 +170,25 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 				res.StatusCode = 500
 				res.Body = []byte(`{"error":"INTERNAL_ERROR","message":"Internal Server Error"}`)
 			}
+		} else if ch.StreamHandler != nil {
+			s := streamStorage.Get()
+			s.req = req
+			s.res = res
+			s.br = br
+			s.bw = bw
+			s.conn = conn
+			err := ch.StreamHandler.Serve(s)
+			s.req = nil
+			s.res = nil
+			s.br = nil
+			s.bw = nil
+			s.conn = nil
+			streamStorage.Put(s)
+
+			if err != nil {
+				res.StatusCode = 500
+				res.Body = []byte(`{"error":"INTERNAL_ERROR","message":"Internal Server Error"}`)
+			}
 		}
 
 		if req.CloseConnection {
@@ -206,8 +200,8 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			keepAlive = false
 		}
 
-		if isHijacked {
-			// Handler took over the raw connection
+		if req.isHijacked {
+			isHijacked = true
 			return nil
 		}
 
@@ -232,4 +226,89 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 			return nil
 		}
 	}
+}
+
+// ServerStream adapts an H1 server request/response exchange into a mach.Stream.
+type ServerStream struct {
+	req   *Request
+	res   *Response
+	br    *bufio.Reader
+	bw    *bytesconv.ByteBuffer
+	conn  net.Conn
+	frame StreamFrame
+}
+
+var _ mach.Stream = (*ServerStream)(nil)
+
+func (s *ServerStream) Read(p []byte) (int, error) {
+	if s.req != nil && len(s.req.Body) > 0 {
+		n := copy(p, s.req.Body)
+		s.req.Body = s.req.Body[n:]
+		return n, nil
+	}
+
+	if s.br != nil {
+		return s.br.Read(p)
+	}
+
+	return 0, io.EOF
+}
+
+func (s *ServerStream) Write(p []byte) (int, error) {
+	if s.bw != nil {
+		return s.bw.Write(p)
+	}
+
+	if s.conn != nil {
+		return s.conn.Write(p)
+	}
+
+	return 0, io.ErrClosedPipe
+}
+
+func (s *ServerStream) Close() error {
+	if s.bw != nil && s.conn != nil {
+		_, err := s.bw.WriteTo(s.conn)
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServerStream) ReadFrame() (mach.Frame, error) {
+	if s.br == nil {
+		return nil, io.EOF
+	}
+
+	line, err := s.br.ReadSlice('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	s.frame.frameType = mach.FrameData
+	s.frame.payload = line
+
+	return &s.frame, nil
+}
+
+func (s *ServerStream) Request() *Request {
+	return s.req
+}
+
+func (s *ServerStream) Response() *Response {
+	return s.res
+}
+
+// StreamFrame implements mach.Frame for ServerStream.
+type StreamFrame struct {
+	frameType uint8
+	payload   []byte
+}
+
+func (f *StreamFrame) Type() uint8 {
+	return f.frameType
+}
+
+func (f *StreamFrame) Payload() []byte {
+	return f.payload
 }

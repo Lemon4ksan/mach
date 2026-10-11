@@ -5,30 +5,55 @@
 package compress
 
 import (
-	"bytes"
 	"compress/zlib"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach/internal/stackless"
 )
 
-func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
-	v := flateReaderPool.Get()
-	if v == nil {
-		zr, err := zlib.NewReader(r)
-		if err != nil {
-			return nil, err
-		}
+var deflateWriterPoolMap = newDeflateWriterPoolMap()
 
-		return zr, nil
+func newDeflateWriterPoolMap() [12]*pool.PerCorePool[*zlib.Writer] {
+	var m [12]*pool.PerCorePool[*zlib.Writer]
+	for i := range 12 {
+		lvl := i - 2
+		m[i] = pool.NewPerCorePool[*zlib.Writer](func() *zlib.Writer {
+			zw, err := zlib.NewWriterLevel(io.Discard, lvl)
+			if err != nil {
+				if lvl < zlib.HuffmanOnly {
+					lvl = zlib.HuffmanOnly
+				} else {
+					lvl = zlib.BestCompression
+				}
+				zw, _ = zlib.NewWriterLevel(io.Discard, lvl)
+			}
+			return zw
+		})
+	}
+	return m
+}
+
+var flateReaderPool = pool.NewPerCorePool[io.ReadCloser](func() io.ReadCloser {
+	return nil
+})
+
+func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
+	zr := flateReaderPool.Get()
+	if zr == nil {
+		return zlib.NewReader(r)
 	}
 
-	zr := v.(io.ReadCloser) //nolint:forcetypeassert
-	if err := resetFlateReader(zr, r); err != nil {
+	zrr, ok := zr.(zlib.Resetter)
+	if !ok {
+		_ = zr.Close()
+		return zlib.NewReader(r)
+	}
+
+	if err := zrr.Reset(r, nil); err != nil {
 		_ = zr.Close()
 		return nil, err
 	}
@@ -37,6 +62,9 @@ func acquireFlateReader(r io.Reader) (io.ReadCloser, error) {
 }
 
 func releaseFlateReader(zr io.ReadCloser) {
+	if zr == nil {
+		return
+	}
 	_ = zr.Close()
 	flateReaderPool.Put(zr)
 }
@@ -51,80 +79,35 @@ func resetFlateReader(zr io.ReadCloser, r io.Reader) error {
 	return zrr.Reset(r, nil)
 }
 
-var flateReaderPool sync.Pool
-
-// AcquireStacklessDeflateWriter acquires an asynchronous stackless Deflate writer targeting w at the given compression level (RFC 1950 §2.2, RFC 1951 §3.1.1).
-//
-// It offloads deflate compression work to a dedicated worker pool, avoiding stack expansion on the caller goroutine.
-// Callers must return the writer to the pool with [ReleaseStacklessDeflateWriter] when completed.
+// AcquireStacklessDeflateWriter acquires a zero-alloc pooled Deflate writer targeting w at the given compression level (RFC 1950 §2.2, RFC 1951 §3.1.1).
 func AcquireStacklessDeflateWriter(w io.Writer, level int) stackless.Writer {
-	nLevel := normalizeCompressLevel(level)
-	p := stacklessDeflateWriterPoolMap[nLevel]
-
-	v := p.Get()
-	if v == nil {
-		return stackless.NewWriter(w, func(w io.Writer) stackless.Writer {
-			return acquireRealDeflateWriter(w, level)
-		})
-	}
-
-	sw := v.(stackless.Writer) //nolint:forcetypeassert
-	sw.Reset(w)
-
-	return sw
+	return acquireRealDeflateWriter(w, level)
 }
 
 // ReleaseStacklessDeflateWriter closes sw and returns it to the corresponding deflate pool (RFC 1950 §2.2, RFC 1951 §3.1.1).
-//
-// Callers must not use sw after calling ReleaseStacklessDeflateWriter.
 func ReleaseStacklessDeflateWriter(sw stackless.Writer, level int) {
-	_ = sw.Close()
-
-	nLevel := normalizeCompressLevel(level)
-	p := stacklessDeflateWriterPoolMap[nLevel]
-	p.Put(sw)
+	if zw, ok := sw.(*zlib.Writer); ok {
+		releaseRealDeflateWriter(zw, level)
+	} else if sw != nil {
+		_ = sw.Close()
+	}
 }
 
 func acquireRealDeflateWriter(w io.Writer, level int) *zlib.Writer {
 	nLevel := normalizeCompressLevel(level)
-	p := realDeflateWriterPoolMap[nLevel]
-
-	v := p.Get()
-	if v == nil {
-		zw, err := zlib.NewWriterLevel(w, level)
-		if err != nil {
-			// zlib.NewWriterLevel only errors for invalid
-			// compression levels. Clamp it to be min or max.
-			if level < zlib.HuffmanOnly {
-				level = zlib.HuffmanOnly
-			} else {
-				level = zlib.BestCompression
-			}
-
-			zw, _ = zlib.NewWriterLevel(w, level)
-		}
-
-		return zw
-	}
-
-	zw := v.(*zlib.Writer) //nolint:forcetypeassert
+	zw := deflateWriterPoolMap[nLevel].Get()
 	zw.Reset(w)
-
 	return zw
 }
 
 func releaseRealDeflateWriter(zw *zlib.Writer, level int) {
+	if zw == nil {
+		return
+	}
 	_ = zw.Close()
-
 	nLevel := normalizeCompressLevel(level)
-	p := realDeflateWriterPoolMap[nLevel]
-	p.Put(zw)
+	deflateWriterPoolMap[nLevel].Put(zw)
 }
-
-var (
-	stacklessDeflateWriterPoolMap = newCompressWriterPoolMap()
-	realDeflateWriterPoolMap      = newCompressWriterPoolMap()
-)
 
 // AppendDeflateBytesLevel appends deflated src to dst using the given
 // compression level and returns the resulting slice (RFC 1950 §2.2, RFC 1951 §3.1.1).
@@ -154,48 +137,10 @@ func AppendDeflateBytesLevel(dst, src []byte, level int) []byte {
 //   - [CompressDefaultCompression]
 //   - [CompressHuffmanOnly]
 func WriteDeflateLevel(w io.Writer, p []byte, level int) (int, error) {
-	switch w.(type) {
-	case *byteSliceWriter,
-		*bytes.Buffer,
-		*bytesconv.ByteBuffer:
-		// These writers don't block, so we can just use stacklessWriteDeflate
-		ctx := &compressCtx{
-			w:     w,
-			p:     p,
-			level: level,
-		}
-		stacklessWriteDeflate(ctx)
-
-		return len(p), nil
-
-	default:
-		zw := AcquireStacklessDeflateWriter(w, level)
-		n, err := zw.Write(p)
-		ReleaseStacklessDeflateWriter(zw, level)
-
-		return n, err
-	}
-}
-
-var (
-	stacklessWriteDeflateOnce sync.Once
-	stacklessWriteDeflateFunc func(ctx any) bool
-)
-
-func stacklessWriteDeflate(ctx any) {
-	stacklessWriteDeflateOnce.Do(func() {
-		stacklessWriteDeflateFunc = stackless.NewFunc(nonblockingWriteDeflate)
-	})
-	stacklessWriteDeflateFunc(ctx)
-}
-
-func nonblockingWriteDeflate(ctxv any) {
-	ctx := ctxv.(*compressCtx) //nolint:forcetypeassert
-	zw := acquireRealDeflateWriter(ctx.w, ctx.level)
-
-	_, _ = zw.Write(ctx.p)
-
-	releaseRealDeflateWriter(zw, ctx.level)
+	zw := acquireRealDeflateWriter(w, level)
+	n, err := zw.Write(p)
+	releaseRealDeflateWriter(zw, level)
+	return n, err
 }
 
 // WriteDeflate writes deflated p to w using [CompressDefaultCompression] and returns the number of compressed

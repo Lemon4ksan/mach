@@ -141,3 +141,22 @@ func BenchmarkFormatHexUint(b *testing.B) {
 		_ = FormatHexUint(&buf, 0x1A2B3C)
 	}
 }
+
+func BenchmarkDecodeArgAppend(b *testing.B) {
+	src := []byte("hello+world%20with%20encoded%26special%2Bcharacters%21")
+	dst := make([]byte, 0, len(src))
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = DecodeArgAppend(dst[:0], src)
+	}
+}
+
+func BenchmarkDecodeArgAppendNoPlus(b *testing.B) {
+	src := []byte("hello+world%20with%20encoded%26special%2Bcharacters%21")
+	dst := make([]byte, 0, len(src))
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = DecodeArgAppendNoPlus(dst[:0], src)
+	}
+}
+

@@ -231,6 +231,9 @@ func (req *Request) CopyToSkipBody(dst *Request) {
 	dst.ParsedPostArgs = req.ParsedPostArgs
 	dst.isTLS = req.isTLS
 	dst.UseHostHeader = req.UseHostHeader
+	dst.Timeout = req.Timeout
+	dst.SecureErrorLogMessage = req.SecureErrorLogMessage
+	dst.DisableRedirectPathNormalizing = req.DisableRedirectPathNormalizing
 }
 
 // BodyScoped borrows the request body without memory allocation using a borrow.Scope.

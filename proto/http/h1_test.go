@@ -5,6 +5,7 @@
 package http
 
 import (
+	"bytes"
 	"sync"
 	"testing"
 
@@ -123,13 +124,14 @@ var testHeaderRaw1KB = []byte("HTTP/1.1 200 OK\r\n" +
 	"Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\r\n")
 
 func BenchmarkHeaderScanner_SIMD(b *testing.B) {
-	b.SetBytes(int64(len(testHeaderRaw1KB)))
+	headersOnly := testHeaderRaw1KB[bytes.Index(testHeaderRaw1KB, []byte("\r\n"))+2:]
+	b.SetBytes(int64(len(headersOnly)))
 	b.ReportAllocs()
 
 	for b.Loop() {
 		var s headerScanner
 
-		s.b = testHeaderRaw1KB
+		s.b = headersOnly
 		for s.next() {
 			if len(s.key) == 0 || len(s.value) == 0 {
 				b.Fatal("empty kv")

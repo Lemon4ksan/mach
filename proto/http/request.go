@@ -188,7 +188,7 @@ func (req *Request) SetTimeout(t time.Duration) {
 }
 
 // Reset clears all request contents and returns internal buffers to their respective pools.
-// Must be called prior to returning the request to a sync.Pool.
+// Must be called prior to returning the request to a pool.
 //
 // Thread-safe: No.
 func (req *Request) Reset() {
@@ -199,6 +199,8 @@ func (req *Request) Reset() {
 	req.Header.Reset()
 	req.resetSkipHeader()
 	req.Timeout = 0
+	req.SecureErrorLogMessage = false
+	req.KeepBodyBuffer = false
 	req.UseHostHeader = false
 	req.DisableRedirectPathNormalizing = false
 }

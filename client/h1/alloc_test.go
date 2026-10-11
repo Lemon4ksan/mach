@@ -37,7 +37,7 @@ func TestDoAllocations(t *testing.T) {
 	// We'll recreate the conn for each run since reading consumes the buffer,
 	// but testing.AllocsPerRun expects the func to not allocate.
 	// We can pre-fill a larger buffer or reset it.
-	m := &mockConn{Buffer: bytes.NewBuffer(nil)}
+	m := &mockConn{Buffer: bytes.NewBuffer(make([]byte, 0, 64*1024))}
 	conn := h1.NewClientConn(m)
 
 	allocs := testing.AllocsPerRun(100, func() {
@@ -45,8 +45,8 @@ func TestDoAllocations(t *testing.T) {
 		_ = conn.Do(context.Background(), req, res)
 	})
 
-	if allocs > 0 { // Or whatever the baseline is
-		// t.Errorf("expected 0 allocations, got %f", allocs)
+	if allocs > 0 {
+		t.Errorf("expected 0 allocations, got %f", allocs)
 	}
 }
 

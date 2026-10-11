@@ -184,7 +184,7 @@ func (resp *Response) CopyTo(dst *Response) {
 
 	switch {
 	case resp.bodyRaw != nil:
-		dst.bodyRaw = append(dst.bodyRaw, resp.bodyRaw...)
+		dst.bodyRaw = append(dst.bodyRaw[:0], resp.bodyRaw...)
 		if dst.body != nil {
 			dst.body.Reset()
 		}
@@ -204,6 +204,10 @@ func (resp *Response) CopyToSkipBody(dst *Response) {
 	dst.SkipBody = resp.SkipBody
 	dst.raddr = resp.raddr
 	dst.laddr = resp.laddr
+	dst.ImmediateHeaderFlush = resp.ImmediateHeaderFlush
+	dst.StreamBody = resp.StreamBody
+	dst.SecureErrorLogMessage = resp.SecureErrorLogMessage
+	dst.OnInterimResponse = resp.OnInterimResponse
 }
 
 // BodyScoped borrows the response body without memory allocation using a borrow.Scope.

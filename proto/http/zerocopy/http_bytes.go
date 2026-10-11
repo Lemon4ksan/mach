@@ -83,12 +83,11 @@ func ParseIPv4(dst net.IP, ipStr []byte) (net.IP, error) {
 		return dst, errEmptyIPStr
 	}
 
-	if len(dst) < net.IPv4len || len(dst) > net.IPv4len {
+	if cap(dst) >= net.IPv4len {
+		dst = dst[:net.IPv4len]
+	} else {
 		dst = make([]byte, net.IPv4len)
 	}
-
-	copy(dst, net.IPv4zero)
-	dst = dst.To4() // dst is always non-nil here
 
 	b := ipStr
 	for i := range 3 {

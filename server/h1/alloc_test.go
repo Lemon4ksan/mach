@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -51,7 +52,37 @@ func TestServeConnAllocations(t *testing.T) {
 		_ = handler.ServeConn(&conn)
 	})
 
-	if allocs != 3 {
-		t.Errorf("ServeConn allocated %v times, expected 3", allocs)
+	if allocs != 0 {
+		t.Errorf("ServeConn allocated %v times, expected 0", allocs)
 	}
+}
+
+func TestServeConnStreamHandlerAllocations(t *testing.T) {
+	reqData := []byte("GET /stream HTTP/1.1\r\nHost: localhost\r\n\r\n")
+
+	handler := &h1.ConnHandler{
+		StreamHandler: h1_test_streamHandler{},
+	}
+
+	var conn mockConn
+	conn.Reader = bytes.NewReader(reqData)
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		conn.Reader.Reset(reqData)
+		conn.writeBuf = conn.writeBuf[:0]
+		_ = handler.ServeConn(&conn)
+	})
+
+	if allocs != 0 {
+		t.Errorf("ServeConn with StreamHandler allocated %v times, expected 0", allocs)
+	}
+}
+
+type h1_test_streamHandler struct{}
+
+func (h1_test_streamHandler) Serve(stream mach.Stream) error {
+	s := stream.(*h1.ServerStream)
+	s.Response().StatusCode = 200
+	s.Response().Body = append(s.Response().Body[:0], []byte("OK")...)
+	return nil
 }

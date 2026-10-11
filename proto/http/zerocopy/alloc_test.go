@@ -36,3 +36,43 @@ func TestAlloc(t *testing.T) {
 		t.Fatalf("expected 0 allocations on zerocopy hot path, got %v", allocs)
 	}
 }
+
+func TestParseIPv4_ZeroAlloc(t *testing.T) {
+	dst := make([]byte, 4)
+	ipStr := []byte("192.168.1.100")
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		res, err := zerocopy.ParseIPv4(dst, ipStr)
+		if err != nil || len(res) != 4 {
+			t.Fatalf("ParseIPv4 failed: %v, %v", res, err)
+		}
+	})
+
+	if allocs > 0 {
+		t.Fatalf("expected 0 allocations on ParseIPv4 with reusable buffer, got %v", allocs)
+	}
+}
+
+func TestFormatHexUint_ZeroAlloc(t *testing.T) {
+	var buf [16]byte
+	allocs := testing.AllocsPerRun(1000, func() {
+		_ = zerocopy.FormatHexUint(&buf, 0x1A2B3C)
+	})
+	if allocs > 0 {
+		t.Fatalf("expected 0 allocations on FormatHexUint, got %v", allocs)
+	}
+}
+
+func TestDecodeArgAppend_ZeroAlloc(t *testing.T) {
+	src := []byte("hello+world%20test%21%2Bmore")
+	dst := make([]byte, 0, len(src))
+	allocs := testing.AllocsPerRun(1000, func() {
+		_ = zerocopy.DecodeArgAppend(dst[:0], src)
+		_ = zerocopy.DecodeArgAppendNoPlus(dst[:0], src)
+	})
+	if allocs > 0 {
+		t.Fatalf("expected 0 allocations on DecodeArgAppend, got %v", allocs)
+	}
+}
+
+

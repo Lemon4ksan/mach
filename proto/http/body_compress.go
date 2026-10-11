@@ -11,12 +11,12 @@ import (
 	"io"
 	"sync"
 
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/seal/codec/compress"
 	"github.com/lemon4ksan/seal/codec/compress/brotli"
 	"github.com/lemon4ksan/seal/codec/compress/zstd"
-	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	machcompress "github.com/lemon4ksan/mach/proto/compress"
+	codeccompress "github.com/lemon4ksan/mach/proto/codec/compress"
 )
 
 // ErrContentEncodingUnsupported is returned when an HTTP payload specifies a Content-Encoding
@@ -46,7 +46,7 @@ func gunzipData(p []byte, maxBodySize int) ([]byte, error) {
 
 	var bb bytesconv.ByteBuffer
 
-	_, err := machcompress.WriteGunzipLimit(&bb, p, maxBodySize)
+	_, err := codeccompress.WriteGunzipLimit(&bb, p, maxBodySize)
 	if err != nil {
 		return nil, mapLimitError(err)
 	}
@@ -61,7 +61,7 @@ func unBrotliData(p []byte, maxBodySize int) ([]byte, error) {
 
 	var bb bytesconv.ByteBuffer
 
-	_, err := machcompress.WriteUnbrotliLimit(&bb, p, maxBodySize)
+	_, err := codeccompress.WriteUnbrotliLimit(&bb, p, maxBodySize)
 	if err != nil {
 		return nil, mapLimitError(err)
 	}
@@ -76,7 +76,7 @@ func unzstdData(p []byte, maxBodySize int) ([]byte, error) {
 
 	var bb bytesconv.ByteBuffer
 
-	_, err := machcompress.WriteUnzstdLimit(&bb, p, maxBodySize)
+	_, err := codeccompress.WriteUnzstdLimit(&bb, p, maxBodySize)
 	if err != nil {
 		return nil, mapLimitError(err)
 	}
@@ -91,7 +91,7 @@ func inflateData(p []byte, maxBodySize int) ([]byte, error) {
 
 	var bb bytesconv.ByteBuffer
 
-	_, err := machcompress.WriteInflateLimit(&bb, p, maxBodySize)
+	_, err := codeccompress.WriteInflateLimit(&bb, p, maxBodySize)
 	if err != nil {
 		return nil, mapLimitError(err)
 	}
@@ -210,21 +210,21 @@ func compressBrotliBodyStream(sw *bufio.Writer, bodyStream io.Reader, level int)
 }
 
 func compressGzipBodyStream(sw *bufio.Writer, bodyStream io.Reader, level int) error {
-	zw := machcompress.AcquireStacklessGzipWriter(sw, level)
+	zw := codeccompress.AcquireGzipWriter(sw, level)
 	fw := &flushWriter{wf: zw, bw: sw}
 	_, wErr := copyBodyStream(fw, bodyStream)
 
-	machcompress.ReleaseStacklessGzipWriter(zw, level)
+	codeccompress.ReleaseGzipWriter(zw, level)
 
 	return wErr
 }
 
 func compressDeflateBodyStream(sw *bufio.Writer, bodyStream io.Reader, level int) error {
-	zw := machcompress.AcquireStacklessDeflateWriter(sw, level)
+	zw := codeccompress.AcquireDeflateWriter(sw, level)
 	fw := &flushWriter{wf: zw, bw: sw}
 	_, wErr := copyBodyStream(fw, bodyStream)
 
-	machcompress.ReleaseStacklessDeflateWriter(zw, level)
+	codeccompress.ReleaseDeflateWriter(zw, level)
 
 	return wErr
 }
