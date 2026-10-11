@@ -35,7 +35,7 @@ func (req *Request) parsePostArgs() {
 		return
 	}
 
-	req.postArgs.ParseBytes(req.bodyBytes())
+	uri.Parse(&req.postArgs, req.bodyBytes())
 }
 
 // MultipartForm returns the parsed multipart/form-data payload (RFC 7578).

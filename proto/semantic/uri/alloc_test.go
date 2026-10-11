@@ -16,7 +16,7 @@ func TestAlloc(t *testing.T) {
 
 	allocs := testing.AllocsPerRun(1000, func() {
 		args := uri.AcquireArgs()
-		args.ParseBytes(query)
+		uri.Parse(args, query)
 		_ = args.Peek("foo")
 		uri.ReleaseArgs(args)
 
@@ -45,8 +45,34 @@ func TestDecodeArgAppend_ZeroAlloc(t *testing.T) {
 	}
 }
 
-func TestParseArgs_ZeroAlloc(t *testing.T) {
-	t.Run("String", func(t *testing.T) {
+func TestParse_ZeroAlloc(t *testing.T) {
+	t.Run("GenericString", func(t *testing.T) {
+		query := "foo=bar&baz=qux&num=12345"
+		allocs := testing.AllocsPerRun(1000, func() {
+			args := uri.AcquireArgs()
+			uri.Parse(args, query)
+			_ = args.Peek("foo")
+			uri.ReleaseArgs(args)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on Parse string, got %v", allocs)
+		}
+	})
+
+	t.Run("GenericBytes", func(t *testing.T) {
+		query := []byte("foo=bar&baz=qux&num=12345")
+		allocs := testing.AllocsPerRun(1000, func() {
+			args := uri.AcquireArgs()
+			uri.Parse(args, query)
+			_ = args.Peek("foo")
+			uri.ReleaseArgs(args)
+		})
+		if allocs > 0 {
+			t.Fatalf("expected 0 allocations on Parse bytes, got %v", allocs)
+		}
+	})
+
+	t.Run("ParseArgsLegacy", func(t *testing.T) {
 		query := "foo=bar&baz=qux&num=12345"
 		allocs := testing.AllocsPerRun(1000, func() {
 			args := uri.AcquireArgs()
@@ -55,20 +81,7 @@ func TestParseArgs_ZeroAlloc(t *testing.T) {
 			uri.ReleaseArgs(args)
 		})
 		if allocs > 0 {
-			t.Fatalf("expected 0 allocations on ParseArgs string, got %v", allocs)
-		}
-	})
-
-	t.Run("Bytes", func(t *testing.T) {
-		query := []byte("foo=bar&baz=qux&num=12345")
-		allocs := testing.AllocsPerRun(1000, func() {
-			args := uri.AcquireArgs()
-			uri.ParseArgs(args, query)
-			_ = args.Peek("foo")
-			uri.ReleaseArgs(args)
-		})
-		if allocs > 0 {
-			t.Fatalf("expected 0 allocations on ParseArgs bytes, got %v", allocs)
+			t.Fatalf("expected 0 allocations on ParseArgs legacy, got %v", allocs)
 		}
 	})
 }

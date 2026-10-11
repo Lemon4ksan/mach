@@ -108,7 +108,7 @@ func (h *header) SetConnectionClose() {
 func (h *header) ResetConnectionClose() {
 	if h.connectionClose {
 		h.connectionClose = false
-		h.h.Del(HeaderConnection)
+		h.h.Del(headkit.Connection)
 	}
 }
 

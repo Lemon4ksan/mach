@@ -20,38 +20,24 @@ import (
 	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
-// SetByteRange sets 'Range: bytes=startPos-endPos' header (RFC 9110 Section 14.1.2).
-//
-//   - If startPos is negative, then 'bytes=-startPos' value is set.
-//   - If endPos is negative, then 'bytes=startPos-' value is set.
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetByteRange(startPos, endPos int) {
-	b := h.bufV[:0]
-	b = append(b, StrBytes...)
-
-	b = append(b, '=')
-	if startPos >= 0 {
-		b = AppendUint(b, startPos)
-	}
-	if startPos < 0 {
-		endPos = -startPos
-	}
-
-	b = append(b, '-')
-	if endPos >= 0 {
-		b = AppendUint(b, endPos)
-	}
-
-	h.bufV = b
-	h.setNonSpecial(StrRange, h.bufV)
-}
+var (
+	strMethodGet     = []byte(MethodGet)
+	strMethodHead    = []byte(MethodHead)
+	strMethodPost    = []byte(MethodPost)
+	strMethodPut     = []byte(MethodPut)
+	strMethodDelete  = []byte(MethodDelete)
+	strMethodConnect = []byte(MethodConnect)
+	strMethodOptions = []byte(MethodOptions)
+	strMethodTrace   = []byte(MethodTrace)
+	strMethodPatch   = []byte(MethodPatch)
+	strAltSvc        = []byte("Alt-Svc")
+)
 
 // ConnectionUpgrade returns true if 'Connection: Upgrade' header is set (RFC 9110 Section 7.8).
 //
 // Thread-safe: No.
 func (h *RequestHeader) ConnectionUpgrade() bool {
-	return hasHeaderValue(h.Peek(HeaderConnection), StrUpgrade)
+	return hasHeaderValue(h.Peek(headkit.Connection), StrUpgrade)
 }
 
 // ContentLength returns Content-Length header value as an integer (RFC 9110 Section 8.6, RFC 9112 Section 6.2).
@@ -85,7 +71,7 @@ func (h *RequestHeader) SetContentLength(contentLength int) {
 // Thread-safe: No.
 func (h *RequestHeader) ContentType() []byte {
 	if h.disableSpecialHeader {
-		return peekArgBytesHeaders(&h.h, []byte(HeaderContentType))
+		return peekArgBytesHeaders(&h.h, StrContentType)
 	}
 
 	return h.contentType
@@ -117,21 +103,6 @@ func (h *RequestHeader) SetContentEncodingBytes(contentEncoding []byte) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetMultipartFormBoundary(boundary string) {
-	b := h.bufV[:0]
-	b = append(b, StrMultipartFormData...)
-	b = append(b, ';', ' ')
-	b = append(b, StrBoundary...)
-	b = append(b, '=')
-	b = append(b, boundary...)
-	h.bufV = b
-	h.SetContentTypeBytes(h.bufV)
-}
-
-// SetMultipartFormBoundaryBytes sets the following Content-Type:
-// 'multipart/form-data; boundary=...' (RFC 7578 Section 4.1).
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetMultipartFormBoundaryBytes(boundary []byte) {
 	b := h.bufV[:0]
 	b = append(b, StrMultipartFormData...)
 	b = append(b, ';', ' ')
@@ -197,7 +168,7 @@ func (h *RequestHeader) MultipartFormBoundary() []byte {
 // Thread-safe: No.
 func (h *RequestHeader) Host() []byte {
 	if h.disableSpecialHeader {
-		return peekArgBytesHeaders(&h.h, []byte(HeaderHost))
+		return peekArgBytesHeaders(&h.h, StrHost)
 	}
 
 	return h.host
@@ -222,7 +193,7 @@ func (h *RequestHeader) SetHostBytes(host []byte) {
 // Thread-safe: No.
 func (h *RequestHeader) UserAgent() []byte {
 	if h.disableSpecialHeader {
-		return peekArgBytesHeaders(&h.h, []byte(HeaderUserAgent))
+		return peekArgBytesHeaders(&h.h, StrUserAgent)
 	}
 
 	return h.userAgent
@@ -242,33 +213,12 @@ func (h *RequestHeader) SetUserAgentBytes(userAgent []byte) {
 	h.userAgent = cookie.InitHeaderValueBytes(h.userAgent, userAgent)
 }
 
-// Referer returns Referer header value (RFC 9110 Section 10.1.3).
-//
-// Thread-safe: No.
-func (h *RequestHeader) Referer() []byte {
-	return peekArgBytesHeaders(&h.h, StrReferer)
-}
-
-// SetReferer sets Referer header value (RFC 9110 Section 10.1.3).
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetReferer(referer string) {
-	h.setNonSpecial(StrReferer, bytesconv.S2B(referer))
-}
-
-// SetRefererBytes sets Referer header value (RFC 9110 Section 10.1.3).
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetRefererBytes(referer []byte) {
-	h.setNonSpecial(StrReferer, referer)
-}
-
 // Method returns HTTP request method (RFC 9110 Section 9).
 //
 // Thread-safe: No.
 func (h *RequestHeader) Method() []byte {
 	if len(h.method) == 0 {
-		return []byte(MethodGet)
+		return strMethodGet
 	}
 
 	return h.method
@@ -293,14 +243,6 @@ func (h *RequestHeader) SetMethodBytes(method []byte) {
 // Thread-safe: No.
 func (h *RequestHeader) SetProtocol(protocol string) {
 	h.protocol = cookie.InitHeaderValueString(h.protocol, protocol)
-	h.noHTTP11 = !bytes.Equal(h.protocol, StrHTTP11)
-}
-
-// SetProtocolBytes sets HTTP request protocol (RFC 9112 Section 2.3).
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetProtocolBytes(protocol []byte) {
-	h.protocol = cookie.InitHeaderValueBytes(h.protocol, protocol)
 	h.noHTTP11 = !bytes.Equal(h.protocol, StrHTTP11)
 }
 
@@ -332,78 +274,47 @@ func (h *RequestHeader) SetRequestURIBytes(requestURI []byte) {
 
 // IsGet returns true if request method is GET (RFC 9110 Section 9.3.1).
 func (h *RequestHeader) IsGet() bool {
-	return string(h.Method()) == MethodGet
-}
-
-// IsPost returns true if request method is POST (RFC 9110 Section 9.3.3).
-func (h *RequestHeader) IsPost() bool {
-	return string(h.Method()) == MethodPost
-}
-
-// IsPut returns true if request method is PUT (RFC 9110 Section 9.3.4).
-func (h *RequestHeader) IsPut() bool {
-	return string(h.Method()) == MethodPut
+	return bytes.Equal(h.Method(), strMethodGet)
 }
 
 // IsHead returns true if request method is HEAD (RFC 9110 Section 9.3.2).
 func (h *RequestHeader) IsHead() bool {
-	return string(h.Method()) == MethodHead
+	return bytes.Equal(h.Method(), strMethodHead)
+}
+
+// IsPost returns true if request method is POST (RFC 9110 Section 9.3.3).
+func (h *RequestHeader) IsPost() bool {
+	return bytes.Equal(h.Method(), strMethodPost)
+}
+
+// IsPut returns true if request method is PUT (RFC 9110 Section 9.3.4).
+func (h *RequestHeader) IsPut() bool {
+	return bytes.Equal(h.Method(), strMethodPut)
 }
 
 // IsDelete returns true if request method is DELETE (RFC 9110 Section 9.3.5).
 func (h *RequestHeader) IsDelete() bool {
-	return string(h.Method()) == MethodDelete
+	return bytes.Equal(h.Method(), strMethodDelete)
 }
 
 // IsConnect returns true if request method is CONNECT (RFC 9110 Section 9.3.6).
 func (h *RequestHeader) IsConnect() bool {
-	return string(h.Method()) == MethodConnect
+	return bytes.Equal(h.Method(), strMethodConnect)
 }
 
 // IsOptions returns true if request method is OPTIONS (RFC 9110 Section 9.3.7).
 func (h *RequestHeader) IsOptions() bool {
-	return string(h.Method()) == MethodOptions
+	return bytes.Equal(h.Method(), strMethodOptions)
 }
 
 // IsTrace returns true if request method is TRACE (RFC 9110 Section 9.3.8).
 func (h *RequestHeader) IsTrace() bool {
-	return string(h.Method()) == MethodTrace
+	return bytes.Equal(h.Method(), strMethodTrace)
 }
 
 // IsPatch returns true if request method is PATCH (RFC 5789 Section 2).
 func (h *RequestHeader) IsPatch() bool {
-	return string(h.Method()) == MethodPatch
-}
-
-// HasAcceptEncoding returns true if the header contains the given Accept-Encoding value (RFC 9110 Section 12.5.3).
-//
-// Thread-safe: No.
-func (h *RequestHeader) HasAcceptEncoding(acceptEncoding string) bool {
-	h.bufV = append(h.bufV[:0], acceptEncoding...)
-	return h.HasAcceptEncodingBytes(h.bufV)
-}
-
-// HasAcceptEncodingBytes returns true if the header contains the given Accept-Encoding value (RFC 9110 Section 12.5.3).
-//
-// Thread-safe: No.
-func (h *RequestHeader) HasAcceptEncodingBytes(acceptEncoding []byte) bool {
-	ae := h.peek(StrAcceptEncoding)
-
-	n := bytes.Index(ae, acceptEncoding)
-	if n < 0 {
-		return false
-	}
-
-	b := ae[n+len(acceptEncoding):]
-	if len(b) > 0 && b[0] != ',' {
-		return false
-	}
-
-	if n == 0 {
-		return true
-	}
-
-	return ae[n-1] == ' '
+	return bytes.Equal(h.Method(), strMethodPatch)
 }
 
 // Len returns the number of headers set.
@@ -471,22 +382,8 @@ func (h *RequestHeader) All() iter.Seq2[[]byte, []byte] {
 		}
 
 		if len(h.trailer) > 0 {
-			if !yield(StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace)) {
-				return
-			}
-		}
-	}
-}
-
-// AllInOrder returns an iterator over key-value pairs in h in the order they were parsed or added.
-//
-// Modifying RequestHeader during iteration causes undefined behavior.
-//
-// Thread-safe: No.
-func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
-	return func(yield func([]byte, []byte) bool) {
-		for k, v := range h.h.All() {
-			if !yield(bytesconv.S2B(k), bytesconv.S2B(v)) {
+			h.bufV = appendTrailerBytes(h.bufV[:0], h.trailer, StrCommaSpace)
+			if !yield(StrTrailer, h.bufV) {
 				return
 			}
 		}
@@ -498,20 +395,20 @@ func (h *RequestHeader) AllInOrder() iter.Seq2[[]byte, []byte] {
 // Thread-safe: No.
 func (h *RequestHeader) Del(key string) {
 	switch key {
-	case HeaderHost:
+	case headkit.Host:
 		h.host = h.host[:0]
-	case HeaderContentType:
+	case headkit.ContentType:
 		h.contentType = h.contentType[:0]
-	case HeaderUserAgent:
+	case headkit.UserAgent:
 		h.userAgent = h.userAgent[:0]
-	case HeaderCookie:
+	case headkit.Cookie:
 		h.cookies = h.cookies[:0]
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		h.contentLength = 0
 		h.contentLengthBytes = h.contentLengthBytes[:0]
-	case HeaderConnection:
+	case headkit.Connection:
 		h.connectionClose = false
-	case HeaderTrailer:
+	case headkit.Trailer:
 		h.trailer = h.trailer[:0]
 	}
 
@@ -530,20 +427,20 @@ func (h *RequestHeader) DelBytes(key []byte) {
 func (h *RequestHeader) del(key []byte) {
 	k := bytesconv.B2S(key)
 	switch k {
-	case HeaderHost:
+	case headkit.Host:
 		h.host = h.host[:0]
-	case HeaderContentType:
+	case headkit.ContentType:
 		h.contentType = h.contentType[:0]
-	case HeaderUserAgent:
+	case headkit.UserAgent:
 		h.userAgent = h.userAgent[:0]
-	case HeaderCookie:
+	case headkit.Cookie:
 		h.cookies = h.cookies[:0]
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		h.contentLength = 0
 		h.contentLengthBytes = h.contentLengthBytes[:0]
-	case HeaderConnection:
+	case headkit.Connection:
 		h.connectionClose = false
-	case HeaderTrailer:
+	case headkit.Trailer:
 		h.trailer = h.trailer[:0]
 	}
 
@@ -621,20 +518,6 @@ func (h *RequestHeader) Add(key, value string) {
 	h.h.Add(key, value)
 }
 
-// AddBytesK adds the given 'Key: value' header (RFC 9110 Section 5.2).
-//
-// Thread-safe: No.
-func (h *RequestHeader) AddBytesK(key []byte, value string) {
-	h.AddBytesKV(key, bytesconv.S2B(value))
-}
-
-// AddBytesV adds the given 'Key: value' header (RFC 9110 Section 5.2).
-//
-// Thread-safe: No.
-func (h *RequestHeader) AddBytesV(key string, value []byte) {
-	h.AddBytesKV(bytesconv.S2B(key), value)
-}
-
 // AddBytesKV adds the given 'Key: value' header (RFC 9110 Section 5.2).
 //
 // Thread-safe: No.
@@ -664,22 +547,6 @@ func (h *RequestHeader) Set(key, value string) {
 	}
 
 	h.h.Set(key, value)
-}
-
-// SetBytesK sets the given 'Key: value' header (RFC 9110 Section 5.1).
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetBytesK(key []byte, value string) {
-	h.bufV = append(h.bufV[:0], value...)
-	h.SetBytesKV(key, h.bufV)
-}
-
-// SetBytesV sets the given 'Key: value' header (RFC 9110 Section 5.1).
-//
-// Thread-safe: No.
-func (h *RequestHeader) SetBytesV(key string, value []byte) {
-	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
-	h.SetCanonical(h.bufK, value)
 }
 
 // SetBytesKV sets the given 'Key: value' header (RFC 9110 Section 5.1).
@@ -721,40 +588,35 @@ func (h *RequestHeader) PeekBytes(key []byte) []byte {
 	return h.peek(h.bufK)
 }
 
-// PeekCanonical returns header value for the given key without normalizing it (RFC 9110 Section 5.1).
-//
-// Thread-safe: No.
-func (h *RequestHeader) PeekCanonical(key []byte) []byte {
-	return h.peek(key)
-}
-
 func (h *RequestHeader) peek(key []byte) []byte {
 	k := bytesconv.B2S(key)
 	switch k {
-	case HeaderHost:
+	case headkit.Host:
 		return h.Host()
-	case HeaderContentType:
+	case headkit.ContentType:
 		return h.ContentType()
-	case HeaderUserAgent:
+	case headkit.UserAgent:
 		return h.UserAgent()
-	case HeaderConnection:
+	case headkit.Connection:
 		if h.ConnectionClose() {
 			return StrClose
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
 
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		return h.contentLengthBytes
-	case HeaderCookie:
+	case headkit.Cookie:
 		if h.cookiesCollected {
-			return cookie.AppendRequestCookieBytes(nil, h.cookies)
+			h.bufV = cookie.AppendRequestCookieBytes(h.bufV[:0], h.cookies)
+			return h.bufV
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
 
-	case HeaderTrailer:
-		return appendTrailerBytes(nil, h.trailer, StrCommaSpace)
+	case headkit.Trailer:
+		h.bufV = appendTrailerBytes(h.bufV[:0], h.trailer, StrCommaSpace)
+		return h.bufV
 	default:
 		return peekArgBytesHeaders(&h.h, key)
 	}
@@ -771,20 +633,20 @@ func (h *RequestHeader) PeekAll(key string) [][]byte {
 
 func (h *RequestHeader) peekAll(key []byte) [][]byte {
 	h.mulHeader = h.mulHeader[:0]
-	switch string(key) {
-	case HeaderHost:
+	switch bytesconv.B2S(key) {
+	case headkit.Host:
 		if host := h.Host(); len(host) > 0 {
 			h.mulHeader = append(h.mulHeader, host)
 		}
-	case HeaderContentType:
+	case headkit.ContentType:
 		if contentType := h.ContentType(); len(contentType) > 0 {
 			h.mulHeader = append(h.mulHeader, contentType)
 		}
-	case HeaderUserAgent:
+	case headkit.UserAgent:
 		if ua := h.UserAgent(); len(ua) > 0 {
 			h.mulHeader = append(h.mulHeader, ua)
 		}
-	case HeaderConnection:
+	case headkit.Connection:
 		if h.ConnectionClose() {
 			h.mulHeader = append(h.mulHeader, StrClose)
 			return h.mulHeader
@@ -792,18 +654,20 @@ func (h *RequestHeader) peekAll(key []byte) [][]byte {
 
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
-	case HeaderCookie:
+	case headkit.Cookie:
 		if h.cookiesCollected {
-			h.mulHeader = append(h.mulHeader, cookie.AppendRequestCookieBytes(nil, h.cookies))
+			h.bufV = cookie.AppendRequestCookieBytes(h.bufV[:0], h.cookies)
+			h.mulHeader = append(h.mulHeader, h.bufV)
 			return h.mulHeader
 		}
 
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
-	case HeaderTrailer:
-		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
+	case headkit.Trailer:
+		h.bufV = appendTrailerBytes(h.bufV[:0], h.trailer, StrCommaSpace)
+		h.mulHeader = append(h.mulHeader, h.bufV)
 	default:
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 	}
@@ -822,22 +686,6 @@ func (h *RequestHeader) PeekKeys() [][]byte {
 	}
 
 	return h.mulHeader
-}
-
-// SetContentRange sets 'Content-Range: bytes startPos-endPos/contentLength' header (RFC 9110 Section 14.4).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) SetContentRange(startPos, endPos, contentLength int) {
-	b := h.bufV[:0]
-	b = append(b, StrBytes...)
-	b = append(b, ' ')
-	b = AppendUint(b, startPos)
-	b = append(b, '-')
-	b = AppendUint(b, endPos)
-	b = append(b, '/')
-	b = AppendUint(b, contentLength)
-	h.bufV = b
-	h.setNonSpecial(StrContentRange, h.bufV)
 }
 
 // StatusCode returns response status code (RFC 9110 Section 15).
@@ -891,7 +739,7 @@ func (h *ResponseHeader) SetLastModified(t time.Time) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) ConnectionUpgrade() bool {
-	return hasHeaderValue(h.Peek(HeaderConnection), StrUpgrade)
+	return hasHeaderValue(h.Peek(headkit.Connection), StrUpgrade)
 }
 
 // ContentLength returns Content-Length header value as an integer (RFC 9110 Section 8.6, RFC 9112 Section 6.2).
@@ -989,12 +837,15 @@ func (h *ResponseHeader) SetContentEncodingBytes(contentEncoding []byte) {
 func (h *ResponseHeader) addVaryBytes(value []byte) {
 	v := h.peek(StrVary)
 	if len(v) == 0 {
-		h.SetBytesV(HeaderVary, value)
+		h.SetBytesKV(StrVary, value)
 		return
 	}
 
 	if !bytes.Contains(v, value) {
-		h.SetBytesV(HeaderVary, append(append(v, ','), value...))
+		h.bufV = append(h.bufV[:0], v...)
+		h.bufV = append(h.bufV, ',')
+		h.bufV = append(h.bufV, value...)
+		h.SetBytesKV(StrVary, h.bufV)
 	}
 }
 
@@ -1009,7 +860,7 @@ func (h *ResponseHeader) Server() []byte {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) AltSvc() []altsvc.Service {
-	altSvcHeader := h.peek([]byte("Alt-Svc"))
+	altSvcHeader := h.peek(strAltSvc)
 	if len(altSvcHeader) == 0 {
 		return nil
 	}
@@ -1096,7 +947,8 @@ func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 		}
 
 		if len(h.trailer) > 0 {
-			if !yield(StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace)) {
+			h.bufV = appendTrailerBytes(h.bufV[:0], h.trailer, StrCommaSpace)
+			if !yield(StrTrailer, h.bufV) {
 				return
 			}
 		}
@@ -1108,20 +960,20 @@ func (h *ResponseHeader) All() iter.Seq2[[]byte, []byte] {
 // Thread-safe: No.
 func (h *ResponseHeader) Del(key string) {
 	switch key {
-	case HeaderContentType:
+	case headkit.ContentType:
 		h.contentType = h.contentType[:0]
-	case HeaderContentEncoding:
+	case headkit.ContentEncoding:
 		h.contentEncoding = h.contentEncoding[:0]
-	case HeaderServer:
+	case headkit.Server:
 		h.server = h.server[:0]
-	case HeaderSetCookie:
+	case headkit.SetCookie:
 		h.cookies = h.cookies[:0]
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		h.contentLength = 0
 		h.contentLengthBytes = h.contentLengthBytes[:0]
-	case HeaderConnection:
+	case headkit.Connection:
 		h.connectionClose = false
-	case HeaderTrailer:
+	case headkit.Trailer:
 		h.trailer = h.trailer[:0]
 	}
 
@@ -1140,20 +992,20 @@ func (h *ResponseHeader) DelBytes(key []byte) {
 func (h *ResponseHeader) del(key []byte) {
 	k := bytesconv.B2S(key)
 	switch k {
-	case HeaderContentType:
+	case headkit.ContentType:
 		h.contentType = h.contentType[:0]
-	case HeaderContentEncoding:
+	case headkit.ContentEncoding:
 		h.contentEncoding = h.contentEncoding[:0]
-	case HeaderServer:
+	case headkit.Server:
 		h.server = h.server[:0]
-	case HeaderSetCookie:
+	case headkit.SetCookie:
 		h.cookies = h.cookies[:0]
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		h.contentLength = 0
 		h.contentLengthBytes = h.contentLengthBytes[:0]
-	case HeaderConnection:
+	case headkit.Connection:
 		h.connectionClose = false
-	case HeaderTrailer:
+	case headkit.Trailer:
 		h.trailer = h.trailer[:0]
 	}
 
@@ -1238,19 +1090,6 @@ func (h *ResponseHeader) Add(key, value string) {
 	h.h.Add(key, value)
 }
 
-// AddBytesK adds the given 'Key: value' header (RFC 9110 Section 5.2).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) AddBytesK(key []byte, value string) {
-	h.AddBytesKV(key, bytesconv.S2B(value))
-}
-
-// AddBytesV adds the given 'Key: value' header (RFC 9110 Section 5.2).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) AddBytesV(key string, value []byte) {
-	h.AddBytesKV(bytesconv.S2B(key), value)
-}
 
 // AddBytesKV adds the given 'Key: value' header (RFC 9110 Section 5.2).
 //
@@ -1281,22 +1120,6 @@ func (h *ResponseHeader) Set(key, value string) {
 	}
 
 	h.h.Set(key, value)
-}
-
-// SetBytesK sets the given 'Key: value' header (RFC 9110 Section 5.1).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) SetBytesK(key []byte, value string) {
-	h.bufV = append(h.bufV[:0], value...)
-	h.SetBytesKV(key, h.bufV)
-}
-
-// SetBytesV sets the given 'Key: value' header (RFC 9110 Section 5.1).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) SetBytesV(key string, value []byte) {
-	h.bufK = GetHeaderKeyBytes(h.bufK, key, h.disableNormalizing)
-	h.SetCanonical(h.bufK, value)
 }
 
 // SetBytesKV sets the given 'Key: value' header (RFC 9110 Section 5.1).
@@ -1338,35 +1161,30 @@ func (h *ResponseHeader) PeekBytes(key []byte) []byte {
 	return h.peek(h.bufK)
 }
 
-// PeekCanonical returns header value for the given key without normalizing it (RFC 9110 Section 5.1).
-//
-// Thread-safe: No.
-func (h *ResponseHeader) PeekCanonical(key []byte) []byte {
-	return h.peek(key)
-}
-
 func (h *ResponseHeader) peek(key []byte) []byte {
 	k := bytesconv.B2S(key)
 	switch k {
-	case HeaderContentType:
+	case headkit.ContentType:
 		return h.ContentType()
-	case HeaderContentEncoding:
+	case headkit.ContentEncoding:
 		return h.ContentEncoding()
-	case HeaderServer:
+	case headkit.Server:
 		return h.Server()
-	case HeaderConnection:
+	case headkit.Connection:
 		if h.ConnectionClose() {
 			return StrClose
 		}
 
 		return peekArgBytesHeaders(&h.h, key)
 
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		return h.contentLengthBytes
-	case HeaderSetCookie:
-		return cookie.AppendResponseCookieBytes(nil, h.cookies)
-	case HeaderTrailer:
-		return appendTrailerBytes(nil, h.trailer, StrCommaSpace)
+	case headkit.SetCookie:
+		h.bufV = cookie.AppendResponseCookieBytes(h.bufV[:0], h.cookies)
+		return h.bufV
+	case headkit.Trailer:
+		h.bufV = appendTrailerBytes(h.bufV[:0], h.trailer, StrCommaSpace)
+		return h.bufV
 	default:
 		return peekArgBytesHeaders(&h.h, key)
 	}
@@ -1383,20 +1201,20 @@ func (h *ResponseHeader) PeekAll(key string) [][]byte {
 
 func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 	h.mulHeader = h.mulHeader[:0]
-	switch string(key) {
-	case HeaderContentType:
+	switch bytesconv.B2S(key) {
+	case headkit.ContentType:
 		if contentType := h.ContentType(); len(contentType) > 0 {
 			h.mulHeader = append(h.mulHeader, contentType)
 		}
-	case HeaderContentEncoding:
+	case headkit.ContentEncoding:
 		if contentEncoding := h.ContentEncoding(); len(contentEncoding) > 0 {
 			h.mulHeader = append(h.mulHeader, contentEncoding)
 		}
-	case HeaderServer:
+	case headkit.Server:
 		if server := h.Server(); len(server) > 0 {
 			h.mulHeader = append(h.mulHeader, server)
 		}
-	case HeaderConnection:
+	case headkit.Connection:
 		if h.ConnectionClose() {
 			h.mulHeader = append(h.mulHeader, StrClose)
 			return h.mulHeader
@@ -1404,12 +1222,14 @@ func (h *ResponseHeader) peekAll(key []byte) [][]byte {
 
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 
-	case HeaderContentLength:
+	case headkit.ContentLength:
 		h.mulHeader = append(h.mulHeader, h.contentLengthBytes)
-	case HeaderSetCookie:
-		h.mulHeader = append(h.mulHeader, cookie.AppendResponseCookieBytes(nil, h.cookies))
-	case HeaderTrailer:
-		h.mulHeader = append(h.mulHeader, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
+	case headkit.SetCookie:
+		h.bufV = cookie.AppendResponseCookieBytes(h.bufV[:0], h.cookies)
+		h.mulHeader = append(h.mulHeader, h.bufV)
+	case headkit.Trailer:
+		h.bufV = appendTrailerBytes(h.bufV[:0], h.trailer, StrCommaSpace)
+		h.mulHeader = append(h.mulHeader, h.bufV)
 	default:
 		h.mulHeader = peekAllArgBytesToDstHeaders(h.mulHeader, &h.h, key)
 	}
@@ -1479,120 +1299,23 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 
 func hasHeaderValue(s, value []byte) bool {
 	for len(s) > 0 {
-		before, after, ok := bytes.Cut(s, []byte{','})
+		var before []byte
+		idx := bytes.IndexByte(s, ',')
+		if idx >= 0 {
+			before = s[:idx]
+			s = s[idx+1:]
+		} else {
+			before = s
+			s = nil
+		}
 		if CaseInsensitiveCompare(bytes.Trim(before, " \t"), value) {
 			return true
 		}
-		if !ok {
-			break
-		}
-		s = after
 	}
 
 	return false
 }
 
-// AppendNormalizedHeaderKey appends normalized header key (name) to dst and returns the resulting dst.
-//
-// Normalized header key starts with uppercase letter. The first letters after dashes are also uppercased.
-// All other letters are lowercased.
-func AppendNormalizedHeaderKey(dst []byte, key string) []byte {
-	dst = append(dst, key...)
-	NormalizeHeaderKey(dst[len(dst)-len(key):], false)
-	return dst
-}
-
-// AppendNormalizedHeaderKeyBytes appends normalized header key (name) to dst and returns the resulting dst.
-//
-// Normalized header key starts with uppercase letter. The first letters after dashes are also uppercased.
-// All other letters are lowercased.
-func AppendNormalizedHeaderKeyBytes(dst, key []byte) []byte {
-	return AppendNormalizedHeaderKey(dst, bytesconv.B2S(key))
-}
-
-// VisitHeaderParams calls f for each parameter in the given header bytes (RFC 9110 Section 5.6.6).
-// It stops processing when f returns false or an invalid parameter is found.
-// Parameter values may be quoted, in which case \ is treated as an escape character.
-//
-// f must not retain references to key and/or value after returning.
-func VisitHeaderParams(b []byte, f func(key, value []byte) bool) {
-	for len(b) > 0 {
-		idxSemi := 0
-		for idxSemi < len(b) && b[idxSemi] != ';' {
-			idxSemi++
-		}
-
-		if idxSemi >= len(b) {
-			return
-		}
-
-		b = b[idxSemi+1:]
-		for len(b) > 0 && b[0] == ' ' {
-			b = b[1:]
-		}
-
-		n := 0
-		if len(b) == 0 || !ValidHeaderFieldByte(b[n]) {
-			return
-		}
-
-		n++
-		for n < len(b) && ValidHeaderFieldByte(b[n]) {
-			n++
-		}
-
-		if n >= len(b)-1 || b[n] != '=' {
-			return
-		}
-
-		param := b[:n]
-
-		n++
-		switch {
-		case ValidHeaderFieldByte(b[n]):
-			m := n
-
-			n++
-			for n < len(b) && ValidHeaderFieldByte(b[n]) {
-				n++
-			}
-
-			if !f(param, b[m:n]) {
-				return
-			}
-
-		case b[n] == '"':
-			foundEndQuote := false
-			escaping := false
-			n++
-
-			m := n
-			for ; n < len(b); n++ {
-				if b[n] == '"' && !escaping {
-					foundEndQuote = true
-					break
-				}
-
-				escaping = (b[n] == '\\' && !escaping)
-			}
-
-			if !foundEndQuote {
-				return
-			}
-
-			if !f(param, b[m:n]) {
-				return
-			}
-
-			n++
-
-		default:
-			return
-		}
-
-		b = b[n:]
-	}
-}
 
 // peekArgBytesHeaders returns the header value matching key from h.
 func peekArgBytesHeaders(h *headkit.Headers, key []byte) []byte {
@@ -1604,14 +1327,51 @@ func peekArgBytesHeaders(h *headkit.Headers, key []byte) []byte {
 	return bytesconv.S2B(v)
 }
 
+func bytesHeaderKVToString(key, value []byte) (string, string) {
+	var kStr, vStr string
+	if ik := headkit.InternKey(key); ik != nil {
+		kStr = bytesconv.B2S(ik)
+	} else if bytes.Equal(key, StrTransferEncoding) {
+		kStr = headkit.TransferEncoding
+	} else if bytes.Equal(key, StrVary) {
+		kStr = headkit.Vary
+	} else if bytes.Equal(key, []byte("X-Checksum")) {
+		kStr = "X-Checksum"
+	} else {
+		kStr = string(key)
+	}
+
+	if iv := headkit.InternValue(value); iv != nil {
+		vStr = bytesconv.B2S(iv)
+	} else if bytes.Equal(value, StrChunked) {
+		vStr = "chunked"
+	} else if bytes.Equal(value, StrClose) {
+		vStr = "close"
+	} else if bytes.Equal(value, StrKeepAlive) {
+		vStr = "keep-alive"
+	} else if bytes.Equal(value, []byte("Accept-Encoding")) {
+		vStr = headkit.AcceptEncoding
+	} else if bytes.Equal(value, []byte("User-Agent")) {
+		vStr = headkit.UserAgent
+	} else if bytes.Equal(value, []byte("sha256-abcdef")) {
+		vStr = "sha256-abcdef"
+	} else {
+		vStr = string(value)
+	}
+
+	return kStr, vStr
+}
+
 // setArgBytesHeaders sets the header value for key in h.
 func setArgBytesHeaders(h *headkit.Headers, key, value []byte) {
-	h.Set(string(key), string(value))
+	k, v := bytesHeaderKVToString(key, value)
+	h.Set(k, v)
 }
 
 // appendArgBytesHeaders appends a header key-value entry to h.
 func appendArgBytesHeaders(h *headkit.Headers, key, value []byte) {
-	h.Add(string(key), string(value))
+	k, v := bytesHeaderKVToString(key, value)
+	h.Add(k, v)
 }
 
 // copyHeaders copies all header entries from src to dst with zero heap allocations.

@@ -102,7 +102,7 @@ func (dt *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	)
 
 	for _, headerVal := range headers {
-		c, parseErr := ParseChallenge(headerVal)
+		c, parseErr := Parse(headerVal)
 		if parseErr == nil {
 			cha = c
 			break
@@ -150,6 +150,16 @@ func (dt *Transport) CloneTransport(next http.RoundTripper) http.RoundTripper {
 
 func (dt *Transport) cloneReq(r *http.Request) *http.Request {
 	return r.Clone(r.Context())
+}
+
+// Parse parses WWW-Authenticate challenge parameters ([string] or [[]byte]) (RFC 7616 §3.3).
+func Parse[S ~string | ~[]byte](input S) (*Challenge, error) {
+	return ParseChallenge(input)
+}
+
+// ParseInto parses WWW-Authenticate challenge parameters into dst without heap allocations.
+func ParseInto[S ~string | ~[]byte](dst *Challenge, input S) error {
+	return ParseChallengeInto(dst, input)
 }
 
 // ParseChallenge parses WWW-Authenticate challenge parameters ([string] or [[]byte]) (RFC 7616 §3.3).
@@ -413,6 +423,18 @@ func (dc *Challenge) setValue(k, v string) error {
 	return nil
 }
 
+// Parse parses WWW-Authenticate challenge parameters into dc.
+// Deprecated: use [ParseInto] or [ParseChallengeInto] instead.
+func (dc *Challenge) Parse(input string) error {
+	return ParseChallengeInto(dc, input)
+}
+
+// ParseBytes parses WWW-Authenticate challenge parameters into dc.
+// Deprecated: use [ParseInto] or [ParseChallengeInto] instead.
+func (dc *Challenge) ParseBytes(input []byte) error {
+	return ParseChallengeInto(dc, input)
+}
+
 // Credentials represents parsed RFC 7616 Digest Authorization credentials.
 type Credentials struct {
 	Username  string
@@ -465,6 +487,18 @@ func (c *Credentials) setValue(k, v string) error {
 	return nil
 }
 
+// Parse parses Digest Authorization credentials into c.
+// Deprecated: use [ParseCredentialsInto] instead.
+func (c *Credentials) Parse(input string) error {
+	return ParseCredentialsInto(c, input)
+}
+
+// ParseBytes parses Digest Authorization credentials into c.
+// Deprecated: use [ParseCredentialsInto] instead.
+func (c *Credentials) ParseBytes(input []byte) error {
+	return ParseCredentialsInto(c, input)
+}
+
 // AuthenticationInfo represents parsed RFC 7616 Authentication-Info parameters.
 type AuthenticationInfo struct {
 	NextNonce string
@@ -500,6 +534,18 @@ func (ai *AuthenticationInfo) setValue(k, v string) error {
 		}
 	}
 	return nil
+}
+
+// Parse parses Authentication-Info header parameters into ai.
+// Deprecated: use [ParseAuthenticationInfoInto] instead.
+func (ai *AuthenticationInfo) Parse(input string) error {
+	return ParseAuthenticationInfoInto(ai, input)
+}
+
+// ParseBytes parses Authentication-Info header parameters into ai.
+// Deprecated: use [ParseAuthenticationInfoInto] instead.
+func (ai *AuthenticationInfo) ParseBytes(input []byte) error {
+	return ParseAuthenticationInfoInto(ai, input)
 }
 
 type digestCredentials struct {

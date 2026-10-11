@@ -28,6 +28,30 @@ func TestAlloc(t *testing.T) {
 	challengeStr := `Digest realm="http-auth@example.org", qop="auth, auth-int", algorithm=SHA-256, nonce="7yp转/近代...", opaque="fqh/转..."`
 	challengeBytes := []byte(challengeStr)
 
+	t.Run("ParseInto_String", func(t *testing.T) {
+		var dst digest.Challenge
+		allocs := testing.AllocsPerRun(1000, func() {
+			if err := digest.ParseInto(&dst, challengeStr); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("ParseInto_Bytes", func(t *testing.T) {
+		var dst digest.Challenge
+		allocs := testing.AllocsPerRun(1000, func() {
+			if err := digest.ParseInto(&dst, challengeBytes); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
 	t.Run("ParseChallengeInto_String", func(t *testing.T) {
 		var dst digest.Challenge
 		allocs := testing.AllocsPerRun(1000, func() {

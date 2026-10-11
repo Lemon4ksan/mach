@@ -414,31 +414,23 @@ var (
 )
 // Parse parses a Set-Cookie header ([string] or [[]byte]) into c (RFC 6265 §4.1).
 func Parse[S ~string | ~[]byte](c *Cookie, src S) error {
+	c.Reset()
+
+	var b []byte
 	switch v := any(src).(type) {
-	case string:
-		return c.Parse(v)
 	case []byte:
-		return c.ParseBytes(v)
+		b = v
+	case string:
+		c.bufK = append(c.bufK[:0], v...)
+		b = c.bufK
 	default:
 		c.bufK = append(c.bufK[:0], src...)
-		return c.ParseBytes(c.bufK)
+		b = c.bufK
 	}
-}
-
-// Parse parses a Set-Cookie header string into c (RFC 6265 §4.1).
-func (c *Cookie) Parse(src string) error {
-	c.bufK = append(c.bufK[:0], src...)
-	return c.ParseBytes(c.bufK)
-}
-
-
-// ParseBytes parses Set-Cookie header bytes into c (RFC 6265 §4.1).
-func (c *Cookie) ParseBytes(src []byte) error {
-	c.Reset()
 
 	var s cookieScanner
 
-	s.b = src
+	s.b = b
 
 	var k, v []byte
 	if !s.nextRaw(&k, &v) {
@@ -563,6 +555,18 @@ func (c *Cookie) ParseBytes(src []byte) error {
 	}
 
 	return nil
+}
+
+// Parse parses a Set-Cookie header string into c (RFC 6265 §4.1).
+// Deprecated: use [Parse] instead.
+func (c *Cookie) Parse(src string) error {
+	return Parse(c, src)
+}
+
+// ParseBytes parses Set-Cookie header bytes into c (RFC 6265 §4.1).
+// Deprecated: use [Parse] instead.
+func (c *Cookie) ParseBytes(src []byte) error {
+	return Parse(c, src)
 }
 
 // removeSemicolons replaces every ';' in raw with a space.

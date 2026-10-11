@@ -1055,7 +1055,7 @@ func (u *URI) parseQueryArgs() {
 		return
 	}
 
-	u.queryArgs.ParseBytes(u.queryString)
+	Parse(&u.queryArgs, u.queryString)
 	u.parsedQueryArgs = true
 }
 

@@ -107,29 +107,21 @@ func (a *Args) Len() int {
 	return len(a.args)
 }
 
-// ParseArgs parses query args from a [string] or [[]byte] into a.
-func ParseArgs[S ~string | ~[]byte](a *Args, src S) {
+// Parse parses query args from a [string] or [[]byte] into a.
+func Parse[S ~string | ~[]byte](a *Args, src S) {
+	a.Reset()
+
+	var b []byte
 	switch v := any(src).(type) {
-	case string:
-		a.Parse(v)
 	case []byte:
-		a.ParseBytes(v)
+		b = v
+	case string:
+		a.buf = append(a.buf[:0], v...)
+		b = a.buf
 	default:
 		a.buf = append(a.buf[:0], src...)
-		a.ParseBytes(a.buf)
+		b = a.buf
 	}
-}
-
-// Parse parses the given string containing query args.
-func (a *Args) Parse(s string) {
-	a.buf = append(a.buf[:0], s...)
-	a.ParseBytes(a.buf)
-}
-
-
-// ParseBytes parses the given b containing query args.
-func (a *Args) ParseBytes(b []byte) {
-	a.Reset()
 
 	var s argsScanner
 
@@ -145,6 +137,24 @@ func (a *Args) ParseBytes(b []byte) {
 	}
 
 	a.args = ReleaseArg(a.args)
+}
+
+// ParseArgs parses query args from a [string] or [[]byte] into a.
+// Deprecated: use [Parse] instead.
+func ParseArgs[S ~string | ~[]byte](a *Args, src S) {
+	Parse(a, src)
+}
+
+// Parse parses the given string containing query args.
+// Deprecated: use [Parse] instead.
+func (a *Args) Parse(s string) {
+	Parse(a, s)
+}
+
+// ParseBytes parses the given b containing query args.
+// Deprecated: use [Parse] instead.
+func (a *Args) ParseBytes(b []byte) {
+	Parse(a, b)
 }
 
 // String returns string representation of query args.

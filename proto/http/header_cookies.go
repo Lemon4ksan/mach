@@ -60,14 +60,20 @@ func (h *RequestHeader) SetCookie(key, value string) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetCookieBytesK(key []byte, value string) {
-	h.SetCookie(bytesconv.B2S(key), value)
+	h.collectCookies()
+	h.bufK = cookie.InitHeaderValueBytes(h.bufK, key)
+	h.bufV = cookie.InitHeaderValueString(h.bufV, value)
+	h.cookies = uri.SetArg(h.cookies, h.bufK, h.bufV, uri.ArgsHasValue)
 }
 
 // SetCookieBytesKV sets a request cookie with byte key and byte value (RFC 6265 Section 4.2.1).
 //
 // Thread-safe: No.
 func (h *RequestHeader) SetCookieBytesKV(key, value []byte) {
-	h.SetCookie(bytesconv.B2S(key), bytesconv.B2S(value))
+	h.collectCookies()
+	h.bufK = cookie.InitHeaderValueBytes(h.bufK, key)
+	h.bufV = cookie.InitHeaderValueBytes(h.bufV, value)
+	h.cookies = uri.SetArg(h.cookies, h.bufK, h.bufV, uri.ArgsHasValue)
 }
 
 // DelCookie removes the cookie matching key from request headers (RFC 6265 Section 5.4).
@@ -82,7 +88,8 @@ func (h *RequestHeader) DelCookie(key string) {
 //
 // Thread-safe: No.
 func (h *RequestHeader) DelCookieBytes(key []byte) {
-	h.DelCookie(bytesconv.B2S(key))
+	h.collectCookies()
+	h.cookies = uri.DelAllArgs(h.cookies, key)
 }
 
 // DelAllCookies removes all cookies from the request header (RFC 6265 Section 5.4).
@@ -170,7 +177,13 @@ func (h *ResponseHeader) DelClientCookie(key string) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) DelClientCookieBytes(key []byte) {
-	h.DelClientCookie(bytesconv.B2S(key))
+	h.DelCookieBytes(key)
+
+	c := cookie.AcquireCookie()
+	c.SetKeyBytes(key)
+	c.SetExpire(cookie.CookieExpireDelete)
+	h.SetCookie(c)
+	cookie.ReleaseCookie(c)
 }
 
 // DelCookie removes the Set-Cookie header matching key from the response (RFC 6265 Section 4.1).
@@ -185,7 +198,7 @@ func (h *ResponseHeader) DelCookie(key string) {
 //
 // Thread-safe: No.
 func (h *ResponseHeader) DelCookieBytes(key []byte) {
-	h.DelCookie(bytesconv.B2S(key))
+	h.cookies = uri.DelAllArgs(h.cookies, key)
 }
 
 // DelAllCookies removes all Set-Cookie headers from the response (RFC 6265 Section 4.1).

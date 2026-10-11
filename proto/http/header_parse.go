@@ -479,7 +479,8 @@ func (h *RequestHeader) AppendBytes(dst []byte) []byte {
 	}
 
 	if len(h.trailer) > 0 {
-		dst = appendHeaderLine(dst, StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
+		h.bufK = appendTrailerBytes(h.bufK[:0], h.trailer, StrCommaSpace)
+		dst = appendHeaderLine(dst, StrTrailer, h.bufK)
 	}
 
 	n := len(h.cookies)
@@ -890,7 +891,8 @@ func (h *ResponseHeader) AppendBytes(dst []byte) []byte {
 	}
 
 	if len(h.trailer) > 0 {
-		dst = appendHeaderLine(dst, StrTrailer, appendTrailerBytes(nil, h.trailer, StrCommaSpace))
+		h.bufK = appendTrailerBytes(h.bufK[:0], h.trailer, StrCommaSpace)
+		dst = appendHeaderLine(dst, StrTrailer, h.bufK)
 	}
 
 	n := len(h.cookies)
