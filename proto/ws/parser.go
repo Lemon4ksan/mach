@@ -44,6 +44,10 @@ type Parser struct {
 	remainingLen  int64
 
 	err error
+
+	// Preallocated header ring to ensure 0 heap allocations when decoding frames
+	hdrRing    [64]Header
+	hdrRingIdx int
 }
 
 // Reset resets the parser state for reuse on a new connection.
@@ -53,6 +57,7 @@ func (p *Parser) Reset() {
 	p.hasHeader = false
 	p.remainingLen = 0
 	p.err = nil
+	p.hdrRingIdx = 0
 }
 
 // Err returns the first sticky protocol or parse error encountered, if any.
@@ -151,8 +156,10 @@ func (p *Parser) Decode(data []byte, chunks *[]FrameChunk) error {
 
 		var hdrPtr *Header
 		if firstChunk {
-			hCopy := p.currentHeader
-			hdrPtr = &hCopy
+			slot := p.hdrRingIdx & 63
+			p.hdrRing[slot] = p.currentHeader
+			hdrPtr = &p.hdrRing[slot]
+			p.hdrRingIdx++
 		}
 
 		*chunks = append(*chunks, FrameChunk{

@@ -162,3 +162,24 @@ func TestAlloc_FormatClosePayload(t *testing.T) {
 	_ = sinkN
 	_ = sinkErr
 }
+
+func TestAlloc_Parser_Decode(t *testing.T) {
+	data := []byte("\x81\x05Hello\x82\x05World")
+	var parser ws.Parser
+	chunks := make([]ws.FrameChunk, 0, 16)
+
+	allocs := testing.AllocsPerRun(100, func() {
+		chunks = chunks[:0]
+		err := parser.Decode(data, &chunks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(chunks) != 2 {
+			t.Fatalf("expected 2 chunks, got %d", len(chunks))
+		}
+	})
+
+	if allocs > 0 {
+		t.Fatalf("Parser.Decode allocated %f times; want 0", allocs)
+	}
+}
