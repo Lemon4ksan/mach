@@ -11,9 +11,6 @@ import (
 )
 
 func (sc *ServerConn) writeHeaders(streamID uint32, statusCode int, headers http.Header, endStream bool) error {
-	sc.writeMu.Lock()
-	defer sc.writeMu.Unlock()
-
 	hdrFr := coreh2.AcquireFrameHeader()
 	defer coreh2.ReleaseFrameHeader(hdrFr)
 
@@ -31,6 +28,9 @@ func (sc *ServerConn) writeHeaders(streamID uint32, statusCode int, headers http
 
 	hdrFr.SetFlags(flags)
 	hdrFr.SetBody(hFrame)
+
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
 
 	if _, err := hdrFr.WriteTo(sc.bw); err != nil {
 		return err
@@ -52,15 +52,14 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 	if len(body) == 0 {
 		if endStream {
 			dataFr := coreh2.AcquireFrameHeader()
+			defer coreh2.ReleaseFrameHeader(dataFr)
+
 			dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
 			dFrame.SetData(nil)
 			dataFr.SetStream(streamID)
 			dataFr.SetFlags(coreh2.FlagEndStream)
 			dataFr.SetBody(dFrame)
-			_, err := dataFr.WriteTo(sc.bw)
-			coreh2.ReleaseFrameHeader(dataFr)
-
-			if err != nil {
+			if _, err := dataFr.WriteTo(sc.bw); err != nil {
 				return 0, err
 			}
 
@@ -70,26 +69,28 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 		return 0, nil
 	}
 
+	dataFr := coreh2.AcquireFrameHeader()
+	defer coreh2.ReleaseFrameHeader(dataFr)
+
+	dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
+
 	for len(body) > 0 {
 		chunkSize := min(len(body), maxChunk)
 		chunk := body[:chunkSize]
 		body = body[chunkSize:]
 
-		dataFr := coreh2.AcquireFrameHeader()
-		dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
 		dFrame.SetData(chunk)
 		dataFr.SetStream(streamID)
 
 		if endStream && len(body) == 0 {
 			dataFr.SetFlags(coreh2.FlagEndStream)
+		} else {
+			dataFr.SetFlags(0)
 		}
 
 		dataFr.SetBody(dFrame)
 
-		_, err := dataFr.WriteTo(sc.bw)
-		coreh2.ReleaseFrameHeader(dataFr)
-
-		if err != nil {
+		if _, err := dataFr.WriteTo(sc.bw); err != nil {
 			return 0, err
 		}
 	}
@@ -98,10 +99,7 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 }
 
 func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error {
-	sc.writeMu.Lock()
-	defer sc.writeMu.Unlock()
-
-	// 1. Serialize HEADERS Frame (RFC 9113 §6.2)
+	// 1. Serialize HEADERS Frame (RFC 9113 §6.2) outside writeMu to minimize contention
 	hdrFr := coreh2.AcquireFrameHeader()
 	defer coreh2.ReleaseFrameHeader(hdrFr)
 
@@ -111,13 +109,15 @@ func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error 
 	sc.encMu.Unlock()
 
 	hdrFr.SetStream(streamID)
-	hdrFr.SetFlags(coreh2.FlagEndHeaders)
-
+	flags := coreh2.FlagEndHeaders
 	if len(res.Body) == 0 {
-		hdrFr.SetFlags(coreh2.FlagEndHeaders | coreh2.FlagEndStream)
+		flags |= coreh2.FlagEndStream
 	}
-
+	hdrFr.SetFlags(flags)
 	hdrFr.SetBody(hFrame)
+
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
 
 	if _, err := hdrFr.WriteTo(sc.bw); err != nil {
 		return err
@@ -125,34 +125,36 @@ func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error 
 
 	// 2. Serialize DATA Frames (RFC 9113 §6.1)
 	body := res.Body
-
-	maxChunk := int(sc.peerMaxFrameSize)
-	if maxChunk <= 0 {
-		maxChunk = coreh2.DefaultMaxLen
-	}
-
-	for len(body) > 0 {
-		chunkSize := min(len(body), maxChunk)
-		chunk := body[:chunkSize]
-		body = body[chunkSize:]
-
-		dataFr := coreh2.AcquireFrameHeader()
-		dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
-		dFrame.SetData(chunk)
-
-		dataFr.SetStream(streamID)
-
-		if len(body) == 0 {
-			dataFr.SetFlags(coreh2.FlagEndStream)
+	if len(body) > 0 {
+		maxChunk := int(sc.peerMaxFrameSize)
+		if maxChunk <= 0 {
+			maxChunk = coreh2.DefaultMaxLen
 		}
 
-		dataFr.SetBody(dFrame)
+		dataFr := coreh2.AcquireFrameHeader()
+		defer coreh2.ReleaseFrameHeader(dataFr)
 
-		_, err := dataFr.WriteTo(sc.bw)
-		coreh2.ReleaseFrameHeader(dataFr)
+		dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
 
-		if err != nil {
-			return err
+		for len(body) > 0 {
+			chunkSize := min(len(body), maxChunk)
+			chunk := body[:chunkSize]
+			body = body[chunkSize:]
+
+			dFrame.SetData(chunk)
+			dataFr.SetStream(streamID)
+
+			if len(body) == 0 {
+				dataFr.SetFlags(coreh2.FlagEndStream)
+			} else {
+				dataFr.SetFlags(0)
+			}
+
+			dataFr.SetBody(dFrame)
+
+			if _, err := dataFr.WriteTo(sc.bw); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -194,6 +196,43 @@ func (sc *ServerConn) sendWindowUpdateFrame(streamID, inc uint32) error {
 
 	if _, err := wuFr.WriteTo(sc.bw); err != nil {
 		return err
+	}
+
+	return sc.bw.Flush()
+}
+
+func (sc *ServerConn) sendBatchedWindowUpdates(connInc uint32, st *serverStream, stInc uint32) error {
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	if sc.Closed() {
+		return nil
+	}
+
+	if connInc > 0 {
+		wuFr := coreh2.AcquireFrameHeader()
+		wu := coreh2.AcquireFrame(coreh2.FrameWindowUpdate).(*coreh2.WindowUpdate)
+		wu.SetIncrement(int(connInc))
+		wuFr.SetStream(0)
+		wuFr.SetBody(wu)
+		_, err := wuFr.WriteTo(sc.bw)
+		coreh2.ReleaseFrameHeader(wuFr)
+		if err != nil {
+			return err
+		}
+	}
+
+	if stInc > 0 && st != nil {
+		wuFr := coreh2.AcquireFrameHeader()
+		wu := coreh2.AcquireFrame(coreh2.FrameWindowUpdate).(*coreh2.WindowUpdate)
+		wu.SetIncrement(int(stInc))
+		wuFr.SetStream(st.id)
+		wuFr.SetBody(wu)
+		_, err := wuFr.WriteTo(sc.bw)
+		coreh2.ReleaseFrameHeader(wuFr)
+		if err != nil {
+			return err
+		}
 	}
 
 	return sc.bw.Flush()

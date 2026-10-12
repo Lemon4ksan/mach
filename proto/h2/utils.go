@@ -149,8 +149,69 @@ func addPadding(b []byte) []byte {
 	return b
 }
 
+var (
+	status200 = []byte("200")
+	status204 = []byte("204")
+	status206 = []byte("206")
+	status301 = []byte("301")
+	status302 = []byte("302")
+	status304 = []byte("304")
+	status400 = []byte("400")
+	status401 = []byte("401")
+	status403 = []byte("403")
+	status404 = []byte("404")
+	status500 = []byte("500")
+	status502 = []byte("502")
+	status503 = []byte("503")
+	valZero   = []byte("0")
+)
+
+func statusCodeToBytes(code int) []byte {
+	switch code {
+	case 200:
+		return status200
+	case 204:
+		return status204
+	case 206:
+		return status206
+	case 301:
+		return status301
+	case 302:
+		return status302
+	case 304:
+		return status304
+	case 400:
+		return status400
+	case 401:
+		return status401
+	case 403:
+		return status403
+	case 404:
+		return status404
+	case 500:
+		return status500
+	case 502:
+		return status502
+	case 503:
+		return status503
+	default:
+		return nil
+	}
+}
+
 // ToLowerCopy converts ASCII header name bytes to lowercase using a stack-allocated buffer to prevent heap allocations.
 func ToLowerCopy(b []byte) []byte {
+	hasUpper := false
+	for i := range b {
+		if b[i] >= 'A' && b[i] <= 'Z' {
+			hasUpper = true
+			break
+		}
+	}
+	if !hasUpper {
+		return b
+	}
+
 	var (
 		stackBuf [64]byte
 		out      []byte
@@ -179,7 +240,13 @@ func ResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
 	defer hpack.ReleaseHeaderField(hf)
 
 	hf.SetKeyBytes(StringStatus)
-	hf.SetValue(strconv.Itoa(res.Header.StatusCode()))
+	code := res.Header.StatusCode()
+	if b := statusCodeToBytes(code); b != nil {
+		hf.SetValueBytes(b)
+	} else {
+		var numBuf [16]byte
+		hf.SetValueBytes(strconv.AppendInt(numBuf[:0], int64(code), 10))
+	}
 
 	dst.AppendHeaderField(hp, hf, true)
 
@@ -208,12 +275,22 @@ func SerializeResponseHeaders(dst *Headers, hp *hpack.HPACK, statusCode int, hea
 	defer hpack.ReleaseHeaderField(hf)
 
 	hf.SetKeyBytes(StringStatus)
-	hf.SetValue(strconv.Itoa(statusCode))
+	if b := statusCodeToBytes(statusCode); b != nil {
+		hf.SetValueBytes(b)
+	} else {
+		var numBuf [16]byte
+		hf.SetValueBytes(strconv.AppendInt(numBuf[:0], int64(statusCode), 10))
+	}
 	dst.AppendHeaderField(hp, hf, false)
 
 	if bodyLen >= 0 {
 		hf.SetKeyBytes(StringContentLength)
-		hf.SetValue(strconv.Itoa(bodyLen))
+		if bodyLen == 0 {
+			hf.SetValueBytes(valZero)
+		} else {
+			var numBuf [24]byte
+			hf.SetValueBytes(strconv.AppendInt(numBuf[:0], int64(bodyLen), 10))
+		}
 		dst.AppendHeaderField(hp, hf, false)
 	}
 
@@ -224,8 +301,9 @@ func SerializeResponseHeaders(dst *Headers, hp *hpack.HPACK, statusCode int, hea
 			continue
 		}
 
+		kLower := ToLowerCopy([]byte(k))
 		for _, v := range vv {
-			hf.SetBytes(ToLowerCopy([]byte(k)), []byte(v))
+			hf.SetBytes(kLower, []byte(v))
 			dst.AppendHeaderField(hp, hf, false)
 		}
 	}

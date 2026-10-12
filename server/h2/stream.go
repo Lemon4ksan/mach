@@ -9,6 +9,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"sync"
 	"sync/atomic"
 
 	"github.com/lemon4ksan/mach/proto/codec/hpack"
@@ -37,7 +38,8 @@ type serverStream struct {
 	endHeaders  bool
 	endStream   bool
 	state       streamState
-	sendWindow  int32
+	sendWindow  atomic.Int32
+	recvUnacked int32
 	ctx         context.Context
 	cancel      context.CancelFunc
 	isTunnel    bool
@@ -45,19 +47,70 @@ type serverStream struct {
 	pipeWriter  *io.PipeWriter
 }
 
+var (
+	serverStreamPool = sync.Pool{
+		New: func() any {
+			return &serverStream{
+				headers: make(http.Header, 8),
+			}
+		},
+	}
+	serverRequestPool = sync.Pool{
+		New: func() any {
+			return &ServerRequest{}
+		},
+	}
+	serverResponsePool = sync.Pool{
+		New: func() any {
+			return &ServerResponse{
+				Headers: make(http.Header, 8),
+			}
+		},
+	}
+)
+
+func acquireServerStream(streamID uint32, endHeaders, endStream bool, initWin int32, ctx context.Context, cancel context.CancelFunc) *serverStream {
+	st := serverStreamPool.Get().(*serverStream)
+	st.id = streamID
+	st.endHeaders = endHeaders
+	st.endStream = endStream
+	st.state = streamOpen
+	st.sendWindow.Store(initWin)
+	st.recvUnacked = 0
+	st.ctx = ctx
+	st.cancel = cancel
+	st.method = ""
+	st.path = ""
+	st.scheme = ""
+	st.authority = ""
+	st.protocol = ""
+	st.isTunnel = false
+	st.pipeReader = nil
+	st.pipeWriter = nil
+	st.headerBlock.Reset()
+	st.body.Reset()
+	clear(st.headers)
+	return st
+}
+
+func releaseServerStream(st *serverStream) {
+	if st == nil {
+		return
+	}
+	if st.cancel != nil {
+		st.cancel()
+	}
+	st.pipeReader = nil
+	st.pipeWriter = nil
+	st.headerBlock.Reset()
+	st.body.Reset()
+	clear(st.headers)
+	serverStreamPool.Put(st)
+}
+
 func (sc *ServerConn) newServerStream(streamID uint32, endHeaders, endStream bool) *serverStream {
 	ctx, cancel := context.WithCancel(sc.ctx)
-
-	return &serverStream{
-		id:         streamID,
-		headers:    make(http.Header),
-		endHeaders: endHeaders,
-		endStream:  endStream,
-		state:      streamOpen,
-		sendWindow: sc.peerInitialWin,
-		ctx:        ctx,
-		cancel:     cancel,
-	}
+	return acquireServerStream(streamID, endHeaders, endStream, sc.peerInitialWin, ctx, cancel)
 }
 
 func (sc *ServerConn) startStream(st *serverStream) {
@@ -243,7 +296,10 @@ func (a *h2ServerStreamAdapter) Close() error {
 
 func (sc *ServerConn) dispatchStream(st *serverStream) {
 	defer sc.streamsWg.Done() // Escalation 2 fix: Decrement wait group on exit
-	defer st.cancel()
+	defer func() {
+		sc.deleteStream(st.id)
+		releaseServerStream(st)
+	}()
 
 	isExtConnect := (st.method == "CONNECT" && st.protocol != "")
 
@@ -264,29 +320,39 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 		}()
 	}
 
-	req := &ServerRequest{
-		StreamID:          st.id,
-		Method:            st.method,
-		Path:              st.path,
-		Scheme:            st.scheme,
-		Authority:         st.authority,
-		Protocol:          st.protocol,
-		Headers:           st.headers,
-		Body:              st.body.Bytes(),
-		RemoteAddr:        sc.conn.RemoteAddr().String(),
-		Ctx:               st.ctx,
-		Stream:            adapter,
-		IsExtendedConnect: isExtConnect,
-		UpgradeFn: func(statusCode int, header http.Header) error {
-			st.isTunnel = true
-			return sc.writeHeaders(st.id, statusCode, header, false)
-		},
+	req := serverRequestPool.Get().(*ServerRequest)
+	defer func() {
+		*req = ServerRequest{}
+		serverRequestPool.Put(req)
+	}()
+
+	req.StreamID = st.id
+	req.Method = st.method
+	req.Path = st.path
+	req.Scheme = st.scheme
+	req.Authority = st.authority
+	req.Protocol = st.protocol
+	req.Headers = st.headers
+	req.Body = st.body.Bytes()
+	req.RemoteAddr = sc.conn.RemoteAddr().String()
+	req.Ctx = st.ctx
+	req.Stream = adapter
+	req.IsExtendedConnect = isExtConnect
+	req.UpgradeFn = func(statusCode int, header http.Header) error {
+		st.isTunnel = true
+		return sc.writeHeaders(st.id, statusCode, header, false)
 	}
 
-	res := &ServerResponse{
-		StatusCode: status.OK,
-		Headers:    make(http.Header),
-	}
+	res := serverResponsePool.Get().(*ServerResponse)
+	defer func() {
+		clear(res.Headers)
+		res.Body = nil
+		serverResponsePool.Put(res)
+	}()
+
+	res.StatusCode = status.OK
+	clear(res.Headers)
+	res.Body = nil
 
 	if sc.handler != nil {
 		_ = sc.handler(req, res)
@@ -301,8 +367,4 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 	}
 
 	st.state = streamClosed
-
-	sc.streamsMu.Lock()
-	delete(sc.streams, st.id)
-	sc.streamsMu.Unlock()
 }

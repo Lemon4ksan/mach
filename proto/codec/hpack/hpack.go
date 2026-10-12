@@ -5,7 +5,6 @@
 package hpack
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"iter"
@@ -377,7 +376,7 @@ func (hp *HPACK) peek(n uint64) *HeaderField {
 func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 	switch string(key) {
 	case ":authority":
-		return 1, false, true
+		return 1, len(val) == 0, true
 	case ":method":
 		switch string(val) {
 		case "GET":
@@ -387,7 +386,6 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 2, false, true
 		}
-
 	case ":path":
 		switch string(val) {
 		case "/":
@@ -397,7 +395,6 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 4, false, true
 		}
-
 	case ":scheme":
 		switch string(val) {
 		case "http":
@@ -407,70 +404,152 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 7, false, true
 		}
-
 	case ":status":
-		if string(val) == "200" {
+		switch string(val) {
+		case "200":
 			return 8, true, true
+		case "204":
+			return 9, true, true
+		case "206":
+			return 10, true, true
+		case "304":
+			return 11, true, true
+		case "400":
+			return 12, true, true
+		case "404":
+			return 13, true, true
+		case "500":
+			return 14, true, true
+		default:
+			return 8, false, true
 		}
-
-		return 8, false, true
-
+	case "accept-charset":
+		return 15, len(val) == 0, true
 	case "accept-encoding":
 		if string(val) == "gzip, deflate" {
 			return 16, true, true
 		}
-
-		return 16, false, true
-
+		return 16, len(val) == 0, true
+	case "accept-language":
+		return 17, len(val) == 0, true
+	case "accept-ranges":
+		return 18, len(val) == 0, true
 	case "accept":
-		return 19, false, true
-	case "content-type":
-		return 31, false, true
-	case "cookie":
-		return 32, false, true
-	case "content-length":
-		return 28, false, true
+		return 19, len(val) == 0, true
+	case "access-control-allow-origin":
+		return 20, len(val) == 0, true
+	case "age":
+		return 21, len(val) == 0, true
+	case "allow":
+		return 22, len(val) == 0, true
+	case "authorization":
+		return 23, len(val) == 0, true
+	case "cache-control":
+		return 24, len(val) == 0, true
+	case "content-disposition":
+		return 25, len(val) == 0, true
 	case "content-encoding":
-		return 27, false, true
+		return 26, len(val) == 0, true
+	case "content-language":
+		return 27, len(val) == 0, true
+	case "content-length":
+		return 28, len(val) == 0, true
+	case "content-location":
+		return 29, len(val) == 0, true
+	case "content-range":
+		return 30, len(val) == 0, true
+	case "content-type":
+		return 31, len(val) == 0, true
+	case "cookie":
+		return 32, len(val) == 0, true
+	case "date":
+		return 33, len(val) == 0, true
+	case "etag":
+		return 34, len(val) == 0, true
+	case "expect":
+		return 35, len(val) == 0, true
+	case "expires":
+		return 36, len(val) == 0, true
+	case "from":
+		return 37, len(val) == 0, true
 	case "host":
-		return 38, false, true
+		return 38, len(val) == 0, true
+	case "if-match":
+		return 39, len(val) == 0, true
+	case "if-modified-since":
+		return 40, len(val) == 0, true
+	case "if-none-match":
+		return 41, len(val) == 0, true
+	case "if-range":
+		return 42, len(val) == 0, true
+	case "if-unmodified-since":
+		return 43, len(val) == 0, true
+	case "last-modified":
+		return 44, len(val) == 0, true
+	case "link":
+		return 45, len(val) == 0, true
+	case "location":
+		return 46, len(val) == 0, true
+	case "max-forwards":
+		return 47, len(val) == 0, true
+	case "proxy-authenticate":
+		return 48, len(val) == 0, true
+	case "proxy-authorization":
+		return 49, len(val) == 0, true
+	case "range":
+		return 50, len(val) == 0, true
+	case "referer":
+		return 51, len(val) == 0, true
+	case "refresh":
+		return 52, len(val) == 0, true
+	case "retry-after":
+		return 53, len(val) == 0, true
+	case "server":
+		return 54, len(val) == 0, true
+	case "set-cookie":
+		return 55, len(val) == 0, true
+	case "strict-transport-security":
+		return 56, len(val) == 0, true
+	case "transfer-encoding":
+		return 57, len(val) == 0, true
 	case "user-agent":
-		return 58, false, true
+		return 58, len(val) == 0, true
+	case "vary":
+		return 59, len(val) == 0, true
+	case "via":
+		return 60, len(val) == 0, true
+	case "www-authenticate":
+		return 61, len(val) == 0, true
 	default:
 		return 0, false, false
 	}
 }
 
 func (hp *HPACK) search(hf *HeaderField) (n uint64, fullMatch bool) {
-	for i, hf2 := range hp.dynamic {
-		if bytes.Equal(hf.key, hf2.key) && bytes.Equal(hf.value, hf2.value) {
-			return uint64(maxIndex + len(hp.dynamic) - i - 1), true
+	// 1. Search dynamic table backwards (newest to oldest) for exact full match
+	dynLen := len(hp.dynamic)
+	for i := dynLen - 1; i >= 0; i-- {
+		hf2 := hp.dynamic[i]
+		if len(hf.key) == len(hf2.key) && len(hf.value) == len(hf2.value) &&
+			string(hf.key) == string(hf2.key) && string(hf.value) == string(hf2.value) {
+			return uint64(maxIndex + dynLen - i - 1), true
 		}
 	}
 
+	// 2. Search static table via full O(1) table lookup
 	if idx, full, found := fastStaticLookup(hf.key, hf.value); found {
-		if full {
-			return idx, true
-		}
-
-		n = idx
+		return idx, full
 	}
 
-	for i, hf2 := range staticTable {
-		if !bytes.Equal(hf.key, hf2.key) {
-			continue
-		}
-
-		if bytes.Equal(hf.value, hf2.value) {
-			return uint64(i + 1), true
-		}
-
-		if n == 0 {
-			n = uint64(i + 1)
+	// 3. Dynamic table name-only match if no static name match exists
+	for i := dynLen - 1; i >= 0; i-- {
+		hf2 := hp.dynamic[i]
+		if len(hf.key) == len(hf2.key) && string(hf.key) == string(hf2.key) {
+			return uint64(maxIndex + dynLen - i - 1), false
 		}
 	}
 
-	return n, false
+	return 0, false
 }
 
 // Decode returns an iterator yielding decoded [HeaderField] entries and any decoding errors encountered in b (RFC 7541 §3.2).
@@ -588,14 +667,12 @@ func (hp *HPACK) decodeIndexed(hf *HeaderField, b []byte) ([]byte, error) {
 func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error) {
 	c := b[0]
 
-	var (
-		n   uint64
-		err error
-	)
-
-	var stackBuf [512]byte
-
 	if c != 64 {
+		var (
+			n   uint64
+			err error
+		)
+
 		b, n, err = readInt(6, b)
 		if err != nil {
 			return b, err
@@ -609,24 +686,32 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 		hf.SetKeyBytes(hf2.KeyBytes())
 	} else {
 		b = b[1:]
-		dst := stackBuf[:0]
+		var err error
 
-		b, dst, err = readString(dst, b)
+		b, hf.keyBuf, err = readString(hf.keyBuf[:0], b)
 		if err != nil {
 			return b, err
 		}
 
-		hf.SetKeyBytes(dst)
+		if ik := headkit.InternKey(hf.keyBuf); ik != nil {
+			hf.key = ik
+		} else {
+			hf.key = hf.keyBuf
+		}
 	}
 
-	dst := stackBuf[:0]
-
-	b, dst, err = readString(dst, b)
+	var err error
+	b, hf.valBuf, err = readString(hf.valBuf[:0], b)
 	if err != nil {
 		return b, err
 	}
 
-	hf.SetValueBytes(dst)
+	if iv := headkit.InternValue(hf.valBuf); iv != nil {
+		hf.value = iv
+	} else {
+		hf.value = hf.valBuf
+	}
+
 	hp.addDynamic(hf)
 
 	return b, nil
@@ -636,14 +721,12 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error) {
 	c := b[0]
 
-	var (
-		n   uint64
-		err error
-	)
-
-	var stackBuf [512]byte
-
 	if c&15 != 0 {
+		var (
+			n   uint64
+			err error
+		)
+
 		b, n, err = readInt(4, b)
 		if err != nil {
 			return b, err
@@ -654,27 +737,34 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 			return b, fmt.Errorf("non-indexed field not found: %d", n)
 		}
 
-		hf.SetKeyBytes(hf2.key)
+		hf.SetKeyBytes(hf2.KeyBytes())
 	} else {
 		b = b[1:]
-		dst := stackBuf[:0]
+		var err error
 
-		b, dst, err = readString(dst, b)
+		b, hf.keyBuf, err = readString(hf.keyBuf[:0], b)
 		if err != nil {
 			return b, err
 		}
 
-		hf.SetKeyBytes(dst)
+		if ik := headkit.InternKey(hf.keyBuf); ik != nil {
+			hf.key = ik
+		} else {
+			hf.key = hf.keyBuf
+		}
 	}
 
-	dst := stackBuf[:0]
-
-	b, dst, err = readString(dst, b)
+	var err error
+	b, hf.valBuf, err = readString(hf.valBuf[:0], b)
 	if err != nil {
 		return b, err
 	}
 
-	hf.SetValueBytes(dst)
+	if iv := headkit.InternValue(hf.valBuf); iv != nil {
+		hf.value = iv
+	} else {
+		hf.value = hf.valBuf
+	}
 
 	return b, nil
 }
@@ -877,39 +967,24 @@ func AppendHuffman[S ~string | ~[]byte](dst []byte, s S) []byte {
 
 // appendString encodes a string literal with optional static Huffman coding and 7-bit length prefix (RFC 7541 §5.2).
 func appendString(dst, src []byte, encode bool) []byte {
-	var (
-		bufPtr   *[]byte
-		payload  []byte
-		stackBuf [512]byte
-	)
-
-	switch {
-	case !encode:
-		payload = src
-	case len(src) <= 256:
-		payload = HuffmanEncode(stackBuf[:0], src)
-	default:
-		bufPtr = byteStorage.Get()
-		payload = HuffmanEncode((*bufPtr)[:0], src)
+	if !encode {
+		dst = append(dst, 0)
+		dst = appendInt(dst, 7, uint64(len(src)))
+		return append(dst, src...)
 	}
 
-	payloadLen := uint64(len(payload))
+	if len(src) == 0 {
+		dst = append(dst, 0x80)
+		return appendInt(dst, 7, 0)
+	}
+
+	hLen := HuffmanEncodeLength(src)
 	hBitIdx := len(dst)
 	dst = append(dst, 0)
+	dst = appendInt(dst, 7, uint64(hLen))
+	dst[hBitIdx] |= 0x80
 
-	dst = appendInt(dst, 7, payloadLen)
-	dst = append(dst, payload...)
-
-	if encode {
-		if bufPtr != nil {
-			*bufPtr = payload
-			byteStorage.Put(bufPtr)
-		}
-
-		dst[hBitIdx] |= 0x80
-	}
-
-	return dst
+	return HuffmanEncode(dst, src)
 }
 
 func init() {
