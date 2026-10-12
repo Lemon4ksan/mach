@@ -25,7 +25,7 @@
 // Every operation in this package operates directly on caller-provided wire buffers:
 //
 //   - Zero Heap Allocations: Frame views are type-aliased byte slices (`type Frame []byte`).
-//   - Single-Instruction BCE: Compiler hints (`_ = f[8]`) allow multi-byte integer assembly
+//   - Single-Instruction BCE: Compiler bounds check elimination hints allow multi-byte integer assembly
 //     without branch instructions.
 //   - In-Place Slicing: Unpadded application data is returned as a sub-slice of the input buffer.
 //

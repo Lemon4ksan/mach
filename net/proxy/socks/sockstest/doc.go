@@ -2,19 +2,20 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package sockstest provides utilities for SOCKS testing.
+// Package sockstest implements test harnesses, mock servers, and frame synthesizers for SOCKS protocols.
 //
-// It includes a local mock server and helpers to parse or synthesize SOCKS wire frames.
-// Use this package to simulate proxy authentication, connection acceptance, and protocol
-// errors without spawning a real proxy daemon.
+// # Architecture
 //
-// # Compared to the standard library
+// In-memory and loopback servers simulate proxy authentication workflows, connection negotiations,
+// and wire-level protocol failures without requiring external proxy daemons:
 //
-// Stdlib counterpart: golang.org/x/net/proxy (which lacks dedicated test harnesses)
+//   - Mock Server Infrastructure:
+//     Binds local loopback listeners to exercise client handshakes against arbitrary authentication configurations.
+//   - Frame Synthesis:
+//     Generates conforming and deliberately corrupted SOCKS wire frames for negative testing and fuzz validation.
 //
-// Rejected compromise: none (pure testing utility).
+// # RFC Specifications
 //
-// Accepted cost: the fake server binds actual localhost sockets which may flake in constrained environments.
-//
-// Allocations: unconstrained
+//   - RFC 1928: SOCKS Protocol Version 5
+//   - RFC 1929: Username/Password Authentication for SOCKS V5
 package sockstest

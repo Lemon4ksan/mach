@@ -2,33 +2,39 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package mach provides silicon-speed, zero-allocation L7 protocol engines and transport codecs for Go.
+// Package mach defines foundational Layer 7 protocol engines, wire codecs, and stream multiplexing abstractions for Go.
 //
-// # Architectural Scope & Guidelines
+// Root contracts unify transport mechanics across HTTP/1.1, HTTP/2, and HTTP/3 over QUIC,
+// establishing protocol-agnostic interfaces for connection lifecycles, zero-allocation framing,
+// and request dispatching.
 //
-// mach is built as the foundational L7 protocol layer on top of foundation. It delivers
-// wire-speed codecs and state machines for:
-//   - HTTP/1.1 (RFC 9112)
-//   - HTTP/2 (RFC 9113)
-//   - HTTP/3 over QUIC (RFC 9114)
-//   - HPACK (RFC 7541) and QPACK (RFC 9204) Header Compression
-//   - WebSocket Framing & Protocol Engine (RFC 6455)
-//   - Bootstrapping WebSockets with HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220) Extended CONNECT
+// # Unified Protocol Model
 //
-// # Core Invariants
+// Protocol engines expose a cohesive hierarchy decoupling network I/O from protocol state machines:
 //
-//   - Zero-Allocation Hot Paths: Request/response parsing, wire framing, header decoding, and
-//     WebSocket masking must execute with 0 heap allocations on active streams.
-//   - 64-bit SWAR Acceleration: Hardware-agnostic SIMD/SWAR vector kernels accelerate header
-//     scanning and WebSocket frame masking at wire speeds (39+ GB/s).
-//   - Multi-Protocol Unified Server: Server handlers process requests transparently across
-//     HTTP/1.1, HTTP/2, and HTTP/3, and can perform seamless WebSocket upgrades via
-//     Context.UpgradeWebSocket().
-//   - Resilient Client Engine: Client engine provides automatic ALPN negotiation, SOCKS5/HTTP
-//     CONNECT proxy tunneling, Alt-Svc connection pooling, and multi-protocol WebSocket dialing
-//     via Engine.DialWebSocket().
-//   - Asymmetric Isolation: Server handler logic is strictly isolated from malformed wire traffic
-//     and network congestion.
-//   - Sans-IO & FSM: Protocol decoding operates via event-driven state machines without
-//     goroutine-per-stream overhead or blocking I/O calls on the hot path.
+//   - [Engine]: Protocol connection factory establishing outbound transports or yielding protocol-specific multiplexers.
+//   - [Conn]: Active transport carrier managing one or more concurrent request-response streams.
+//   - [Stream]: Isolated data-in-motion stream supporting zero-copy frame ingestion ([Stream.ReadFrame]) and standard streaming I/O.
+//   - [Frame]: Protocol-agnostic representation of serialized wire frames ([Frame.Type], [Frame.Payload]), encompassing standard control, header, and data primitives.
+//   - [Handler] and [HandlerFunc]: Universal request processing abstraction serving streams across HTTP generations without transport coupling.
+//
+// # Architectural Invariants
+//
+//   - Zero-Allocation Steady State: Wire framing, header parsing, payload masking, and stream demultiplexing execute without heap allocations on active streams.
+//   - 64-Bit SWAR Acceleration: Vectorized bit-manipulation kernels scan header delimiters and apply WebSocket masking masks at memory bandwidth limits.
+//   - Asymmetric Isolation: Protocol parsers reject malformed ingress frames at the wire boundary, safeguarding application handlers from malformed traffic and network congestion.
+//   - Sans-I/O State Machines: Event-driven parsing pipelines decouple protocol transitions from thread scheduling and blocking socket operations.
+//
+// # Supported Protocols & Standards
+//
+//   - RFC 9110: HTTP Semantics
+//   - RFC 9112: HTTP/1.1 (Chunked Transfer, Pipelining)
+//   - RFC 9113: HTTP/2 (Binary Framing, Stream Multiplexing, Flow Control)
+//   - RFC 9114: HTTP/3 (QUIC-Mapped Transport, Control Streams)
+//   - RFC 7541: HPACK - Header Compression for HTTP/2
+//   - RFC 9204: QPACK - Field Compression for HTTP/3
+//   - RFC 6455: The WebSocket Protocol
+//   - RFC 8441: Bootstrapping WebSockets with HTTP/2 (Extended CONNECT)
+//   - RFC 9220: Bootstrapping WebSockets with HTTP/3 (Extended CONNECT)
+//   - RFC 7838: HTTP Alternative Services (Alt-Svc)
 package mach

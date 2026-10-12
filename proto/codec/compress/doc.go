@@ -2,24 +2,25 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package compress implements HTTP payload compression and decompression codecs.
+// Package compress implements HTTP payload compression and decompression codecs conforming to RFC 9110 §8.4.
 //
-// # Package compress
+// # Architecture
 //
-// Layer 7 Architecture:
-// In the Layer 7 protocol stack, compress handles payload content coding and
-// decoding (RFC 9110 §8.4) for HTTP/1.1, HTTP/2, and HTTP/3 transactions. It provides
-// stream-oriented and buffer-oriented codecs for Deflate, Gzip, Brotli, and Zstandard.
+// The package handles content coding negotiation, streaming compression, and buffer-oriented codecs
+// across HTTP/1.1, HTTP/2, and HTTP/3:
 //
-// Goroutines executing stream compression recycle internal resources through
-// per-core writer and reader pools ([AcquireGzipWriter], [AcquireDeflateWriter], etc.).
-// Buffer operations recycle internal resources through per-core byte buffer pools.
+//   - Supported Encodings:
+//     Gzip (RFC 1952), Deflate (RFC 1951), Brotli (RFC 7932), and Zstandard (RFC 8878).
+//   - Resource Recycling:
+//     Streaming compressors and decompressors utilize per-core recycling pools ([AcquireGzipWriter],
+//     [AcquireDeflateWriter], [ReleaseGzipWriter], etc.), recycling internal state without GC churn on active streams.
 //
-// Relevant Specifications:
-//   - RFC 1950 §2.2: ZLIB Compressed Data Format (CMF/FLG headers, FCHECK, Adler-32 trailer)
-//   - RFC 1951 §3.1.1 & §3.2: DEFLATE Compressed Data Format (BFINAL, BTYPE, fixed & dynamic Huffman)
-//   - RFC 1952 §2.2 & §2.3.1: GZIP File Format (ID1/ID2 magic, FLG flags, CRC-32 and ISIZE trailers)
-//   - RFC 7932 §2 & §9: Brotli Compressed Data Format (meta-block framing, WBITS sliding window)
-//   - RFC 8878 §3.1.1: Zstandard Compression (Magic Number 0xFD2FB528, Frame Header Descriptor, Block format, XXH64 checksum)
-//   - RFC 9110 §8.4: HTTP Semantics (Content-Coding: "gzip" §8.4.1.3, "deflate" §8.4.1.2, "br" §8.4.1.4, "zstd" §8.4.1.5)
+// # RFC Specifications
+//
+//   - RFC 1950: ZLIB Compressed Data Format
+//   - RFC 1951: DEFLATE Compressed Data Format
+//   - RFC 1952: GZIP File Format
+//   - RFC 7932: Brotli Compressed Data Format
+//   - RFC 8878: Zstandard Compression
+//   - RFC 9110 §8.4: HTTP Semantics (Content Coding)
 package compress

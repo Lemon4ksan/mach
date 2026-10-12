@@ -2,23 +2,47 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package proxy provides high-performance, zero-allocation proxy dialers and tunneling engines.
+// Package proxy implements zero-allocation proxy dialers and tunnel negotiation engines
+// supporting SOCKS5 and HTTP CONNECT protocols.
 //
-// This package implements zero-allocation proxy dialers that route network connections through
-// intermediary servers, supporting SOCKS5 (RFC 1928, RFC 1929) and HTTP CONNECT tunneling (RFC 9110 §9.3.6).
-// It supports environment-based proxy configuration, automatic URL parsing, credential authentication,
-// and per-host routing rules. Callers can compose proxy dialers to chain connections or bypass proxies
-// for specific networks.
+// # Architecture
+//
+// Proxy routing coordinates transport establishment across intermediary nodes before handing
+// off clean byte streams to application callers:
+//
+//   - Dialer Contracts ([Dialer], [ContextDialer]):
+//     Universal interfaces providing standard and context-bound connection establishment through
+//     proxy chains.
+//   - Dialing Pipelines ([FromURL], [FromEnvironment], [Direct]):
+//     Resolves proxy topologies automatically from environment variables (HTTP_PROXY, HTTPS_PROXY,
+//     ALL_PROXY, NO_PROXY) or parsed URLs (socks5://, socks5h://, http://, https://).
+//   - HTTP CONNECT Tunneling ([HTTPConnect], [HTTPConnectDialer]):
+//     Establishes end-to-end TCP and TLS tunnels through HTTP forward proxies conforming to RFC 9110 §9.3.6,
+//     supporting Basic authentication ([Auth]), custom proxy headers, and upstream TLS handshakes.
+//   - Host-Based Routing ([PerHost]):
+//     Directs traffic selectively through proxies or directly to destination targets based on
+//     CIDR blocks, loopback designations, and domain pattern matches.
+//
+// # Memory and Buffer Boundaries
+//
+// Handshake framing operates entirely on fixed stack buffers (1KB for HTTP CONNECT headers,
+// 512B for SOCKS5 greeting and authentication frames). Dials execute with zero heap allocations
+// on the connection establishment path.
+//
+// # RFC Specifications
+//
+//   - RFC 1928: SOCKS Protocol Version 5
+//   - RFC 1929: Username/Password Authentication for SOCKS V5
+//   - RFC 9110 §9.3.6: HTTP CONNECT Method
 //
 // # Compared to the standard library
 //
 // Stdlib counterpart: golang.org/x/net/proxy
 //
-// Rejected compromise: standard library proxy packages suffered from goroutine leaks on cancelled dials,
-// lacked first-class HTTP CONNECT tunneling, and incurred unconstrained heap allocations on every connection.
-//
-// Accepted cost: fixed stack buffers limit raw handshake headers to 1KB for HTTP CONNECT and 512B for SOCKS5,
-// strictly adhering to protocol limits without heap allocation.
+// Standard library proxy utilities lack native HTTP CONNECT support, leak background goroutines
+// upon context cancellation during handshakes, and incur multiple heap allocations per dial.
+// This implementation provides unified SOCKS5 and HTTP CONNECT engines with zero heap allocations
+// and prompt socket termination on cancellation.
 //
 // Allocations: 0 allocs/op on handshake hot paths.
 package proxy
