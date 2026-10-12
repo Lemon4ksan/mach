@@ -294,16 +294,28 @@ func (b *CoreSessionBridge) SetDestConnID(cid handshake.ConnectionID) {
 
 // HandleIncomingPacket processes an incoming raw UDP datagram with zero-allocation
 // header parsing, AEAD decryption, frame dispatch, and strict asymmetric isolation.
+// If multiple QUIC packets are coalesced within the datagram (RFC 9000 §12.2), they are
+// processed sequentially in-place.
 func (b *CoreSessionBridge) HandleIncomingPacket(packetData []byte) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	return b.handleSinglePacketLocked(packetData)
+	for len(packetData) > 0 {
+		consumed, err := b.handleSinglePacketLocked(packetData)
+		if err != nil {
+			return err
+		}
+		if consumed <= 0 || consumed >= len(packetData) {
+			break
+		}
+		packetData = packetData[consumed:]
+	}
+	return nil
 }
 
-func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
+func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) (int, error) {
 	if len(packetData) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	isLong := (packetData[0] & 0x80) != 0
@@ -317,18 +329,16 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		case 0x2:
 			pktType = wire.PacketTypeHandshake
 		default:
-			return errors.New("quic: unsupported or invalid long header packet type")
+			return 0, errors.New("quic: unsupported or invalid long header packet type")
 		}
 	} else {
 		if (packetData[0] & 0x40) == 0 {
-			return errors.New("quic: invalid fixed bit in short header")
+			return 0, errors.New("quic: invalid fixed bit in short header")
 		}
 
 		pktType = wire.PacketType1RTT
 	}
 
-	// OpenPacket modifies packet in-place to remove header protection, so work on a copy
-	pktCopy := append([]byte(nil), packetData...)
 	connIDLen := b.srcConnID.Len()
 
 	var (
@@ -340,14 +350,14 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 	switch pktType {
 	case wire.PacketTypeInitial:
 		if b.initialOpener == nil {
-			return errors.New("quic: initial opener not available")
+			return 0, errors.New("quic: initial opener not available")
 		}
 
 		largestAcked := b.largestRecvPNInitial.Load()
 
-		hdr, decryptedPayload, err = b.initialOpener.OpenPacket(nil, pktCopy, connIDLen, largestAcked)
+		hdr, decryptedPayload, err = b.initialOpener.OpenPacket(nil, packetData, connIDLen, largestAcked)
 		if err != nil {
-			return fmt.Errorf("quic: initial open error: %w", err)
+			return 0, fmt.Errorf("quic: initial open error: %w", err)
 		}
 
 		if largestAcked == wire.InvalidPacketNumber || hdr.PacketNumber > largestAcked {
@@ -355,7 +365,7 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		}
 
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevelInitial, decryptedPayload); err != nil {
-			return err
+			return 0, err
 		}
 
 		if b.perspective == handshake.PerspectiveClient && len(hdr.SrcConnID) > 0 {
@@ -368,17 +378,17 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		if b.handshakeOpener == nil {
 			// Early packet reordering: buffer handshake packet until handshake keys are derived
 			if len(b.earlyHandshakePackets) < 32 {
-				b.earlyHandshakePackets = append(b.earlyHandshakePackets, pktCopy)
+				b.earlyHandshakePackets = append(b.earlyHandshakePackets, append([]byte(nil), packetData...))
 			}
 
-			return nil
+			return len(packetData), nil
 		}
 
 		largestAcked := b.largestRecvPNHs.Load()
 
-		hdr, decryptedPayload, err = b.handshakeOpener.OpenPacket(nil, pktCopy, connIDLen, largestAcked)
+		hdr, decryptedPayload, err = b.handshakeOpener.OpenPacket(nil, packetData, connIDLen, largestAcked)
 		if err != nil {
-			return fmt.Errorf("quic: handshake open error: %w", err)
+			return 0, fmt.Errorf("quic: handshake open error: %w", err)
 		}
 
 		if largestAcked == wire.InvalidPacketNumber || hdr.PacketNumber > largestAcked {
@@ -386,7 +396,7 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		}
 
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevelHandshake, decryptedPayload); err != nil {
-			return err
+			return 0, err
 		}
 
 	case wire.PacketType1RTT:
@@ -395,17 +405,17 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		if b.oneRTTOpener == nil {
 			// Early packet reordering: buffer 1-RTT packet until 1-RTT keys are derived
 			if len(b.early1RTTPackets) < 32 {
-				b.early1RTTPackets = append(b.early1RTTPackets, pktCopy)
+				b.early1RTTPackets = append(b.early1RTTPackets, append([]byte(nil), packetData...))
 			}
 
-			return nil
+			return len(packetData), nil
 		}
 
 		largestAcked := b.largestRecvPN1RTT.Load()
 
-		hdr, decryptedPayload, err = b.oneRTTOpener.OpenPacket(nil, pktCopy, connIDLen, largestAcked)
+		hdr, decryptedPayload, err = b.oneRTTOpener.OpenPacket(nil, packetData, connIDLen, largestAcked)
 		if err != nil {
-			return fmt.Errorf("quic: 1-RTT open error: %w", err)
+			return 0, fmt.Errorf("quic: 1-RTT open error: %w", err)
 		}
 
 		if largestAcked == wire.InvalidPacketNumber || hdr.PacketNumber > largestAcked {
@@ -413,11 +423,11 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		}
 
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevel1RTT, decryptedPayload); err != nil {
-			return err
+			return 0, err
 		}
 
 	default:
-		return nil
+		return len(packetData), nil
 	}
 
 	b.checkHandshakeProgressLocked()
@@ -429,7 +439,11 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		}
 	}
 
-	return nil
+	consumed := len(packetData)
+	if isLong && hdr.HeaderLen+hdr.PayloadLen > 0 && hdr.HeaderLen+hdr.PayloadLen <= len(packetData) {
+		consumed = hdr.HeaderLen + hdr.PayloadLen
+	}
+	return consumed, nil
 }
 
 func (b *CoreSessionBridge) processDecryptedFramesLocked(level handshake.EncryptionLevel, payload []byte) error {
@@ -519,7 +533,7 @@ func (b *CoreSessionBridge) checkHandshakeProgressLocked() {
 
 		b.earlyHandshakePackets = nil
 		for _, pkt := range pkts {
-			_ = b.handleSinglePacketLocked(pkt)
+			_, _ = b.handleSinglePacketLocked(pkt)
 		}
 	}
 
@@ -529,7 +543,7 @@ func (b *CoreSessionBridge) checkHandshakeProgressLocked() {
 
 		b.early1RTTPackets = nil
 		for _, pkt := range pkts {
-			_ = b.handleSinglePacketLocked(pkt)
+			_, _ = b.handleSinglePacketLocked(pkt)
 		}
 	}
 
@@ -615,22 +629,48 @@ func (b *CoreSessionBridge) DrainOutgoingPackets() [][]byte {
 	return b.drainCryptoPacketsLocked()
 }
 
-// FlushPendingPackets sends all pending crypto/handshake packets to remoteAddr over packetConn.
+// FlushPendingPackets sends all pending crypto/handshake packets to remoteAddr over packetConn,
+// coalescing consecutive packets into a single UDP datagram where possible (RFC 9000 §12.2).
 func (b *CoreSessionBridge) FlushPendingPackets() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	packets := b.drainCryptoPacketsLocked()
-	for _, pkt := range packets {
-		if b.packetConn != nil && b.remoteAddr != nil {
-			if _, err := b.packetConn.WriteTo(pkt, b.remoteAddr); err != nil {
-				return err
-			}
-		} else {
+	if len(packets) == 0 {
+		return nil
+	}
+
+	if b.packetConn == nil || b.remoteAddr == nil {
+		for _, pkt := range packets {
 			select {
 			case b.outgoingPackets <- pkt:
 			default:
 			}
+		}
+		return nil
+	}
+
+	const maxCoalescedSize = 1200
+	var coalesced []byte
+
+	for _, pkt := range packets {
+		if len(coalesced) > 0 && len(coalesced)+len(pkt) > maxCoalescedSize {
+			if _, err := b.packetConn.WriteTo(coalesced, b.remoteAddr); err != nil {
+				return err
+			}
+			coalesced = nil
+		}
+
+		if len(coalesced) == 0 {
+			coalesced = pkt
+		} else {
+			coalesced = append(coalesced, pkt...)
+		}
+	}
+
+	if len(coalesced) > 0 {
+		if _, err := b.packetConn.WriteTo(coalesced, b.remoteAddr); err != nil {
+			return err
 		}
 	}
 

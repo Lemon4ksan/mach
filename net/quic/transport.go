@@ -182,7 +182,7 @@ func (l *Listener) readLoop() {
 			continue
 		}
 
-		packetData := append([]byte(nil), buf[:n]...)
+		packetData := buf[:n]
 		isLong := (packetData[0] & 0x80) != 0
 
 		if isLong {

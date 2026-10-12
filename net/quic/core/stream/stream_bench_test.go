@@ -63,3 +63,20 @@ func BenchmarkStream_WriteFastPath(b *testing.B) {
 		_ = ss.TryWriteAll(payload)
 	}
 }
+
+func BenchmarkReassemblyBuffer_OutOfOrder(b *testing.B) {
+	rb := NewReassemblyBuffer()
+	payload := make([]byte, 1024)
+	buf := make([]byte, 2048)
+	b.SetBytes(2048)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		// Simulate out-of-order packet arrival: chunk 1 then chunk 0
+		_ = rb.Push(1024, payload, false)
+		_ = rb.Push(0, payload, false)
+		_, _ = rb.Read(buf)
+		rb.Reset()
+	}
+}

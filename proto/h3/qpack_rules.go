@@ -60,3 +60,29 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 
 	return false
 }
+
+// isForbiddenH3HeaderString checks if string-key/val header is prohibited in HTTP/3 (RFC 9114 §4.2).
+func isForbiddenH3HeaderString(key, val string) bool {
+	if key == "" || key[0] == ':' {
+		return true
+	}
+
+	b0 := key[0] | 0x20
+	switch b0 {
+	case 'c', 'k', 'p', 't', 'u', 's':
+		if bytesconv.EqualFoldASCII(key, "connection") ||
+			bytesconv.EqualFoldASCII(key, "keep-alive") ||
+			bytesconv.EqualFoldASCII(key, "proxy-connection") ||
+			bytesconv.EqualFoldASCII(key, "transfer-encoding") ||
+			bytesconv.EqualFoldASCII(key, "upgrade") ||
+			bytesconv.EqualFoldASCII(key, "sec-websocket-key") ||
+			bytesconv.EqualFoldASCII(key, "sec-websocket-accept") {
+			return true
+		}
+		if bytesconv.EqualFoldASCII(key, "te") {
+			return !bytesconv.EqualFoldASCII(val, "trailers")
+		}
+	}
+
+	return false
+}

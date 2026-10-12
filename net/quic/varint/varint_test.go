@@ -486,3 +486,22 @@ func TestStressVarint_Parallel(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestAppendAndLen(t *testing.T) {
+	testValues := []uint64{0, 25, 63, 64, 1000, 16383, 16384, 1000000, 1073741823, 1073741824, varint.Max}
+	for _, v := range testValues {
+		expectedLen := varint.Len(v)
+		b := varint.Append(nil, v)
+		if len(b) != expectedLen {
+			t.Fatalf("Len(%d) = %d, but Append produced %d bytes", v, expectedLen, len(b))
+		}
+		dec, readLen, err := varint.Decode(b)
+		if err != nil {
+			t.Fatalf("Decode failed for Append(%d): %v", v, err)
+		}
+		if dec != v || readLen != expectedLen {
+			t.Fatalf("Decode(Append(%d)) = %d, len=%d; want %d, len=%d", v, dec, readLen, v, expectedLen)
+		}
+	}
+}
+
