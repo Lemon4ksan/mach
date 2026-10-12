@@ -295,12 +295,14 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 
 		// RFC 6455 §5.2: Opcode validation (check reserved and valid opcodes)
 		if !hdr.Opcode.IsValid() || hdr.Opcode.IsReserved() {
+			c.drainPayload(hdr.PayloadLen)
 			c.writeProtocolErrorAndClose(StatusProtocolError, "Unknown or reserved opcode")
 			return 0, nil, ErrInvalidOpcode
 		}
 
 		// RFC 6455 §5.5.1: If a Close frame was already received, receiving data frames is forbidden
 		if c.seenClose && !hdr.Opcode.IsControl() {
+			c.drainPayload(hdr.PayloadLen)
 			c.writeProtocolErrorAndClose(StatusProtocolError, "Data frame received after close")
 			return 0, nil, ErrDataAfterClose
 		}
@@ -308,10 +310,12 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 		// Verify masking rules (RFC 6455 §5.1)
 		if !c.skipMaskCheck {
 			if c.isServer && !hdr.Masked {
+				c.drainPayload(hdr.PayloadLen)
 				c.writeProtocolErrorAndClose(StatusProtocolError, "Server requires masked frames")
 				return 0, nil, ErrMaskRequired
 			}
 			if !c.isServer && hdr.Masked {
+				c.drainPayload(hdr.PayloadLen)
 				c.writeProtocolErrorAndClose(StatusProtocolError, "Client requires unmasked frames")
 				return 0, nil, ErrMaskForbidden
 			}
@@ -319,15 +323,18 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 
 		// Verify reserved bits (RSV1, RSV2, RSV3)
 		if hdr.Rsv2 || hdr.Rsv3 {
+			c.drainPayload(hdr.PayloadLen)
 			c.writeProtocolErrorAndClose(StatusProtocolError, "Reserved bits RSV2/RSV3 set")
 			return 0, nil, ErrRSVSet
 		}
 		if hdr.Rsv1 {
 			if !c.enableDeflate {
+				c.drainPayload(hdr.PayloadLen)
 				c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 set without deflate extension")
 				return 0, nil, ErrRSVSet
 			}
 			if hdr.Opcode.IsControl() || hdr.Opcode == OpcodeContinuation {
+				c.drainPayload(hdr.PayloadLen)
 				c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 not allowed on control or continuation frame")
 				return 0, nil, ErrRSVSet
 			}
@@ -336,10 +343,12 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 		// Control frame constraints (RFC 6455 §5.5)
 		if hdr.Opcode.IsControl() {
 			if !hdr.Fin {
+				c.drainPayload(hdr.PayloadLen)
 				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame must not be fragmented")
 				return 0, nil, ErrControlFrameFragmented
 			}
 			if hdr.PayloadLen > 125 {
+				c.drainPayload(hdr.PayloadLen)
 				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame payload exceeds 125 bytes")
 				return 0, nil, ErrControlFrameTooLarge
 			}
@@ -348,10 +357,12 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 		// DoS / Memory Exhaustion Defense (BUG #1 Fix):
 		// Validate against ReadLimit BEFORE allocating payload slice!
 		if c.readLimit > 0 && hdr.PayloadLen > c.readLimit {
+			c.drainPayload(hdr.PayloadLen)
 			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Frame payload exceeds read limit")
 			return 0, nil, ErrMessageTooBig
 		}
 		if !hdr.Opcode.IsControl() && c.readLimit > 0 && (int64(len(c.fragmentBuf))+hdr.PayloadLen) > c.readLimit {
+			c.drainPayload(hdr.PayloadLen)
 			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Message exceeds read limit")
 			return 0, nil, ErrMessageTooBig
 		}
@@ -616,6 +627,27 @@ func (c *Conn) writeControlFrame(op Opcode, data []byte) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	return c.writeFrameLocked(true, false, op, data)
+}
+
+// drainPayload reads and discards up to n unread bytes of an invalid frame payload.
+// This prevents Windows TCP sockets (Winsock) from transmitting a hard RST upon closeTransport()
+// when unread payload data remains in the socket receive buffer.
+func (c *Conn) drainPayload(n int64) {
+	if n <= 0 || n > 65536 {
+		return
+	}
+	var discardBuf [512]byte
+	for n > 0 {
+		toRead := int64(len(discardBuf))
+		if n < toRead {
+			toRead = n
+		}
+		readN, err := c.rw.Read(discardBuf[:toRead])
+		if err != nil {
+			return
+		}
+		n -= int64(readN)
+	}
 }
 
 // writeProtocolErrorAndClose sends a Close frame with status code and safely truncated reason,

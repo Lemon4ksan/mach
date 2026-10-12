@@ -65,7 +65,7 @@ func performServerHandshake(rawConn net.Conn) (*ws.Conn, error) {
 		return nil, err
 	}
 
-	return ws.NewServerConn(rawConn), nil
+	return ws.NewConnWithReader(rawConn, reader, true), nil
 }
 
 // ============================================================================
@@ -136,7 +136,7 @@ func TestChromiumWSNemesis_UnmaskedFrameInjection(t *testing.T) {
 	// 3. Server MUST reply with Close frame code 1002 (Protocol Error)
 	var respBuf [128]byte
 	_ = rawClient.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := rawClient.Read(respBuf[:])
+	n, err := reader.Read(respBuf[:])
 	require.NoError(t, err)
 	require.True(t, n >= 4, "server must send Close frame")
 
@@ -217,7 +217,7 @@ func TestChromiumWSNemesis_OversizedControlFrames(t *testing.T) {
 
 			var resp [128]byte
 			_ = rawClient.SetReadDeadline(time.Now().Add(2 * time.Second))
-			n, err := rawClient.Read(resp[:])
+			n, err := reader.Read(resp[:])
 			require.NoError(t, err)
 
 			h, hlen, err := ws.ParseHeader(resp[:n])
@@ -284,7 +284,7 @@ func TestChromiumWSNemesis_FragmentedControlFrameInjection(t *testing.T) {
 
 	var resp [128]byte
 	_ = rawClient.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := rawClient.Read(resp[:])
+	n, err := reader.Read(resp[:])
 	require.NoError(t, err)
 
 	h, hlen, _ := ws.ParseHeader(resp[:n])
@@ -350,7 +350,7 @@ func TestChromiumWSNemesis_ReservedBitsSmuggling(t *testing.T) {
 
 	var resp [128]byte
 	_ = rawClient.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := rawClient.Read(resp[:])
+	n, err := reader.Read(resp[:])
 	require.NoError(t, err)
 
 	h, hlen, _ := ws.ParseHeader(resp[:n])
@@ -415,7 +415,7 @@ func TestChromiumWSNemesis_UTF8FuzzExploits(t *testing.T) {
 
 	var resp [128]byte
 	_ = rawClient.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := rawClient.Read(resp[:])
+	n, err := reader.Read(resp[:])
 	require.NoError(t, err)
 
 	h, hlen, _ := ws.ParseHeader(resp[:n])
@@ -480,7 +480,7 @@ func TestChromiumWSNemesis_ForbiddenCloseCodes(t *testing.T) {
 
 	var resp [128]byte
 	_ = rawClient.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := rawClient.Read(resp[:])
+	n, err := reader.Read(resp[:])
 	require.NoError(t, err)
 
 	h, hlen, _ := ws.ParseHeader(resp[:n])

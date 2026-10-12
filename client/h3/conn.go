@@ -43,7 +43,13 @@ type ClientConn struct {
 	Transport        *quic.Transport
 	UnderlyingCloser io.Closer
 	qpack            *coreh3.QPACKCodec
-	settings         coreh3.Settings
+	localSettings    coreh3.Settings
+
+	peerSettingsMu    sync.RWMutex
+	peerSettings      coreh3.Settings
+	settingsReady     chan struct{}
+	settingsReadyOnce sync.Once
+	enableConnect     atomic.Bool
 
 	closeOnce       sync.Once
 	closed          chan struct{}
@@ -70,10 +76,11 @@ func NewClientConn(conn *quic.Conn, settings *coreh3.Settings) (*ClientConn, err
 	}
 
 	cc := &ClientConn{
-		conn:     conn,
-		qpack:    coreh3.NewQPACKCodecWithOptions(settings.QpackMaxTableCap, settings.QpackBlockedStreams, nil),
-		settings: *settings,
-		closed:   make(chan struct{}),
+		conn:          conn,
+		qpack:         coreh3.NewQPACKCodecWithOptions(settings.QpackMaxTableCap, settings.QpackBlockedStreams, nil),
+		localSettings: *settings,
+		settingsReady: make(chan struct{}),
+		closed:        make(chan struct{}),
 	}
 
 	cc.qpack.SetErrorHandler(func(err error) {
@@ -176,12 +183,36 @@ func (cc *ClientConn) readBidirectionalStreams() {
 
 // EnableConnect reports whether the peer advertised SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 §3).
 func (cc *ClientConn) EnableConnect() bool {
-	return cc.settings.EnableConnect
+	return cc.enableConnect.Load()
 }
 
 // Settings returns the active settings received from the peer.
 func (cc *ClientConn) Settings() coreh3.Settings {
-	return cc.settings
+	cc.peerSettingsMu.RLock()
+	defer cc.peerSettingsMu.RUnlock()
+	return cc.peerSettings
+}
+
+// WaitSettings blocks until the peer's initial SETTINGS frame has been processed,
+// or until the connection or context is canceled.
+func (cc *ClientConn) WaitSettings(ctx context.Context) error {
+	var quicDone <-chan struct{}
+	if cc.conn != nil {
+		quicDone = cc.conn.Context().Done()
+	}
+	select {
+	case <-cc.settingsReady:
+		return nil
+	case <-cc.closed:
+		return errors.New("h3: connection closed before settings received")
+	case <-quicDone:
+		if cc.conn != nil {
+			return cc.conn.Context().Err()
+		}
+		return errors.New("h3: connection closed")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // ExtendedConnectStream adapts an HTTP/3 Extended CONNECT stream to io.ReadWriteCloser.

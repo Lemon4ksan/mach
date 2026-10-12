@@ -460,6 +460,14 @@ func (e *Engine) dialH3WebSocket(
 		return nil, nil, err
 	}
 
+	// Wait for peer SETTINGS frame per RFC 9220 §3
+	waitCtx, waitCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer waitCancel()
+	if err := h3cc.WaitSettings(waitCtx); err != nil {
+		_ = h3cc.Close()
+		return nil, nil, fmt.Errorf("client: failed waiting for H3 settings: %w", err)
+	}
+
 	if !h3cc.EnableConnect() {
 		_ = h3cc.Close()
 		return nil, nil, errors.New("client: server did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL")

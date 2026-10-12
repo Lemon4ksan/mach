@@ -26,7 +26,7 @@ func (cc *ClientConn) setupControlStream() error {
 	var stackBuf [64]byte
 
 	buf := varint.Append(stackBuf[:0], coreh3.StreamTypeControl)
-	buf = append(buf, cc.settings.Encode()...)
+	buf = append(buf, cc.localSettings.Encode()...)
 
 	_, err = str.Write(buf)
 
@@ -176,7 +176,13 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 				return
 			}
 
-			cc.settings = *st
+			cc.peerSettingsMu.Lock()
+			cc.peerSettings = *st
+			cc.peerSettingsMu.Unlock()
+			cc.enableConnect.Store(st.EnableConnect)
+			cc.settingsReadyOnce.Do(func() {
+				close(cc.settingsReady)
+			})
 			cc.qpack.ApplySettings(st.QpackMaxTableCap, st.QpackBlockedStreams)
 
 		case coreh3.FrameTypeGoAway:
