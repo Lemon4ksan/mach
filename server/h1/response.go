@@ -8,6 +8,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
@@ -46,19 +47,13 @@ func (r *Response) Reset() {
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to bw (RFC 9112 §2.1, RFC 9110 §15).
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
 func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
-	code := r.StatusCode
-	if code == 0 {
-		code = status.OK
-	}
+	code := generic.Coalesce(r.StatusCode, status.OK)
 
 	// 1. Fast Status Line (from pre-compiled static table)
 	if code >= 100 && code < len(statusLines) && statusLines[code] != nil {
 		_, _ = bw.Write(statusLines[code])
 	} else {
-		statusText := status.Message(code)
-		if statusText == "" {
-			statusText = "Unknown"
-		}
+		statusText := generic.Coalesce(status.Message(code), "Unknown")
 
 		var stBuf [16]byte
 
@@ -71,9 +66,8 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 
 	// 2. Atomic Cached Date Header
 	if r.Headers.Get(headkit.Date) == "" {
-		dateBytes := cachedDateHeader.Load()
-		if dateBytes != nil {
-			_, _ = bw.Write(*dateBytes)
+		if b := generic.DerefOr(cachedDateHeader.Load(), nil); len(b) > 0 {
+			_, _ = bw.Write(b)
 		}
 	}
 

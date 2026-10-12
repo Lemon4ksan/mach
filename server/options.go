@@ -7,6 +7,8 @@ package server
 import (
 	"crypto/tls"
 	"time"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // Option configures Server instances.
@@ -61,7 +63,7 @@ func WithAltSvcDisabled(disabled bool) Option {
 func WithCustomAltSvc(val string) Option {
 	return func(s *Server) {
 		s.CustomAltSvc = val
-		s.altSvcHeader.Store(&val)
+		s.altSvcHeader.Store(generic.Ptr(val))
 	}
 }
 

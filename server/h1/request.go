@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	protoh1 "github.com/lemon4ksan/mach/proto/h1"
@@ -566,11 +567,7 @@ func (r *Request) ClientIP() string {
 
 	if addr != "" {
 		host, _, err := net.SplitHostPort(addr)
-		if err == nil {
-			return host
-		}
-
-		return addr
+		return generic.Ternary(err == nil, host, addr)
 	}
 
 	return ""

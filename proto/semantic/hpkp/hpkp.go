@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 )
@@ -107,10 +108,7 @@ func NewPinSHA256(fingerprint string) (Pin, error) {
 
 // AppendFormat appends the directive string representation to dst without heap allocations.
 func (p Pin) AppendFormat(dst []byte) []byte {
-	algo := p.Algorithm
-	if algo == "" {
-		algo = "sha256"
-	}
+	algo := generic.Coalesce(p.Algorithm, "sha256")
 
 	dst = append(dst, "pin-"...)
 	dst = append(dst, algo...)

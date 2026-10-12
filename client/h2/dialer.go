@@ -141,11 +141,7 @@ func (d *Dialer) tryDial(ctx context.Context) (net.Conn, error) {
 
 	if tlsConf.ServerName == "" {
 		host, _, err := net.SplitHostPort(d.Addr)
-		if err != nil {
-			host = d.Addr
-		}
-
-		tlsConf.ServerName = host
+		tlsConf.ServerName = generic.Ternary(err == nil, host, d.Addr)
 	}
 
 	if !generic.Contains(tlsConf.NextProtos, "h2") {

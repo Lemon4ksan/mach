@@ -4,7 +4,11 @@
 
 package proxy
 
-import "net/url"
+import (
+	"net/url"
+
+	"github.com/lemon4ksan/foundation/generic"
+)
 
 // Option configures proxy settings across client transports (H1, H2, H3).
 type Option func(*Config)
@@ -45,12 +49,12 @@ func WithProxy(p any) Option {
 // ResolveProxy resolves a Dialer from one or more Option functions.
 // If no proxy option is provided or configured, it defaults to Direct.
 func ResolveProxy(opts ...Option) Dialer {
-	cfg := &Config{Dialer: Direct}
+	var cfg Config
 	for _, opt := range opts {
 		if opt != nil {
-			opt(cfg)
+			opt(&cfg)
 		}
 	}
 
-	return cfg.Dialer
+	return generic.CoalesceNil[Dialer](cfg.Dialer, Direct)
 }

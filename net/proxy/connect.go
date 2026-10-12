@@ -43,12 +43,8 @@ type HTTPConnectDialer struct {
 
 // NewHTTPConnectDialer creates an HTTP CONNECT tunnel dialer targeting the proxy at address.
 func NewHTTPConnectDialer(network, address string, auth *Auth, forward Dialer) *HTTPConnectDialer {
-	if network == "" {
-		network = "tcp"
-	}
-
 	return &HTTPConnectDialer{
-		ProxyNetwork: network,
+		ProxyNetwork: generic.Coalesce(network, "tcp"),
 		ProxyAddress: address,
 		Auth:         auth,
 		Forward:      forward,

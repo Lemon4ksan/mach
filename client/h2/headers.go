@@ -248,12 +248,8 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 
 	var (
 		totalSize uint32
-		maxList   = c.current.MaxHeaderListSize()
+		maxList   = generic.Coalesce(c.current.MaxHeaderListSize(), defaultMaxHeaderListSize)
 	)
-
-	if maxList == 0 {
-		maxList = defaultMaxHeaderListSize
-	}
 
 	if reqCtx.Trailers == nil {
 		reqCtx.Trailers = make(map[string][]string)
@@ -320,12 +316,8 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 		hasStatus        bool
 		hasRegularHeader bool
 		totalSize        uint32
-		maxList          = c.current.MaxHeaderListSize()
+		maxList          = generic.Coalesce(c.current.MaxHeaderListSize(), defaultMaxHeaderListSize)
 	)
-
-	if maxList == 0 {
-		maxList = defaultMaxHeaderListSize
-	}
 
 	informationalHeader := make(http.Header)
 

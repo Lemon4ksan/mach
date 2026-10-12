@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"sync"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // A Dialer is a means to establish a connection.
@@ -99,32 +101,17 @@ func FromURL(u *url.URL, forward Dialer) (Dialer, error) {
 	switch u.Scheme {
 	case "socks5", "socks5h":
 		addr := u.Hostname()
-		port := u.Port()
-
-		if port == "" {
-			port = "1080"
-		}
-
+		port := generic.Coalesce(u.Port(), "1080")
 		return SOCKS5("tcp", net.JoinHostPort(addr, port), auth, forward)
 
 	case "http":
 		addr := u.Hostname()
-		port := u.Port()
-
-		if port == "" {
-			port = "80"
-		}
-
+		port := generic.Coalesce(u.Port(), "80")
 		return HTTPConnect("tcp", net.JoinHostPort(addr, port), auth, forward)
 
 	case "https":
 		addr := u.Hostname()
-		port := u.Port()
-
-		if port == "" {
-			port = "443"
-		}
-
+		port := generic.Coalesce(u.Port(), "443")
 		d := NewHTTPConnectDialer("tcp", net.JoinHostPort(addr, port), auth, forward)
 		d.TLSConfig = &tls.Config{ServerName: addr}
 

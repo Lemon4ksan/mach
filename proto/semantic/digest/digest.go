@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -637,10 +638,7 @@ func (dc *digestCredentials) h(data string) string {
 
 // digest computes the cryptographic response digest (RFC 7616 §3.4.1).
 func (dc *digestCredentials) digest(cha *Challenge) (string, error) {
-	normAlg := strings.ToUpper(strings.TrimSpace(dc.algorithm))
-	if normAlg == "" {
-		normAlg = "MD5"
-	}
+	normAlg := generic.Coalesce(strings.ToUpper(strings.TrimSpace(dc.algorithm)), "MD5")
 
 	if _, ok := digestHashFuncs[normAlg]; !ok {
 		return "", ErrDigestAlgNotSupported

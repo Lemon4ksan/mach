@@ -23,6 +23,8 @@ import (
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/proto/ws"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 var (
@@ -173,28 +175,19 @@ func (e *Engine) DialWebSocket(
 
 	authority := u.Host
 
-	path := u.RequestURI()
-	if path == "" {
-		path = "/"
-	}
+	path := generic.Coalesce(u.RequestURI(), "/")
 
-	tlsConf := cfg.TLSConfig
-	switch {
-	case tlsConf == nil && e.TLSConfig != nil:
-		tlsConf = e.TLSConfig.Clone()
-	case tlsConf != nil:
-		tlsConf = tlsConf.Clone()
-	case isTLS:
+	baseTLS := generic.CoalesceNil(cfg.TLSConfig, e.TLSConfig)
+	var tlsConf *tls.Config
+	if baseTLS != nil {
+		tlsConf = baseTLS.Clone()
+	} else if isTLS {
 		tlsConf = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
 	if isTLS && tlsConf.ServerName == "" {
 		h, _, err := net.SplitHostPort(u.Host)
-		if err != nil {
-			h = u.Host
-		}
-
-		tlsConf.ServerName = h
+		tlsConf.ServerName = generic.Ternary(err == nil, h, u.Host)
 	}
 
 	proto := cfg.ForceProto
@@ -454,10 +447,10 @@ func (e *Engine) startH2WebSocketSession(
 
 	wsConn := ws.NewConn(&h2WebSocketStreamCloser{ExtendedConnectStream: stream, h2c: h2c}, false)
 
-	selectedSubproto := string(resp.Header.Peek("sec-websocket-protocol"))
-	if selectedSubproto == "" {
-		selectedSubproto = string(resp.Header.Peek("Sec-WebSocket-Protocol"))
-	}
+	selectedSubproto := generic.Coalesce(
+		string(resp.Header.Peek("sec-websocket-protocol")),
+		string(resp.Header.Peek("Sec-WebSocket-Protocol")),
+	)
 
 	if selectedSubproto != "" {
 		wsConn.SetSubprotocol(selectedSubproto)
@@ -542,10 +535,10 @@ func (e *Engine) dialH3WebSocket(
 
 	wsConn := ws.NewConn(&h3WebSocketStreamCloser{ExtendedConnectStream: stream, h3cc: h3cc}, false)
 
-	selectedSubproto := string(resp.Header.Peek("sec-websocket-protocol"))
-	if selectedSubproto == "" {
-		selectedSubproto = string(resp.Header.Peek("Sec-WebSocket-Protocol"))
-	}
+	selectedSubproto := generic.Coalesce(
+		string(resp.Header.Peek("sec-websocket-protocol")),
+		string(resp.Header.Peek("Sec-WebSocket-Protocol")),
+	)
 
 	if selectedSubproto != "" {
 		wsConn.SetSubprotocol(selectedSubproto)

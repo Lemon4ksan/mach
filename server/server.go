@@ -209,27 +209,18 @@ func (s *Server) updateAltSvcHeader(port int) {
 		return
 	}
 
-	maxAge := s.AltSvcMaxAge
-	if maxAge <= 0 {
-		maxAge = altsvc.DefaultMaxAge
-	}
+	maxAge := generic.Ternary(s.AltSvcMaxAge > 0, s.AltSvcMaxAge, altsvc.DefaultMaxAge)
 
 	svc := altsvc.Service{
 		ProtocolID: "h3",
 		Port:       port,
 		MaxAge:     maxAge,
 	}
-	hdr := altsvc.Format(svc)
-	s.altSvcHeader.Store(&hdr)
+	s.altSvcHeader.Store(generic.Ptr(altsvc.Format(svc)))
 }
 
 func (s *Server) getAltSvcHeader() string {
-	ptr := s.altSvcHeader.Load()
-	if ptr != nil {
-		return *ptr
-	}
-
-	return ""
+	return generic.DerefOr(s.altSvcHeader.Load(), "")
 }
 
 func (s *Server) shouldEmitAltSvc(ctx *Context) bool {

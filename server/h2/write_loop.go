@@ -7,6 +7,8 @@ package h2
 import (
 	"net/http"
 
+	"github.com/lemon4ksan/foundation/generic"
+
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
@@ -43,10 +45,7 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 
-	maxChunk := int(sc.peerMaxFrameSize)
-	if maxChunk <= 0 {
-		maxChunk = coreh2.DefaultMaxLen
-	}
+	maxChunk := generic.Ternary(sc.peerMaxFrameSize > 0, int(sc.peerMaxFrameSize), coreh2.DefaultMaxLen)
 
 	written := len(body)
 	if len(body) == 0 {
@@ -129,10 +128,7 @@ func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error 
 	// 2. Serialize DATA Frames (RFC 9113 §6.1)
 	body := res.Body
 	if len(body) > 0 {
-		maxChunk := int(sc.peerMaxFrameSize)
-		if maxChunk <= 0 {
-			maxChunk = coreh2.DefaultMaxLen
-		}
+		maxChunk := generic.Ternary(sc.peerMaxFrameSize > 0, int(sc.peerMaxFrameSize), coreh2.DefaultMaxLen)
 
 		dataFr := coreh2.AcquireFrameHeader()
 		defer coreh2.ReleaseFrameHeader(dataFr)

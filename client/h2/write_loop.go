@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/clock"
 	"github.com/lemon4ksan/foundation/silicon/sysnet"
 
@@ -23,9 +24,7 @@ func (c *Conn) writeLoop() {
 	defer func() { _ = c.Close() }()
 	defer c.recoverWriteLoop(&lastErr)
 
-	if c.pingInterval <= 0 {
-		c.pingInterval = DefaultPingInterval
-	}
+	c.pingInterval = generic.Ternary(c.pingInterval > 0, c.pingInterval, DefaultPingInterval)
 
 	ticker := time.NewTicker(c.pingInterval)
 	defer ticker.Stop()
