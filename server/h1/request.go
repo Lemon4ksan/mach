@@ -359,13 +359,15 @@ func (r *Request) parseRequestLine(line []byte) error {
 	}
 
 	// RFC 9112 §2.3: Validate HTTP version
-	if len(protoBytes) == 8 && protoBytes[0] == 'H' && protoBytes[1] == 'T' && protoBytes[2] == 'T' && protoBytes[3] == 'P' &&
-		protoBytes[4] == '/' && protoBytes[5] == '1' && protoBytes[6] == '.' {
-		if protoBytes[7] == '1' {
+	if len(protoBytes) == 8 && protoBytes[0] == 'H' && protoBytes[1] == 'T' &&
+		protoBytes[2] == 'T' && protoBytes[3] == 'P' && protoBytes[4] == '/' &&
+		protoBytes[5] == '1' && protoBytes[6] == '.' {
+		switch protoBytes[7] {
+		case '1':
 			r.Proto = "HTTP/1.1"
-		} else if protoBytes[7] == '0' {
+		case '0':
 			r.Proto = "HTTP/1.0"
-		} else {
+		default:
 			return ErrUnsupportedProtocol
 		}
 	} else {
@@ -375,33 +377,39 @@ func (r *Request) parseRequestLine(line []byte) error {
 	methodBytes := line[:s1]
 	switch len(methodBytes) {
 	case 3:
-		if methodBytes[0] == 'G' && methodBytes[1] == 'E' && methodBytes[2] == 'T' {
+		switch {
+		case methodBytes[0] == 'G' && methodBytes[1] == 'E' && methodBytes[2] == 'T':
 			r.Method = "GET"
-		} else if methodBytes[0] == 'P' && methodBytes[1] == 'U' && methodBytes[2] == 'T' {
+		case methodBytes[0] == 'P' && methodBytes[1] == 'U' && methodBytes[2] == 'T':
 			r.Method = "PUT"
-		} else {
+		default:
 			r.Method = bytesconv.B2S(methodBytes)
 		}
+
 	case 4:
-		if methodBytes[0] == 'P' && methodBytes[1] == 'O' && methodBytes[2] == 'S' && methodBytes[3] == 'T' {
+		switch {
+		case methodBytes[0] == 'P' && methodBytes[1] == 'O' && methodBytes[2] == 'S' && methodBytes[3] == 'T':
 			r.Method = "POST"
-		} else if methodBytes[0] == 'H' && methodBytes[1] == 'E' && methodBytes[2] == 'A' && methodBytes[3] == 'D' {
+		case methodBytes[0] == 'H' && methodBytes[1] == 'E' && methodBytes[2] == 'A' && methodBytes[3] == 'D':
 			r.Method = "HEAD"
-		} else {
+		default:
 			r.Method = bytesconv.B2S(methodBytes)
 		}
+
 	case 6:
 		if bytes.Equal(methodBytes, []byte("DELETE")) {
 			r.Method = "DELETE"
 		} else {
 			r.Method = bytesconv.B2S(methodBytes)
 		}
+
 	case 7:
 		if bytes.Equal(methodBytes, []byte("OPTIONS")) {
 			r.Method = "OPTIONS"
 		} else {
 			r.Method = bytesconv.B2S(methodBytes)
 		}
+
 	default:
 		r.Method = bytesconv.B2S(methodBytes)
 	}

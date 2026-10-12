@@ -386,6 +386,7 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 2, false, true
 		}
+
 	case ":path":
 		switch string(val) {
 		case "/":
@@ -395,6 +396,7 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 4, false, true
 		}
+
 	case ":scheme":
 		switch string(val) {
 		case "http":
@@ -404,6 +406,7 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 7, false, true
 		}
+
 	case ":status":
 		switch string(val) {
 		case "200":
@@ -423,13 +426,16 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 8, false, true
 		}
+
 	case "accept-charset":
 		return 15, len(val) == 0, true
 	case "accept-encoding":
 		if string(val) == "gzip, deflate" {
 			return 16, true, true
 		}
+
 		return 16, len(val) == 0, true
+
 	case "accept-language":
 		return 17, len(val) == 0, true
 	case "accept-ranges":
@@ -686,6 +692,7 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 		hf.SetKeyBytes(hf2.KeyBytes())
 	} else {
 		b = b[1:]
+
 		var err error
 
 		b, hf.keyBuf, err = readString(hf.keyBuf[:0], b)
@@ -701,6 +708,7 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 	}
 
 	var err error
+
 	b, hf.valBuf, err = readString(hf.valBuf[:0], b)
 	if err != nil {
 		return b, err
@@ -740,6 +748,7 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 		hf.SetKeyBytes(hf2.KeyBytes())
 	} else {
 		b = b[1:]
+
 		var err error
 
 		b, hf.keyBuf, err = readString(hf.keyBuf[:0], b)
@@ -755,6 +764,7 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 	}
 
 	var err error
+
 	b, hf.valBuf, err = readString(hf.valBuf[:0], b)
 	if err != nil {
 		return b, err
