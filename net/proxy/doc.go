@@ -16,10 +16,9 @@
 //   - Dialing Pipelines ([FromURL], [FromEnvironment], [Direct]):
 //     Resolves proxy topologies automatically from environment variables (HTTP_PROXY, HTTPS_PROXY,
 //     ALL_PROXY, NO_PROXY) or parsed URLs (socks5://, socks5h://, http://, https://).
-//   - HTTP CONNECT Tunneling ([HTTPConnect], [ConnectOption]):
+//   - HTTP CONNECT Tunneling ([HTTPConnect], [HTTPConnectDialer]):
 //     Establishes end-to-end TCP and TLS tunnels through HTTP forward proxies conforming to RFC 9110 §9.3.6,
-//     supporting Basic authentication ([WithConnectAuth]), arbitrary proxy headers ([WithConnectHeaders]),
-//     and upstream TLS handshakes ([WithConnectTLS]).
+//     supporting Basic authentication ([Auth]), custom proxy headers, and upstream TLS handshakes.
 //   - Host-Based Routing ([PerHost]):
 //     Directs traffic selectively through proxies or directly to destination targets based on
 //     CIDR blocks, loopback designations, and domain pattern matches.

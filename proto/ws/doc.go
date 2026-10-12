@@ -16,14 +16,14 @@
 //   - Wire Framing ([Header], [ReadHeader], [WriteHeader]):
 //     Serializes and decodes standard 2-to-14 byte RFC 6455 frame headers with zero allocations,
 //     enforcing payload length encoding rules (7-bit, 16-bit, and 64-bit variants).
-//   - Vectorized Masking ([MaskPayload]):
+//   - Vectorized Masking ([Mask]):
 //     Accelerates client-to-server payload masking with 64-bit SWAR (SIMD Within A Register) XOR
 //     vector kernels, processing payloads at wire speed (39+ GB/s) while falling back to scalar byte
 //     loops for unaligned boundaries.
 //   - Streaming Frame Parser ([Parser]):
 //     Decodes segmented wire inputs without intermediate buffer allocations, validating RSV bit
 //     invariants, UTF-8 text compliance, and fragmented message sequences.
-//   - Handshake Negotiation ([ValidateClientHandshake], [BuildServerHandshakeResponse]):
+//   - Handshake Negotiation ([ValidateUpgradeRequest], [WriteUpgradeResponse]):
 //     Validates HTTP/1.1 upgrade headers, computes Sec-WebSocket-Accept keys via SHA-1 hashes (RFC 6455 §1.3),
 //     and negotiates requested subprotocols.
 //   - Permessage-Deflate Compression:
@@ -34,7 +34,7 @@
 //
 // Violations of RFC 6455 framing invariants—such as unmasked client frames, control frames exceeding
 // 125 octets, non-zero RSV bits without negotiated extensions, or invalid UTF-8 payload in text frames—result
-// in protocol closure frames emitting typed status codes ([StatusProtocolError], [StatusInvalidFramePayloadData]).
+// in protocol closure frames emitting typed status codes ([CloseProtocolError], [CloseInvalidFramePayloadData]).
 //
 // # RFC Specifications
 //

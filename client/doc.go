@@ -16,7 +16,7 @@
 //   - Connection Pooling ([PoolManager]):
 //     Maintains host-keyed pools with stripped lock contention and generational idle evictions,
 //     minimizing allocation drag during connection acquisition.
-//   - Transparent Alternative Services ([AltSvcManager]):
+//   - Transparent Alternative Services ([AltSvcCache]):
 //     Parses and caches RFC 7838 Alt-Svc headers from ingress responses, automatically migrating
 //     subsequent requests from TCP-based HTTP/1.1 or HTTP/2 to zero-RTT HTTP/3 over QUIC.
 //   - Proxy Integration ([WithProxy]):

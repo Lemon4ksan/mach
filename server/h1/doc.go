@@ -5,7 +5,7 @@
 //
 // The server engine isolates L4 network connection management from L7 application handlers:
 //
-//   - Connection State Machine ([ServerConn]):
+//   - Connection State Machine ([Conn]):
 //     Processes incoming requests sequentially or via pipelining over active TCP connections,
 //     recycling request contexts and header buffers to eliminate allocation overhead.
 //   - Request Parsing & Pipelining:
