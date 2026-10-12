@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/mach"
 	h1client "github.com/lemon4ksan/mach/client/h1"
 	h2client "github.com/lemon4ksan/mach/client/h2"
@@ -513,18 +514,10 @@ func (e *Engine) Close() error {
 	// on e.mu when OnDisconnect triggers evictH2 (EXP-1206).
 	e.mu.Lock()
 
-	h2Conns := make([]*h2Conn, 0, len(e.h2Active))
-	for _, h2c := range e.h2Active {
-		h2Conns = append(h2Conns, h2c)
-	}
-
+	h2Conns := generic.Values(e.h2Active)
 	clear(e.h2Active)
 
-	h3Conns := make([]*h3Conn, 0, len(e.h3Active))
-	for _, h3c := range e.h3Active {
-		h3Conns = append(h3Conns, h3c)
-	}
-
+	h3Conns := generic.Values(e.h3Active)
 	clear(e.h3Active)
 	e.mu.Unlock()
 

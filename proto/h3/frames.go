@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 var ErrH3SettingsError = errors.New("aoni/h3engine: reserved H2 setting ID in H3 SETTINGS frame (RFC 9114 §7.2.4.1)")
@@ -155,7 +156,7 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 		Other:               make(map[uint64]uint64),
 	}
 
-	seen := make(map[uint64]bool)
+	seen := generic.NewSet[uint64]()
 
 	for {
 		id, err := varint.Read(qr)
@@ -167,11 +168,11 @@ func DecodeSettings(r io.Reader, payloadLen uint64) (*Settings, error) {
 			return nil, err
 		}
 
-		if seen[id] {
+		if seen.Has(id) {
 			return nil, ErrH3SettingsError
 		}
 
-		seen[id] = true
+		seen.Add(id)
 
 		val, err := varint.Read(qr)
 		if err != nil {

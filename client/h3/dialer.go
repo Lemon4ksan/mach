@@ -11,8 +11,8 @@ import (
 	"io"
 	"net"
 	"net/url"
-	"slices"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/mach/net/proxy"
 	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
@@ -120,7 +120,7 @@ func (d *Dialer) Dial(ctx context.Context, addr string, quicOpts ...quic.Option)
 		tlsConf.ServerName = host
 	}
 
-	if !slices.Contains(tlsConf.NextProtos, "h3") {
+	if !generic.Contains(tlsConf.NextProtos, "h3") {
 		tlsConf.NextProtos = append(tlsConf.NextProtos, "h3")
 	}
 

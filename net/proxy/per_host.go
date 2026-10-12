@@ -8,8 +8,9 @@ import (
 	"context"
 	"net"
 	"net/netip"
-	"slices"
 	"strings"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // A PerHost directs connections to a default Dialer unless the host name
@@ -63,34 +64,28 @@ func (p *PerHost) DialContext(ctx context.Context, network, addr string) (c net.
 func (p *PerHost) dialerForRequest(host string) Dialer {
 	if nip, err := netip.ParseAddr(host); err == nil {
 		ip := net.IP(nip.AsSlice())
-		for _, net := range p.bypassNetworks {
-			if net.Contains(ip) {
-				return p.bypass
-			}
+		if generic.Any(p.bypassNetworks, func(net *net.IPNet) bool {
+			return net.Contains(ip)
+		}) {
+			return p.bypass
 		}
 
-		for _, bypassIP := range p.bypassIPs {
-			if bypassIP.Equal(ip) {
-				return p.bypass
-			}
+		if generic.Any(p.bypassIPs, func(bypassIP net.IP) bool {
+			return bypassIP.Equal(ip)
+		}) {
+			return p.bypass
 		}
 
 		return p.def
 	}
 
-	for _, zone := range p.bypassZones {
-		if strings.HasSuffix(host, zone) {
-			return p.bypass
-		}
-
-		if host == zone[1:] {
-			// For a zone ".example.com", we match "example.com"
-			// too.
-			return p.bypass
-		}
+	if generic.Any(p.bypassZones, func(zone string) bool {
+		return strings.HasSuffix(host, zone) || host == zone[1:]
+	}) {
+		return p.bypass
 	}
 
-	if slices.Contains(p.bypassHosts, host) {
+	if generic.Contains(p.bypassHosts, host) {
 		return p.bypass
 	}
 

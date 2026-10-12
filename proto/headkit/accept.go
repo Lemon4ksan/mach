@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -145,12 +146,9 @@ func splitSemicolons[S ~string | ~[]byte](s S) []S {
 // SortedAccepts parses header and returns items sorted by quality Q in descending order (highest preference first).
 // Supports both [string] and [[]byte].
 func SortedAccepts[S ~string | ~[]byte](header S) []AcceptItem {
-	var items []AcceptItem
-	for item := range Accepts(header) {
-		if item.Q > 0 { // RFC 9110 §12.4.2: q=0 means unacceptable
-			items = append(items, item)
-		}
-	}
+	items := generic.Filter(slices.Collect(Accepts(header)), func(item AcceptItem) bool {
+		return item.Q > 0 // RFC 9110 §12.4.2: q=0 means unacceptable
+	})
 
 	slices.SortStableFunc(items, func(a, b AcceptItem) int {
 		if b.Q > a.Q {
@@ -190,19 +188,19 @@ func Negotiate[S ~string | ~[]byte](acceptHeader S, offers []string) string {
 		}
 
 		// Exact match
-		for _, offer := range offers {
-			if bytesconv.EqualFoldASCII(offer, prefVal) {
-				return offer
-			}
+		if match, ok := generic.Find(offers, func(offer string) bool {
+			return bytesconv.EqualFoldASCII(offer, prefVal)
+		}); ok {
+			return match
 		}
 
 		// Wildcard match (e.g. "text/*")
 		if strings.HasSuffix(prefVal, "/*") {
 			prefix := prefVal[:len(prefVal)-1] // "text/"
-			for _, offer := range offers {
-				if strings.HasPrefix(strings.ToLower(offer), prefix) {
-					return offer
-				}
+			if match, ok := generic.Find(offers, func(offer string) bool {
+				return strings.HasPrefix(strings.ToLower(offer), prefix)
+			}); ok {
+				return match
 			}
 		}
 	}

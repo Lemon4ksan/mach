@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -97,12 +98,9 @@ func RedactHeader(h http.Header) http.Header {
 	redacted := make(http.Header, len(h))
 	for k, vv := range h {
 		if IsSensitive(k) {
-			masked := make([]string, len(vv))
-			for i, v := range vv {
-				masked[i] = RedactValue(k, v)
-			}
-
-			redacted[k] = masked
+			redacted[k] = generic.Map(vv, func(v string) string {
+				return RedactValue(k, v)
+			})
 		} else {
 			copied := make([]string, len(vv))
 			copy(copied, vv)

@@ -9,9 +9,9 @@ import (
 	"crypto/tls"
 	"net"
 	"net/url"
-	"slices"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/mach/net/proxy"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
@@ -148,7 +148,7 @@ func (d *Dialer) tryDial(ctx context.Context) (net.Conn, error) {
 		tlsConf.ServerName = host
 	}
 
-	if !slices.Contains(tlsConf.NextProtos, "h2") {
+	if !generic.Contains(tlsConf.NextProtos, "h2") {
 		tlsConf.NextProtos = append(tlsConf.NextProtos, "h2")
 	}
 

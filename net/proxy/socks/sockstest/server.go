@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/mach/net/proxy/socks"
 )
 
@@ -35,10 +36,9 @@ func ParseAuthRequest(b []byte) (*AuthRequest, error) {
 
 	req := &AuthRequest{Version: int(b[0])}
 	if b[1] > 0 {
-		req.Methods = make([]socks.AuthMethod, b[1])
-		for i, m := range b[2 : 2+b[1]] {
-			req.Methods[i] = socks.AuthMethod(m)
-		}
+		req.Methods = generic.Map(b[2:2+b[1]], func(m byte) socks.AuthMethod {
+			return socks.AuthMethod(m)
+		})
 	}
 
 	return req, nil

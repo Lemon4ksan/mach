@@ -133,15 +133,7 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 			return errors.New("unsupported or unoffered authentication method: " + strconv.Itoa(int(am)))
 		}
 	} else {
-		found := false
-		for _, m := range d.AuthMethods {
-			if m == am {
-				found = true
-				break
-			}
-		}
-
-		if !found {
+		if !generic.Contains(d.AuthMethods, am) {
 			return errors.New("server selected unoffered authentication method: " + strconv.Itoa(int(am)))
 		}
 
@@ -356,15 +348,7 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 			return nil, errors.New("unsupported or unoffered authentication method: " + strconv.Itoa(int(am)))
 		}
 	} else {
-		found := false
-		for _, m := range d.AuthMethods {
-			if m == am {
-				found = true
-				break
-			}
-		}
-
-		if !found {
+		if !generic.Contains(d.AuthMethods, am) {
 			return nil, errors.New("server selected unoffered authentication method: " + strconv.Itoa(int(am)))
 		}
 
