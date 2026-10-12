@@ -99,11 +99,6 @@ func (t *Transport) Dial(ctx context.Context, addr net.Addr, tlsConf *tls.Config
 	return dialInternal(ctx, t.Conn, addr, tlsConf, conf, false)
 }
 
-// DialEarly establishes a new 0-RTT client QUIC connection.
-func (t *Transport) DialEarly(ctx context.Context, addr net.Addr, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
-	return t.Dial(ctx, addr, tlsConf, opts...)
-}
-
 // Listener listens for incoming QUIC connections on a UDP socket.
 type Listener struct {
 	tr        *Transport
@@ -348,11 +343,6 @@ func DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, opts ...Opt
 	return dialInternal(ctx, udpConn, udpAddr, tlsConf, conf, true)
 }
 
-// DialAddrEarly establishes a 0-RTT client connection.
-func DialAddrEarly(ctx context.Context, addr string, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
-	return DialAddr(ctx, addr, tlsConf, opts...)
-}
-
 // Dial establishes a client QUIC connection on an existing PacketConn.
 func Dial(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
 	conf := &Config{}
@@ -363,17 +353,6 @@ func Dial(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tls.Con
 	}
 
 	return dialInternal(ctx, c, addr, tlsConf, conf, false)
-}
-
-// DialEarly establishes a 0-RTT client QUIC connection on an existing PacketConn.
-func DialEarly(
-	ctx context.Context,
-	c net.PacketConn,
-	addr net.Addr,
-	tlsConf *tls.Config,
-	opts ...Option,
-) (*Conn, error) {
-	return Dial(ctx, c, addr, tlsConf, opts...)
 }
 
 func dialInternal(
