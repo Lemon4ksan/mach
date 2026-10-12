@@ -205,7 +205,8 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 					headerBlock := peekBytes[startIdx : headerEnd-4]
 					_, _ = br.Discard(headerEnd)
 
-					if err := r.parseHeaderBlock(headerBlock); err != nil {
+					r.headerBuf = append(r.headerBuf[:0], headerBlock...)
+					if err := r.parseHeaderBlock(r.headerBuf); err != nil {
 						return err
 					}
 

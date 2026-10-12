@@ -97,15 +97,15 @@ type ServerConn struct {
 
 func (sc *ServerConn) getStream(streamID uint32) (*serverStream, bool) {
 	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
-
 	shard.mu.RLock()
-	defer shard.mu.RUnlock()
 
 	if shard.streams == nil {
+		shard.mu.RUnlock()
 		return nil, false
 	}
 
 	st, ok := shard.streams[streamID]
+	shard.mu.RUnlock()
 
 	return st, ok
 }

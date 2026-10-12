@@ -97,9 +97,9 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 		}
 	} else if code >= 200 && code != status.NoContent && code != status.NotModified &&
 		r.Headers.Get(headkit.ContentLength) == "" && r.Headers.Get(headkit.TransferEncoding) == "" {
-		bodyLen := len(r.Body)
-
 		_, _ = bw.Write(hdrContentLengthPrefix)
+
+		bodyLen := len(r.Body)
 		switch {
 		case bodyLen >= 0 && bodyLen < 10:
 			var clBuf [1]byte

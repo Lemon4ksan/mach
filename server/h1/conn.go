@@ -228,6 +228,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		// If more unread request bytes already reside in br and connection is keep-alive,
 		// defer bw.Flush() to combine multiple pipelined responses into a single TCP write.
 		hasMorePipelined := false
+
 		if keepAlive && br.Buffered() >= 4 {
 			if peek, _ := br.Peek(br.Buffered()); len(peek) >= 4 {
 				start := 0

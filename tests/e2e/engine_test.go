@@ -472,25 +472,30 @@ func TestEngine_E2E_AltSvc_ClearInvalidatesCache(t *testing.T) {
 	defer cancel()
 
 	// 1. Initial request caches Alt-Svc
-	req := machhttp.AcquireRequest()
-	resp := machhttp.AcquireResponse()
-	defer machhttp.ReleaseRequest(req)
-	defer machhttp.ReleaseResponse(resp)
+	req1 := machhttp.AcquireRequest()
+	resp1 := machhttp.AcquireResponse()
+	defer machhttp.ReleaseRequest(req1)
+	defer machhttp.ReleaseResponse(resp1)
 
-	req.Header.SetMethod("GET")
-	req.SetRequestURI("https://" + h2Addr + "/clear-test")
+	req1.Header.SetMethod("GET")
+	req1.SetRequestURI("https://" + h2Addr + "/clear-test")
 
-	err := engine.Do(ctx, req, resp)
+	err := engine.Do(ctx, req1, resp1)
 	require.NoError(t, err)
 	_, ok := engine.AltSvcCache.GetH3(h2Addr)
 	assert.True(t, ok)
 
 	// 2. Second request sends "Alt-Svc: clear"
 	sendClear.Store(true)
-	machhttp.ReleaseResponse(resp)
-	resp = machhttp.AcquireResponse()
+	req2 := machhttp.AcquireRequest()
+	resp2 := machhttp.AcquireResponse()
+	defer machhttp.ReleaseRequest(req2)
+	defer machhttp.ReleaseResponse(resp2)
 
-	err = engine.Do(ctx, req, resp)
+	req2.Header.SetMethod("GET")
+	req2.SetRequestURI("https://" + h2Addr + "/clear-test")
+
+	err = engine.Do(ctx, req2, resp2)
 	require.NoError(t, err)
 
 	// Alt-Svc cache must be invalidated
