@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
@@ -457,9 +456,6 @@ func ReadHexInt(r *bufio.Reader) (int, error) {
 		i++
 	}
 }
-
-//nolint:unused
-var hexIntBufPool sync.Pool
 
 // WriteHexInt formats n as a hexadecimal integer and writes it to w.
 // WriteHexInt panics if n is negative.
