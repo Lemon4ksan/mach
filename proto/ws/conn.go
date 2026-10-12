@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package ws
 
 import (
@@ -13,8 +17,9 @@ import (
 	"unicode/utf8"
 )
 
-// Conn represents a WebSocket connection implementing the RFC 6455 state machine,
-// control frame interleaving, automatic heartbeats, and close handshakes.
+// Conn represents an RFC 6455 compliant WebSocket connection with thread-safe
+// concurrent read/write support, automatic heartbeats, control frame interleaving,
+// and robust adversarial defenses.
 type Conn struct {
 	rw       io.ReadWriter
 	closer   io.Closer
@@ -25,15 +30,12 @@ type Conn struct {
 	state atomic.Uint32
 
 	// Mutexes: readMu and writeMu are independent.
-	// readMu is held during ReadMessage. writeMu is held during frame writes.
-	// When ReadMessage replies with an automatic Pong, it acquires writeMu briefly.
-	// writeMu NEVER acquires readMu, preventing deadlocks.
 	readMu  sync.Mutex
 	writeMu sync.Mutex
 
 	// Frame header scratch buffers (MaxHeaderSize = 14 bytes)
-	readHdrBuf  [MaxHeaderSize]byte
-	writeHdrBuf [MaxHeaderSize]byte
+	readHdrBuf  [14]byte
+	writeHdrBuf [14]byte
 
 	// Configuration
 	readLimit     int64
@@ -51,11 +53,14 @@ type Conn struct {
 	fragmentBuf    []byte
 	fragmentRsv1   bool
 
-	// Random masking source
-	maskRand *randv2.Rand
+	// Random masking source (ChaCha8 PRNG seeded with crypto/rand)
+	maskRand *randv2.ChaCha8
 
 	// Buffer pool for masked writes
 	writeBufPool sync.Pool
+
+	// Preallocated frame buffer protected by writeMu for 0-allocation writes
+	writeFrameBuf []byte
 }
 
 // NewConn initializes a new WebSocket connection wrapping rw.
@@ -76,7 +81,7 @@ func NewConn(rw io.ReadWriter, isServer bool) *Conn {
 	// Seed client masking PRNG with cryptographic randomness
 	var seed [32]byte
 	_, _ = crand.Read(seed[:])
-	c.maskRand = randv2.New(randv2.NewChaCha8(seed))
+	c.maskRand = randv2.NewChaCha8(seed)
 
 	if closer, ok := rw.(io.Closer); ok {
 		c.closer = closer
@@ -85,12 +90,11 @@ func NewConn(rw io.ReadWriter, isServer bool) *Conn {
 		c.netConn = nc
 	}
 
-	// Initial state is StateOpen
 	c.state.Store(uint32(StateOpen))
 
 	// Default ping handler: automatically reply with Pong carrying identical payload (RFC 6455 §5.5.3)
 	c.pingHandler = func(appData []byte) error {
-		return c.writeControlLocked(OpPong, appData)
+		return c.writeControlLocked(OpcodePong, appData)
 	}
 
 	// Default pong handler: accept unsolicited or replied pong frames
@@ -127,7 +131,6 @@ func (c *Conn) IsServer() bool {
 }
 
 // SetReadLimit sets the maximum message size allowed in bytes.
-// Messages exceeding this limit will trigger ErrMessageTooBig and close the connection.
 func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
 }
@@ -209,6 +212,8 @@ func (c *Conn) SetWriteDeadline(t time.Time) error {
 
 // ReadMessage reads the next complete message, reassembling fragmented frames,
 // processing and replying to interleaved control frames (Ping/Pong/Close) seamlessly.
+//
+// Hardened against RFC 6455 framing violations, DoS allocation attacks, and invalid payloads.
 func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
@@ -226,12 +231,19 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 				c.state.Store(uint32(StateClosed))
 				return 0, nil, io.EOF
 			}
-			if errors.Is(err, ErrUnknownOpcode) || errors.Is(err, ErrProtocolViolation) ||
-				errors.Is(err, ErrControlFrameFragmented) || errors.Is(err, ErrControlFrameTooLarge) {
+			if errors.Is(err, ErrInvalidOpcode) || errors.Is(err, ErrProtocolViolation) ||
+				errors.Is(err, ErrControlFrameFragmented) || errors.Is(err, ErrControlFrameTooLarge) ||
+				errors.Is(err, ErrInvalidLength) || errors.Is(err, ErrPayloadTooLarge) {
 				c.writeProtocolErrorAndClose(StatusProtocolError, err.Error())
 				return 0, nil, err
 			}
 			return 0, nil, err
+		}
+
+		// RFC 6455 §5.2: Opcode validation (check reserved and valid opcodes)
+		if !hdr.Opcode.IsValid() || hdr.Opcode.IsReserved() {
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Unknown or reserved opcode")
+			return 0, nil, ErrInvalidOpcode
 		}
 
 		// RFC 6455 §5.5.1: If a Close frame was already received, receiving data frames is forbidden
@@ -262,52 +274,73 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 				c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 set without deflate extension")
 				return 0, nil, ErrRSVSet
 			}
-			if hdr.Opcode.IsControl() || hdr.Opcode == OpContinuation {
+			if hdr.Opcode.IsControl() || hdr.Opcode == OpcodeContinuation {
 				c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 not allowed on control or continuation frame")
 				return 0, nil, ErrRSVSet
 			}
 		}
 
-		// Read payload
+		// Control frame constraints (RFC 6455 §5.5)
+		if hdr.Opcode.IsControl() {
+			if !hdr.Fin {
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame must not be fragmented")
+				return 0, nil, ErrControlFrameFragmented
+			}
+			if hdr.PayloadLen > 125 {
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame payload exceeds 125 bytes")
+				return 0, nil, ErrControlFrameTooLarge
+			}
+		}
+
+		// DoS / Memory Exhaustion Defense (BUG #1 Fix):
+		// Validate against ReadLimit BEFORE allocating payload slice!
+		if c.readLimit > 0 && hdr.PayloadLen > c.readLimit {
+			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Frame payload exceeds read limit")
+			return 0, nil, ErrMessageTooBig
+		}
+		if !hdr.Opcode.IsControl() && c.readLimit > 0 && (int64(len(c.fragmentBuf))+hdr.PayloadLen) > c.readLimit {
+			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Message exceeds read limit")
+			return 0, nil, ErrMessageTooBig
+		}
+
+		// Read payload safely
 		var framePayload []byte
-		if hdr.Length > 0 {
-			framePayload = make([]byte, hdr.Length)
+		if hdr.PayloadLen > 0 {
+			framePayload = make([]byte, hdr.PayloadLen)
 			if _, err := io.ReadFull(c.rw, framePayload); err != nil {
 				c.state.Store(uint32(StateClosed))
 				return 0, nil, err
 			}
 			if hdr.Masked {
-				MaskBytes(framePayload, hdr.MaskKey)
+				Mask(framePayload, hdr.MaskKey)
 			}
 		}
 
-		// Dispatch Control Frames
+		// Dispatch Control Frames (Ping / Pong / Close)
 		if hdr.Opcode.IsControl() {
 			switch hdr.Opcode {
-			case OpPing:
+			case OpcodePing:
 				if c.pingHandler != nil {
 					if err := c.pingHandler(framePayload); err != nil {
 						return 0, nil, err
 					}
 				}
-				// Seamlessly continue reassembling message!
 				continue
 
-			case OpPong:
+			case OpcodePong:
 				if c.pongHandler != nil {
 					if err := c.pongHandler(framePayload); err != nil {
 						return 0, nil, err
 					}
 				}
-				// Seamlessly continue reassembling message!
 				continue
 
-			case OpClose:
+			case OpcodeClose:
 				c.seenClose = true
 				code, reason, parseErr := ParseClosePayload(framePayload)
 				if parseErr != nil {
-					if errors.Is(parseErr, ErrInvalidPayload) {
-						c.writeProtocolErrorAndClose(StatusInvalidPayloadData, "Invalid UTF-8 in Close frame")
+					if errors.Is(parseErr, ErrInvalidUTF8) {
+						c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in Close frame")
 					} else {
 						c.writeProtocolErrorAndClose(StatusProtocolError, parseErr.Error())
 					}
@@ -322,28 +355,27 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 				oldState := c.State()
 				if oldState == StateOpen || oldState == StateConnecting {
 					c.state.Store(uint32(StateClosing))
-					if code == StatusNoStatusRcvd {
-						// Chromium test Code1005IsNotEchoed: echo empty close payload
-						_ = c.writeControlFrame(OpClose, nil)
+					if code == StatusNoStatusReceived {
+						_ = c.writeControlFrame(OpcodeClose, nil)
 					} else {
-						payload, _ := AppendClosePayload(code, reason)
-						_ = c.writeControlFrame(OpClose, payload)
+						var buf [128]byte
+						n, _ := FormatClosePayload(buf[:], code, reason)
+						_ = c.writeControlFrame(OpcodeClose, buf[:n])
 					}
 					c.state.Store(uint32(StateClosed))
 					c.closeTransport()
-					return OpClose, nil, &CloseError{Code: code, Reason: reason}
+					return OpcodeClose, nil, &CloseError{Code: code, Reason: reason}
 				}
 
-				// If we were already in StateClosing (we sent close earlier, now received echo),
-				// or simultaneous close occurred:
+				// Already in StateClosing or simultaneous close occurred
 				c.state.Store(uint32(StateClosed))
 				c.closeTransport()
-				return OpClose, nil, &CloseError{Code: code, Reason: reason}
+				return OpcodeClose, nil, &CloseError{Code: code, Reason: reason}
 			}
 		}
 
-		// Handle Data Frames (OpText, OpBinary, OpContinuation)
-		if hdr.Opcode == OpContinuation {
+		// Handle Data Frames (Continuation, Text, Binary)
+		if hdr.Opcode == OpcodeContinuation {
 			if c.fragmentOpcode == 0 {
 				c.writeProtocolErrorAndClose(StatusProtocolError, "Unexpected continuation frame")
 				return 0, nil, ErrUnexpectedContinuation
@@ -355,13 +387,6 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 			}
 			c.fragmentOpcode = hdr.Opcode
 			c.fragmentRsv1 = hdr.Rsv1
-		}
-
-		// Enforce ReadLimit
-		totalLen := int64(len(c.fragmentBuf) + len(framePayload))
-		if c.readLimit > 0 && totalLen > c.readLimit {
-			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Message exceeds read limit")
-			return 0, nil, ErrMessageTooBig
 		}
 
 		c.fragmentBuf = append(c.fragmentBuf, framePayload...)
@@ -387,9 +412,9 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 			}
 
 			// Validate UTF-8 for Text messages (RFC 6455 §5.6, §8.1)
-			if msgType == OpText && !utf8.Valid(msgPayload) {
-				c.writeProtocolErrorAndClose(StatusInvalidPayloadData, "Invalid UTF-8 in text message")
-				return 0, nil, ErrInvalidPayload
+			if msgType == OpcodeText && !utf8.Valid(msgPayload) {
+				c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in text message")
+				return 0, nil, ErrInvalidUTF8
 			}
 
 			return msgType, msgPayload, nil
@@ -397,7 +422,7 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 	}
 }
 
-// WriteMessage writes a complete unfragmented data message of type OpText or OpBinary.
+// WriteMessage writes a complete unfragmented data message of type OpcodeText or OpcodeBinary.
 func (c *Conn) WriteMessage(messageType Opcode, data []byte) error {
 	if !messageType.IsData() {
 		return ErrProtocolViolation
@@ -422,7 +447,6 @@ func (c *Conn) WriteMessage(messageType Opcode, data []byte) error {
 }
 
 // WriteFragmentedMessage writes a data message split into multiple frames.
-// Useful for streaming or testing control frame interleaving.
 func (c *Conn) WriteFragmentedMessage(messageType Opcode, frames [][]byte) error {
 	if !messageType.IsData() {
 		return ErrProtocolViolation
@@ -437,7 +461,7 @@ func (c *Conn) WriteFragmentedMessage(messageType Opcode, frames [][]byte) error
 		if i == 0 {
 			op = messageType
 		} else {
-			op = OpContinuation
+			op = OpcodeContinuation
 		}
 		if err := c.writeDataFrame(fin, false, op, frameData); err != nil {
 			return err
@@ -459,7 +483,6 @@ func (c *Conn) writeDataFrame(fin bool, rsv1 bool, op Opcode, data []byte) error
 }
 
 // WriteControl writes a control frame (Ping, Pong, Close).
-// It can be called concurrently with ReadMessage and other writes.
 func (c *Conn) WriteControl(messageType Opcode, data []byte) error {
 	if !messageType.IsControl() {
 		return ErrProtocolViolation
@@ -481,28 +504,28 @@ func (c *Conn) WriteControl(messageType Opcode, data []byte) error {
 
 // WritePing sends a Ping control frame with payload data (len <= 125).
 func (c *Conn) WritePing(data []byte) error {
-	return c.WriteControl(OpPing, data)
+	return c.WriteControl(OpcodePing, data)
 }
 
 // WritePong sends a Pong control frame with payload data (len <= 125).
 func (c *Conn) WritePong(data []byte) error {
-	return c.WriteControl(OpPong, data)
+	return c.WriteControl(OpcodePong, data)
 }
 
 // WriteClose initiates a graceful closing handshake by sending a Close frame.
-// Validates status code (RFC 6455 §7.4.2) and reason string.
 func (c *Conn) WriteClose(statusCode CloseCode, reason string) error {
-	if !IsValidCloseCode(statusCode) {
+	if !statusCode.IsValidForWire() {
 		return ErrInvalidCloseCode
 	}
 	if len(reason) > 123 {
 		return ErrCloseReasonTooLong
 	}
 	if !utf8.ValidString(reason) {
-		return ErrInvalidPayload
+		return ErrInvalidUTF8
 	}
 
-	payload, err := AppendClosePayload(statusCode, reason)
+	var buf [128]byte
+	n, err := FormatClosePayload(buf[:], statusCode, reason)
 	if err != nil {
 		return err
 	}
@@ -510,12 +533,11 @@ func (c *Conn) WriteClose(statusCode CloseCode, reason string) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
-	// Chromium test: CloseOnlySentOnce
 	if !c.state.CompareAndSwap(uint32(StateOpen), uint32(StateClosing)) {
 		return ErrClosed
 	}
 
-	return c.writeFrameLocked(true, false, OpClose, payload)
+	return c.writeFrameLocked(true, false, OpcodeClose, buf[:n])
 }
 
 // Close closes the underlying transport immediately and sets state to StateClosed.
@@ -543,59 +565,73 @@ func (c *Conn) writeControlFrame(op Opcode, data []byte) error {
 	return c.writeFrameLocked(true, false, op, data)
 }
 
+// writeProtocolErrorAndClose sends a Close frame with status code and safely truncated reason,
+// then transitions to StateClosed and terminates the transport.
+//
+// Hardened (BUG #2 Fix): Guarantees reason is truncated to <= 123 bytes at valid UTF-8 boundary
+// so the status code is NEVER dropped or replaced by an empty close frame on the wire.
 func (c *Conn) writeProtocolErrorAndClose(code CloseCode, reason string) {
 	c.state.Store(uint32(StateClosing))
-	payload, _ := AppendClosePayload(code, reason)
-	_ = c.writeControlFrame(OpClose, payload)
+
+	if len(reason) > 123 {
+		// Truncate to at most 123 bytes on valid UTF-8 rune boundary
+		cut := 123
+		for cut > 0 && !utf8.RuneStart(reason[cut]) {
+			cut--
+		}
+		reason = reason[:cut]
+	}
+
+	var buf [128]byte
+	n, err := FormatClosePayload(buf[:], code, reason)
+	if err != nil {
+		binary.BigEndian.PutUint16(buf[:2], uint16(code))
+		n = 2
+	}
+
+	_ = c.writeControlFrame(OpcodeClose, buf[:n])
 	c.state.Store(uint32(StateClosed))
 	_ = c.closeTransport()
 }
 
 // writeFrameLocked performs the low-level frame serialization and transmission.
+// writeFrameLocked performs the low-level frame serialization and transmission.
 // Must be called with writeMu locked.
+// Transmits the entire frame (header + payload) in a single atomic Write call
+// to prevent packet fragmentation, Nagle delays, and pipe reader deadlocks.
 func (c *Conn) writeFrameLocked(fin bool, rsv1 bool, op Opcode, data []byte) error {
 	h := Header{
-		Fin:    fin,
-		Rsv1:   rsv1,
-		Opcode: op,
-		Length: int64(len(data)),
+		Fin:        fin,
+		Rsv1:       rsv1,
+		Opcode:     op,
+		PayloadLen: int64(len(data)),
 	}
 
 	if !c.isServer {
 		h.Masked = true
-		maskUint32 := c.maskRand.Uint32()
+		maskUint32 := uint32(c.maskRand.Uint64())
 		binary.LittleEndian.PutUint32(h.MaskKey[:], maskUint32)
 	}
 
-	hdrBytes := AppendHeader(c.writeHdrBuf[:0], h)
-	if _, err := c.rw.Write(hdrBytes); err != nil {
+	hdrLen := HeaderLen(h)
+	totalLen := hdrLen + len(data)
+
+	if cap(c.writeFrameBuf) < totalLen {
+		c.writeFrameBuf = make([]byte, totalLen+1024)
+	}
+	buf := c.writeFrameBuf[:totalLen]
+
+	_, err := WriteHeader(buf[:hdrLen], h)
+	if err != nil {
 		return err
 	}
-
-	if len(data) == 0 {
-		return nil
+	if len(data) > 0 {
+		copy(buf[hdrLen:totalLen], data)
+		if h.Masked {
+			Mask(buf[hdrLen:totalLen], h.MaskKey)
+		}
 	}
-
-	if !h.Masked {
-		_, err := c.rw.Write(data)
-		return err
-	}
-
-	// For client masked writes, mask without mutating caller's data
-	var buf []byte
-	bp := c.writeBufPool.Get().(*[]byte)
-	if cap(*bp) >= len(data) {
-		buf = (*bp)[:len(data)]
-	} else {
-		buf = make([]byte, len(data))
-	}
-
-	copy(buf, data)
-	MaskBytes(buf, h.MaskKey)
-	_, err := c.rw.Write(buf)
-
-	if cap(buf) == cap(*bp) {
-		c.writeBufPool.Put(bp)
-	}
+	_, err = c.rw.Write(buf)
 	return err
 }
+

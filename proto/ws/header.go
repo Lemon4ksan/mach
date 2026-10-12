@@ -6,6 +6,7 @@ package ws
 
 import (
 	"encoding/binary"
+	"io"
 	"slices"
 	"unicode/utf8"
 
@@ -14,6 +15,10 @@ import (
 
 // MaskKey represents a 4-byte RFC 6455 masking key.
 type MaskKey = [4]byte
+
+// MaxHeaderSize is the maximum size of a WebSocket frame header in bytes
+// (2 base + 8 extended length + 4 masking key = 14 bytes).
+const MaxHeaderSize = 14
 
 // Header represents an RFC 6455 frame header (§5.2).
 type Header struct {
@@ -39,7 +44,7 @@ type Header struct {
 	// PayloadLen is the payload length in bytes (unextended or extended).
 	PayloadLen int64
 
-	// Length is an alias field for PayloadLen for channel FSM compatibility.
+	// Length is an alias field for PayloadLen for FSM compatibility.
 	Length int64
 }
 
@@ -141,7 +146,6 @@ func ParseHeader(b []byte) (h Header, headerLen int, err error) {
 		}
 	}
 
-	h.Length = h.PayloadLen
 	return h, hlen, nil
 }
 
@@ -151,9 +155,6 @@ func ParseHeader(b []byte) (h Header, headerLen int, err error) {
 //
 // Zero-allocation: testing.AllocsPerRun == 0.
 func WriteHeader(dst []byte, h Header) (int, error) {
-	if h.PayloadLen == 0 && h.Length > 0 {
-		h.PayloadLen = h.Length
-	}
 	if h.PayloadLen < 0 {
 		return 0, ErrInvalidLength
 	}
@@ -316,3 +317,103 @@ func FormatClosePayload(dst []byte, code CloseCode, reason string) (int, error) 
 	n := copy(dst[2:], reason)
 	return 2 + n, nil
 }
+
+// AppendClosePayload encodes a close status code and optional reason into a newly allocated byte slice.
+func AppendClosePayload(code CloseCode, reason string) ([]byte, error) {
+	if code == StatusNoStatusReceived {
+		return nil, nil
+	}
+	if !code.IsValidForWire() {
+		return nil, ErrInvalidCloseCode
+	}
+	if len(reason) > 123 {
+		return nil, ErrCloseReasonTooLong
+	}
+	if !utf8.ValidString(reason) {
+		return nil, ErrInvalidUTF8
+	}
+	dst := make([]byte, 2+len(reason))
+	_, err := FormatClosePayload(dst, code, reason)
+	return dst, err
+}
+
+// ReadHeader reads and parses an RFC 6455 frame header from r using buf as scratch.
+// buf must have capacity >= 14 bytes (or a new slice will be allocated).
+func ReadHeader(r io.Reader, buf []byte) (Header, error) {
+	if len(buf) < 14 {
+		buf = make([]byte, 14)
+	}
+	if _, err := io.ReadFull(r, buf[:2]); err != nil {
+		return Header{}, err
+	}
+	len7 := buf[1] & 0x7F
+	extra := 0
+	if len7 == 126 {
+		extra += 2
+	} else if len7 == 127 {
+		extra += 8
+	}
+	if (buf[1] & 0x80) != 0 {
+		extra += 4
+	}
+	if extra > 0 {
+		if _, err := io.ReadFull(r, buf[2:2+extra]); err != nil {
+			return Header{}, err
+		}
+	}
+	h, _, err := ParseHeader(buf[:2+extra])
+	if err == nil {
+		h.Length = h.PayloadLen
+	}
+	return h, err
+}
+
+// AppendHeader serializes the frame header h into dst and returns the extended slice.
+func AppendHeader(dst []byte, h Header) []byte {
+	length := h.PayloadLen
+	if length == 0 && h.Length > 0 {
+		length = h.Length
+	}
+
+	var b0 byte = byte(h.Opcode & 0x0F)
+	if h.Fin {
+		b0 |= 0x80
+	}
+	if h.Rsv1 {
+		b0 |= 0x40
+	}
+	if h.Rsv2 {
+		b0 |= 0x20
+	}
+	if h.Rsv3 {
+		b0 |= 0x10
+	}
+
+	var maskBit byte
+	if h.Masked {
+		maskBit = 0x80
+	}
+
+	switch {
+	case length <= 125:
+		dst = append(dst, b0, maskBit|byte(length))
+	case length <= 0xFFFF:
+		dst = append(dst, b0, maskBit|126, byte(length>>8), byte(length))
+	default:
+		dst = append(dst, b0, maskBit|127,
+			byte(length>>56), byte(length>>48), byte(length>>40), byte(length>>32),
+			byte(length>>24), byte(length>>16), byte(length>>8), byte(length))
+	}
+
+	if h.Masked {
+		dst = append(dst, h.MaskKey[0], h.MaskKey[1], h.MaskKey[2], h.MaskKey[3])
+	}
+
+	return dst
+}
+
+// MaskBytes applies in-place XOR masking to data using mask.
+func MaskBytes(data []byte, mask [4]byte) {
+	Mask(data, mask)
+}
+

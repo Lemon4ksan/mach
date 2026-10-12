@@ -13,9 +13,6 @@ var (
 	// ErrProtocolViolation indicates a general RFC 6455 protocol error.
 	ErrProtocolViolation = errors.New("ws: protocol error")
 
-	// ErrInvalidPayload indicates invalid payload data.
-	ErrInvalidPayload = errors.New("ws: invalid payload data")
-
 	// ErrIncomplete indicates that the buffer contains an incomplete frame header.
 	ErrIncomplete = errors.New("ws: incomplete frame header")
 
@@ -43,7 +40,7 @@ var (
 	ErrInvalidCloseCode = fmt.Errorf("%w: invalid close status code", ErrProtocolViolation)
 
 	// ErrInvalidUTF8 indicates invalid UTF-8 data in a Text frame or Close reason payload.
-	ErrInvalidUTF8 = fmt.Errorf("%w: invalid utf-8 payload", ErrInvalidPayload)
+	ErrInvalidUTF8 = errors.New("ws: invalid utf-8 payload")
 
 	// ErrInvalidMethod indicates a handshake HTTP request method other than GET.
 	ErrInvalidMethod = errors.New("ws: handshake request method must be GET")
@@ -62,4 +59,41 @@ var (
 
 	// ErrInvalidOpcode indicates an unknown or reserved opcode.
 	ErrInvalidOpcode = errors.New("ws: unknown or reserved opcode")
+
+	// ErrClosed indicates the connection has already been closed.
+	ErrClosed = errors.New("ws: connection closed")
+
+	// ErrClosing indicates the connection is closing.
+	ErrClosing = errors.New("ws: connection closing")
+
+	// ErrUnexpectedContinuation indicates a continuation frame without preceding fragmented message.
+	ErrUnexpectedContinuation = errors.New("ws: unexpected continuation frame")
+
+	// ErrExpectedContinuation indicates a new data frame while fragmented message is in progress.
+	ErrExpectedContinuation = errors.New("ws: expected continuation frame")
+
+	// ErrMaskRequired indicates an unmasked frame was received by the server.
+	ErrMaskRequired = errors.New("ws: unmasked frame received by server")
+
+	// ErrMaskForbidden indicates a masked frame was received by the client.
+	ErrMaskForbidden = errors.New("ws: masked frame received by client")
+
+	// ErrRSVSet indicates non-zero RSV bits were set without negotiated extension.
+	ErrRSVSet = errors.New("ws: reserved bits RSV1/2/3 set without extension")
+
+	// ErrDataAfterClose indicates a data frame was received after receiving a Close frame.
+	ErrDataAfterClose = errors.New("ws: data frame received after close")
+
+	// ErrCloseReasonTooLong indicates close reason exceeds 123 bytes.
+	ErrCloseReasonTooLong = errors.New("ws: close reason exceeds 123 bytes")
+
+	// ErrInvalidPayload is an alias for ErrInvalidUTF8.
+	ErrInvalidPayload = ErrInvalidUTF8
+
+	// ErrMessageTooBig is an alias for ErrPayloadTooLarge.
+	ErrMessageTooBig = ErrPayloadTooLarge
+
+	// ErrUnknownOpcode is an alias for ErrInvalidOpcode.
+	ErrUnknownOpcode = ErrInvalidOpcode
 )
+

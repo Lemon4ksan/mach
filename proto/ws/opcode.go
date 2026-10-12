@@ -201,3 +201,63 @@ func (c CloseCode) String() string {
 		return fmt.Sprintf("CloseCode(%d)", c)
 	}
 }
+
+// Opcode aliases for compatibility with alternative naming conventions.
+const (
+	OpContinuation = OpcodeContinuation
+	OpText         = OpcodeText
+	OpBinary       = OpcodeBinary
+	OpClose        = OpcodeClose
+	OpPing         = OpcodePing
+	OpPong         = OpcodePong
+)
+
+// CloseCode aliases for compatibility.
+const (
+	StatusReserved1004       = CloseCode(1004)
+	StatusNoStatusRcvd       = StatusNoStatusReceived
+	StatusInvalidPayloadData = StatusInvalidFramePayloadData
+	StatusServiceRestart     = CloseCode(1012)
+	StatusTryAgainLater      = CloseCode(1013)
+	StatusBadGateway         = CloseCode(1014)
+)
+
+// ConnState represents the WebSocket connection lifecycle state.
+type ConnState uint32
+
+const (
+	StateConnecting ConnState = 0
+	StateOpen       ConnState = 1
+	StateClosing    ConnState = 2
+	StateClosed     ConnState = 3
+)
+
+// String returns the human-readable string representation of ConnState.
+func (s ConnState) String() string {
+	switch s {
+	case StateConnecting:
+		return "Connecting"
+	case StateOpen:
+		return "Open"
+	case StateClosing:
+		return "Closing"
+	case StateClosed:
+		return "Closed"
+	default:
+		return fmt.Sprintf("ConnState(%d)", uint32(s))
+	}
+}
+
+// CloseError is returned when a Close frame is received or sent.
+type CloseError struct {
+	Code   CloseCode
+	Reason string
+}
+
+func (e *CloseError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("ws: close %d: %s", e.Code, e.Reason)
+	}
+	return fmt.Sprintf("ws: close %d", e.Code)
+}
+
