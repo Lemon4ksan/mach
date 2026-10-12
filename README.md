@@ -439,7 +439,7 @@ func main() {
 	}
 
 	// 3. Connect to target endpoint through proxy tunnel
-	conn, err := socksDialer.Dial("tcp", "database.internal:5432")
+	conn, err := socksDialer.(proxy.ContextDialer).DialContext(ctx, "tcp", "database.internal:5432")
 	if err != nil {
 		panic(err)
 	}
