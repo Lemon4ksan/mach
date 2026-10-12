@@ -72,7 +72,11 @@ func (s *headerScanner) next() bool {
 	}
 
 	s.key = k
-	s.value = simd.TrimLeadingSpaceSWAR(v)
+	if len(v) > 1 && v[0] == ' ' && v[1] > ' ' {
+		s.value = v[1:]
+	} else {
+		s.value = simd.TrimLeadingSpaceSWAR(v)
+	}
 
 	if err != nil {
 		s.err = err
@@ -113,7 +117,7 @@ func (s *headerScanner) readContinuedLineSlice() ([]byte, int, error) {
 		peek := s.b[s.r : s.r+2]
 		if len(peek) > 0 && (isASCIILetter(peek[0]) || peek[0] == '\n') ||
 			len(peek) == 2 && peek[0] == '\r' && peek[1] == '\n' {
-			return simd.TrimSpaceSWAR(line), colon, nil
+			return line, colon, nil
 		}
 	}
 
