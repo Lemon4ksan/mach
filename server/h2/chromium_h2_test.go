@@ -324,15 +324,19 @@ func TestChromium_SpdySessionTest_InterleavedFramesBetweenHeadersAndContinuation
 			coreh2.ReleaseFrameHeader(respFr)
 		}
 
-		assert.True(t, gotProtocolError, "expected GOAWAY(PROTOCOL_ERROR) when "+desc+" is interleaved (RFC 9113 §6.10)")
+		assert.True(
+			t,
+			gotProtocolError,
+			"expected GOAWAY(PROTOCOL_ERROR) when "+desc+" is interleaved (RFC 9113 §6.10)",
+		)
 	}
 
 	t.Run("InterleavedPriorityFrame", func(t *testing.T) {
 		// PRIORITY frame (type 0x02), length 5, stream 1
 		priorityFrame := []byte{
 			0x00, 0x00, 0x05, // length: 5
-			0x02,             // type: PRIORITY
-			0x00,             // flags: 0
+			0x02,                   // type: PRIORITY
+			0x00,                   // flags: 0
 			0x00, 0x00, 0x00, 0x01, // stream: 1
 			0x00, 0x00, 0x00, 0x00, 0x10, // payload
 		}
@@ -343,8 +347,8 @@ func TestChromium_SpdySessionTest_InterleavedFramesBetweenHeadersAndContinuation
 		// Unknown frame type 0x0a, length 4, stream 1
 		unknownFrame := []byte{
 			0x00, 0x00, 0x04, // length: 4
-			0x0a,             // type: 0x0a (unknown)
-			0x00,             // flags: 0
+			0x0a,                   // type: 0x0a (unknown)
+			0x00,                   // flags: 0
 			0x00, 0x00, 0x00, 0x01, // stream: 1
 			0x01, 0x02, 0x03, 0x04, // payload
 		}
@@ -355,8 +359,8 @@ func TestChromium_SpdySessionTest_InterleavedFramesBetweenHeadersAndContinuation
 		// PING frame (type 0x06), length 8, stream 0
 		pingFrame := []byte{
 			0x00, 0x00, 0x08, // length: 8
-			0x06,             // type: PING
-			0x00,             // flags: 0
+			0x06,                   // type: PING
+			0x00,                   // flags: 0
 			0x00, 0x00, 0x00, 0x00, // stream: 0
 			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, // payload
 		}
@@ -439,7 +443,11 @@ func TestChromium_SpdySessionTest_SessionFlowControlNoReceiveLeaks(t *testing.T)
 		coreh2.ReleaseFrameHeader(respFr)
 	}
 
-	assert.True(t, gotConnWindowUpdate, "server MUST send WINDOW_UPDATE on stream 0 for DATA received on closed stream to prevent receive window leak")
+	assert.True(
+		t,
+		gotConnWindowUpdate,
+		"server MUST send WINDOW_UPDATE on stream 0 for DATA received on closed stream to prevent receive window leak",
+	)
 }
 
 // RFC 9113 §6.5 & §6.5.2: Settings validation

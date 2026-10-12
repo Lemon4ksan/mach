@@ -193,7 +193,11 @@ func TestLoopbackHandshakeSuccess(t *testing.T) {
 		t.Errorf("client got wrong InitialSourceConnectionID")
 	}
 	if clientPeerParams.InitialMaxData != serverParams.InitialMaxData {
-		t.Errorf("client got wrong InitialMaxData: %d != %d", clientPeerParams.InitialMaxData, serverParams.InitialMaxData)
+		t.Errorf(
+			"client got wrong InitialMaxData: %d != %d",
+			clientPeerParams.InitialMaxData,
+			serverParams.InitialMaxData,
+		)
 	}
 	if clientPeerParams.DisableActiveMigration != serverParams.DisableActiveMigration {
 		t.Errorf("client got wrong DisableActiveMigration")
@@ -207,7 +211,11 @@ func TestLoopbackHandshakeSuccess(t *testing.T) {
 		t.Errorf("server got wrong InitialSourceConnectionID")
 	}
 	if serverPeerParams.InitialMaxData != clientParams.InitialMaxData {
-		t.Errorf("server got wrong InitialMaxData: %d != %d", serverPeerParams.InitialMaxData, clientParams.InitialMaxData)
+		t.Errorf(
+			"server got wrong InitialMaxData: %d != %d",
+			serverPeerParams.InitialMaxData,
+			clientParams.InitialMaxData,
+		)
 	}
 
 	// Verify Key Agreement:
@@ -239,11 +247,13 @@ func TestLoopbackHandshakeSuccess(t *testing.T) {
 
 	// Verify derived packet keys and header protection keys exist
 	client1RTTKeys := client.WriteKeys(EncryptionLevel1RTT)
-	if client1RTTKeys == nil || len(client1RTTKeys.Key) == 0 || len(client1RTTKeys.IV) == 0 || len(client1RTTKeys.HPKey) == 0 {
+	if client1RTTKeys == nil || len(client1RTTKeys.Key) == 0 || len(client1RTTKeys.IV) == 0 ||
+		len(client1RTTKeys.HPKey) == 0 {
 		t.Fatalf("client 1-RTT write traffic keys are missing or invalid")
 	}
 	server1RTTKeys := server.WriteKeys(EncryptionLevel1RTT)
-	if server1RTTKeys == nil || len(server1RTTKeys.Key) == 0 || len(server1RTTKeys.IV) == 0 || len(server1RTTKeys.HPKey) == 0 {
+	if server1RTTKeys == nil || len(server1RTTKeys.Key) == 0 || len(server1RTTKeys.IV) == 0 ||
+		len(server1RTTKeys.HPKey) == 0 {
 		t.Fatalf("server 1-RTT write traffic keys are missing or invalid")
 	}
 

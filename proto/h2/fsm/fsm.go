@@ -20,7 +20,7 @@ type EventHandler interface {
 	OnStreamReset(streamID, errorCode uint32)
 	OnGoAway(lastStreamID, errorCode uint32)
 	OnPriority(streamID uint32, payload []byte)
-	OnUnknownFrame(streamID uint32, frameType uint8, flags uint8, payload []byte)
+	OnUnknownFrame(streamID uint32, frameType, flags uint8, payload []byte)
 	OnWrite(payload []byte)
 }
 

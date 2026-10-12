@@ -48,6 +48,7 @@ func (p *byteBufferPerCorePool) Put(b *bytesconv.ByteBuffer) {
 	if b == nil {
 		return
 	}
+
 	b.Reset()
 	p.p.Put(b)
 }
@@ -82,6 +83,7 @@ func ReleaseRequest(req *Request) {
 	if req == nil {
 		return
 	}
+
 	req.Reset()
 	requestStorage.Put(req)
 }
@@ -103,6 +105,7 @@ func ReleaseResponse(resp *Response) {
 	if resp == nil {
 		return
 	}
+
 	resp.Reset()
 	responseStorage.Put(resp)
 }

@@ -44,7 +44,11 @@ func TestTransportParametersRoundTripClient(t *testing.T) {
 	}
 
 	if !parsed.InitialSourceConnectionID.Equal(orig.InitialSourceConnectionID) {
-		t.Errorf("InitialSourceConnectionID mismatch: got %v, want %v", parsed.InitialSourceConnectionID, orig.InitialSourceConnectionID)
+		t.Errorf(
+			"InitialSourceConnectionID mismatch: got %v, want %v",
+			parsed.InitialSourceConnectionID,
+			orig.InitialSourceConnectionID,
+		)
 	}
 	if parsed.MaxIdleTimeout != orig.MaxIdleTimeout {
 		t.Errorf("MaxIdleTimeout mismatch: got %v, want %v", parsed.MaxIdleTimeout, orig.MaxIdleTimeout)
@@ -56,19 +60,39 @@ func TestTransportParametersRoundTripClient(t *testing.T) {
 		t.Errorf("InitialMaxData mismatch: got %v, want %v", parsed.InitialMaxData, orig.InitialMaxData)
 	}
 	if parsed.InitialMaxStreamDataBidiLocal != orig.InitialMaxStreamDataBidiLocal {
-		t.Errorf("InitialMaxStreamDataBidiLocal mismatch: got %v, want %v", parsed.InitialMaxStreamDataBidiLocal, orig.InitialMaxStreamDataBidiLocal)
+		t.Errorf(
+			"InitialMaxStreamDataBidiLocal mismatch: got %v, want %v",
+			parsed.InitialMaxStreamDataBidiLocal,
+			orig.InitialMaxStreamDataBidiLocal,
+		)
 	}
 	if parsed.InitialMaxStreamDataBidiRemote != orig.InitialMaxStreamDataBidiRemote {
-		t.Errorf("InitialMaxStreamDataBidiRemote mismatch: got %v, want %v", parsed.InitialMaxStreamDataBidiRemote, orig.InitialMaxStreamDataBidiRemote)
+		t.Errorf(
+			"InitialMaxStreamDataBidiRemote mismatch: got %v, want %v",
+			parsed.InitialMaxStreamDataBidiRemote,
+			orig.InitialMaxStreamDataBidiRemote,
+		)
 	}
 	if parsed.InitialMaxStreamDataUni != orig.InitialMaxStreamDataUni {
-		t.Errorf("InitialMaxStreamDataUni mismatch: got %v, want %v", parsed.InitialMaxStreamDataUni, orig.InitialMaxStreamDataUni)
+		t.Errorf(
+			"InitialMaxStreamDataUni mismatch: got %v, want %v",
+			parsed.InitialMaxStreamDataUni,
+			orig.InitialMaxStreamDataUni,
+		)
 	}
 	if parsed.InitialMaxStreamsBidi != orig.InitialMaxStreamsBidi {
-		t.Errorf("InitialMaxStreamsBidi mismatch: got %v, want %v", parsed.InitialMaxStreamsBidi, orig.InitialMaxStreamsBidi)
+		t.Errorf(
+			"InitialMaxStreamsBidi mismatch: got %v, want %v",
+			parsed.InitialMaxStreamsBidi,
+			orig.InitialMaxStreamsBidi,
+		)
 	}
 	if parsed.InitialMaxStreamsUni != orig.InitialMaxStreamsUni {
-		t.Errorf("InitialMaxStreamsUni mismatch: got %v, want %v", parsed.InitialMaxStreamsUni, orig.InitialMaxStreamsUni)
+		t.Errorf(
+			"InitialMaxStreamsUni mismatch: got %v, want %v",
+			parsed.InitialMaxStreamsUni,
+			orig.InitialMaxStreamsUni,
+		)
 	}
 	if parsed.AckDelayExponent != orig.AckDelayExponent {
 		t.Errorf("AckDelayExponent mismatch: got %v, want %v", parsed.AckDelayExponent, orig.AckDelayExponent)
@@ -77,13 +101,25 @@ func TestTransportParametersRoundTripClient(t *testing.T) {
 		t.Errorf("MaxAckDelay mismatch: got %v, want %v", parsed.MaxAckDelay, orig.MaxAckDelay)
 	}
 	if parsed.DisableActiveMigration != orig.DisableActiveMigration {
-		t.Errorf("DisableActiveMigration mismatch: got %v, want %v", parsed.DisableActiveMigration, orig.DisableActiveMigration)
+		t.Errorf(
+			"DisableActiveMigration mismatch: got %v, want %v",
+			parsed.DisableActiveMigration,
+			orig.DisableActiveMigration,
+		)
 	}
 	if parsed.ActiveConnectionIDLimit != orig.ActiveConnectionIDLimit {
-		t.Errorf("ActiveConnectionIDLimit mismatch: got %v, want %v", parsed.ActiveConnectionIDLimit, orig.ActiveConnectionIDLimit)
+		t.Errorf(
+			"ActiveConnectionIDLimit mismatch: got %v, want %v",
+			parsed.ActiveConnectionIDLimit,
+			orig.ActiveConnectionIDLimit,
+		)
 	}
 	if parsed.MaxDatagramFrameSize != orig.MaxDatagramFrameSize {
-		t.Errorf("MaxDatagramFrameSize mismatch: got %v, want %v", parsed.MaxDatagramFrameSize, orig.MaxDatagramFrameSize)
+		t.Errorf(
+			"MaxDatagramFrameSize mismatch: got %v, want %v",
+			parsed.MaxDatagramFrameSize,
+			orig.MaxDatagramFrameSize,
+		)
 	}
 }
 

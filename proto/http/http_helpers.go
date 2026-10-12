@@ -6,6 +6,7 @@ package http
 
 import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/semantic/cookie"
 )
@@ -52,7 +53,12 @@ func validHeaderValueByte(c byte) bool {
 }
 
 // InitHeaderKV initializes and normalizes header key and value buffers from strings.
-func InitHeaderKV[SK, SV ~string | ~[]byte](bufK, bufV []byte, key SK, value SV, disableNormalizing bool) ([]byte, []byte) {
+func InitHeaderKV[SK, SV ~string | ~[]byte](
+	bufK, bufV []byte,
+	key SK,
+	value SV,
+	disableNormalizing bool,
+) ([]byte, []byte) {
 	bufK = GetHeaderKeyBytes(bufK, key, disableNormalizing)
 	bufV = InitHeaderValue(bufV, value)
 	return bufK, bufV

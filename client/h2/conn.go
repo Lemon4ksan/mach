@@ -174,6 +174,7 @@ func (c *Conn) CancelStream(ctx *Context) {
 	if ctx.pipeWriter != nil {
 		_ = ctx.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
 	}
+
 	if ctx.pipeReader != nil {
 		_ = ctx.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
 	}
@@ -232,8 +233,11 @@ func (c *Conn) Close() error {
 	defer coreh2.ReleaseFrameHeader(fr)
 
 	ga := coreh2.AcquireFrame(coreh2.FrameGoAway).(*coreh2.GoAway)
-	var errCode coreh2.ErrorCode = coreh2.NoError
+
+	errCode := coreh2.NoError
+
 	c.errMu.Lock()
+
 	streamErr := c.lastErr
 	if streamErr == nil {
 		streamErr = coreh2.ErrStreamClosed
@@ -248,6 +252,7 @@ func (c *Conn) Close() error {
 			}
 		}
 	}
+
 	c.errMu.Unlock()
 
 	ga.SetCode(errCode)
@@ -413,10 +418,12 @@ func (c *Conn) setLastError(err error) {
 	if err == nil {
 		return
 	}
+
 	c.errMu.Lock()
 	if c.lastErr == nil {
 		c.lastErr = err
 	}
+
 	c.errMu.Unlock()
 }
 
@@ -449,10 +456,12 @@ func (s *ExtendedConnectStream) Write(p []byte) (int, error) {
 	if s.closed.Load() {
 		return 0, io.ErrClosedPipe
 	}
+
 	err := s.conn.WriteTunnelData(s.reqCtx, p, false)
 	if err != nil {
 		return 0, err
 	}
+
 	return len(p), nil
 }
 
@@ -463,11 +472,15 @@ func (s *ExtendedConnectStream) Close() error {
 		_ = s.conn.WriteTunnelData(s.reqCtx, nil, true)
 		s.conn.CancelStream(s.reqCtx)
 	}
+
 	return nil
 }
 
 // StartExtendedConnect initiates an Extended CONNECT stream (RFC 8441 §4).
-func (c *Conn) StartExtendedConnect(ctx context.Context, req *h1.Request) (*ExtendedConnectStream, *h1.Response, error) {
+func (c *Conn) StartExtendedConnect(
+	ctx context.Context,
+	req *h1.Request,
+) (*ExtendedConnectStream, *h1.Response, error) {
 	if !c.EnableConnect() {
 		return nil, nil, errors.New("h2: server did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL")
 	}
@@ -503,6 +516,7 @@ func (c *Conn) StartExtendedConnect(ctx context.Context, req *h1.Request) (*Exte
 			h1.ReleaseResponse(res)
 			return nil, nil, err
 		}
+
 	case err := <-errCh:
 		if err != nil {
 			h1.ReleaseResponse(res)
@@ -521,7 +535,6 @@ func (c *Conn) StartExtendedConnect(ctx context.Context, req *h1.Request) (*Exte
 		pr:     pr,
 		pw:     pw,
 	}
+
 	return stream, res, nil
 }
-
-

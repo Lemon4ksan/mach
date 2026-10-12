@@ -307,7 +307,11 @@ func TestClient_ClosedStream_DATA_ReplenishesConnectionWindow(t *testing.T) {
 
 	<-serverDone
 
-	assert.True(t, gotConnWindowUpdate.Load(), "client MUST emit WINDOW_UPDATE(0) for DATA on closed stream (RFC 9113 §5.2.2)")
+	assert.True(
+		t,
+		gotConnWindowUpdate.Load(),
+		"client MUST emit WINDOW_UPDATE(0) for DATA on closed stream (RFC 9113 §5.2.2)",
+	)
 }
 
 // TestClient_GOAWAY_GracefulShutdown_InFlightStreams verifies RFC 9113 §6.8:

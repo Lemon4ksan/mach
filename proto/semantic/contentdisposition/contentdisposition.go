@@ -47,6 +47,7 @@ type ContentDisposition struct {
 // control characters, and Windows reserved device names per RFC 6266 §4.3.
 func FileName[S ~string | ~[]byte](filename S) string {
 	raw := stringOrBytes(filename)
+
 	var sb strings.Builder
 	sb.Grow(len(raw))
 
@@ -153,6 +154,7 @@ func AppendFormatContentDisposition(dst []byte, dispType, filename string) []byt
 		dst = append(dst, ';', ' ', 'f', 'i', 'l', 'e', 'n', 'a', 'm', 'e', '=', '"')
 		dst = append(dst, filename...)
 		dst = append(dst, '"')
+
 		return dst
 	}
 
@@ -166,8 +168,10 @@ func AppendFormatContentDisposition(dst []byte, dispType, filename string) []byt
 			dst = append(dst, '_')
 		}
 	}
+
 	dst = append(dst, '"', ';', ' ', 'f', 'i', 'l', 'e', 'n', 'a', 'm', 'e', '*', '=')
 	dst = AppendEncodeRFC8187(dst, filename, "")
+
 	return dst
 }
 
@@ -175,8 +179,8 @@ func AppendFormatContentDisposition(dst []byte, dispType, filename string) []byt
 // using the recommendations in RFC 6266 Appendix D (providing ASCII fallback and RFC 8187 filename*).
 func FormatContentDisposition(dispType, filename string) string {
 	var buf [256]byte
-	b := AppendFormatContentDisposition(buf[:0], dispType, filename)
-	return string(b)
+
+	return string(AppendFormatContentDisposition(buf[:0], dispType, filename))
 }
 
 const hexTableUpper = "0123456789ABCDEF"
@@ -209,6 +213,7 @@ func AppendEncodeRFC8187(dst []byte, value, language string) []byte {
 			dst = append(dst, '%', hexTableUpper[b>>4], hexTableUpper[b&0x0F])
 		}
 	}
+
 	return dst
 }
 
@@ -216,14 +221,15 @@ func AppendEncodeRFC8187(dst []byte, value, language string) []byte {
 // using UTF-8 character encoding and percent-encoding for non-attr-char octets (RFC 8187 §3.2.1).
 func EncodeRFC8187(value, language string) string {
 	var buf [256]byte
-	b := AppendEncodeRFC8187(buf[:0], value, language)
-	return string(b)
+
+	return string(AppendEncodeRFC8187(buf[:0], value, language))
 }
 
 // DecodeRFC8187 decodes an RFC 8187 extended parameter value ([string] or [[]byte]) ("charset'language'value-chars")
 // into its constituent charset, language, and decoded value (RFC 8187 §3.2.1).
 func DecodeRFC8187[S ~string | ~[]byte](extValue S) (charset, language, value string) {
 	raw := stringOrBytes(extValue)
+
 	firstQuote := strings.IndexByte(raw, '\'')
 	if firstQuote == -1 {
 		return "", "", raw
@@ -279,18 +285,21 @@ func AppendISO88591ToUTF8[S ~string | ~[]byte](dst []byte, s S) []byte {
 	str := stringOrBytes(s)
 	for i := range len(str) {
 		r := rune(str[i])
+
 		var buf [utf8.UTFMax]byte
+
 		n := utf8.EncodeRune(buf[:], r)
 		dst = append(dst, buf[:n]...)
 	}
+
 	return dst
 }
 
 // ISO88591ToUTF8 translates ISO-8859-1 raw bytes ([string] or [[]byte]) into UTF-8 representation.
 func ISO88591ToUTF8[S ~string | ~[]byte](s S) string {
 	var buf [256]byte
-	b := AppendISO88591ToUTF8(buf[:0], s)
-	return string(b)
+
+	return string(AppendISO88591ToUTF8(buf[:0], s))
 }
 
 // IsWindowsReservedName checks whether filename stem conflicts with Win32 legacy DOS devices (RFC 6266 §4.3).

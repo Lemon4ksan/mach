@@ -48,6 +48,7 @@ func (cr *ChunkedReader) readChunkLine() ([]byte, error) {
 		if len(line) > maxChunkLineLen {
 			return nil, ErrInvalidChunkSize
 		}
+
 		return line, nil
 	}
 
@@ -55,13 +56,16 @@ func (cr *ChunkedReader) readChunkLine() ([]byte, error) {
 		total := len(line)
 		for {
 			part, pErr := cr.r.ReadSlice('\n')
+
 			total += len(part)
 			if total > maxChunkLineLen {
 				return nil, ErrInvalidChunkSize
 			}
+
 			if pErr == nil {
 				return nil, ErrInvalidChunkSize
 			}
+
 			if !errors.Is(pErr, bufio.ErrBufferFull) {
 				return nil, pErr
 			}
@@ -94,6 +98,7 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 		if idx := IndexByte(line, ';'); idx != -1 {
 			extPart := line[idx:]
 			line = TrimTrailingSpace(line[:idx])
+
 			if err := validateChunkExtensions(extPart); err != nil {
 				return 0, err
 			}
@@ -109,6 +114,7 @@ func (cr *ChunkedReader) Read(p []byte) (n int, err error) {
 			if err != nil {
 				return 0, fmt.Errorf("%w: %w", ErrInvalidChunkSize, err)
 			}
+
 			return 0, ErrInvalidChunkSize
 		}
 
@@ -254,6 +260,7 @@ func validateChunkExtensions(ext []byte) error {
 		if ext[0] != ';' {
 			return ErrInvalidChunkSize
 		}
+
 		ext = ext[1:]
 
 		// Skip BWS
@@ -272,11 +279,14 @@ func validateChunkExtensions(ext []byte) error {
 			if c >= 128 || validTokenTable[c] == 0 {
 				return ErrInvalidChunkSize
 			}
+
 			nameLen++
 		}
+
 		if nameLen == 0 {
 			return ErrInvalidChunkSize
 		}
+
 		ext = ext[nameLen:]
 
 		// Skip BWS
@@ -295,6 +305,7 @@ func validateChunkExtensions(ext []byte) error {
 		if ext[0] != '=' {
 			return ErrInvalidChunkSize
 		}
+
 		ext = ext[1:]
 
 		// Skip BWS
@@ -309,6 +320,7 @@ func validateChunkExtensions(ext []byte) error {
 		// chunk-ext-val = token / quoted-string
 		if ext[0] == '"' {
 			ext = ext[1:]
+
 			closed := false
 			for len(ext) > 0 {
 				c := ext[0]
@@ -317,18 +329,24 @@ func validateChunkExtensions(ext []byte) error {
 					closed = true
 					break
 				}
+
 				if c == '\\' {
 					if len(ext) < 2 {
 						return ErrInvalidChunkSize
 					}
+
 					ext = ext[2:]
+
 					continue
 				}
+
 				if c < 0x20 && c != '\t' {
 					return ErrInvalidChunkSize
 				}
+
 				ext = ext[1:]
 			}
+
 			if !closed {
 				return ErrInvalidChunkSize
 			}
@@ -339,11 +357,14 @@ func validateChunkExtensions(ext []byte) error {
 				if c >= 128 || validTokenTable[c] == 0 {
 					return ErrInvalidChunkSize
 				}
+
 				valLen++
 			}
+
 			if valLen == 0 {
 				return ErrInvalidChunkSize
 			}
+
 			ext = ext[valLen:]
 		}
 

@@ -79,12 +79,14 @@ func (s *Stream) ensureExecuted() error {
 	}
 
 	var resBuf bytes.Buffer
+
 	bw := bufio.NewWriter(&resBuf)
 	_ = s.res.Write(bw)
 	_ = bw.Flush()
 	s.resBytes = resBuf.Bytes()
 
 	var hdrBuf bytes.Buffer
+
 	hw := bufio.NewWriter(&hdrBuf)
 	_ = s.res.Header.Write(hw)
 	_ = hw.Flush()

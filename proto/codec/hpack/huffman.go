@@ -120,7 +120,6 @@ func HuffmanDecode[S ~string | ~[]byte](dst []byte, src S) []byte {
 	return res
 }
 
-
 func appendHuffmanDecodeFallback(dst, src []byte) ([]byte, error) {
 	nSrc := len(src)
 	if nSrc == 0 {

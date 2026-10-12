@@ -43,8 +43,10 @@ func (cs CipherSuite) String() string {
 // ComputeNonce computes the 12-byte AEAD nonce for a given packet number and IV (RFC 9001 §5.3).
 func ComputeNonce(iv []byte, pn uint64, nonce *[12]byte) {
 	copy(nonce[:], iv[:12])
+
 	var pnBytes [8]byte
 	binary.BigEndian.PutUint64(pnBytes[:], pn)
+
 	for i := 0; i < 8; i++ {
 		nonce[4+i] ^= pnBytes[i]
 	}
@@ -65,9 +67,11 @@ func NewPacketProtector(suite CipherSuite, key, iv, hpKey []byte) (*PacketProtec
 		return nil, errors.New("wire: IV must be at least 12 bytes")
 	}
 
-	var aead cipher.AEAD
-	var hp HeaderProtector
-	var err error
+	var (
+		aead cipher.AEAD
+		hp   HeaderProtector
+		err  error
+	)
 
 	switch suite {
 	case TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384:
@@ -75,10 +79,12 @@ func NewPacketProtector(suite CipherSuite, key, iv, hpKey []byte) (*PacketProtec
 		if err != nil {
 			return nil, err
 		}
+
 		aead, err = cipher.NewGCM(block)
 		if err != nil {
 			return nil, err
 		}
+
 		hp, err = NewAESHeaderProtector(hpKey)
 		if err != nil {
 			return nil, err
@@ -89,6 +95,7 @@ func NewPacketProtector(suite CipherSuite, key, iv, hpKey []byte) (*PacketProtec
 		if err != nil {
 			return nil, err
 		}
+
 		hp, err = NewChaChaHeaderProtector(hpKey)
 		if err != nil {
 			return nil, err
@@ -104,6 +111,7 @@ func NewPacketProtector(suite CipherSuite, key, iv, hpKey []byte) (*PacketProtec
 		hp:    hp,
 	}
 	copy(p.iv[:], iv[:12])
+
 	return p, nil
 }
 
@@ -118,12 +126,16 @@ func (p *PacketProtector) SealPacket(dst []byte, h *Header, payload []byte) ([]b
 		h.Length = uint64(h.PacketNumberLen + len(payload) + p.aead.Overhead())
 	}
 
-	var pnOffset int
-	var err error
+	var (
+		pnOffset int
+		err      error
+	)
+
 	dst, pnOffset, err = AppendHeader(dst, h)
 	if err != nil {
 		return nil, err
 	}
+
 	aad := dst[startLen:]
 
 	ComputeNonce(p.iv[:], h.PacketNumber, &p.nonce)
@@ -154,9 +166,11 @@ func NewPacketOpener(suite CipherSuite, key, iv, hpKey []byte) (*PacketOpener, e
 		return nil, errors.New("wire: IV must be at least 12 bytes")
 	}
 
-	var aead cipher.AEAD
-	var hp HeaderProtector
-	var err error
+	var (
+		aead cipher.AEAD
+		hp   HeaderProtector
+		err  error
+	)
 
 	switch suite {
 	case TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384:
@@ -164,10 +178,12 @@ func NewPacketOpener(suite CipherSuite, key, iv, hpKey []byte) (*PacketOpener, e
 		if err != nil {
 			return nil, err
 		}
+
 		aead, err = cipher.NewGCM(block)
 		if err != nil {
 			return nil, err
 		}
+
 		hp, err = NewAESHeaderProtector(hpKey)
 		if err != nil {
 			return nil, err
@@ -178,6 +194,7 @@ func NewPacketOpener(suite CipherSuite, key, iv, hpKey []byte) (*PacketOpener, e
 		if err != nil {
 			return nil, err
 		}
+
 		hp, err = NewChaChaHeaderProtector(hpKey)
 		if err != nil {
 			return nil, err
@@ -193,12 +210,13 @@ func NewPacketOpener(suite CipherSuite, key, iv, hpKey []byte) (*PacketOpener, e
 		hp:    hp,
 	}
 	copy(o.iv[:], iv[:12])
+
 	return o, nil
 }
 
 // OpenPacket removes header protection from packet in-place, decodes the header,
 // and decrypts the payload into dst. Zero heap allocations.
-func (o *PacketOpener) OpenPacket(dst []byte, packet []byte, destConnIDLen int, largestAcked uint64) (Header, []byte, error) {
+func (o *PacketOpener) OpenPacket(dst, packet []byte, destConnIDLen int, largestAcked uint64) (Header, []byte, error) {
 	var h Header
 
 	pnOffset, _, _, _, _, _, err := ParseHeaderOffsets(packet, destConnIDLen)
@@ -215,6 +233,7 @@ func (o *PacketOpener) OpenPacket(dst []byte, packet []byte, destConnIDLen int, 
 	if err != nil {
 		return h, nil, err
 	}
+
 	h.PacketNumberLen = pnLen
 
 	ComputeNonce(o.iv[:], h.PacketNumber, &o.nonce)

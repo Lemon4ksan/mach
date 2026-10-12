@@ -614,4 +614,3 @@ func TestParseGeneric(t *testing.T) {
 		t.Fatalf("unexpected key/val: %s=%s", c.Key(), c.Value())
 	}
 }
-

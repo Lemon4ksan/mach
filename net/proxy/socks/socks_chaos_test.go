@@ -32,8 +32,8 @@ func TestSOCKS5_TruncatedAuthSelection(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name     string
-		response []byte
+		name       string
+		response   []byte
 		closeEarly bool
 	}{
 		{
@@ -485,7 +485,9 @@ func TestPoC_EXP1214_SOCKS5_RogueServer_DisallowedAuthMethod(t *testing.T) {
 			if err == nil && n > 0 {
 				if buf[0] == socks.Version5 && buf[1] == 0x01 {
 					// Client erroneously sent CONNECT command!
-					t.Errorf("EXP-1214: SOCKS5 client sent CONNECT command instead of failing when server required auth method 0x02!")
+					t.Errorf(
+						"EXP-1214: SOCKS5 client sent CONNECT command instead of failing when server required auth method 0x02!",
+					)
 				}
 			}
 		}()
@@ -503,6 +505,3 @@ func TestPoC_EXP1214_SOCKS5_RogueServer_DisallowedAuthMethod(t *testing.T) {
 		t.Fatalf("expected error when server selected unoffered auth method 0x02, got nil")
 	}
 }
-
-
-

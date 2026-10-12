@@ -71,12 +71,14 @@ func CompressDeflate(src []byte, level int) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
+
 	fw := globalWriterPool.get(&buf, level)
 	defer globalWriterPool.put(fw)
 
 	if _, err := fw.Write(src); err != nil {
 		return nil, err
 	}
+
 	if err := fw.Flush(); err != nil {
 		return nil, err
 	}
@@ -89,6 +91,7 @@ func CompressDeflate(src []byte, level int) ([]byte, error) {
 
 	result := make([]byte, len(compressed))
 	copy(result, compressed)
+
 	return result, nil
 }
 
@@ -98,17 +101,20 @@ func CompressDeflate(src []byte, level int) ([]byte, error) {
 func DecompressDeflate(src []byte, limit int64) ([]byte, error) {
 	// Reconstruct tail with BFINAL=1 termination
 	tailReader := io.MultiReader(bytes.NewReader(src), bytes.NewReader(flateReaderTail))
+
 	fr := flate.NewReader(tailReader)
 	defer fr.Close()
 
-	var buf bytes.Buffer
-	var r io.Reader = fr
+	var (
+		buf bytes.Buffer
+		r   io.Reader = fr
+	)
 	if limit > 0 {
 		r = io.LimitReader(fr, limit+1)
 	}
 
 	if _, err := buf.ReadFrom(r); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidCompressedPayload, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidCompressedPayload, err)
 	}
 
 	if limit > 0 && int64(buf.Len()) > limit {

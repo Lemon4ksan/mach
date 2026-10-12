@@ -51,10 +51,12 @@ func (p *PerHost) DialContext(ctx context.Context, network, addr string) (c net.
 	if err != nil {
 		return nil, err
 	}
+
 	d := p.dialerForRequest(host)
 	if x, ok := d.(ContextDialer); ok {
 		return x.DialContext(ctx, network, addr)
 	}
+
 	return dialContext(ctx, d, network, addr)
 }
 
@@ -66,11 +68,13 @@ func (p *PerHost) dialerForRequest(host string) Dialer {
 				return p.bypass
 			}
 		}
+
 		for _, bypassIP := range p.bypassIPs {
 			if bypassIP.Equal(ip) {
 				return p.bypass
 			}
 		}
+
 		return p.def
 	}
 
@@ -78,15 +82,18 @@ func (p *PerHost) dialerForRequest(host string) Dialer {
 		if strings.HasSuffix(host, zone) {
 			return p.bypass
 		}
+
 		if host == zone[1:] {
 			// For a zone ".example.com", we match "example.com"
 			// too.
 			return p.bypass
 		}
 	}
+
 	if slices.Contains(p.bypassHosts, host) {
 		return p.bypass
 	}
+
 	return p.def
 }
 
@@ -102,21 +109,26 @@ func (p *PerHost) AddFromString(s string) {
 		if len(host) == 0 {
 			continue
 		}
+
 		if strings.Contains(host, "/") {
 			// We assume that it's a CIDR address like 127.0.0.0/8
 			if _, net, err := net.ParseCIDR(host); err == nil {
 				p.AddNetwork(net)
 			}
+
 			continue
 		}
+
 		if nip, err := netip.ParseAddr(host); err == nil {
 			p.AddIP(net.IP(nip.AsSlice()))
 			continue
 		}
+
 		if strings.HasPrefix(host, "*.") {
 			p.AddZone(host[1:])
 			continue
 		}
+
 		p.AddHost(host)
 	}
 }
@@ -142,6 +154,7 @@ func (p *PerHost) AddZone(zone string) {
 	if !strings.HasPrefix(zone, ".") {
 		zone = "." + zone
 	}
+
 	p.bypassZones = append(p.bypassZones, zone)
 }
 

@@ -416,7 +416,7 @@ func ParseUfloat(buf []byte) (float64, error) {
 
 var (
 	// ErrEmptyHexNum indicates that a hexadecimal number buffer was empty.
-	ErrEmptyHexNum    = errors.New("empty hex number")
+	ErrEmptyHexNum = errors.New("empty hex number")
 	// ErrTooLargeHexNum indicates that a hexadecimal number exceeds implementation limits.
 	ErrTooLargeHexNum = errors.New("too large hex number")
 )

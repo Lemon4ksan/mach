@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/mach/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/proto/headkit"
 )
@@ -123,13 +123,16 @@ func (a *h3DataStreamAdapter) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+
 		if frameType == coreh3.FrameTypeData {
 			a.readRemain = int64(frameLen)
 			if a.readRemain == 0 {
 				continue
 			}
+
 			break
 		}
+
 		if frameLen > 0 {
 			lr := io.LimitReader(a.br, int64(frameLen))
 			_, _ = io.Copy(io.Discard, lr)
@@ -140,10 +143,12 @@ func (a *h3DataStreamAdapter) Read(p []byte) (int, error) {
 	if toRead > a.readRemain {
 		toRead = a.readRemain
 	}
+
 	n, err := a.br.Read(p[:toRead])
 	if n > 0 {
 		a.readRemain -= int64(n)
 	}
+
 	return n, err
 }
 
@@ -151,15 +156,20 @@ func (a *h3DataStreamAdapter) Write(p []byte) (int, error) {
 	if a.closed.Load() {
 		return 0, io.ErrClosedPipe
 	}
+
 	if len(p) == 0 {
 		return 0, nil
 	}
+
 	var hdr [16]byte
+
 	b := varint.Append(hdr[:0], coreh3.FrameTypeData)
+
 	b = varint.Append(b, uint64(len(p)))
 	if _, err := a.stream.Write(b); err != nil {
 		return 0, err
 	}
+
 	return a.stream.Write(p)
 }
 
@@ -167,6 +177,7 @@ func (a *h3DataStreamAdapter) Close() error {
 	if a.closed.CompareAndSwap(false, true) {
 		return a.stream.Close()
 	}
+
 	return nil
 }
 
@@ -248,6 +259,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 					lr := io.LimitReader(br, int64(frameLen)) //nolint:gosec
 					_, _ = io.Copy(io.Discard, lr)
 				}
+
 				break
 			}
 
@@ -273,6 +285,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 			}
 
 			streamID := uint64(stream.StreamID()) //nolint:gosec
+
 			m, p, s, a, decErr := sc.qpack.DecodeRequestHeaders(
 				streamID,
 				headerBlock,
@@ -297,6 +310,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 					stream.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3GeneralProtocolError))
 					return
 				}
+
 				req.IsExtendedConnect = true
 				req.RemoteAddr = sc.quicConn.RemoteAddr().String()
 				req.Ctx = stream.Context()
@@ -308,16 +322,22 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 				req.Stream = adapter
 
 				var isUpgraded bool
+
 				req.UpgradeFn = func(statusCode int, resHdrs headkit.Headers) error {
 					isUpgraded = true
 					respBlock := sc.qpack.EncodeResponseHeaders(streamID, statusCode, resHdrs, -1)
+
 					var frameHdr [16]byte
+
 					hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+
 					hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
 					if _, err := stream.Write(hdrBytes); err != nil {
 						return err
 					}
+
 					_, err := stream.Write(respBlock)
+
 					return err
 				}
 
@@ -331,11 +351,14 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 				}
 
 				respBlock := sc.qpack.EncodeResponseHeaders(streamID, res.StatusCode, res.Headers, len(res.Body))
+
 				var frameHdr [16]byte
+
 				hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
 				hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
 				_, _ = stream.Write(hdrBytes)
 				_, _ = stream.Write(respBlock)
+
 				return
 			}
 

@@ -13,11 +13,13 @@ type mockStream struct {
 
 func (s *mockStream) Read(p []byte) (n int, err error)  { return s.buf.Read(p) }
 func (s *mockStream) Write(p []byte) (n int, err error) { return s.buf.Write(p) }
-func (s *mockStream) Close() error                     { return nil }
+func (s *mockStream) Close() error                      { return nil }
 
-var _ coreh3.Stream = (*mockStream)(nil)
-var _ coreh3.ReceiveStream = (*mockStream)(nil)
-var _ coreh3.SendStream = (*mockStream)(nil)
+var (
+	_ coreh3.Stream        = (*mockStream)(nil)
+	_ coreh3.ReceiveStream = (*mockStream)(nil)
+	_ coreh3.SendStream    = (*mockStream)(nil)
+)
 
 func TestAllocations(t *testing.T) {
 	headerBytes := coreh3.AppendHeadersHeader(nil, 128)

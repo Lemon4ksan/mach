@@ -107,6 +107,7 @@ func (dt *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			cha = c
 			break
 		}
+
 		lastErr = parseErr
 	}
 
@@ -114,6 +115,7 @@ func (dt *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if lastErr != nil {
 			return nil, lastErr
 		}
+
 		return nil, ErrDigestBadChallenge
 	}
 
@@ -168,30 +170,37 @@ func ParseChallenge[S ~string | ~[]byte](input S) (*Challenge, error) {
 	if err := ParseChallengeInto(c, input); err != nil {
 		return nil, err
 	}
+
 	return c, nil
 }
 
 // ParseChallengeInto parses WWW-Authenticate challenge parameters into dst without heap allocations.
 func ParseChallengeInto[S ~string | ~[]byte](dst *Challenge, input S) error {
 	raw := stringOrBytes(input)
+
 	var parseErr error
+
 	foundAny := false
 
 	ok := forEachAuthParam(raw, "Digest", func(key, val string) bool {
 		foundAny = true
+
 		if err := dst.setValue(key, val); err != nil {
 			parseErr = err
 			return false
 		}
+
 		return true
 	})
 
 	if parseErr != nil {
 		return parseErr
 	}
+
 	if !ok || !foundAny {
 		return ErrDigestBadChallenge
 	}
+
 	return nil
 }
 
@@ -201,30 +210,37 @@ func ParseCredentials[S ~string | ~[]byte](input S) (*Credentials, error) {
 	if err := ParseCredentialsInto(cred, input); err != nil {
 		return nil, err
 	}
+
 	return cred, nil
 }
 
 // ParseCredentialsInto parses Digest Authorization credentials into dst without heap allocations.
 func ParseCredentialsInto[S ~string | ~[]byte](dst *Credentials, input S) error {
 	raw := stringOrBytes(input)
+
 	var parseErr error
+
 	foundAny := false
 
 	ok := forEachAuthParam(raw, "Digest", func(key, val string) bool {
 		foundAny = true
+
 		if err := dst.setValue(key, val); err != nil {
 			parseErr = err
 			return false
 		}
+
 		return true
 	})
 
 	if parseErr != nil {
 		return parseErr
 	}
+
 	if !ok || !foundAny {
 		return ErrDigestBadCredentials
 	}
+
 	return nil
 }
 
@@ -234,30 +250,37 @@ func ParseAuthenticationInfo[S ~string | ~[]byte](input S) (*AuthenticationInfo,
 	if err := ParseAuthenticationInfoInto(ai, input); err != nil {
 		return nil, err
 	}
+
 	return ai, nil
 }
 
 // ParseAuthenticationInfoInto parses Authentication-Info header parameters into dst without heap allocations.
 func ParseAuthenticationInfoInto[S ~string | ~[]byte](dst *AuthenticationInfo, input S) error {
 	raw := stringOrBytes(input)
+
 	var parseErr error
+
 	foundAny := false
 
 	ok := forEachAuthParam(raw, "", func(key, val string) bool {
 		foundAny = true
+
 		if err := dst.setValue(key, val); err != nil {
 			parseErr = err
 			return false
 		}
+
 		return true
 	})
 
 	if parseErr != nil {
 		return parseErr
 	}
+
 	if !ok || !foundAny {
 		return ErrDigestBadAuthInfo
 	}
+
 	return nil
 }
 
@@ -294,6 +317,7 @@ func (dt *Transport) createCredentials(cha *Challenge, req *http.Request) (*dige
 		h := newHashFunc(cha.Algorithm)
 		if body != nil && body != http.NoBody {
 			defer body.Close()
+
 			if _, err := io.Copy(h, body); err != nil {
 				return nil, fmt.Errorf("digest: failed to hash body: %w", err)
 			}
@@ -314,6 +338,7 @@ func (dt *Transport) prepareBody(req *http.Request) error {
 		req.GetBody = func() (io.ReadCloser, error) {
 			return http.NoBody, nil
 		}
+
 		return nil
 	}
 
@@ -358,6 +383,7 @@ func (dc *Challenge) isQopSupported(qop string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -389,47 +415,58 @@ func (dc *Challenge) setValue(k, v string) error {
 		default:
 			if vTrim != "" {
 				parts := strings.Split(vTrim, ",")
+
 				dc.Qop = make([]string, len(parts))
 				for i, p := range parts {
 					dc.Qop[i] = strings.TrimSpace(p)
 				}
 			}
 		}
+
 	case strings.EqualFold(k, "charset"):
 		if v != "" {
 			if !strings.EqualFold(v, "UTF-8") {
 				return ErrDigestInvalidCharset
 			}
+
 			dc.Charset = "UTF-8"
 		}
+
 	case strings.EqualFold(k, "nc"):
 		nc, err := strconv.ParseInt(v, 16, 32)
 		if err != nil {
 			return fmt.Errorf("digest: invalid nc: %w", err)
 		}
+
 		dc.NC = int(nc)
+
 	case strings.EqualFold(k, "userhash"):
-		if strings.EqualFold(v, "true") {
+		switch {
+		case strings.EqualFold(v, "true"):
 			dc.UserHash = "true"
-		} else if strings.EqualFold(v, "false") {
+		case strings.EqualFold(v, "false"):
 			dc.UserHash = "false"
-		} else {
+		default:
 			dc.UserHash = v
 		}
+
 	default:
 		// RFC 7616 §3.3: Unknown parameters MUST be ignored
 		return nil
 	}
+
 	return nil
 }
 
 // Parse parses WWW-Authenticate challenge parameters into dc.
+//
 // Deprecated: use [ParseInto] or [ParseChallengeInto] instead.
 func (dc *Challenge) Parse(input string) error {
 	return ParseChallengeInto(dc, input)
 }
 
 // ParseBytes parses WWW-Authenticate challenge parameters into dc.
+//
 // Deprecated: use [ParseInto] or [ParseChallengeInto] instead.
 func (dc *Challenge) ParseBytes(input []byte) error {
 	return ParseChallengeInto(dc, input)
@@ -476,24 +513,28 @@ func (c *Credentials) setValue(k, v string) error {
 			c.NC = int(nc)
 		}
 	case strings.EqualFold(k, "userhash"):
-		if strings.EqualFold(v, "true") {
+		switch {
+		case strings.EqualFold(v, "true"):
 			c.UserHash = "true"
-		} else if strings.EqualFold(v, "false") {
+		case strings.EqualFold(v, "false"):
 			c.UserHash = "false"
-		} else {
+		default:
 			c.UserHash = v
 		}
 	}
+
 	return nil
 }
 
 // Parse parses Digest Authorization credentials into c.
+//
 // Deprecated: use [ParseCredentialsInto] instead.
 func (c *Credentials) Parse(input string) error {
 	return ParseCredentialsInto(c, input)
 }
 
 // ParseBytes parses Digest Authorization credentials into c.
+//
 // Deprecated: use [ParseCredentialsInto] instead.
 func (c *Credentials) ParseBytes(input []byte) error {
 	return ParseCredentialsInto(c, input)
@@ -525,24 +566,28 @@ func (ai *AuthenticationInfo) setValue(k, v string) error {
 			ai.NC = int(nc)
 		}
 	case strings.EqualFold(k, "userhash"):
-		if strings.EqualFold(v, "true") {
+		switch {
+		case strings.EqualFold(v, "true"):
 			ai.UserHash = "true"
-		} else if strings.EqualFold(v, "false") {
+		case strings.EqualFold(v, "false"):
 			ai.UserHash = "false"
-		} else {
+		default:
 			ai.UserHash = v
 		}
 	}
+
 	return nil
 }
 
 // Parse parses Authentication-Info header parameters into ai.
+//
 // Deprecated: use [ParseAuthenticationInfoInto] instead.
 func (ai *AuthenticationInfo) Parse(input string) error {
 	return ParseAuthenticationInfoInto(ai, input)
 }
 
 // ParseBytes parses Authentication-Info header parameters into ai.
+//
 // Deprecated: use [ParseAuthenticationInfoInto] instead.
 func (ai *AuthenticationInfo) ParseBytes(input []byte) error {
 	return ParseAuthenticationInfoInto(ai, input)
@@ -608,6 +653,7 @@ func (dc *digestCredentials) digest(cha *Challenge) (string, error) {
 	dc.nc++
 
 	var b [16]byte
+
 	_, _ = io.ReadFull(rand.Reader, b[:])
 	dc.cnonce = hex.EncodeToString(b[:])
 
@@ -633,6 +679,7 @@ func (dc *digestCredentials) ha1() string {
 	if dc.sessAlgorithm {
 		return dc.h(a1 + ":" + dc.nonce + ":" + dc.cnonce)
 	}
+
 	return a1
 }
 
@@ -641,6 +688,7 @@ func (dc *digestCredentials) ha2() string {
 	if dc.qop == qopAuthInt {
 		return dc.h(dc.method + ":" + dc.uri + ":" + dc.bodyHash)
 	}
+
 	return dc.h(dc.method + ":" + dc.uri)
 }
 
@@ -663,6 +711,7 @@ func (dc *digestCredentials) String() string {
 		if isASCII {
 			userStr = `username="` + dc.username + `"`
 		}
+
 		sl = append(sl, userStr)
 	}
 
@@ -695,7 +744,9 @@ func (dc *digestCredentials) String() string {
 
 func encodeRFC8187Simple(s string) string {
 	const hexChars = "0123456789ABCDEF"
+
 	var buf [256]byte
+
 	b := buf[:0]
 
 	for i := range len(s) {
@@ -704,6 +755,7 @@ func encodeRFC8187Simple(s string) string {
 			b = append(b, c)
 			continue
 		}
+
 		b = append(b, '%', hexChars[c>>4], hexChars[c&0x0F])
 	}
 
@@ -712,12 +764,15 @@ func encodeRFC8187Simple(s string) string {
 
 func newHashFunc(algorithm string) hash.Hash {
 	normAlg := strings.ToUpper(strings.TrimSpace(algorithm))
+
 	hf := digestHashFuncs[normAlg]
 	if hf == nil {
 		hf = md5.New
 	}
+
 	h := hf()
 	h.Reset()
+
 	return h
 }
 
@@ -743,16 +798,18 @@ func findScheme(raw, scheme string) (int, bool) {
 			}
 		}
 	}
+
 	return -1, false
 }
 
-func forEachAuthParam(raw string, scheme string, yield func(key, val string) bool) bool {
+func forEachAuthParam(raw, scheme string, yield func(key, val string) bool) bool {
 	raw = strings.TrimSpace(raw)
 	if scheme != "" {
 		idx, found := findScheme(raw, scheme)
 		if !found {
 			return false
 		}
+
 		raw = strings.TrimSpace(raw[idx+len(scheme):])
 	} else {
 		trimmed := strings.TrimSpace(raw)
@@ -783,6 +840,7 @@ func forEachAuthParam(raw string, scheme string, yield func(key, val string) boo
 		var val string
 		if len(raw) > 0 && raw[0] == '"' {
 			raw = raw[1:]
+
 			quoteIdx := strings.IndexByte(raw, '"')
 			if quoteIdx == -1 {
 				val = raw
@@ -795,43 +853,55 @@ func forEachAuthParam(raw string, scheme string, yield func(key, val string) boo
 						break
 					}
 				}
+
 				if !hasEscape {
 					val = raw[:quoteIdx]
 					raw = raw[quoteIdx+1:]
 				} else {
 					var sb strings.Builder
+
 					escaped := false
+
 					foundQuote := false
 					for i, c := range raw {
 						if escaped {
 							sb.WriteRune(c)
+
 							escaped = false
+
 							continue
 						}
+
 						if c == '\\' {
 							escaped = true
 							continue
 						}
+
 						if c == '"' {
 							raw = raw[i+1:]
 							foundQuote = true
 							break
 						}
+
 						sb.WriteRune(c)
 					}
+
 					if !foundQuote {
 						raw = ""
 					}
+
 					val = sb.String()
 				}
 			}
 		} else {
 			commaIdx := strings.IndexByte(raw, ',')
 			spaceIdx2 := strings.IndexByte(raw, ' ')
+
 			endIdx := commaIdx
 			if spaceIdx2 >= 0 && (endIdx < 0 || spaceIdx2 < endIdx) {
 				endIdx = spaceIdx2
 			}
+
 			if endIdx < 0 {
 				val = strings.TrimSpace(raw)
 				raw = ""
@@ -845,5 +915,6 @@ func forEachAuthParam(raw string, scheme string, yield func(key, val string) boo
 			return false
 		}
 	}
+
 	return true
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/client"
 	machhttp "github.com/lemon4ksan/mach/proto/http"

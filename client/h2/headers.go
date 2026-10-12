@@ -260,6 +260,7 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 	}
 
 	c.dec.BeginHeaderBlock()
+
 	for len(b) > 0 {
 		var err error
 
@@ -290,6 +291,7 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 		if err := coreh2.ValidateHeaderName(k, false); err != nil {
 			return err
 		}
+
 		if err := coreh2.ValidateHeaderValue(v); err != nil {
 			return err
 		}
@@ -313,12 +315,12 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 	defer hpack.ReleaseHeaderField(hf)
 
 	var (
-		err                  error
-		statusCode           int
-		hasStatus            bool
-		hasRegularHeader     bool
-		totalSize            uint32
-		maxList              = c.current.MaxHeaderListSize()
+		err              error
+		statusCode       int
+		hasStatus        bool
+		hasRegularHeader bool
+		totalSize        uint32
+		maxList          = c.current.MaxHeaderListSize()
 	)
 
 	if maxList == 0 {
@@ -328,6 +330,7 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 	informationalHeader := make(http.Header)
 
 	c.dec.BeginHeaderBlock()
+
 	for len(b) > 0 {
 		b, err = c.dec.Next(hf, b)
 		if err != nil {

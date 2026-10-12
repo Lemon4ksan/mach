@@ -9,8 +9,8 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/mach/net/quic"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -108,6 +108,7 @@ func (sc *ServerConn) handleUniStream(stream *quic.ReceiveStream) {
 	default:
 		// RFC 9114 §6.2: Unknown unidirectional stream types MUST either be discarded or cancelled.
 		defer stream.CancelRead(0)
+
 		_, _ = io.Copy(io.Discard, stream)
 	}
 }
@@ -136,6 +137,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 
 			return
 		}
+
 		if !firstFrame && frameType == coreh3.FrameTypeSettings {
 			// RFC 9114 §7.2.4: A second SETTINGS frame MUST cause H3_FRAME_UNEXPECTED.
 			_ = sc.quicConn.CloseWithError(
@@ -145,6 +147,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 
 			return
 		}
+
 		firstFrame = false
 
 		switch frameType {
@@ -161,6 +164,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 					code = coreh3.ErrCodeH3FrameError
 					msg = "truncated SETTINGS frame (RFC 9114 §7.1)"
 				}
+
 				_ = sc.quicConn.CloseWithError(
 					quic.ApplicationErrorCode(code),
 					msg,
@@ -184,6 +188,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 			}
 
 			lr := io.LimitReader(stream, int64(payloadLen)) //nolint:gosec
+
 			vReader := varint.NewReader(lr)
 			if _, err := varint.Read(vReader); err != nil {
 				_ = sc.quicConn.CloseWithError(
@@ -218,6 +223,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 			}
 
 			lr := io.LimitReader(stream, int64(payloadLen)) //nolint:gosec
+
 			vReader := varint.NewReader(lr)
 			if _, err := varint.Read(vReader); err != nil {
 				_ = sc.quicConn.CloseWithError(
@@ -250,6 +256,7 @@ func (sc *ServerConn) handleControlStream(stream *quic.ReceiveStream, qr varint.
 			}
 
 			lr := io.LimitReader(stream, int64(payloadLen)) //nolint:gosec
+
 			vReader := varint.NewReader(lr)
 			if _, err := varint.Read(vReader); err != nil {
 				_ = sc.quicConn.CloseWithError(

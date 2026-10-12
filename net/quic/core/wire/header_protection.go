@@ -37,14 +37,17 @@ func NewAESHeaderProtector(hpKey []byte) (*AESHeaderProtector, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &AESHeaderProtector{block: block}, nil
 }
 
 // Mask encrypts the 16-byte sample with AES-ECB and outputs the first 5 bytes.
 func (hp *AESHeaderProtector) Mask(sample []byte) [5]byte {
 	hp.block.Encrypt(hp.maskBuf[:], sample[:16])
+
 	var mask [5]byte
 	copy(mask[:], hp.maskBuf[:5])
+
 	return mask
 }
 
@@ -58,10 +61,12 @@ func NewChaChaHeaderProtector(hpKey []byte) (*ChaChaHeaderProtector, error) {
 	if len(hpKey) != 32 {
 		return nil, errors.New("wire: ChaCha20 header protection key must be 32 bytes")
 	}
+
 	hp := &ChaChaHeaderProtector{}
 	for i := 0; i < 8; i++ {
 		hp.key[i] = binary.LittleEndian.Uint32(hpKey[i*4 : (i+1)*4])
 	}
+
 	return hp, nil
 }
 
@@ -112,6 +117,7 @@ func (hp *ChaChaHeaderProtector) Mask(sample []byte) [5]byte {
 	var mask [5]byte
 	binary.LittleEndian.PutUint32(mask[0:4], state[0])
 	mask[4] = byte(state[1])
+
 	return mask
 }
 
@@ -133,11 +139,12 @@ func quarterRound(a, b, c, d *uint32) {
 // ApplyHeaderProtection applies header protection in-place to packet (RFC 9001 §5.4.1).
 // pnOffset is the byte offset of the Packet Number field.
 // pnLen is the length of the packet number (1 to 4 bytes).
-func ApplyHeaderProtection(packet []byte, pnOffset int, pnLen int, hp HeaderProtector) error {
+func ApplyHeaderProtection(packet []byte, pnOffset, pnLen int, hp HeaderProtector) error {
 	sampleStart := pnOffset + 4
 	if len(packet) < sampleStart+HeaderProtectionSampleLen {
 		return ErrSampleOutOfBounds
 	}
+
 	if pnLen < 1 || pnLen > 4 {
 		return ErrInvalidPacketNumber
 	}
@@ -151,9 +158,10 @@ func ApplyHeaderProtection(packet []byte, pnOffset int, pnLen int, hp HeaderProt
 		packet[0] ^= mask[0] & 0x1f
 	}
 
-	for i := 0; i < pnLen; i++ {
-		packet[pnOffset+i] ^= mask[1+i]
+	for i := 0; i < pnLen && i < 4; i++ {
+		packet[pnOffset+i] ^= mask[1+i] //nolint:gosec // bounds checked
 	}
+
 	return nil
 }
 
@@ -180,8 +188,9 @@ func RemoveHeaderProtection(packet []byte, pnOffset int, hp HeaderProtector) (in
 		return 0, ErrTruncatedPacket
 	}
 
-	for i := 0; i < pnLen; i++ {
-		packet[pnOffset+i] ^= mask[1+i]
+	for i := 0; i < pnLen && i < 4; i++ {
+		packet[pnOffset+i] ^= mask[1+i] //nolint:gosec // bounds checked
 	}
+
 	return pnLen, nil
 }

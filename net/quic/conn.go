@@ -24,6 +24,7 @@ func (s *Stream) Write(p []byte) (int, error) {
 	if n > 0 {
 		_ = s.bridge.FlushStreamData(s.StreamID())
 	}
+
 	return n, err
 }
 
@@ -61,10 +62,12 @@ func (s *Stream) CancelRead(code StreamErrorCode) {
 // ReadByte reads a single byte from the stream with 0 allocations.
 func (s *Stream) ReadByte() (byte, error) {
 	var b [1]byte
+
 	n, err := s.Read(b[:])
 	if n == 1 {
 		return b[0], nil
 	}
+
 	return 0, err
 }
 
@@ -90,6 +93,7 @@ func (s *SendStream) Write(p []byte) (int, error) {
 	if n > 0 {
 		_ = s.bridge.FlushStreamData(s.StreamID())
 	}
+
 	return n, err
 }
 
@@ -103,7 +107,7 @@ func (s *SendStream) Close() error {
 // CancelWrite aborts the outbound unidirectional stream with RESET_STREAM.
 func (s *SendStream) CancelWrite(code StreamErrorCode) {
 	s.SendStream.CancelWrite(code)
-	_, finalSize, _ := s.SendStream.GetResetStreamFrame()
+	_, finalSize, _ := s.GetResetStreamFrame()
 	_ = s.bridge.SendResetStream(s.StreamID(), code, finalSize)
 }
 
@@ -122,10 +126,12 @@ func (s *ReceiveStream) CancelRead(code StreamErrorCode) {
 // ReadByte reads a single byte from the unidirectional stream with 0 allocations.
 func (s *ReceiveStream) ReadByte() (byte, error) {
 	var b [1]byte
+
 	n, err := s.Read(b[:])
 	if n == 1 {
 		return b[0], nil
 	}
+
 	return 0, err
 }
 
@@ -138,6 +144,7 @@ func (b *CoreSessionBridge) OpenStream() (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Stream{Stream: str, bridge: b}, nil
 }
 
@@ -147,6 +154,7 @@ func (b *CoreSessionBridge) OpenStreamSync(ctx context.Context) (*Stream, error)
 	if err != nil {
 		return nil, err
 	}
+
 	return &Stream{Stream: str, bridge: b}, nil
 }
 
@@ -156,6 +164,7 @@ func (b *CoreSessionBridge) OpenUniStream() (*SendStream, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &SendStream{SendStream: str, bridge: b}, nil
 }
 
@@ -165,6 +174,7 @@ func (b *CoreSessionBridge) OpenUniStreamSync(ctx context.Context) (*SendStream,
 	if err != nil {
 		return nil, err
 	}
+
 	return &SendStream{SendStream: str, bridge: b}, nil
 }
 
@@ -174,6 +184,7 @@ func (b *CoreSessionBridge) AcceptStream(ctx context.Context) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Stream{Stream: str, bridge: b}, nil
 }
 
@@ -183,6 +194,7 @@ func (b *CoreSessionBridge) AcceptUniStream(ctx context.Context) (*ReceiveStream
 	if err != nil {
 		return nil, err
 	}
+
 	return &ReceiveStream{ReceiveStream: str, bridge: b}, nil
 }
 
@@ -192,6 +204,7 @@ func (b *CoreSessionBridge) CloseWithError(code ApplicationErrorCode, reason str
 	defer b.mu.Unlock()
 
 	b.ensure1RTTKeysLocked()
+
 	if b.oneRTTProtector != nil && b.packetConn != nil && b.remoteAddr != nil {
 		ccf := wire.ConnectionCloseFrame{
 			IsApplication: true,
@@ -199,20 +212,26 @@ func (b *CoreSessionBridge) CloseWithError(code ApplicationErrorCode, reason str
 			Reason:        []byte(reason),
 		}
 		payload := wire.AppendConnectionCloseFrame(nil, &ccf)
+
 		var h wire.Header
+
 		h.IsLong = false
 		h.Type = wire.PacketType1RTT
 		h.DestConnID = b.destConnID.Bytes()
 		h.PacketNumber = b.Next1RTTPacketNumber()
+
 		h.PacketNumberLen = 4
 		if pkt, err := b.oneRTTProtector.SealPacket(nil, &h, payload); err == nil {
 			_, _ = b.packetConn.WriteTo(pkt, b.remoteAddr)
 		}
 	}
+
 	if b.ownsConn && b.packetConn != nil {
 		_ = b.packetConn.Close()
 	}
+
 	_ = b.handshakeDriver.Close()
+
 	return b.streamConn.CloseWithError(stream.ApplicationErrorCode(code), reason)
 }
 
@@ -222,12 +241,15 @@ func (b *CoreSessionBridge) ConnectionState() ConnectionState {
 	defer b.mu.Unlock()
 
 	var cs ConnectionState
+
 	cs.Version = b.version
 	cs.SupportsDatagrams.Local = true
+
 	cs.SupportsDatagrams.Remote = true
 	if b.handshakeDriver != nil {
 		cs.TLS = b.handshakeDriver.ConnectionState()
 	}
+
 	return cs
 }
 
@@ -237,6 +259,7 @@ func (b *CoreSessionBridge) SendDatagram(payload []byte) error {
 	defer b.mu.Unlock()
 
 	b.ensure1RTTKeysLocked()
+
 	if b.oneRTTProtector == nil {
 		return errors.New("quic: 1-RTT protector not ready")
 	}
@@ -248,6 +271,7 @@ func (b *CoreSessionBridge) SendDatagram(payload []byte) error {
 	framePayload := wire.AppendDatagramFrame(nil, &df)
 
 	var h wire.Header
+
 	h.IsLong = false
 	h.Type = wire.PacketType1RTT
 	h.DestConnID = b.destConnID.Bytes()
@@ -258,10 +282,12 @@ func (b *CoreSessionBridge) SendDatagram(payload []byte) error {
 	if err != nil {
 		return err
 	}
+
 	if b.packetConn != nil && b.remoteAddr != nil {
 		_, err = b.packetConn.WriteTo(pkt, b.remoteAddr)
 		return err
 	}
+
 	return nil
 }
 

@@ -136,7 +136,11 @@ func TestServer_RFC9113_StreamID_Monotonicity(t *testing.T) {
 		coreh2.ReleaseFrameHeader(respFr)
 	}
 
-	assert.True(t, gotProtocolError, "expected GOAWAY(PROTOCOL_ERROR) when opening lower stream ID 3 after 5 (RFC 9113 §5.1.1)")
+	assert.True(
+		t,
+		gotProtocolError,
+		"expected GOAWAY(PROTOCOL_ERROR) when opening lower stream ID 3 after 5 (RFC 9113 §5.1.1)",
+	)
 }
 
 // TestServer_RFC9113_Continuation_Interleaving verifies RFC 9113 §6.2 & §6.10:
@@ -200,7 +204,11 @@ func TestServer_RFC9113_Continuation_Interleaving(t *testing.T) {
 		coreh2.ReleaseFrameHeader(respFr)
 	}
 
-	assert.True(t, gotProtocolError, "expected GOAWAY(PROTOCOL_ERROR) when frame is interleaved during header block (RFC 9113 §6.2)")
+	assert.True(
+		t,
+		gotProtocolError,
+		"expected GOAWAY(PROTOCOL_ERROR) when frame is interleaved during header block (RFC 9113 §6.2)",
+	)
 }
 
 // TestServer_RFC9113_HalfClosedRemote_DataRejected verifies RFC 9113 §5.1:
@@ -287,6 +295,10 @@ func TestServer_RFC9113_HalfClosedRemote_DataRejected(t *testing.T) {
 		coreh2.ReleaseFrameHeader(respFr)
 	}
 
-	assert.True(t, gotStreamClosed, "expected RST_STREAM(STREAM_CLOSED) for extra DATA on half-closed stream (RFC 9113 §5.1)")
+	assert.True(
+		t,
+		gotStreamClosed,
+		"expected RST_STREAM(STREAM_CLOSED) for extra DATA on half-closed stream (RFC 9113 §5.1)",
+	)
 	assert.Equal(t, int32(1), handlerInvocations.Load(), "handler must not be invoked more than once for the stream")
 }

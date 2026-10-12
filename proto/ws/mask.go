@@ -41,27 +41,33 @@ func MaskWithOffset(payload []byte, key [4]byte, offset int) {
 		for i := 0; i < n; i++ {
 			payload[i] ^= key[(off+i)&3]
 		}
+
 		return
 	}
 
 	// Align to 8-byte pointer boundary for peak hardware throughput.
 	ptr := uintptr(unsafe.Pointer(&payload[0]))
+
 	misalign := int(ptr & 7)
 	if misalign != 0 {
 		prefix := 8 - misalign
 		if prefix > n {
 			prefix = n
 		}
+
 		for i := 0; i < prefix; i++ {
 			payload[i] ^= key[(off+i)&3]
 		}
+
 		payload = payload[prefix:]
 		off = (off + prefix) & 3
+
 		n = len(payload)
 		if n < 8 {
 			for i := 0; i < n; i++ {
 				payload[i] ^= key[(off+i)&3]
 			}
+
 			return
 		}
 	}
@@ -107,6 +113,7 @@ func MaskWithOffset(payload []byte, key [4]byte, offset int) {
 		} else {
 			*(*uint32)(unsafe.Pointer(&payload[0])) ^= uint32(k64 >> 32)
 		}
+
 		payload = payload[4:]
 	}
 

@@ -111,6 +111,7 @@ func DeriveTrafficKeys(secret []byte, suite uint16, v Version) (*TrafficKeys, er
 
 	keyLabel := labelKeyV1
 	ivLabel := labelIVV1
+
 	hpLabel := labelHPV1
 	if v == Version2 {
 		keyLabel = labelKeyV2
@@ -139,7 +140,9 @@ func CreateAEAD(key []byte, suite uint16) (cipher.AEAD, error) {
 		if err != nil {
 			return nil, fmt.Errorf("quic: failed to create AES block cipher: %w", err)
 		}
+
 		return cipher.NewGCM(block)
+
 	case tls.TLS_CHACHA20_POLY1305_SHA256:
 		return chacha20poly1305.New(key)
 	default:

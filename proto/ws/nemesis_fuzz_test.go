@@ -15,13 +15,14 @@ import (
 
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
+
 	"github.com/lemon4ksan/mach/proto/ws"
 )
 
 // tcpPair establishes a bidirectional loopback TCP socket connection pair.
 // Unlike unbuffered net.Pipe(), real TCP sockets provide kernel buffering and
 // accurately model real-world full-duplex WebSocket network transport.
-func tcpPair(t *testing.T) (client net.Conn, server net.Conn) {
+func tcpPair(t *testing.T) (client, server net.Conn) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -188,7 +189,11 @@ func TestNemesis_ControlFrame_Fragmented_Rejected(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := ws.ParseHeader(tc.header)
-			assert.True(t, errors.Is(err, ws.ErrControlFrameFragmented), "ParseHeader must reject control frame without FIN")
+			assert.True(
+				t,
+				errors.Is(err, ws.ErrControlFrameFragmented),
+				"ParseHeader must reject control frame without FIN",
+			)
 
 			clientConnRaw, serverConnRaw := tcpPair(t)
 			clientConn := ws.NewClientConn(clientConnRaw)
@@ -208,7 +213,11 @@ func TestNemesis_ControlFrame_Fragmented_Rejected(t *testing.T) {
 			_, _, err = clientConn.ReadMessage()
 			wg.Wait()
 			require.Error(t, err, "ReadMessage must reject fragmented control frame")
-			assert.True(t, errors.Is(err, ws.ErrControlFrameFragmented) || errors.Is(err, ws.ErrProtocolViolation), "expected error")
+			assert.True(
+				t,
+				errors.Is(err, ws.ErrControlFrameFragmented) || errors.Is(err, ws.ErrProtocolViolation),
+				"expected error",
+			)
 		})
 	}
 }
@@ -358,7 +367,11 @@ func TestNemesis_ContinuationWithoutStart_Rejected(t *testing.T) {
 	_, _, err := clientConn.ReadMessage()
 	wg.Wait()
 	require.Error(t, err, "continuation frame without starting frame must be rejected")
-	assert.True(t, errors.Is(err, ws.ErrUnexpectedContinuation) || errors.Is(err, ws.ErrProtocolViolation), "expected error")
+	assert.True(
+		t,
+		errors.Is(err, ws.ErrUnexpectedContinuation) || errors.Is(err, ws.ErrProtocolViolation),
+		"expected error",
+	)
 }
 
 // TestNemesis_NewDataFrameBeforeCompletion_Rejected verifies that receiving a new
@@ -392,7 +405,11 @@ func TestNemesis_NewDataFrameBeforeCompletion_Rejected(t *testing.T) {
 	_, _, err := clientConn.ReadMessage()
 	wg.Wait()
 	require.Error(t, err, "new data frame before completion of fragmented message must be rejected")
-	assert.True(t, errors.Is(err, ws.ErrExpectedContinuation) || errors.Is(err, ws.ErrProtocolViolation), "expected error")
+	assert.True(
+		t,
+		errors.Is(err, ws.ErrExpectedContinuation) || errors.Is(err, ws.ErrProtocolViolation),
+		"expected error",
+	)
 }
 
 // ============================================================================
@@ -406,10 +423,10 @@ func TestNemesis_InvalidUTF8_TextFrame_Rejected(t *testing.T) {
 	t.Parallel()
 
 	invalidSequences := [][]byte{
-		{0xFF, 0xFE},                   // Invalid UTF-8 BOM/surrogate
-		{0xC0, 0x80},                   // Overlong NUL
-		{0xED, 0xA0, 0x80},             // UTF-16 surrogate half (U+D800)
-		{0xF4, 0x90, 0x80, 0x80},       // Beyond Unicode max (U+110000)
+		{0xFF, 0xFE},                    // Invalid UTF-8 BOM/surrogate
+		{0xC0, 0x80},                    // Overlong NUL
+		{0xED, 0xA0, 0x80},              // UTF-16 surrogate half (U+D800)
+		{0xF4, 0x90, 0x80, 0x80},        // Beyond Unicode max (U+110000)
 		{'t', 'e', 'x', 't', 0x80, 'a'}, // Stray continuation byte
 	}
 
@@ -512,14 +529,14 @@ func TestNemesis_InvalidCloseCodes_Rejected(t *testing.T) {
 	t.Parallel()
 
 	forbiddenCodes := []uint16{
-		0, 1, 999,        // 0-999: Not used
+		0, 1, 999, // 0-999: Not used
 		1004,             // Reserved
 		1005,             // No Status Received (forbidden on wire)
 		1006,             // Abnormal Closure (forbidden on wire)
 		1014,             // Bad Gateway (forbidden on wire in RFC 6455)
 		1015,             // TLS Handshake (forbidden on wire)
 		1016, 2000, 2999, // 1016-2999: Unassigned protocol reserved
-		5000, 6000, 65535,// >= 5000: Out of range
+		5000, 6000, 65535, // >= 5000: Out of range
 	}
 
 	for _, code := range forbiddenCodes {
@@ -552,7 +569,11 @@ func TestNemesis_InvalidCloseCodes_Rejected(t *testing.T) {
 		_ = clientConn.Close()
 
 		require.Error(t, err, fmt.Sprintf("connection must fail on forbidden close code %d", code))
-		assert.True(t, errors.Is(err, ws.ErrInvalidCloseCode) || errors.Is(err, ws.ErrProtocolViolation), "expected error")
+		assert.True(
+			t,
+			errors.Is(err, ws.ErrInvalidCloseCode) || errors.Is(err, ws.ErrProtocolViolation),
+			"expected error",
+		)
 	}
 }
 
@@ -564,7 +585,11 @@ func TestNemesis_OneByteClosePayload_Rejected(t *testing.T) {
 	oneBytePayload := []byte{0x03}
 	_, _, err := ws.ParseClosePayload(oneBytePayload)
 	require.Error(t, err, "1-byte close payload must be rejected")
-	assert.True(t, errors.Is(err, ws.ErrInvalidClosePayload) || errors.Is(err, ws.ErrProtocolViolation), "expected error")
+	assert.True(
+		t,
+		errors.Is(err, ws.ErrInvalidClosePayload) || errors.Is(err, ws.ErrProtocolViolation),
+		"expected error",
+	)
 }
 
 // ============================================================================
@@ -596,7 +621,12 @@ func TestNemesis_NonMinimalLengthEncoding_Rejected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := ws.ParseHeader(tc.header)
 			require.Error(t, err, "ParseHeader must reject non-minimal length encoding")
-			assert.True(t, errors.Is(err, ws.ErrInvalidLength) || errors.Is(err, ws.ErrPayloadTooLarge) || errors.Is(err, ws.ErrProtocolViolation), "expected error")
+			assert.True(
+				t,
+				errors.Is(err, ws.ErrInvalidLength) || errors.Is(err, ws.ErrPayloadTooLarge) ||
+					errors.Is(err, ws.ErrProtocolViolation),
+				"expected error",
+			)
 		})
 	}
 }
@@ -622,7 +652,7 @@ func TestNemesis_MemoryExhaustion_DoS_Defense(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		rawHeader := make([]byte, 14)
-		rawHeader[0] = 0x82 // Binary, FIN=1
+		rawHeader[0] = 0x82       // Binary, FIN=1
 		rawHeader[1] = 0x80 | 127 // Masked=1, len=127 (64-bit)
 		binary.BigEndian.PutUint64(rawHeader[2:10], 2_000_000_000)
 		_, _ = clientConnRaw.Write(rawHeader)
@@ -729,7 +759,12 @@ func TestNemesis_Chromium_InterleavedPingPong_FragmentedText(t *testing.T) {
 	wg.Wait()
 	require.NoError(t, err)
 	assert.Equal(t, ws.OpcodeText, op)
-	assert.Equal(t, "part1_part2", string(msg), "fragmented message must be correctly assembled despite interleaved Ping")
+	assert.Equal(
+		t,
+		"part1_part2",
+		string(msg),
+		"fragmented message must be correctly assembled despite interleaved Ping",
+	)
 
 	pingMu.Lock()
 	assert.Equal(t, "heartbeat", string(pingPayloadReceived), "interleaved ping must be handled")

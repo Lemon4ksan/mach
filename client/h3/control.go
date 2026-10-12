@@ -10,8 +10,8 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/mach/net/quic"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -144,6 +144,7 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 
 			return
 		}
+
 		if !firstFrame && frameType == coreh3.FrameTypeSettings {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
@@ -152,6 +153,7 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 
 			return
 		}
+
 		firstFrame = false
 
 		switch frameType {
@@ -168,6 +170,7 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 					code = coreh3.ErrCodeH3FrameError
 					msg = "H3_FRAME_ERROR: truncated settings payload (RFC 9114 §7.1)"
 				}
+
 				_ = cc.conn.CloseWithError(
 					quic.ApplicationErrorCode(code),
 					msg,
@@ -209,6 +212,7 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 			}
 
 			lr := io.LimitReader(r, int64(payloadLen)) //nolint:gosec
+
 			vReader := varint.NewReader(lr)
 			if _, err := varint.Read(vReader); err != nil {
 				_ = cc.conn.CloseWithError(
@@ -274,6 +278,7 @@ func (cc *ClientConn) handleGoAway(r varint.Reader, payloadLen uint64) error {
 	}
 
 	lr := io.LimitReader(r, int64(payloadLen)) //nolint:gosec
+
 	vReader := varint.NewReader(lr)
 	if _, err := varint.Read(vReader); err != nil {
 		return err

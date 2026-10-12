@@ -332,8 +332,14 @@ func TestChromium_WebSocketFrame_MaskPayloadAlignment(t *testing.T) {
 				expected := testOutput[frameOffset : frameOffset+avail]
 				actual := scratch[alignment : alignment+avail]
 				if !bytes.Equal(actual, expected) {
-					t.Fatalf("MaskPayloadAlignment mismatch: frameOffset=%d, alignment=%d, chunkSize=%d\ngot:  %x\nwant: %x",
-						frameOffset, alignment, chunkSize, actual, expected)
+					t.Fatalf(
+						"MaskPayloadAlignment mismatch: frameOffset=%d, alignment=%d, chunkSize=%d\ngot:  %x\nwant: %x",
+						frameOffset,
+						alignment,
+						chunkSize,
+						actual,
+						expected,
+					)
 				}
 			}
 		}

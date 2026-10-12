@@ -151,14 +151,18 @@ func TestReproduce_ResetStreamFlowControlViolation(t *testing.T) {
 	select {
 	case <-done:
 		if err == nil {
-			t.Fatal("RFC 9000 §4.5 violation: RESET_STREAM exceeding flow control limits was accepted without FLOW_CONTROL_ERROR!")
+			t.Fatal(
+				"RFC 9000 §4.5 violation: RESET_STREAM exceeding flow control limits was accepted without FLOW_CONTROL_ERROR!",
+			)
 		}
 		var tErr *TransportError
 		if !errors.As(err, &tErr) || tErr.ErrorCode != FlowControlError {
 			t.Fatalf("expected FlowControlError, got %v", err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("RFC 9000 §4.5 violation: HandleResetStreamFrame failed to validate flow control limits and deadlocked!")
+		t.Fatal(
+			"RFC 9000 §4.5 violation: HandleResetStreamFrame failed to validate flow control limits and deadlocked!",
+		)
 	}
 }
 
@@ -189,7 +193,11 @@ func TestReproduce_DecodePacketNumberExceedsMax(t *testing.T) {
 	largestPN := wire.MaxPacketNumber // (1 << 62) - 1
 	pn := wire.DecodePacketNumber(largestPN, 0, 1)
 	if pn > wire.MaxPacketNumber {
-		t.Fatalf("RFC 9000 §17.1 violation: DecodePacketNumber returned %d (exceeds MaxPacketNumber %d)", pn, wire.MaxPacketNumber)
+		t.Fatalf(
+			"RFC 9000 §17.1 violation: DecodePacketNumber returned %d (exceeds MaxPacketNumber %d)",
+			pn,
+			wire.MaxPacketNumber,
+		)
 	}
 }
 
@@ -268,4 +276,3 @@ func TestStress_ConcurrentStreamCreationAndReset(t *testing.T) {
 		t.Fatal("DEADLOCK in concurrent stream creation/reset/close")
 	}
 }
-

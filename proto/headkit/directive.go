@@ -22,6 +22,7 @@ import (
 func Directives[S ~string | ~[]byte](header S) iter.Seq2[S, S] {
 	return parseDirectivesIter(header, ',')
 }
+
 // ParamDirectives yields an iterator traversing semicolon-separated key=value directives (e.g., in Alt-Svc or Content-Type)
 // with zero heap allocations. Supports both [string] and [[]byte].
 func ParamDirectives[S ~string | ~[]byte](header S) iter.Seq2[S, S] {
@@ -100,8 +101,10 @@ func trimLeftDirectives[S ~string | ~[]byte](s S, delim byte) S {
 			start++
 			continue
 		}
+
 		break
 	}
+
 	return s[start:]
 }
 
@@ -113,8 +116,10 @@ func trimSpaceDirectives[S ~string | ~[]byte](s S) S {
 			start++
 			continue
 		}
+
 		break
 	}
+
 	end := len(s)
 	for end > start {
 		c := s[end-1]
@@ -122,8 +127,10 @@ func trimSpaceDirectives[S ~string | ~[]byte](s S) S {
 			end--
 			continue
 		}
+
 		break
 	}
+
 	return s[start:end]
 }
 
@@ -133,6 +140,7 @@ func cutDirectives[S ~string | ~[]byte](s S, sep byte) (before, after S, found b
 			return s[:i], s[i+1:], true
 		}
 	}
+
 	return s, s[:0], false
 }
 
@@ -150,6 +158,7 @@ func toLowerDirectives[S ~string | ~[]byte](s S) S {
 			}
 		}
 	}
+
 	return s
 }
 

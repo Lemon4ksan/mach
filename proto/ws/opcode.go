@@ -258,6 +258,6 @@ func (e *CloseError) Error() string {
 	if e.Reason != "" {
 		return fmt.Sprintf("ws: close %d: %s", e.Code, e.Reason)
 	}
+
 	return fmt.Sprintf("ws: close %d", e.Code)
 }
-

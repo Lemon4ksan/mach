@@ -62,7 +62,8 @@ func TestFrameSerialization_Ack(t *testing.T) {
 	if n != len(buf) || f.Type != FrameTypeAck {
 		t.Fatalf("ACK mismatch: n=%d, type=%s", n, f.Type)
 	}
-	if f.Ack.LargestAcked != 1000 || f.Ack.AckDelay != 25 || f.Ack.FirstAckRange != 5 || f.Ack.RangeCount() != 0 || f.Ack.HasECN {
+	if f.Ack.LargestAcked != 1000 || f.Ack.AckDelay != 25 || f.Ack.FirstAckRange != 5 || f.Ack.RangeCount() != 0 ||
+		f.Ack.HasECN {
 		t.Fatalf("ACK field mismatch: %+v", f.Ack)
 	}
 
@@ -90,7 +91,8 @@ func TestFrameSerialization_Ack(t *testing.T) {
 	if n != len(buf) || f.Type != FrameTypeAckECN {
 		t.Fatalf("ACK_ECN mismatch: n=%d, type=%s", n, f.Type)
 	}
-	if f.Ack.LargestAcked != a2.LargestAcked || f.Ack.AckDelay != a2.AckDelay || f.Ack.FirstAckRange != a2.FirstAckRange {
+	if f.Ack.LargestAcked != a2.LargestAcked || f.Ack.AckDelay != a2.AckDelay ||
+		f.Ack.FirstAckRange != a2.FirstAckRange {
 		t.Fatalf("ACK header mismatch: %+v", f.Ack)
 	}
 	if f.Ack.RangeCount() != 12 {
@@ -201,8 +203,16 @@ func TestFrameSerialization_Stream(t *testing.T) {
 					t.Fatalf("STREAM length consumed mismatch: got %d, want %d", n, len(buf))
 				}
 				s := f.Stream
-				if s.StreamID != orig.StreamID || s.Offset != orig.Offset || s.Fin != orig.Fin || !bytes.Equal(s.Data, orig.Data) {
-					t.Fatalf("STREAM content mismatch (off=%d, fin=%v, hasLen=%v): got %+v, want %+v", off, fin, hasLen, s, orig)
+				if s.StreamID != orig.StreamID || s.Offset != orig.Offset || s.Fin != orig.Fin ||
+					!bytes.Equal(s.Data, orig.Data) {
+					t.Fatalf(
+						"STREAM content mismatch (off=%d, fin=%v, hasLen=%v): got %+v, want %+v",
+						off,
+						fin,
+						hasLen,
+						s,
+						orig,
+					)
 				}
 			}
 		}
@@ -293,10 +303,27 @@ func TestFrameSerialization_StreamsBlocked(t *testing.T) {
 
 func TestFrameSerialization_NewConnectionID(t *testing.T) {
 	orig := NewConnectionIDFrame{
-		SequenceNumber:      1,
-		RetirePriorTo:       0,
-		ConnID:              []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
-		StatelessResetToken: [16]byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22, 0x33, 0x44, 0x55, 0x65, 0x77, 0x88, 0x99, 0x00},
+		SequenceNumber: 1,
+		RetirePriorTo:  0,
+		ConnID:         []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+		StatelessResetToken: [16]byte{
+			0xaa,
+			0xbb,
+			0xcc,
+			0xdd,
+			0xee,
+			0xff,
+			0x11,
+			0x22,
+			0x33,
+			0x44,
+			0x55,
+			0x65,
+			0x77,
+			0x88,
+			0x99,
+			0x00,
+		},
 	}
 	buf := AppendNewConnectionIDFrame(nil, &orig)
 	var f Frame
@@ -388,7 +415,8 @@ func TestFrameSerialization_ConnectionClose(t *testing.T) {
 	if n != len(buf) || f.Type != FrameTypeConnectionCloseApp {
 		t.Fatalf("CONNECTION_CLOSE app mismatch")
 	}
-	if !f.ConnectionClose.IsApplication || f.ConnectionClose.ErrorCode != c2.ErrorCode || !bytes.Equal(f.ConnectionClose.Reason, c2.Reason) {
+	if !f.ConnectionClose.IsApplication || f.ConnectionClose.ErrorCode != c2.ErrorCode ||
+		!bytes.Equal(f.ConnectionClose.Reason, c2.Reason) {
 		t.Fatalf("CONNECTION_CLOSE app fields mismatch: %+v", f.ConnectionClose)
 	}
 }

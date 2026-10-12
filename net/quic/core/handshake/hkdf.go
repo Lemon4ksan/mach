@@ -17,6 +17,7 @@ func HKDFExtract(hash crypto.Hash, secret, salt []byte) []byte {
 	if err != nil {
 		panic(fmt.Errorf("quic: HKDF-Extract failed: %w", err))
 	}
+
 	return prk
 }
 
@@ -40,5 +41,6 @@ func HKDFExpandLabel(hash crypto.Hash, secret, context []byte, label string, len
 	if err != nil {
 		panic(fmt.Errorf("quic: HKDF-Expand-Label failed: %w", err))
 	}
+
 	return expanded
 }

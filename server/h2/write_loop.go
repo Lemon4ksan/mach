@@ -23,16 +23,19 @@ func (sc *ServerConn) writeHeaders(streamID uint32, statusCode int, headers http
 	sc.encMu.Unlock()
 
 	hdrFr.SetStream(streamID)
+
 	flags := coreh2.FlagEndHeaders
 	if endStream {
 		flags |= coreh2.FlagEndStream
 	}
+
 	hdrFr.SetFlags(flags)
 	hdrFr.SetBody(hFrame)
 
 	if _, err := hdrFr.WriteTo(sc.bw); err != nil {
 		return err
 	}
+
 	return sc.bw.Flush()
 }
 
@@ -56,11 +59,14 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 			dataFr.SetBody(dFrame)
 			_, err := dataFr.WriteTo(sc.bw)
 			coreh2.ReleaseFrameHeader(dataFr)
+
 			if err != nil {
 				return 0, err
 			}
+
 			return 0, sc.bw.Flush()
 		}
+
 		return 0, nil
 	}
 
@@ -73,13 +79,16 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 		dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
 		dFrame.SetData(chunk)
 		dataFr.SetStream(streamID)
+
 		if endStream && len(body) == 0 {
 			dataFr.SetFlags(coreh2.FlagEndStream)
 		}
+
 		dataFr.SetBody(dFrame)
 
 		_, err := dataFr.WriteTo(sc.bw)
 		coreh2.ReleaseFrameHeader(dataFr)
+
 		if err != nil {
 			return 0, err
 		}

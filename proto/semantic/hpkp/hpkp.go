@@ -117,6 +117,7 @@ func (p Pin) AppendFormat(dst []byte) []byte {
 	dst = append(dst, '=', '"')
 	dst = append(dst, p.Fingerprint...)
 	dst = append(dst, '"')
+
 	return dst
 }
 
@@ -188,6 +189,7 @@ func (p *Policy) AppendFormat(dst []byte) []byte {
 		if !first {
 			dst = append(dst, ';', ' ')
 		}
+
 		dst = pin.AppendFormat(dst)
 		first = false
 	}
@@ -196,6 +198,7 @@ func (p *Policy) AppendFormat(dst []byte) []byte {
 		if !first {
 			dst = append(dst, ';', ' ')
 		}
+
 		dst = append(dst, DirectiveIncludeSubDomains...)
 		first = false
 	}
@@ -204,6 +207,7 @@ func (p *Policy) AppendFormat(dst []byte) []byte {
 		if !first {
 			dst = append(dst, ';', ' ')
 		}
+
 		dst = append(dst, DirectiveReportURI...)
 		dst = append(dst, '=', '"')
 		dst = append(dst, p.ReportURI...)
@@ -341,19 +345,23 @@ func (p *Policy) ValidateNotingCriteria(chain []*x509.Certificate) error {
 }
 
 // AppendSPKIFingerprint calculates the Base64 SHA-256 fingerprint directly from raw DER-encoded SPKI bytes and appends to dst.
-func AppendSPKIFingerprint(dst []byte, rawSPKI []byte) []byte {
+func AppendSPKIFingerprint(dst, rawSPKI []byte) []byte {
 	if len(rawSPKI) == 0 {
 		return dst
 	}
+
 	hash := sha256.Sum256(rawSPKI)
 	encLen := base64.StdEncoding.EncodedLen(len(hash))
+
 	start := len(dst)
 	if cap(dst)-start >= encLen {
 		dst = dst[:start+encLen]
 	} else {
 		dst = append(dst, make([]byte, encLen)...)
 	}
+
 	base64.StdEncoding.Encode(dst[start:], hash[:])
+
 	return dst
 }
 
@@ -393,6 +401,7 @@ func ComputeSPKIFingerprintFromSPKI(rawSPKI []byte) string {
 	}
 
 	var buf [64]byte
+
 	return bytesconv.B2S(AppendSPKIFingerprint(buf[:0], rawSPKI))
 }
 
@@ -416,6 +425,7 @@ func ParseHeader[S ~string | ~[]byte](headerVal S) (*Policy, error) {
 
 	for len(headerValue) > 0 {
 		var rawDir string
+
 		semiIdx := strings.IndexByte(headerValue, ';')
 		if semiIdx >= 0 {
 			rawDir = headerValue[:semiIdx]
@@ -438,6 +448,7 @@ func ParseHeader[S ~string | ~[]byte](headerVal S) (*Policy, error) {
 			if strings.EqualFold(key, DirectiveIncludeSubDomains) {
 				policy.IncludeSubDomains = true
 			}
+
 			continue
 		}
 
@@ -499,6 +510,7 @@ func FromHeader(header http.Header) (*Policy, error) {
 			p.ReportOnly = false
 			return p, nil
 		}
+
 		return nil, err
 	}
 
@@ -508,6 +520,7 @@ func FromHeader(header http.Header) (*Policy, error) {
 			p.ReportOnly = true
 			return p, nil
 		}
+
 		return nil, err
 	}
 

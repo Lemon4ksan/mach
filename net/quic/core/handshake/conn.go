@@ -85,6 +85,7 @@ func NewClientHandshake(cfg *Config) (*HandshakeDriver, error) {
 	if cfg == nil || cfg.TLSConfig == nil {
 		return nil, errors.New("quic: TLSConfig must not be nil for client")
 	}
+
 	tlsConf := cfg.TLSConfig.Clone()
 	tlsConf.MinVersion = tls.VersionTLS13
 
@@ -104,6 +105,7 @@ func NewClientHandshake(cfg *Config) (*HandshakeDriver, error) {
 	}
 
 	quicConn := tls.QUICClient(quicCfg)
+
 	return newHandshakeDriver(quicConn, tlsConf, cfg, PerspectiveClient)
 }
 
@@ -112,6 +114,7 @@ func NewServerHandshake(cfg *Config) (*HandshakeDriver, error) {
 	if cfg == nil || cfg.TLSConfig == nil {
 		return nil, errors.New("quic: TLSConfig must not be nil for server")
 	}
+
 	tlsConf := cfg.TLSConfig.Clone()
 	tlsConf.MinVersion = tls.VersionTLS13
 
@@ -130,10 +133,16 @@ func NewServerHandshake(cfg *Config) (*HandshakeDriver, error) {
 	}
 
 	quicConn := tls.QUICServer(quicCfg)
+
 	return newHandshakeDriver(quicConn, tlsConf, cfg, PerspectiveServer)
 }
 
-func newHandshakeDriver(quicConn *tls.QUICConn, tlsConf *tls.Config, cfg *Config, pers Perspective) (*HandshakeDriver, error) {
+func newHandshakeDriver(
+	quicConn *tls.QUICConn,
+	tlsConf *tls.Config,
+	cfg *Config,
+	pers Perspective,
+) (*HandshakeDriver, error) {
 	v := cfg.Version
 	if v == 0 {
 		v = Version1
@@ -148,6 +157,7 @@ func newHandshakeDriver(quicConn *tls.QUICConn, tlsConf *tls.Config, cfg *Config
 			salt = SaltV1
 		}
 	}
+
 	initKeys := NewInitialKeysWithSalt(cfg.DestConnID.Bytes(), salt, v)
 
 	d := &HandshakeDriver{
@@ -205,6 +215,7 @@ func (d *HandshakeDriver) HandleCryptoData(level EncryptionLevel, data []byte) e
 	if d.closed {
 		return errors.New("quic: handshake driver is closed")
 	}
+
 	if d.err != nil {
 		return d.err
 	}
@@ -230,6 +241,7 @@ func (d *HandshakeDriver) processEventsLocked() error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -247,11 +259,13 @@ func (d *HandshakeDriver) handleEventLocked(ev tls.QUICEvent) error {
 		if err != nil {
 			return fmt.Errorf("quic: failed to derive read traffic keys at %s: %w", level, err)
 		}
+
 		d.readKeys[level] = tKeys
 
 		if d.onReadSecret != nil {
 			d.onReadSecret(level, secret, ev.Suite)
 		}
+
 		return nil
 
 	case tls.QUICSetWriteSecret:
@@ -263,17 +277,20 @@ func (d *HandshakeDriver) handleEventLocked(ev tls.QUICEvent) error {
 		if err != nil {
 			return fmt.Errorf("quic: failed to derive write traffic keys at %s: %w", level, err)
 		}
+
 		d.writeKeys[level] = tKeys
 
 		if d.onWriteSecret != nil {
 			d.onWriteSecret(level, secret, ev.Suite)
 		}
+
 		return nil
 
 	case tls.QUICWriteData:
 		level := FromTLSEncryptionLevel(ev.Level)
 		// Important: ev.Data is owned by crypto/tls and overwritten on subsequent NextEvent calls.
 		d.outgoingCrypto[level] = append(d.outgoingCrypto[level], ev.Data...)
+
 		return nil
 
 	case tls.QUICTransportParameters:
@@ -281,10 +298,12 @@ func (d *HandshakeDriver) handleEventLocked(ev tls.QUICEvent) error {
 		if err := tp.Unmarshal(ev.Data, d.perspective.Opposite()); err != nil {
 			return fmt.Errorf("quic: failed to unmarshal peer transport parameters: %w", err)
 		}
+
 		d.peerParams = &tp
 		if d.onPeerTransportParams != nil {
 			d.onPeerTransportParams(&tp)
 		}
+
 		return nil
 
 	case tls.QUICTransportParametersRequired:
@@ -297,6 +316,7 @@ func (d *HandshakeDriver) handleEventLocked(ev tls.QUICEvent) error {
 		if d.onHandshakeDone != nil {
 			d.onHandshakeDone()
 		}
+
 		return nil
 
 	case tls.QUICRejectedEarlyData:
@@ -304,6 +324,7 @@ func (d *HandshakeDriver) handleEventLocked(ev tls.QUICEvent) error {
 		if d.onEarlyDataRejected != nil {
 			d.onEarlyDataRejected()
 		}
+
 		return nil
 
 	case tls.QUICResumeSession:
@@ -314,6 +335,7 @@ func (d *HandshakeDriver) handleEventLocked(ev tls.QUICEvent) error {
 		if d.perspective == PerspectiveClient && ev.SessionState != nil {
 			_ = d.quicConn.StoreSession(ev.SessionState)
 		}
+
 		return nil
 
 	case tls.QUICErrorEvent:
@@ -339,6 +361,7 @@ func (d *HandshakeDriver) DrainCryptoData(level EncryptionLevel) []byte {
 
 	data := d.outgoingCrypto[level]
 	d.outgoingCrypto[level] = nil
+
 	return data
 }
 
@@ -420,6 +443,8 @@ func (d *HandshakeDriver) Close() error {
 	if d.closed {
 		return nil
 	}
+
 	d.closed = true
+
 	return d.quicConn.Close()
 }

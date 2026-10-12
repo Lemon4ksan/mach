@@ -12,8 +12,8 @@ import (
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
-	"github.com/lemon4ksan/mach/net/quic"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -121,6 +121,7 @@ func (cc *ClientConn) readResponseFrom(
 				trailers, err = cc.qpack.DecodeResponseTrailers(streamID, headerBlock)
 			} else {
 				var statusCode int
+
 				statusCode, err = cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
 				if err == nil && (statusCode < 100 || statusCode >= 200 || statusCode == 101) {
 					headersParsed = true

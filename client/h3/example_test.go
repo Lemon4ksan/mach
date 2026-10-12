@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/lemon4ksan/mach/net/quic"
-
 	"github.com/lemon4ksan/mach/client/h3"
+	"github.com/lemon4ksan/mach/net/quic"
 	"github.com/lemon4ksan/mach/proto/http"
 )
 

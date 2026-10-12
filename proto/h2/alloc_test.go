@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/testing/assert"
+
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
 
@@ -17,7 +18,13 @@ func TestAllocations(t *testing.T) {
 
 	t.Run("PackUnpackFrameHeader", func(t *testing.T) {
 		allocs := testing.AllocsPerRun(1000, func() {
-			coreh2.PackFrameHeader(rawHeader[:], 128, coreh2.FrameHeaders, coreh2.FlagEndHeaders|coreh2.FlagEndStream, 42)
+			coreh2.PackFrameHeader(
+				rawHeader[:],
+				128,
+				coreh2.FrameHeaders,
+				coreh2.FlagEndHeaders|coreh2.FlagEndStream,
+				42,
+			)
 			l, kind, flags, stream := coreh2.UnpackFrameHeader(rawHeader[:])
 			if l != 128 || kind != coreh2.FrameHeaders || stream != 42 || !flags.Has(coreh2.FlagEndHeaders) {
 				t.Fatal("mismatch")

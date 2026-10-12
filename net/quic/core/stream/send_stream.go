@@ -89,6 +89,7 @@ func NewSendStream(
 		dataAvailableCh: make(chan struct{}, 1),
 		wakeWaitersCh:   make(chan struct{}),
 	}
+
 	return s
 }
 
@@ -131,6 +132,7 @@ func (s *SendStream) SetWriteDeadline(t time.Time) error {
 			close(s.deadlineCh)
 		}
 	}
+
 	s.deadlineCh = make(chan struct{})
 
 	if !t.IsZero() {
@@ -142,6 +144,7 @@ func (s *SendStream) SetWriteDeadline(t time.Time) error {
 			s.deadlineTimer = time.AfterFunc(dur, func() {
 				s.mu.Lock()
 				defer s.mu.Unlock()
+
 				select {
 				case <-ch:
 				default:
@@ -150,6 +153,7 @@ func (s *SendStream) SetWriteDeadline(t time.Time) error {
 			})
 		}
 	}
+
 	return nil
 }
 
@@ -176,18 +180,22 @@ func (s *SendStream) WriteWithLimit(p []byte, limiter func(maxBytes int) int) (i
 			s.mu.Unlock()
 			return totalWritten, s.resetErr
 		}
+
 		if s.shutdownErr != nil {
 			s.mu.Unlock()
 			return totalWritten, s.shutdownErr
 		}
+
 		if s.state == SendStateDataSent || s.state == SendStateDataRecvd {
 			s.mu.Unlock()
 			return totalWritten, ErrStreamClosed
 		}
+
 		if !s.writeDeadline.IsZero() && time.Now().After(s.writeDeadline) {
 			s.mu.Unlock()
 			return totalWritten, ErrDeadline
 		}
+
 		select {
 		case <-s.ctx.Done():
 			s.mu.Unlock()
@@ -207,15 +215,18 @@ func (s *SendStream) WriteWithLimit(p []byte, limiter func(maxBytes int) int) (i
 			if streamCredit <= connCredit {
 				s.flowController.CheckAndQueueStreamDataBlocked()
 			}
+
 			if s.flowController.connection != nil && connCredit <= streamCredit {
 				s.flowController.connection.CheckAndQueueDataBlocked()
 			}
+
 			if s.sender != nil {
 				s.sender.OnHasStreamControlFrame(s.streamID)
 			}
 
 			// Block until credit arrives or deadline/context expires.
 			streamWaiter := s.flowController.RegisterSendWaiter()
+
 			var connWaiter <-chan struct{}
 			if s.flowController.connection != nil {
 				connWaiter = s.flowController.connection.RegisterSendWaiter()
@@ -242,6 +253,7 @@ func (s *SendStream) WriteWithLimit(p []byte, limiter func(maxBytes int) int) (i
 			if lim < 0 {
 				lim = 0
 			}
+
 			if lim < int(chunkLen) {
 				chunkLen = uint64(lim)
 			}
@@ -259,6 +271,7 @@ func (s *SendStream) WriteWithLimit(p []byte, limiter func(maxBytes int) int) (i
 		if s.state == SendStateReady {
 			s.state = SendStateSend
 		}
+
 		s.mu.Unlock()
 
 		totalWritten += int(chunkLen)
@@ -288,9 +301,11 @@ func (s *SendStream) TryWriteAll(p []byte) error {
 	if s.resetErr != nil {
 		return s.resetErr
 	}
+
 	if s.shutdownErr != nil {
 		return s.shutdownErr
 	}
+
 	if s.state == SendStateDataSent || s.state == SendStateDataRecvd {
 		return ErrStreamClosed
 	}
@@ -311,6 +326,7 @@ func (s *SendStream) TryWriteAll(p []byte) error {
 	if s.sender != nil {
 		s.sender.OnHasStreamData(s.streamID)
 	}
+
 	return nil
 }
 
@@ -324,6 +340,7 @@ func (s *SendStream) Close() error {
 		s.mu.Unlock()
 		return s.resetErr
 	}
+
 	if s.state == SendStateDataSent || s.state == SendStateDataRecvd {
 		s.mu.Unlock()
 		return nil
@@ -338,6 +355,7 @@ func (s *SendStream) Close() error {
 	if s.sender != nil {
 		s.sender.OnHasStreamData(s.streamID)
 	}
+
 	return nil
 }
 
@@ -364,6 +382,7 @@ func (s *SendStream) CancelWrite(code StreamErrorCode) {
 		unsent := s.writeOffset - s.sentOffset
 		s.flowController.ReclaimBytesSent(unsent)
 	}
+
 	s.writeBuffer = nil
 
 	s.resetErr = &StreamError{
@@ -401,6 +420,7 @@ func (s *SendStream) HandleStopSending(code StreamErrorCode) {
 		unsent := s.writeOffset - s.sentOffset
 		s.flowController.ReclaimBytesSent(unsent)
 	}
+
 	s.writeBuffer = nil
 
 	s.resetErr = &StreamError{
@@ -432,7 +452,7 @@ func (s *SendStream) broadcastWakeWaiters() {
 }
 
 // PopStreamFrame extracts queued bytes up to maxBytes into a STREAM frame payload.
-func (s *SendStream) PopStreamFrame(maxBytes int) (data []byte, offset uint64, fin bool, ok bool) {
+func (s *SendStream) PopStreamFrame(maxBytes int) (data []byte, offset uint64, fin, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -450,10 +470,12 @@ func (s *SendStream) PopStreamFrame(maxBytes int) (data []byte, offset uint64, f
 
 	if take > 0 {
 		data = append([]byte(nil), s.writeBuffer[:take]...)
+
 		s.writeBuffer = s.writeBuffer[take:]
 		if len(s.writeBuffer) == 0 {
 			s.writeBuffer = s.writeBuffer[:0]
 		}
+
 		s.sentOffset += uint64(take)
 	}
 
@@ -469,15 +491,19 @@ func (s *SendStream) PopStreamFrame(maxBytes int) (data []byte, offset uint64, f
 // HandleAck processes an acknowledgment for transmitted data or FIN.
 func (s *SendStream) HandleAck(allDataAcked bool) {
 	s.mu.Lock()
-	var completed bool
-	var sender StreamSender
-	var streamID StreamID
+
+	var (
+		completed bool
+		sender    StreamSender
+		streamID  StreamID
+	)
 	if allDataAcked && s.finSent && s.state == SendStateDataSent {
 		s.state = SendStateDataRecvd
 		completed = true
 		sender = s.sender
 		streamID = s.streamID
 	}
+
 	s.mu.Unlock()
 
 	if completed && sender != nil {
@@ -488,15 +514,19 @@ func (s *SendStream) HandleAck(allDataAcked bool) {
 // HandleResetAck acknowledges the RESET_STREAM frame.
 func (s *SendStream) HandleResetAck() {
 	s.mu.Lock()
-	var completed bool
-	var sender StreamSender
-	var streamID StreamID
+
+	var (
+		completed bool
+		sender    StreamSender
+		streamID  StreamID
+	)
 	if s.state == SendStateResetSent {
 		s.state = SendStateResetRecvd
 		completed = true
 		sender = s.sender
 		streamID = s.streamID
 	}
+
 	s.mu.Unlock()
 
 	if completed && sender != nil {
@@ -513,6 +543,7 @@ func (s *SendStream) GetResetStreamFrame() (code StreamErrorCode, finalSize uint
 		s.resetSent = true
 		return s.resetCode, s.resetFinalPos, true
 	}
+
 	return 0, 0, false
 }
 

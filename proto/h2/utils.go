@@ -191,6 +191,7 @@ func ResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
 		if IsConnectionSpecificHeader(k, v) {
 			continue
 		}
+
 		hf.SetBytes(ToLowerCopy(k), v)
 		dst.AppendHeaderField(hp, hf, false)
 	}
@@ -238,19 +239,23 @@ func ValidateHeaderName(k []byte, isPseudo bool) error {
 	if len(k) == 0 {
 		return ProtocolError
 	}
+
 	start := 0
 	if isPseudo {
 		if k[0] != ':' || len(k) == 1 {
 			return ProtocolError
 		}
+
 		start = 1
 	}
+
 	for i := start; i < len(k); i++ {
 		c := k[i]
 		if c <= 0x20 || (c >= 'A' && c <= 'Z') || c >= 0x7f || c == ':' {
 			return ProtocolError
 		}
 	}
+
 	return nil
 }
 
@@ -263,6 +268,7 @@ func ValidateHeaderValue(v []byte) error {
 			return ProtocolError
 		}
 	}
+
 	return nil
 }
 

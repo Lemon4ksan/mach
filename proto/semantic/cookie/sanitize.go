@@ -33,6 +33,7 @@ func InitHeaderValueBytes(bufV, value []byte) []byte {
 func RemoveNewLines(raw []byte) []byte {
 	foundR := bytes.IndexByte(raw, rChar)
 	foundN := bytes.IndexByte(raw, nChar)
+
 	var start int
 
 	switch {

@@ -58,10 +58,12 @@ func trimSpace[S ~string | ~[]byte](s S) S {
 	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n') {
 		start++
 	}
+
 	end := len(s)
 	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\r' || s[end-1] == '\n') {
 		end--
 	}
+
 	return s[start:end]
 }
 
@@ -69,14 +71,17 @@ func hasPrefixFold[S ~string | ~[]byte](s S, prefix string) bool {
 	if len(s) < len(prefix) {
 		return false
 	}
+
 	if s[0] != 'W' && s[0] != 'w' {
 		return false
 	}
+
 	for i := 1; i < len(prefix); i++ {
 		if s[i] != prefix[i] {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -176,4 +181,3 @@ func (a *Automaton) Reconstruct304(key string) *http.Response {
 		ContentLength: int64(len(entry.body)),
 	}
 }
-

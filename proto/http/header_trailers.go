@@ -220,9 +220,11 @@ func parseTrailerHeaders(src []byte, dest *headkit.Headers) (int, error) {
 			if k[len(k)-1] == ' ' || k[len(k)-1] == '\t' {
 				return n, errors.New("http: whitespace before colon in trailer (RFC 9112 §5.1)")
 			}
+
 			if !isValidTrailerKey(k) {
 				return n, errors.New("http: malformed trailer key (RFC 9112 §5.1)")
 			}
+
 			v := bytes.TrimSpace(line[idxColon+1:])
 			dest.Add(string(k), string(v))
 		}
@@ -302,6 +304,7 @@ func copyTrailer(dst, src [][]byte) [][]byte {
 	if cap(dst) < len(src) {
 		dst = make([][]byte, len(src))
 	}
+
 	dst = dst[:len(src)]
 
 	for i := range dst {
@@ -309,6 +312,7 @@ func copyTrailer(dst, src [][]byte) [][]byte {
 		if cap(dst[i]) < l {
 			dst[i] = make([]byte, l)
 		}
+
 		dst[i] = dst[i][:l]
 
 		copy(dst[i], src[i])

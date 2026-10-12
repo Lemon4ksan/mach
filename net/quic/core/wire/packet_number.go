@@ -16,8 +16,9 @@ const (
 
 // DecodePacketNumber reconstructs the full 62-bit packet number from a truncated packet number,
 // the largest packet number successfully authenticated so far, and the packet number length in bytes (RFC 9000 Appendix A).
-func DecodePacketNumber(largestPN uint64, truncatedPN uint64, pnLen int) uint64 {
+func DecodePacketNumber(largestPN, truncatedPN uint64, pnLen int) uint64 {
 	pnNbits := uint(pnLen * 8)
+
 	var expectedPN uint64
 	if largestPN == InvalidPacketNumber {
 		expectedPN = 0
@@ -39,18 +40,20 @@ func DecodePacketNumber(largestPN uint64, truncatedPN uint64, pnLen int) uint64 
 	if candidatePN > MaxPacketNumber {
 		return MaxPacketNumber
 	}
+
 	return candidatePN
 }
 
 // PacketNumberLength returns the minimum packet number length in bytes (1 to 4) required
 // to safely encode pn given the largest acknowledged packet number (RFC 9000 §17.1).
-func PacketNumberLength(pn uint64, largestAcked uint64) int {
+func PacketNumberLength(pn, largestAcked uint64) int {
 	var diff uint64
-	if largestAcked == InvalidPacketNumber {
+	switch {
+	case largestAcked == InvalidPacketNumber:
 		diff = pn + 1
-	} else if pn < largestAcked {
+	case pn < largestAcked:
 		diff = largestAcked - pn
-	} else {
+	default:
 		diff = pn - largestAcked
 	}
 
@@ -69,8 +72,9 @@ func PacketNumberLength(pn uint64, largestAcked uint64) int {
 }
 
 // EncodePacketNumber returns the truncated packet number and required byte length (1-4).
-func EncodePacketNumber(pn uint64, largestAcked uint64) (uint64, int) {
+func EncodePacketNumber(pn, largestAcked uint64) (uint64, int) {
 	pnLen := PacketNumberLength(pn, largestAcked)
+
 	var mask uint64
 	switch pnLen {
 	case 1:
@@ -82,6 +86,7 @@ func EncodePacketNumber(pn uint64, largestAcked uint64) (uint64, int) {
 	default:
 		mask = 0xffffffff
 	}
+
 	return pn & mask, pnLen
 }
 
@@ -103,6 +108,10 @@ func AppendPacketNumber(dst []byte, pn uint64, pnLen int) []byte {
 
 // ReadPacketNumber decodes a truncated packet number of length pnLen bytes from b in network byte order.
 func ReadPacketNumber(b []byte, pnLen int) uint64 {
+	if len(b) < pnLen {
+		panic("wire: buffer too small for packet number")
+	}
+
 	switch pnLen {
 	case 1:
 		return uint64(b[0])

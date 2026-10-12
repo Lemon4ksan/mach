@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/lemon4ksan/foundation/borrow"
-	"github.com/lemon4ksan/seal/codec/compress"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/seal/codec/compress"
 )
 
 type requestBodyWriter struct{ r *Request }
@@ -315,6 +315,7 @@ func (req *Request) BodyUncompressedWithLimit(maxBodySize int) ([]byte, error) {
 		if maxBodySize > 0 && len(body) > maxBodySize {
 			return nil, ErrBodyTooLarge
 		}
+
 		return body, nil
 	}
 

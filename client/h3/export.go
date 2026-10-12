@@ -38,4 +38,3 @@ func NewClientConnWithCodec(codec *QPACKCodec) *ClientConn {
 		qpack: codec,
 	}
 }
-

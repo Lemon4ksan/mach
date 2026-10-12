@@ -15,7 +15,9 @@ import (
 
 var (
 	// ErrWhitespaceBeforeColon is returned when whitespace occurs between header name and colon (RFC 9112 §5.1).
-	ErrWhitespaceBeforeColon = errors.New("headkit: whitespace between header name and colon prohibited (RFC 9112 §5.1)")
+	ErrWhitespaceBeforeColon = errors.New(
+		"headkit: whitespace between header name and colon prohibited (RFC 9112 §5.1)",
+	)
 
 	// ErrDuplicateContentLength is returned when duplicate conflicting Content-Length headers are present (RFC 9112 §6.3).
 	ErrDuplicateContentLength = errors.New("headkit: duplicate conflicting content-length headers (RFC 9112 §6.3)")
@@ -141,6 +143,7 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 						h.err = ErrMalformedHeader
 					}
 				}
+
 				// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
 				// A server MUST reject, with a response status code of 400 (Bad Request),
 				// any received request message that contains whitespace between a header field name and colon.
@@ -174,11 +177,12 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 				// RFC 9112 §2.2: Bare CR check and null byte check
 				for j := keyStart; j < valEnd; j++ {
 					b := block[j]
-					if b == 0 {
+					switch b {
+					case 0:
 						if h.err == nil {
 							h.err = ErrMalformedHeader
 						}
-					} else if b == '\r' {
+					case '\r':
 						if h.err == nil {
 							h.err = ErrBareCR
 						}
@@ -222,6 +226,7 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 					h.err = ErrMalformedHeader
 				}
 			}
+
 			// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
 			if i > keyStart && (block[i-1] == ' ' || block[i-1] == '\t') {
 				if h.err == nil {
@@ -251,11 +256,12 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 
 			for j := keyStart; j < valEnd; j++ {
 				b := block[j]
-				if b == 0 {
+				switch b {
+				case 0:
 					if h.err == nil {
 						h.err = ErrMalformedHeader
 					}
-				} else if b == '\r' {
+				case '\r':
 					if h.err == nil {
 						h.err = ErrBareCR
 					}
@@ -282,13 +288,15 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 		}
 
 		h.addPacked(keyStart, keyEnd, valStart, valEnd)
+
 		for j := keyStart; j < valEnd; j++ {
 			b := block[j]
-			if b == 0 {
+			switch b {
+			case 0:
 				if h.err == nil {
 					h.err = ErrMalformedHeader
 				}
-			} else if b == '\r' {
+			case '\r':
 				if h.err == nil {
 					h.err = ErrBareCR
 				}
@@ -299,6 +307,7 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 		if valEnd > 0 && block[valEnd-1] == '\r' {
 			valEnd--
 		}
+
 		if keyStart < valEnd {
 			if h.err == nil {
 				h.err = ErrMalformedHeader
@@ -330,6 +339,7 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 		if h.err == nil && keyEnd <= keyStart {
 			h.err = ErrMalformedHeader
 		}
+
 		return
 	}
 
@@ -347,11 +357,15 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 				if h.err == nil {
 					h.err = ErrMultipleHostHeaders
 				}
+
 				return
 			}
+
 			h.packed[IdxHost] = packed
+
 			return
 		}
+
 	case 6:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Accept") {
 			h.packed[IdxAccept] = packed
@@ -362,10 +376,12 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 			h.packed[IdxConnection] = packed
 			return
 		}
+
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "User-Agent") {
 			h.packed[IdxUserAgent] = packed
 			return
 		}
+
 	case 12:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Content-Type") {
 			h.packed[IdxContentType] = packed
@@ -375,16 +391,21 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Content-Length") {
 			if h.packed[IdxContentLength] != 0 {
 				oldVal := h.getVal(h.packed[IdxContentLength])
+
 				newVal := bytesconv.B2S(h.buf[valStart:valEnd])
 				if oldVal != newVal {
 					if h.err == nil {
 						h.err = ErrDuplicateContentLength
 					}
+
 					return
 				}
+
 				return
 			}
+
 			h.packed[IdxContentLength] = packed
+
 			return
 		}
 	}
@@ -423,6 +444,7 @@ func (h *Headers) Get(key string) string {
 				return v
 			}
 		}
+
 		if bytesconv.EqualFoldASCII(key, "User-Agent") {
 			if v := h.getVal(h.packed[IdxUserAgent]); v != "" {
 				return v

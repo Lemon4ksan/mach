@@ -21,11 +21,14 @@ type ConnectionID struct {
 // NewConnectionID creates a ConnectionID from a byte slice.
 func NewConnectionID(b []byte) ConnectionID {
 	var cid ConnectionID
+
 	n := copy(cid.buf[:], b)
 	if n > MaxConnectionIDLen {
 		n = MaxConnectionIDLen
 	}
+
 	cid.len = uint8(n)
+
 	return cid
 }
 
@@ -44,6 +47,7 @@ func (c ConnectionID) Equal(other ConnectionID) bool {
 	if c.len != other.len {
 		return false
 	}
+
 	return bytes.Equal(c.buf[:c.len], other.buf[:other.len])
 }
 
@@ -52,5 +56,6 @@ func (c ConnectionID) String() string {
 	if c.len == 0 {
 		return "(empty)"
 	}
+
 	return hex.EncodeToString(c.buf[:c.len])
 }

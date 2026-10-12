@@ -10,32 +10,32 @@ import "fmt"
 type FrameType uint64
 
 const (
-	FrameTypePadding                 FrameType = 0x00
-	FrameTypePing                    FrameType = 0x01
-	FrameTypeAck                     FrameType = 0x02
-	FrameTypeAckECN                  FrameType = 0x03
-	FrameTypeResetStream             FrameType = 0x04
-	FrameTypeStopSending             FrameType = 0x05
-	FrameTypeCrypto                  FrameType = 0x06
-	FrameTypeNewToken                FrameType = 0x07
-	FrameTypeStream                  FrameType = 0x08 // 0x08 - 0x0f
-	FrameTypeMaxData                 FrameType = 0x10
-	FrameTypeMaxStreamData           FrameType = 0x11
-	FrameTypeMaxStreamsBidi          FrameType = 0x12
-	FrameTypeMaxStreamsUni           FrameType = 0x13
-	FrameTypeDataBlocked             FrameType = 0x14
-	FrameTypeStreamDataBlocked       FrameType = 0x15
-	FrameTypeStreamsBlockedBidi      FrameType = 0x16
-	FrameTypeStreamsBlockedUni       FrameType = 0x17
-	FrameTypeNewConnectionID         FrameType = 0x18
-	FrameTypeRetireConnectionID      FrameType = 0x19
-	FrameTypePathChallenge           FrameType = 0x1a
-	FrameTypePathResponse            FrameType = 0x1b
+	FrameTypePadding                  FrameType = 0x00
+	FrameTypePing                     FrameType = 0x01
+	FrameTypeAck                      FrameType = 0x02
+	FrameTypeAckECN                   FrameType = 0x03
+	FrameTypeResetStream              FrameType = 0x04
+	FrameTypeStopSending              FrameType = 0x05
+	FrameTypeCrypto                   FrameType = 0x06
+	FrameTypeNewToken                 FrameType = 0x07
+	FrameTypeStream                   FrameType = 0x08 // 0x08 - 0x0f
+	FrameTypeMaxData                  FrameType = 0x10
+	FrameTypeMaxStreamData            FrameType = 0x11
+	FrameTypeMaxStreamsBidi           FrameType = 0x12
+	FrameTypeMaxStreamsUni            FrameType = 0x13
+	FrameTypeDataBlocked              FrameType = 0x14
+	FrameTypeStreamDataBlocked        FrameType = 0x15
+	FrameTypeStreamsBlockedBidi       FrameType = 0x16
+	FrameTypeStreamsBlockedUni        FrameType = 0x17
+	FrameTypeNewConnectionID          FrameType = 0x18
+	FrameTypeRetireConnectionID       FrameType = 0x19
+	FrameTypePathChallenge            FrameType = 0x1a
+	FrameTypePathResponse             FrameType = 0x1b
 	FrameTypeConnectionCloseTransport FrameType = 0x1c
 	FrameTypeConnectionCloseApp       FrameType = 0x1d
-	FrameTypeHandshakeDone           FrameType = 0x1e
-	FrameTypeDatagram                FrameType = 0x30
-	FrameTypeDatagramWithLen         FrameType = 0x31
+	FrameTypeHandshakeDone            FrameType = 0x1e
+	FrameTypeDatagram                 FrameType = 0x30
+	FrameTypeDatagramWithLen          FrameType = 0x31
 )
 
 func (t FrameType) String() string {
@@ -133,6 +133,7 @@ func (a *AckFrame) Range(i int) AckRange {
 	if i < a.NumInlineRanges {
 		return a.InlineRanges[i]
 	}
+
 	return a.ExtraRanges[i-a.NumInlineRanges]
 }
 
@@ -143,6 +144,7 @@ func (a *AckFrame) AppendRange(gap, length uint64) {
 		a.NumInlineRanges++
 		return
 	}
+
 	a.ExtraRanges = append(a.ExtraRanges, AckRange{Gap: gap, Length: length})
 }
 
@@ -203,7 +205,7 @@ type MaxStreamDataFrame struct {
 
 // MaxStreamsFrame represents a MAX_STREAMS frame (RFC 9000 §19.11).
 type MaxStreamsFrame struct {
-	MaxStreams    uint64
+	MaxStreams     uint64
 	Unidirectional bool
 }
 

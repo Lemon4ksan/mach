@@ -66,9 +66,11 @@ func HeaderLen(h Header) int {
 	} else if h.PayloadLen > 0xFFFF {
 		n += 8
 	}
+
 	if h.Masked {
 		n += 4
 	}
+
 	return n
 }
 
@@ -101,37 +103,46 @@ func ParseHeader(b []byte) (h Header, headerLen int, err error) {
 		if len(b) < hlen {
 			return Header{}, 0, ErrIncomplete
 		}
+
 		val := binary.BigEndian.Uint16(b[2:4])
 		// RFC 6455 §5.2: minimal number of bytes MUST be used
 		if val < 126 {
 			return Header{}, 0, ErrInvalidLength
 		}
+
 		h.PayloadLen = int64(val)
+
 	case 127:
 		hlen += 8
 		if len(b) < hlen {
 			return Header{}, 0, ErrIncomplete
 		}
+
 		val := binary.BigEndian.Uint64(b[2:10])
 		// RFC 6455 §5.2: most significant bit MUST be 0
 		if val > 0x7FFFFFFFFFFFFFFF {
 			return Header{}, 0, ErrPayloadTooLarge
 		}
+
 		// Minimal encoding check: if it fits in 16 bits, 64-bit encoding is forbidden
 		if val <= 0xFFFF {
 			return Header{}, 0, ErrInvalidLength
 		}
+
 		h.PayloadLen = int64(val)
+
 	default:
 		h.PayloadLen = int64(len7)
 	}
 
 	if h.Masked {
 		maskOffset := hlen
+
 		hlen += 4
 		if len(b) < hlen {
 			return Header{}, 0, ErrIncomplete
 		}
+
 		copy(h.MaskKey[:], b[maskOffset:maskOffset+4])
 	}
 
@@ -141,6 +152,7 @@ func ParseHeader(b []byte) (h Header, headerLen int, err error) {
 		if !h.Fin {
 			return Header{}, 0, ErrControlFrameFragmented
 		}
+
 		if h.PayloadLen > 125 {
 			return Header{}, 0, ErrControlFrameTooLarge
 		}
@@ -158,13 +170,12 @@ func WriteHeader(dst []byte, h Header) (int, error) {
 	if h.PayloadLen < 0 {
 		return 0, ErrInvalidLength
 	}
-	if h.PayloadLen > 0x7FFFFFFFFFFFFFFF {
-		return 0, ErrPayloadTooLarge
-	}
+
 	if h.Opcode.IsControl() {
 		if !h.Fin {
 			return 0, ErrControlFrameFragmented
 		}
+
 		if h.PayloadLen > 125 {
 			return 0, ErrControlFrameTooLarge
 		}
@@ -175,19 +186,23 @@ func WriteHeader(dst []byte, h Header) (int, error) {
 		return 0, ErrBufferTooSmall
 	}
 
-	var b0 byte = byte(h.Opcode & 0x0F)
+	b0 := byte(h.Opcode & 0x0F)
 	if h.Fin {
 		b0 |= 0x80
 	}
+
 	if h.Rsv1 {
 		b0 |= 0x40
 	}
+
 	if h.Rsv2 {
 		b0 |= 0x20
 	}
+
 	if h.Rsv3 {
 		b0 |= 0x10
 	}
+
 	dst[0] = b0
 
 	var b1 byte
@@ -196,17 +211,24 @@ func WriteHeader(dst []byte, h Header) (int, error) {
 	}
 
 	idx := 2
-	if h.PayloadLen <= 125 {
+	switch {
+	case h.PayloadLen <= 125:
 		b1 |= byte(h.PayloadLen)
-	} else if h.PayloadLen <= 0xFFFF {
+	case h.PayloadLen <= 0xFFFF:
 		b1 |= 126
+
 		binary.BigEndian.PutUint16(dst[2:4], uint16(h.PayloadLen))
+
 		idx = 4
-	} else {
+
+	default:
 		b1 |= 127
+
 		binary.BigEndian.PutUint64(dst[2:10], uint64(h.PayloadLen))
+
 		idx = 10
 	}
+
 	dst[1] = b1
 
 	if h.Masked {
@@ -228,6 +250,7 @@ func WriteHeader(dst []byte, h Header) (int, error) {
 func WriteFrame(dst []byte, h Header, payload []byte) (int, error) {
 	h.PayloadLen = int64(len(payload))
 	hlen := HeaderLen(h)
+
 	total := hlen + len(payload)
 	if len(dst) < total {
 		return 0, ErrBufferTooSmall
@@ -241,6 +264,7 @@ func WriteFrame(dst []byte, h Header, payload []byte) (int, error) {
 	if len(payload) > 0 {
 		payloadDst := dst[n:total]
 		copy(payloadDst, payload)
+
 		if h.Masked {
 			Mask(payloadDst, h.MaskKey)
 		}
@@ -267,6 +291,7 @@ func AppendFrame(dst []byte, h Header, payload []byte) []byte {
 	if len(payload) > 0 {
 		payloadDst := dst[start+hlen:]
 		copy(payloadDst, payload)
+
 		if h.Masked {
 			Mask(payloadDst, h.MaskKey)
 		}
@@ -285,6 +310,7 @@ func ParseClosePayload(payload []byte) (code CloseCode, reason string, err error
 	if len(payload) == 0 {
 		return StatusNoStatusReceived, "", nil
 	}
+
 	if len(payload) == 1 {
 		return 0, "", ErrInvalidClosePayload
 	}
@@ -299,6 +325,7 @@ func ParseClosePayload(payload []byte) (code CloseCode, reason string, err error
 		if !utf8.Valid(reasonBytes) {
 			return code, "", ErrInvalidUTF8
 		}
+
 		reason = bytesconv.B2S(reasonBytes)
 	}
 
@@ -313,8 +340,10 @@ func FormatClosePayload(dst []byte, code CloseCode, reason string) (int, error) 
 	if len(dst) < 2+len(reason) {
 		return 0, ErrBufferTooSmall
 	}
+
 	binary.BigEndian.PutUint16(dst[:2], uint16(code))
 	n := copy(dst[2:], reason)
+
 	return 2 + n, nil
 }
 
@@ -323,17 +352,22 @@ func AppendClosePayload(code CloseCode, reason string) ([]byte, error) {
 	if code == StatusNoStatusReceived {
 		return nil, nil
 	}
+
 	if !code.IsValidForWire() {
 		return nil, ErrInvalidCloseCode
 	}
+
 	if len(reason) > 123 {
 		return nil, ErrCloseReasonTooLong
 	}
+
 	if !utf8.ValidString(reason) {
 		return nil, ErrInvalidUTF8
 	}
+
 	dst := make([]byte, 2+len(reason))
 	_, err := FormatClosePayload(dst, code, reason)
+
 	return dst, err
 }
 
@@ -343,28 +377,36 @@ func ReadHeader(r io.Reader, buf []byte) (Header, error) {
 	if len(buf) < 14 {
 		buf = make([]byte, 14)
 	}
+
 	if _, err := io.ReadFull(r, buf[:2]); err != nil {
 		return Header{}, err
 	}
+
 	len7 := buf[1] & 0x7F
+
 	extra := 0
-	if len7 == 126 {
+	switch len7 {
+	case 126:
 		extra += 2
-	} else if len7 == 127 {
+	case 127:
 		extra += 8
 	}
+
 	if (buf[1] & 0x80) != 0 {
 		extra += 4
 	}
+
 	if extra > 0 {
 		if _, err := io.ReadFull(r, buf[2:2+extra]); err != nil {
 			return Header{}, err
 		}
 	}
+
 	h, _, err := ParseHeader(buf[:2+extra])
 	if err == nil {
 		h.Length = h.PayloadLen
 	}
+
 	return h, err
 }
 
@@ -375,16 +417,19 @@ func AppendHeader(dst []byte, h Header) []byte {
 		length = h.Length
 	}
 
-	var b0 byte = byte(h.Opcode & 0x0F)
+	b0 := byte(h.Opcode & 0x0F)
 	if h.Fin {
 		b0 |= 0x80
 	}
+
 	if h.Rsv1 {
 		b0 |= 0x40
 	}
+
 	if h.Rsv2 {
 		b0 |= 0x20
 	}
+
 	if h.Rsv3 {
 		b0 |= 0x10
 	}
@@ -416,4 +461,3 @@ func AppendHeader(dst []byte, h Header) []byte {
 func MaskBytes(data []byte, mask [4]byte) {
 	Mask(data, mask)
 }
-

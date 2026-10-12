@@ -76,4 +76,3 @@ func decodeRFC8187(extValue string) (charset, language, value string) {
 
 	return charset, language, value
 }
-

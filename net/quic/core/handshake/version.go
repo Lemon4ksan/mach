@@ -55,5 +55,6 @@ func (p Perspective) Opposite() Perspective {
 	if p == PerspectiveClient {
 		return PerspectiveServer
 	}
+
 	return PerspectiveClient
 }

@@ -164,7 +164,9 @@ func (q *QPACKCodec) ApplySettings(maxDynamicTableCapacity, maxBlockedStreams ui
 // ReadEncoderStream reads and processes encoder stream instructions until EOF (RFC 9204 §4.3).
 func (q *QPACKCodec) ReadEncoderStream(r io.Reader) (int64, error) {
 	buf := make([]byte, 4096)
+
 	var total int64
+
 	receiver := q.decoder.EncoderStreamReceiver()
 
 	for {
@@ -201,7 +203,9 @@ func (q *QPACKCodec) ReadEncoderStream(r io.Reader) (int64, error) {
 // ReadDecoderStream reads and processes decoder stream instructions until EOF (RFC 9204 §4.4).
 func (q *QPACKCodec) ReadDecoderStream(r io.Reader) (int64, error) {
 	buf := make([]byte, 4096)
+
 	var total int64
+
 	receiver := q.encoder.DecoderStreamReceiver()
 
 	for {

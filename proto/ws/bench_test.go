@@ -10,9 +10,7 @@ import (
 	"github.com/lemon4ksan/mach/proto/ws"
 )
 
-var (
-	benchKey = ws.MaskKey{0x12, 0x34, 0x56, 0x78}
-)
+var benchKey = ws.MaskKey{0x12, 0x34, 0x56, 0x78}
 
 func benchmarkMaskSWAR(b *testing.B, size int) {
 	buf := make([]byte, size)

@@ -38,7 +38,11 @@ func TestChromium_HPACK_DynamicTableSizeUpdate_64BitOverflowBypass(t *testing.T)
 	defer hpack.ReleaseHeaderField(hf)
 
 	_, err := hp.Next(hf, block)
-	require.Error(t, err, "table size update > MaxCapacity (via 64-bit value) MUST be rejected with ErrTableSizeLimitExceeded")
+	require.Error(
+		t,
+		err,
+		"table size update > MaxCapacity (via 64-bit value) MUST be rejected with ErrTableSizeLimitExceeded",
+	)
 	assert.True(t, errors.Is(err, hpack.ErrTableSizeLimitExceeded), "error must be ErrTableSizeLimitExceeded")
 }
 
@@ -59,7 +63,12 @@ func TestChromium_HPACK_EncoderEmitsDynamicTableSizeUpdate(t *testing.T) {
 	require.NotEmpty(t, out)
 
 	// The first byte of output MUST be a Dynamic Table Size Update instruction ('001' prefix = 0x20)
-	assert.Equal(t, byte(0x20), out[0]&0xe0, "encoder MUST emit dynamic table size update (0x20) at start of first header block after size change")
+	assert.Equal(
+		t,
+		byte(0x20),
+		out[0]&0xe0,
+		"encoder MUST emit dynamic table size update (0x20) at start of first header block after size change",
+	)
 }
 
 // Ported from Chromium net/spdy: SpdySessionTest.UpdateHeaderTableSize

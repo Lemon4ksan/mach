@@ -108,4 +108,3 @@ var (
 	ErrUnsupportedVersion  = errors.New("websocket: unsupported version")
 	ErrInvalidAcceptKey    = errors.New("websocket: invalid Sec-WebSocket-Accept header")
 )
-

@@ -77,27 +77,32 @@ func DeriveInitialSecrets(destConnID []byte, v Version) (clientSecret, serverSec
 	if v == Version2 {
 		salt = SaltV2
 	}
+
 	return DeriveInitialSecretsWithSalt(destConnID, salt, v)
 }
 
 // DeriveInitialSecretsWithSalt derives client and server initial secrets using a specified salt.
-func DeriveInitialSecretsWithSalt(destConnID []byte, salt []byte, v Version) (clientSecret, serverSecret []byte) {
+func DeriveInitialSecretsWithSalt(destConnID, salt []byte, v Version) (clientSecret, serverSecret []byte) {
 	initialSecret := HKDFExtract(crypto.SHA256, destConnID, salt)
 	clientSecret = HKDFExpandLabel(crypto.SHA256, initialSecret, nil, labelClientIn, crypto.SHA256.Size())
 	serverSecret = HKDFExpandLabel(crypto.SHA256, initialSecret, nil, labelServerIn, crypto.SHA256.Size())
+
 	return clientSecret, serverSecret
 }
 
 // DeriveInitialPacketKeys derives the AEAD packet protection key (16 bytes for AES-128) and IV (12 bytes).
 func DeriveInitialPacketKeys(secret []byte, v Version) (key, iv []byte) {
 	keyLabel := labelKeyV1
+
 	ivLabel := labelIVV1
 	if v == Version2 {
 		keyLabel = labelKeyV2
 		ivLabel = labelIVV2
 	}
+
 	key = HKDFExpandLabel(crypto.SHA256, secret, nil, keyLabel, 16)
 	iv = HKDFExpandLabel(crypto.SHA256, secret, nil, ivLabel, 12)
+
 	return key, iv
 }
 
@@ -107,6 +112,7 @@ func DeriveInitialHeaderProtectionKey(secret []byte, v Version) []byte {
 	if v == Version2 {
 		hpLabel = labelHPV2
 	}
+
 	return HKDFExpandLabel(crypto.SHA256, secret, nil, hpLabel, 16)
 }
 
@@ -116,11 +122,12 @@ func NewInitialKeys(destConnID []byte, v Version) *InitialKeys {
 	if v == Version2 {
 		salt = SaltV2
 	}
+
 	return NewInitialKeysWithSalt(destConnID, salt, v)
 }
 
 // NewInitialKeysWithSalt derives all Initial secrets and keys using the specified salt.
-func NewInitialKeysWithSalt(destConnID []byte, salt []byte, v Version) *InitialKeys {
+func NewInitialKeysWithSalt(destConnID, salt []byte, v Version) *InitialKeys {
 	clientSecret, serverSecret := DeriveInitialSecretsWithSalt(destConnID, salt, v)
 
 	clientKey, clientIV := DeriveInitialPacketKeys(clientSecret, v)
@@ -153,6 +160,7 @@ func NewAESHeaderProtector(hpKey []byte, isLongHeader bool) (HeaderProtector, er
 	if err != nil {
 		return nil, fmt.Errorf("quic: failed to create AES cipher for header protection: %w", err)
 	}
+
 	return &aesHeaderProtector{
 		block:        block,
 		isLongHeader: isLongHeader,
@@ -163,6 +171,7 @@ func (p *aesHeaderProtector) apply(sample []byte, firstByte *byte, pnBytes []byt
 	if len(sample) < 16 || firstByte == nil || len(pnBytes) == 0 {
 		return
 	}
+
 	var mask [16]byte
 	p.block.Encrypt(mask[:], sample[:16])
 
@@ -172,9 +181,11 @@ func (p *aesHeaderProtector) apply(sample []byte, firstByte *byte, pnBytes []byt
 	} else {
 		maskFirst = mask[0] & 0x1f
 	}
+
 	*firstByte ^= maskFirst
+
 	for i := 0; i < len(pnBytes) && i < 4; i++ {
-		pnBytes[i] ^= mask[1+i]
+		pnBytes[i] ^= mask[1+i] //nolint:gosec // bounds checked
 	}
 }
 
@@ -197,6 +208,7 @@ func NewChaChaHeaderProtector(hpKey []byte, isLongHeader bool) (HeaderProtector,
 	if len(hpKey) != 32 {
 		return nil, fmt.Errorf("quic: invalid ChaCha20 HP key length: %d (expected 32)", len(hpKey))
 	}
+
 	return &chachaHeaderProtector{
 		hpKey:        hpKey,
 		isLongHeader: isLongHeader,
@@ -207,6 +219,7 @@ func (p *chachaHeaderProtector) apply(sample []byte, firstByte *byte, pnBytes []
 	if len(sample) < 16 || firstByte == nil || len(pnBytes) == 0 {
 		return
 	}
+
 	counter := binary.LittleEndian.Uint32(sample[0:4])
 	nonce := sample[4:16]
 
@@ -214,6 +227,7 @@ func (p *chachaHeaderProtector) apply(sample []byte, firstByte *byte, pnBytes []
 	if err != nil {
 		return
 	}
+
 	c.SetCounter(counter)
 
 	var mask [5]byte
@@ -225,9 +239,11 @@ func (p *chachaHeaderProtector) apply(sample []byte, firstByte *byte, pnBytes []
 	} else {
 		maskFirst = mask[0] & 0x1f
 	}
+
 	*firstByte ^= maskFirst
+
 	for i := 0; i < len(pnBytes) && i < 4; i++ {
-		pnBytes[i] ^= mask[1+i]
+		pnBytes[i] ^= mask[1+i] //nolint:gosec // bounds checked
 	}
 }
 

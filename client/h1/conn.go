@@ -326,7 +326,9 @@ func (cc *ClientConn) Hijack() (net.Conn, *bufio.Reader, *bufio.Writer, error) {
 	if cc.isClosed {
 		return nil, nil, nil, ErrConnClosed
 	}
+
 	cc.isUpgraded = true
+
 	return cc.conn, cc.br, cc.bw, nil
 }
 
@@ -347,6 +349,7 @@ func (cc *ClientConn) IsClosed() bool {
 	if cc.conn != nil && cc.br != nil && cc.br.Buffered() == 0 {
 		_ = cc.conn.SetReadDeadline(time.Now())
 		_, err := cc.br.Peek(1)
+
 		_ = cc.conn.SetReadDeadline(time.Time{})
 		if err == io.EOF || errors.Is(err, net.ErrClosed) {
 			cc.isClosed = true

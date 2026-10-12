@@ -368,10 +368,10 @@ func TestServer_MultiProtocol_H1_H2_H3(t *testing.T) {
 	udpAddr := quicLn.Addr().(*net.UDPAddr)
 
 	var (
-		mu      sync.Mutex
-		seenH1  bool
-		seenH2  bool
-		seenH3  bool
+		mu     sync.Mutex
+		seenH1 bool
+		seenH2 bool
+		seenH3 bool
 	)
 
 	srv := server.New(
@@ -613,8 +613,8 @@ func TestServer_EXP1210_SingleBytePrefixDivergence(t *testing.T) {
 	case <-done:
 		// Succeeded immediately without deadlock
 	case <-time.After(2 * time.Second):
-		t.Fatal("DEADLOCK DETECTED: serveCleartextConn blocked waiting for 24 bytes after single-byte prefix divergence (EXP-1210)")
+		t.Fatal(
+			"DEADLOCK DETECTED: serveCleartextConn blocked waiting for 24 bytes after single-byte prefix divergence (EXP-1210)",
+		)
 	}
 }
-
-

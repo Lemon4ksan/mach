@@ -229,7 +229,12 @@ func TestChromium_ResetStream_StopSending_BufferedEgressRace(t *testing.T) {
 	// RFC 9000 §4.5: Final Size MUST be 300 (sentOffset), NOT 1000 (writeOffset)
 	code, finalSize, hasRst := s.GetResetStreamFrame()
 	if !hasRst || finalSize != 300 || code != 42 {
-		t.Fatalf("expected RESET_STREAM with FinalSize=300 code=42, got hasRst=%v finalSize=%d code=%d", hasRst, finalSize, code)
+		t.Fatalf(
+			"expected RESET_STREAM with FinalSize=300 code=42, got hasRst=%v finalSize=%d code=%d",
+			hasRst,
+			finalSize,
+			code,
+		)
 	}
 
 	// Unsent 700 bytes MUST be reclaimed by connection flow controller

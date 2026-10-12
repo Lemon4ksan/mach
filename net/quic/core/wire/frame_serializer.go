@@ -13,9 +13,11 @@ func AppendPadding(dst []byte, count int) []byte {
 		if n > len(zeroBuf) {
 			n = len(zeroBuf)
 		}
+
 		dst = append(dst, zeroBuf[:n]...)
 		count -= n
 	}
+
 	return dst
 }
 
@@ -59,6 +61,7 @@ func AppendResetStreamFrame(dst []byte, r *ResetStreamFrame) []byte {
 	dst = appendVarint(dst, r.StreamID)
 	dst = appendVarint(dst, r.ErrorCode)
 	dst = appendVarint(dst, r.FinalSize)
+
 	return dst
 }
 
@@ -67,6 +70,7 @@ func AppendStopSendingFrame(dst []byte, s *StopSendingFrame) []byte {
 	dst = append(dst, byte(FrameTypeStopSending))
 	dst = appendVarint(dst, s.StreamID)
 	dst = appendVarint(dst, s.ErrorCode)
+
 	return dst
 }
 
@@ -76,6 +80,7 @@ func AppendCryptoFrame(dst []byte, c *CryptoFrame) []byte {
 	dst = appendVarint(dst, c.Offset)
 	dst = appendVarint(dst, uint64(len(c.Data)))
 	dst = append(dst, c.Data...)
+
 	return dst
 }
 
@@ -84,6 +89,7 @@ func AppendNewTokenFrame(dst []byte, n *NewTokenFrame) []byte {
 	dst = append(dst, byte(FrameTypeNewToken))
 	dst = appendVarint(dst, uint64(len(n.Token)))
 	dst = append(dst, n.Token...)
+
 	return dst
 }
 
@@ -93,22 +99,28 @@ func AppendStreamFrame(dst []byte, s *StreamFrame) []byte {
 	if s.Offset != 0 {
 		typ |= 0x04
 	}
+
 	if s.HasLen {
 		typ |= 0x02
 	}
+
 	if s.Fin {
 		typ |= 0x01
 	}
 
 	dst = append(dst, typ)
+
 	dst = appendVarint(dst, s.StreamID)
 	if s.Offset != 0 {
 		dst = appendVarint(dst, s.Offset)
 	}
+
 	if s.HasLen {
 		dst = appendVarint(dst, uint64(len(s.Data)))
 	}
+
 	dst = append(dst, s.Data...)
+
 	return dst
 }
 
@@ -124,6 +136,7 @@ func AppendMaxStreamDataFrame(dst []byte, m *MaxStreamDataFrame) []byte {
 	dst = append(dst, byte(FrameTypeMaxStreamData))
 	dst = appendVarint(dst, m.StreamID)
 	dst = appendVarint(dst, m.MaximumStreamData)
+
 	return dst
 }
 
@@ -134,7 +147,9 @@ func AppendMaxStreamsFrame(dst []byte, m *MaxStreamsFrame) []byte {
 	} else {
 		dst = append(dst, byte(FrameTypeMaxStreamsBidi))
 	}
+
 	dst = appendVarint(dst, m.MaxStreams)
+
 	return dst
 }
 
@@ -150,6 +165,7 @@ func AppendStreamDataBlockedFrame(dst []byte, s *StreamDataBlockedFrame) []byte 
 	dst = append(dst, byte(FrameTypeStreamDataBlocked))
 	dst = appendVarint(dst, s.StreamID)
 	dst = appendVarint(dst, s.MaximumStreamData)
+
 	return dst
 }
 
@@ -160,7 +176,9 @@ func AppendStreamsBlockedFrame(dst []byte, s *StreamsBlockedFrame) []byte {
 	} else {
 		dst = append(dst, byte(FrameTypeStreamsBlockedBidi))
 	}
+
 	dst = appendVarint(dst, s.StreamLimit)
+
 	return dst
 }
 
@@ -172,6 +190,7 @@ func AppendNewConnectionIDFrame(dst []byte, n *NewConnectionIDFrame) []byte {
 	dst = append(dst, byte(len(n.ConnID)))
 	dst = append(dst, n.ConnID...)
 	dst = append(dst, n.StatelessResetToken[:]...)
+
 	return dst
 }
 
@@ -206,8 +225,10 @@ func AppendConnectionCloseFrame(dst []byte, c *ConnectionCloseFrame) []byte {
 		dst = appendVarint(dst, c.ErrorCode)
 		dst = appendVarint(dst, c.FrameType)
 	}
+
 	dst = appendVarint(dst, uint64(len(c.Reason)))
 	dst = append(dst, c.Reason...)
+
 	return dst
 }
 
@@ -224,7 +245,9 @@ func AppendDatagramFrame(dst []byte, d *DatagramFrame) []byte {
 	} else {
 		dst = append(dst, byte(FrameTypeDatagram))
 	}
+
 	dst = append(dst, d.Data...)
+
 	return dst
 }
 
@@ -275,6 +298,7 @@ func AppendFrame(dst []byte, f *Frame) []byte {
 		if f.Type >= 0x08 && f.Type <= 0x0f {
 			return AppendStreamFrame(dst, &f.Stream)
 		}
+
 		panic("wire: unhandled frame type")
 	}
 }

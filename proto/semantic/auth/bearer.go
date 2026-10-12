@@ -46,12 +46,14 @@ func (c BearerChallenge) AppendFormat(dst []byte) []byte {
 		if v == "" {
 			return
 		}
+
 		if first {
 			dst = append(dst, ' ')
 			first = false
 		} else {
 			dst = append(dst, ',', ' ')
 		}
+
 		dst = append(dst, k...)
 		dst = append(dst, '=', '"')
 		dst = append(dst, v...)
@@ -82,12 +84,14 @@ func AppendBearer[S ~string | ~[]byte](dst []byte, token S) []byte {
 // FormatBearer formats an access token into an RFC 6750 Authorization header value ("Bearer <token>").
 func FormatBearer(token string) string {
 	token = strings.TrimSpace(token)
+
 	var buf [128]byte
 	if len(token)+7 <= len(buf) {
 		b := append(buf[:0], "Bearer "...)
 		b = append(b, token...)
 		return string(b)
 	}
+
 	return "Bearer " + token
 }
 
@@ -95,12 +99,14 @@ func FormatBearer(token string) string {
 // 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
 func IsValidBearerToken[S ~string | ~[]byte](token S) bool {
 	raw := stringOrBytes(token)
+
 	n := len(raw)
 	if n == 0 {
 		return false
 	}
 
 	_ = raw[n-1]
+
 	padding := false
 	for i := 0; i < n; i++ {
 		b := raw[i]
@@ -108,12 +114,15 @@ func IsValidBearerToken[S ~string | ~[]byte](token S) bool {
 			padding = true
 			continue
 		}
+
 		if padding {
 			return false
 		}
+
 		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') {
 			continue
 		}
+
 		switch b {
 		case '-', '.', '_', '~', '+', '/':
 			continue
@@ -121,6 +130,7 @@ func IsValidBearerToken[S ~string | ~[]byte](token S) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -146,10 +156,12 @@ func trimSpaceGeneric[S ~string | ~[]byte](s S) S {
 	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n') {
 		start++
 	}
+
 	end := len(s)
 	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\r' || s[end-1] == '\n') {
 		end--
 	}
+
 	return s[start:end]
 }
 
@@ -157,6 +169,7 @@ func hasBearerPrefix[S ~string | ~[]byte](s S) bool {
 	if len(s) < 7 {
 		return false
 	}
+
 	return (s[0] == 'B' || s[0] == 'b') &&
 		(s[1] == 'e' || s[1] == 'E') &&
 		(s[2] == 'a' || s[2] == 'A') &&
@@ -169,12 +182,14 @@ func hasBearerPrefix[S ~string | ~[]byte](s S) bool {
 // ParseBearerChallenge parses a WWW-Authenticate header ([string] or [[]byte]) containing a Bearer challenge (RFC 6750 §3).
 func ParseBearerChallenge[S ~string | ~[]byte](challengeHeader S) (BearerChallenge, bool) {
 	ch := stringOrBytes(challengeHeader)
+
 	ch = strings.TrimSpace(ch)
 	if len(ch) < 6 || !strings.EqualFold(ch[:6], "Bearer") {
 		return BearerChallenge{}, false
 	}
 
 	rest := strings.TrimSpace(ch[6:])
+
 	var challenge BearerChallenge
 	if rest == "" {
 		return challenge, true
@@ -192,12 +207,14 @@ func ParseBearerChallenge[S ~string | ~[]byte](challengeHeader S) (BearerChallen
 		var val string
 		if strings.HasPrefix(rest, "\"") {
 			rest = rest[1:]
+
 			endQuote := strings.IndexByte(rest, '"')
 			if endQuote == -1 {
 				val = rest
 				rest = ""
 			} else {
 				val = rest[:endQuote]
+
 				rest = strings.TrimSpace(rest[endQuote+1:])
 				if strings.HasPrefix(rest, ",") {
 					rest = strings.TrimSpace(rest[1:])

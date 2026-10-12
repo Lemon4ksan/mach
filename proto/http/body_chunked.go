@@ -22,7 +22,6 @@ var errChunkedStream = errors.New("chunked stream")
 // per RFC 9112 Section 7.1.
 type ErrBrokenChunk struct{ error }
 
-
 // ReadBodyChunked decodes an HTTP/1.1 chunked transfer coding stream from r into dst
 // in accordance with RFC 9112 Section 7.1.
 //
@@ -162,7 +161,9 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 
 func writeChunk(w *bufio.Writer, b []byte) error {
 	n := len(b)
+
 	var hexBuf [16]byte
+
 	hexLen := hexkit.FormatHexUint(&hexBuf, n)
 
 	if _, err := w.Write(hexBuf[:hexLen]); err != nil {
@@ -193,11 +194,13 @@ func parseChunkSize(r *bufio.Reader) (int, error) {
 		if errors.Is(err, io.EOF) {
 			return -1, io.EOF
 		}
+
 		if errors.Is(err, bufio.ErrBufferFull) {
 			fullLine, errFull := r.ReadBytes('\n')
 			if errFull != nil {
 				return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read chunk size line: %w", errFull)}
 			}
+
 			line = fullLine
 		} else {
 			return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read chunk size line: %w", err)}
@@ -232,6 +235,7 @@ func parseChunkSize(r *bufio.Reader) (int, error) {
 
 func readCrLf(r *bufio.Reader) error {
 	b1, err1 := r.ReadByte()
+
 	b2, err2 := r.ReadByte()
 	if err1 != nil || err2 != nil || b1 != '\r' || b2 != '\n' {
 		return ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}

@@ -121,27 +121,42 @@ func TestHandshake_ValidateHandshakeRequest(t *testing.T) {
 	}
 
 	// Invalid method
-	if !errors.Is(ws.ValidateHandshakeRequest("POST", "HTTP/1.1", "websocket", "Upgrade", validKey, "13"), ws.ErrInvalidMethod) {
+	if !errors.Is(
+		ws.ValidateHandshakeRequest("POST", "HTTP/1.1", "websocket", "Upgrade", validKey, "13"),
+		ws.ErrInvalidMethod,
+	) {
 		t.Fatal("expected ErrInvalidMethod")
 	}
 
 	// Invalid Upgrade
-	if !errors.Is(ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "h2c", "Upgrade", validKey, "13"), ws.ErrInvalidUpgrade) {
+	if !errors.Is(
+		ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "h2c", "Upgrade", validKey, "13"),
+		ws.ErrInvalidUpgrade,
+	) {
 		t.Fatal("expected ErrInvalidUpgrade")
 	}
 
 	// Invalid Connection
-	if !errors.Is(ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "websocket", "close", validKey, "13"), ws.ErrInvalidConnection) {
+	if !errors.Is(
+		ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "websocket", "close", validKey, "13"),
+		ws.ErrInvalidConnection,
+	) {
 		t.Fatal("expected ErrInvalidConnection")
 	}
 
 	// Invalid Key
-	if !errors.Is(ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "websocket", "Upgrade", "badkey", "13"), ws.ErrInvalidKey) {
+	if !errors.Is(
+		ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "websocket", "Upgrade", "badkey", "13"),
+		ws.ErrInvalidKey,
+	) {
 		t.Fatal("expected ErrInvalidKey")
 	}
 
 	// Invalid Version
-	if !errors.Is(ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "websocket", "Upgrade", validKey, "8"), ws.ErrInvalidVersion) {
+	if !errors.Is(
+		ws.ValidateHandshakeRequest("GET", "HTTP/1.1", "websocket", "Upgrade", validKey, "8"),
+		ws.ErrInvalidVersion,
+	) {
 		t.Fatal("expected ErrInvalidVersion")
 	}
 }

@@ -20,6 +20,7 @@ func (p Perspective) String() string {
 	if p == PerspectiveClient {
 		return "client"
 	}
+
 	return "server"
 }
 
@@ -66,6 +67,7 @@ func NewStreamID(st StreamType, streamNum uint64) StreamID {
 	if streamNum == 0 {
 		return StreamID(st)
 	}
+
 	return StreamID(((streamNum - 1) << 2) | uint64(st))
 }
 
@@ -79,6 +81,7 @@ func (id StreamID) Initiator() Perspective {
 	if id&0x01 == 0 {
 		return PerspectiveClient
 	}
+
 	return PerspectiveServer
 }
 

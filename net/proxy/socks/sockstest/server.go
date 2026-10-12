@@ -5,6 +5,7 @@
 package sockstest
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -23,12 +24,15 @@ func ParseAuthRequest(b []byte) (*AuthRequest, error) {
 	if len(b) < 2 {
 		return nil, errors.New("short auth request")
 	}
+
 	if b[0] != socks.Version5 {
 		return nil, errors.New("unexpected protocol version")
 	}
+
 	if len(b)-2 < int(b[1]) {
 		return nil, errors.New("short auth request")
 	}
+
 	req := &AuthRequest{Version: int(b[0])}
 	if b[1] > 0 {
 		req.Methods = make([]socks.AuthMethod, b[1])
@@ -36,6 +40,7 @@ func ParseAuthRequest(b []byte) (*AuthRequest, error) {
 			req.Methods[i] = socks.AuthMethod(m)
 		}
 	}
+
 	return req, nil
 }
 
@@ -56,17 +61,22 @@ func ParseCmdRequest(b []byte) (*CmdRequest, error) {
 	if len(b) < 7 {
 		return nil, errors.New("short cmd request")
 	}
+
 	if b[0] != socks.Version5 {
 		return nil, errors.New("unexpected protocol version")
 	}
+
 	if socks.Command(b[1]) != socks.CmdConnect {
 		return nil, errors.New("unexpected command")
 	}
+
 	if b[2] != 0 {
 		return nil, errors.New("non-zero reserved field")
 	}
+
 	req := &CmdRequest{Version: int(b[0]), Cmd: socks.Command(b[1])}
 	l := 2
+
 	off := 4
 	switch b[3] {
 	case socks.AddrTypeIPv4:
@@ -81,15 +91,19 @@ func ParseCmdRequest(b []byte) (*CmdRequest, error) {
 	default:
 		return nil, errors.New("unknown address type")
 	}
+
 	if len(b[off:]) < l {
 		return nil, errors.New("short cmd request")
 	}
+
 	if req.Addr.IP != nil {
 		copy(req.Addr.IP, b[off:])
 	} else {
 		req.Addr.Name = string(b[off : off+l-2])
 	}
+
 	req.Addr.Port = int(b[off+l-2])<<8 | int(b[off+l-1])
+
 	return req, nil
 }
 
@@ -97,11 +111,13 @@ func ParseCmdRequest(b []byte) (*CmdRequest, error) {
 func MarshalCmdReply(ver int, reply socks.Reply, a *socks.Addr) ([]byte, error) {
 	b := make([]byte, 4)
 	b[0] = byte(ver)
+
 	b[1] = byte(reply)
 	if a.Name != "" {
 		if len(a.Name) > 255 {
 			return nil, errors.New("fqdn too long")
 		}
+
 		b[3] = socks.AddrTypeFQDN
 		b = append(b, byte(len(a.Name)))
 		b = append(b, a.Name...)
@@ -114,7 +130,9 @@ func MarshalCmdReply(ver int, reply socks.Reply, a *socks.Addr) ([]byte, error) 
 	} else {
 		return nil, errors.New("unknown address type")
 	}
+
 	b = append(b, byte(a.Port>>8), byte(a.Port))
+
 	return b, nil
 }
 
@@ -132,16 +150,16 @@ func (s *Server) Addr() net.Addr {
 //
 // The returned address is only valid for testing with Server.
 func (s *Server) TargetAddr() net.Addr {
-	a := s.ln.Addr()
-	switch a := a.(type) {
-	case *net.TCPAddr:
+	if a, ok := s.ln.Addr().(*net.TCPAddr); ok {
 		if a.IP.To4() != nil {
 			return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5963}
 		}
+
 		if a.IP.To16() != nil && a.IP.To4() == nil {
 			return &net.TCPAddr{IP: net.IPv6loopback, Port: 5963}
 		}
 	}
+
 	return nil
 }
 
@@ -156,19 +174,25 @@ func (s *Server) serve(authFunc, cmdFunc func(io.ReadWriter, []byte) error) {
 		return
 	}
 	defer c.Close()
+
 	go s.serve(authFunc, cmdFunc)
+
 	b := make([]byte, 512)
+
 	n, err := c.Read(b)
 	if err != nil {
 		return
 	}
+
 	if err := authFunc(c, b[:n]); err != nil {
 		return
 	}
+
 	n, err = c.Read(b)
 	if err != nil {
 		return
 	}
+
 	if err := cmdFunc(c, b[:n]); err != nil {
 		return
 	}
@@ -179,13 +203,19 @@ func (s *Server) serve(authFunc, cmdFunc func(io.ReadWriter, []byte) error) {
 // The provided authFunc and cmdFunc must parse requests and return
 // appropriate replies to clients.
 func NewServer(authFunc, cmdFunc func(io.ReadWriter, []byte) error) (*Server, error) {
-	var err error
 	s := new(Server)
-	s.ln, err = net.Listen("tcp", "127.0.0.1:0")
+
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
+
+	s.ln = ln
+
 	go s.serve(authFunc, cmdFunc)
+
 	return s, nil
 }
 
@@ -195,17 +225,21 @@ func NoAuthRequired(rw io.ReadWriter, b []byte) error {
 	if err != nil {
 		return err
 	}
+
 	b, err = MarshalAuthReply(req.Version, socks.AuthMethodNotRequired)
 	if err != nil {
 		return err
 	}
+
 	n, err := rw.Write(b)
 	if err != nil {
 		return err
 	}
+
 	if n != len(b) {
 		return errors.New("short write")
 	}
+
 	return nil
 }
 
@@ -216,24 +250,30 @@ func NoProxyRequired(rw io.ReadWriter, b []byte) error {
 	if err != nil {
 		return err
 	}
+
 	req.Addr.Port += 1
-	if req.Addr.Name != "" {
+	switch {
+	case req.Addr.Name != "":
 		req.Addr.Name = "boundaddr.doesnotexist"
-	} else if req.Addr.IP.To4() != nil {
+	case req.Addr.IP.To4() != nil:
 		req.Addr.IP = net.IPv4(127, 0, 0, 1)
-	} else {
+	default:
 		req.Addr.IP = net.IPv6loopback
 	}
+
 	b, err = MarshalCmdReply(socks.Version5, socks.StatusSucceeded, &req.Addr)
 	if err != nil {
 		return err
 	}
+
 	n, err := rw.Write(b)
 	if err != nil {
 		return err
 	}
+
 	if n != len(b) {
 		return errors.New("short write")
 	}
+
 	return nil
 }

@@ -72,7 +72,9 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 		if len(payload) > 0 && !sc.Closed() {
 			_ = sc.sendWindowUpdateFrame(0, uint32(len(payload)))
 		}
+
 		_ = sc.writeRstStream(streamID, coreh2.StreamClosedError)
+
 		return
 	}
 
@@ -81,7 +83,9 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 		if len(payload) > 0 && !sc.Closed() {
 			_ = sc.sendWindowUpdateFrame(0, uint32(len(payload)))
 		}
+
 		_ = sc.writeRstStream(streamID, coreh2.StreamClosedError)
+
 		return
 	}
 
@@ -90,14 +94,17 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 			if st.pipeWriter != nil {
 				_, _ = st.pipeWriter.Write(payload)
 			}
+
 			sc.replenishReceiveWindow(streamID, len(payload))
 		}
+
 		if endStream {
 			st.endStream = true
 			if st.pipeWriter != nil {
 				_ = st.pipeWriter.Close()
 			}
 		}
+
 		return
 	}
 
@@ -130,6 +137,7 @@ func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, end
 		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
 		return
 	}
+
 	sc.maxStreamID = streamID
 
 	if !endHeaders {
@@ -151,9 +159,12 @@ func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, end
 				sc.streamsMu.Lock()
 				delete(sc.streams, streamID)
 				sc.streamsMu.Unlock()
+
 				return
 			}
-			if ec, ok := err.(coreh2.ErrorCode); ok {
+
+			var ec coreh2.ErrorCode
+			if errors.As(err, &ec) {
 				sc.closeWithGoAway(sc.maxStreamID, ec)
 			} else {
 				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
@@ -188,6 +199,7 @@ func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders
 
 	if endHeaders {
 		sc.continuationStream = 0
+
 		st.endHeaders = true
 		if err := sc.finishHeaderBlock(st); err != nil {
 			// RFC 9113 §8.1.1: Malformed requests MUST be treated as a stream error of type PROTOCOL_ERROR.
@@ -196,9 +208,12 @@ func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders
 				sc.streamsMu.Lock()
 				delete(sc.streams, streamID)
 				sc.streamsMu.Unlock()
+
 				return
 			}
-			if ec, ok := err.(coreh2.ErrorCode); ok {
+
+			var ec coreh2.ErrorCode
+			if errors.As(err, &ec) {
 				sc.closeWithGoAway(sc.maxStreamID, ec)
 			} else {
 				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
@@ -219,6 +234,7 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 		if len(payload) > 0 {
 			sc.closeWithGoAway(sc.maxStreamID, coreh2.FrameSizeError)
 		}
+
 		return
 	}
 
@@ -250,6 +266,7 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 				sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
 				return
 			}
+
 			newWin := int32(val)
 			delta := newWin - sc.peerInitialWin
 			sc.peerInitialWin = newWin
@@ -262,8 +279,10 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 					sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
 					return
 				}
+
 				st.sendWindow += delta
 			}
+
 			sc.streamsMu.Unlock()
 
 		case 5: // MAX_FRAME_SIZE
@@ -272,6 +291,7 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 				sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
 				return
 			}
+
 			sc.peerMaxFrameSize = val
 		}
 	}
@@ -310,6 +330,7 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 		} else {
 			_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
 		}
+
 		return
 	}
 
@@ -339,6 +360,7 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 			if st.cancel != nil {
 				st.cancel()
 			}
+
 			delete(sc.streams, streamID)
 			sc.streamsMu.Unlock()
 		}
@@ -352,7 +374,7 @@ func (sc *ServerConn) OnPriority(streamID uint32, payload []byte) {
 	}
 }
 
-func (sc *ServerConn) OnUnknownFrame(streamID uint32, frameType uint8, flags uint8, payload []byte) {
+func (sc *ServerConn) OnUnknownFrame(streamID uint32, frameType, flags uint8, payload []byte) {
 	if sc.continuationStream != 0 {
 		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
 		return
@@ -382,6 +404,7 @@ func (sc *ServerConn) OnStreamReset(streamID, errorCode uint32) {
 		if st.cancel != nil {
 			st.cancel()
 		}
+
 		if st.pipeWriter != nil {
 			_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
 		}
@@ -413,6 +436,7 @@ func (sc *ServerConn) sendSettings(st *coreh2.Settings, ack bool) error {
 		stFrame.SetAck(true)
 		fr.SetFlags(coreh2.FlagAck)
 	}
+
 	if !ack {
 		st.CopyTo(stFrame)
 	}

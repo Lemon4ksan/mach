@@ -12,10 +12,8 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
-var (
-	// errInvalidHeaderLeadingWhitespace indicates that headers cannot start with space or tab.
-	errInvalidHeaderLeadingWhitespace = errors.New("invalid headers, headers cannot start with space or tab")
-)
+// errInvalidHeaderLeadingWhitespace indicates that headers cannot start with space or tab.
+var errInvalidHeaderLeadingWhitespace = errors.New("invalid headers, headers cannot start with space or tab")
 
 type headerScanner struct {
 	b        []byte
@@ -150,7 +148,6 @@ func isASCIILetter(b byte) bool {
 	b |= 0x20
 	return 'a' <= b && b <= 'z'
 }
-
 
 // trim returns s with leading and trailing spaces and tabs removed using SWAR vectorization.
 //

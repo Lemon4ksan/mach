@@ -70,6 +70,7 @@ var (
 // Accelerated via O(1) length-dispatch and 64-bit SWAR case-insensitive vector matching.
 func InternKey[S ~string | ~[]byte](key S) []byte {
 	b := stringOrBytesToBytes(key)
+
 	n := len(b)
 	if n < 4 || n > 25 {
 		return nil
@@ -91,6 +92,7 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				return KeyETag
 			}
 		}
+
 	case 5:
 		if bytes.Equal(b, PseudoPathBytes) {
 			return PseudoPathBytes
@@ -110,6 +112,7 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				return KeyServer
 			}
 		}
+
 	case 7:
 		if b[0] == ':' {
 			switch b[1] {
@@ -134,12 +137,14 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				return KeyReferer
 			}
 		}
+
 	case 8:
 		if (b[0] | 0x20) == 'p' {
 			if equalFoldSWAR(b, KeyPriority) {
 				return KeyPriority
 			}
 		}
+
 	case 9:
 		switch b[0] | 0x20 {
 		case 's':
@@ -151,6 +156,7 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				return PseudoProtocolBytes
 			}
 		}
+
 	case 10:
 		switch b[0] {
 		case ':':
@@ -170,18 +176,21 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				return KeyUserAgent
 			}
 		}
+
 	case 12:
 		if (b[0] | 0x20) == 'c' {
 			if equalFoldSWAR(b, KeyContentType) {
 				return KeyContentType
 			}
 		}
+
 	case 13:
 		if (b[0] | 0x20) == 'c' {
 			if equalFoldSWAR(b, KeyCacheControl) {
 				return KeyCacheControl
 			}
 		}
+
 	case 14:
 		switch b[0] | 0x20 {
 		case 'c':
@@ -208,6 +217,7 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				}
 			}
 		}
+
 	case 15:
 		if (b[0] | 0x20) == 'a' {
 			switch b[7] | 0x20 {
@@ -221,6 +231,7 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				}
 			}
 		}
+
 	case 16:
 		switch b[0] | 0x20 {
 		case 's':
@@ -232,12 +243,14 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 				return KeyWWWAuthenticate
 			}
 		}
+
 	case 18:
 		if (b[0] | 0x20) == 's' {
 			if equalFoldSWAR(b, KeySecChUaPlatform) {
 				return KeySecChUaPlatform
 			}
 		}
+
 	case 25:
 		if (b[0] | 0x20) == 'u' {
 			if equalFoldSWAR(b, KeyUpgradeInsecureRequests) {
@@ -254,6 +267,7 @@ func InternKey[S ~string | ~[]byte](key S) []byte {
 // Employs O(1) length dispatch and SWAR vector matching with zero heap allocations.
 func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 	b := stringOrBytesToBytes(key)
+
 	n := len(b)
 	switch n {
 	case 2:
@@ -291,6 +305,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return ETag
 			}
 		}
+
 	case 5:
 		switch b[0] | 0x20 {
 		case 'r':
@@ -302,6 +317,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return Allow
 			}
 		}
+
 	case 6:
 		switch b[0] | 0x20 {
 		case 'a':
@@ -329,6 +345,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return Pragma
 			}
 		}
+
 	case 7:
 		switch b[0] | 0x20 {
 		case 'r':
@@ -352,6 +369,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return Expires
 			}
 		}
+
 	case 8:
 		switch b[0] | 0x20 {
 		case 'l':
@@ -365,6 +383,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return IfRange
 			}
 		}
+
 	case 10:
 		switch b[0] | 0x20 {
 		case 'c':
@@ -384,6 +403,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return KeepAlive
 			}
 		}
+
 	case 11:
 		if equalFoldSWAR(b, []byte("retry-after")) {
 			return RetryAfter
@@ -400,12 +420,14 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 			} else if equalFoldSWAR(b, []byte("accept-ranges")) {
 				return AcceptRanges
 			}
+
 		case 'c':
 			if equalFoldSWAR(b, []byte("cache-control")) {
 				return CacheControl
 			} else if equalFoldSWAR(b, []byte("content-range")) {
 				return ContentRange
 			}
+
 		case 'l':
 			if equalFoldSWAR(b, []byte("last-modified")) {
 				return LastModified
@@ -415,6 +437,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return IfNoneMatch
 			}
 		}
+
 	case 14:
 		switch b[0] | 0x20 {
 		case 'c':
@@ -426,6 +449,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return AcceptCharset
 			}
 		}
+
 	case 15:
 		switch b[7] | 0x20 {
 		case 'e':
@@ -437,6 +461,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return AcceptLanguage
 			}
 		}
+
 	case 16:
 		switch b[0] | 0x20 {
 		case 'c':
@@ -452,6 +477,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 					return ContentLocation
 				}
 			}
+
 		case 'p':
 			if equalFoldSWAR(b, []byte("proxy-connection")) {
 				return ProxyConnection
@@ -461,6 +487,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return WWWAuthenticate
 			}
 		}
+
 	case 17:
 		switch b[0] | 0x20 {
 		case 't':
@@ -472,6 +499,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return IfModifiedSince
 			}
 		}
+
 	case 18:
 		if equalFoldSWAR(b, []byte("proxy-authenticate")) {
 			return ProxyAuthenticate
@@ -491,6 +519,7 @@ func InternCanonicalKey[S ~string | ~[]byte](key S) string {
 				return ContentDisposition
 			}
 		}
+
 	case 22:
 		if equalFoldSWAR(b, []byte("x-content-type-options")) {
 			return XContentTypeOptions
@@ -520,6 +549,7 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		} else if bytes.Equal(b, []byte("br")) {
 			return "br"
 		}
+
 	case 4:
 		switch string(b) {
 		case "gzip":
@@ -529,6 +559,7 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		case "none":
 			return "none"
 		}
+
 	case 5:
 		switch string(b) {
 		case "close":
@@ -536,6 +567,7 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		case "bytes":
 			return "bytes"
 		}
+
 	case 7:
 		switch string(b) {
 		case "chunked":
@@ -543,6 +575,7 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		case "deflate":
 			return "deflate"
 		}
+
 	case 8:
 		switch string(b) {
 		case "document":
@@ -558,6 +591,7 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		case "no-store":
 			return "no-store"
 		}
+
 	case 10:
 		switch string(b) {
 		case "keep-alive":
@@ -565,6 +599,7 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		case "cross-site":
 			return "cross-site"
 		}
+
 	case 11:
 		if bytes.Equal(b, []byte("same-origin")) {
 			return "same-origin"
@@ -585,9 +620,11 @@ func InternValueString[S ~string | ~[]byte](val S) string {
 		if bytes.Equal(b, []byte("text/plain; charset=utf-8")) {
 			return "text/plain; charset=utf-8"
 		}
+
 		if bytes.Equal(b, []byte("text/html; charset=utf-8")) {
 			return "text/html; charset=utf-8"
 		}
+
 	case 33:
 		if bytes.Equal(b, ValApplicationForm) {
 			return "application/x-www-form-urlencoded"
@@ -611,6 +648,7 @@ func InternValue[S ~string | ~[]byte](val S) []byte {
 				return ValSecChUaMobileFalse
 			}
 		}
+
 	case 4:
 		if bytes.Equal(b, ValSecFetchSiteNone) {
 			return ValSecFetchSiteNone
@@ -619,16 +657,20 @@ func InternValue[S ~string | ~[]byte](val S) []byte {
 		if bytes.Equal(b, ValSecFetchDestDoc) {
 			return ValSecFetchDestDoc
 		}
+
 		if bytes.Equal(b, ValSecFetchModeNav) {
 			return ValSecFetchModeNav
 		}
+
 	case 10:
 		if bytes.Equal(b, ValConnectionKeepAlive) {
 			return ValConnectionKeepAlive
 		}
+
 		if bytes.Equal(b, ValSecFetchSiteCross) {
 			return ValSecFetchSiteCross
 		}
+
 	case 11:
 		if bytes.Equal(b, ValSecFetchSiteSame) {
 			return ValSecFetchSiteSame
@@ -649,7 +691,6 @@ func InternValue[S ~string | ~[]byte](val S) []byte {
 
 	return nil
 }
-
 
 func stringOrBytesToBytes[S ~string | ~[]byte](s S) []byte {
 	switch v := any(s).(type) {
@@ -675,20 +716,24 @@ func equalFoldSWAR(a, b []byte) bool {
 	// 8-byte SWAR blocks
 	for i+8 <= n {
 		va := binary.LittleEndian.Uint64(a[i:])
+
 		vb := binary.LittleEndian.Uint64(b[i:])
 		if toLower64(va) != vb {
 			return false
 		}
+
 		i += 8
 	}
 
 	// 4-byte remainder
 	if i+4 <= n {
 		va := binary.LittleEndian.Uint32(a[i:])
+
 		vb := binary.LittleEndian.Uint32(b[i:])
 		if toLower32(va) != vb {
 			return false
 		}
+
 		i += 4
 	}
 
@@ -698,6 +743,7 @@ func equalFoldSWAR(a, b []byte) bool {
 		if ca >= 'A' && ca <= 'Z' {
 			ca += 32
 		}
+
 		if ca != b[i] {
 			return false
 		}
@@ -711,6 +757,7 @@ func toLower64(v uint64) uint64 {
 	mask = (mask ^ v) & 0x8080808080808080
 	mask = ((v + 0x3f3f3f3f3f3f3f3f) ^ v) & mask
 	mask = (mask >> 2) & 0x2020202020202020
+
 	return v | mask
 }
 
@@ -719,5 +766,6 @@ func toLower32(v uint32) uint32 {
 	mask = (mask ^ v) & 0x80808080
 	mask = ((v + 0x3f3f3f3f) ^ v) & mask
 	mask = (mask >> 2) & 0x20202020
+
 	return v | mask
 }

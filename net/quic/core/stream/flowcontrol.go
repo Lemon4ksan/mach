@@ -75,9 +75,11 @@ func NewConnectionFlowController(
 	if initialReceiveWindow == 0 {
 		initialReceiveWindow = DefaultInitialConnReceiveWindow
 	}
+
 	if maxReceiveWindow == 0 {
 		maxReceiveWindow = DefaultMaxConnReceiveWindow
 	}
+
 	if rttProvider == nil {
 		rttProvider = staticRTT(50 * time.Millisecond)
 	}
@@ -101,6 +103,7 @@ func (c *ConnectionFlowController) SendCreditAvailable() uint64 {
 	if c.sendWindow > c.bytesSent {
 		return c.sendWindow - c.bytesSent
 	}
+
 	return 0
 }
 
@@ -108,6 +111,7 @@ func (c *ConnectionFlowController) SendCreditAvailable() uint64 {
 func (c *ConnectionFlowController) AddBytesSent(n uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.bytesSent += n
 }
 
@@ -121,8 +125,10 @@ func (c *ConnectionFlowController) UpdateSendWindow(newLimit uint64) {
 		for _, ch := range c.sendBlockedWaiters {
 			close(ch)
 		}
+
 		c.sendBlockedWaiters = nil
 	}
+
 	c.mu.Unlock()
 }
 
@@ -133,6 +139,7 @@ func (c *ConnectionFlowController) RegisterSendWaiter() <-chan struct{} {
 
 	ch := make(chan struct{})
 	c.sendBlockedWaiters = append(c.sendBlockedWaiters, ch)
+
 	return ch
 }
 
@@ -145,8 +152,10 @@ func (c *ConnectionFlowController) CheckAndQueueDataBlocked() (offset uint64, sh
 		c.hasSentBlocked = true
 		c.dataBlockedQueued = true
 		c.lastBlockedOffset = c.sendWindow
+
 		return c.sendWindow, true
 	}
+
 	return 0, false
 }
 
@@ -166,6 +175,7 @@ func (c *ConnectionFlowController) UpdateHighestReceived(streamIncrement uint64)
 			),
 		}
 	}
+
 	return nil
 }
 
@@ -173,6 +183,7 @@ func (c *ConnectionFlowController) UpdateHighestReceived(streamIncrement uint64)
 func (c *ConnectionFlowController) AddBytesRead(n uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.bytesRead += n
 }
 
@@ -186,11 +197,13 @@ func (c *ConnectionFlowController) CheckAndQueueWindowUpdate() (newWindow uint64
 	if c.receiveWindow > c.bytesRead {
 		bytesRemaining = c.receiveWindow - c.bytesRead
 	}
+
 	threshold := uint64(float64(c.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
 	if bytesRemaining > threshold {
 		if c.windowUpdateQueued {
 			return c.queuedWindowUpdate, true
 		}
+
 		return 0, false
 	}
 
@@ -198,6 +211,7 @@ func (c *ConnectionFlowController) CheckAndQueueWindowUpdate() (newWindow uint64
 	c.receiveWindow = c.bytesRead + c.receiveWindowSize
 	c.queuedWindowUpdate = c.receiveWindow
 	c.windowUpdateQueued = true
+
 	return c.receiveWindow, true
 }
 
@@ -210,6 +224,7 @@ func (c *ConnectionFlowController) GetWindowUpdate() (newWindow uint64, ok bool)
 		c.windowUpdateQueued = false
 		return c.queuedWindowUpdate, true
 	}
+
 	return 0, false
 }
 
@@ -227,6 +242,7 @@ func (c *ConnectionFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok 
 	if c.receiveWindow > c.bytesRead {
 		bytesRemaining = c.receiveWindow - c.bytesRead
 	}
+
 	threshold := uint64(float64(c.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
 	if bytesRemaining > threshold {
 		return 0, false
@@ -234,6 +250,7 @@ func (c *ConnectionFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok 
 
 	c.maybeAdjustWindowSize(time.Now())
 	c.receiveWindow = c.bytesRead + c.receiveWindowSize
+
 	return c.receiveWindow, true
 }
 
@@ -302,12 +319,12 @@ type StreamFlowController struct {
 	connection *ConnectionFlowController
 
 	// Send side
-	bytesSent                uint64
-	sendWindow               uint64
-	lastBlockedOffset        uint64
-	streamDataBlockedQueued  bool
-	hasSentBlocked           bool
-	sendBlockedWaiters       []chan struct{}
+	bytesSent               uint64
+	sendWindow              uint64
+	lastBlockedOffset       uint64
+	streamDataBlockedQueued bool
+	hasSentBlocked          bool
+	sendBlockedWaiters      []chan struct{}
 
 	// Receive side
 	bytesRead            uint64
@@ -339,9 +356,11 @@ func NewStreamFlowController(
 	if initialReceiveWindow == 0 {
 		initialReceiveWindow = DefaultInitialStreamReceiveWindow
 	}
+
 	if maxReceiveWindow == 0 {
 		maxReceiveWindow = DefaultMaxStreamReceiveWindow
 	}
+
 	if rttProvider == nil {
 		rttProvider = staticRTT(50 * time.Millisecond)
 	}
@@ -361,11 +380,12 @@ func NewStreamFlowController(
 
 // SendCreditAvailable returns the effective credit available to send on this stream,
 // bounded by both stream-level and connection-level flow control windows (RFC 9000 §4.1).
-func (s *StreamFlowController) SendCreditAvailable() (streamCredit uint64, connCredit uint64, effective uint64) {
+func (s *StreamFlowController) SendCreditAvailable() (streamCredit, connCredit, effective uint64) {
 	s.mu.Lock()
 	if s.sendWindow > s.bytesSent {
 		streamCredit = s.sendWindow - s.bytesSent
 	}
+
 	s.mu.Unlock()
 
 	if s.connection != nil {
@@ -375,6 +395,7 @@ func (s *StreamFlowController) SendCreditAvailable() (streamCredit uint64, connC
 		connCredit = streamCredit
 		effective = streamCredit
 	}
+
 	return streamCredit, connCredit, effective
 }
 
@@ -394,12 +415,15 @@ func (s *StreamFlowController) UpdateSendWindow(newLimit uint64) {
 	s.mu.Lock()
 	if newLimit > s.sendWindow {
 		s.sendWindow = newLimit
+
 		s.hasSentBlocked = false
 		for _, ch := range s.sendBlockedWaiters {
 			close(ch)
 		}
+
 		s.sendBlockedWaiters = nil
 	}
+
 	s.mu.Unlock()
 }
 
@@ -410,6 +434,7 @@ func (s *StreamFlowController) RegisterSendWaiter() <-chan struct{} {
 
 	ch := make(chan struct{})
 	s.sendBlockedWaiters = append(s.sendBlockedWaiters, ch)
+
 	return ch
 }
 
@@ -422,8 +447,10 @@ func (s *StreamFlowController) CheckAndQueueStreamDataBlocked() (offset uint64, 
 		s.hasSentBlocked = true
 		s.streamDataBlockedQueued = true
 		s.lastBlockedOffset = s.sendWindow
+
 		return s.sendWindow, true
 	}
+
 	return 0, false
 }
 
@@ -431,11 +458,13 @@ func (s *StreamFlowController) CheckAndQueueStreamDataBlocked() (offset uint64, 
 // Returns TransportError with FlowControlError if highestReceived > receiveWindow (RFC 9000 §4.3).
 func (s *StreamFlowController) UpdateHighestReceived(offset uint64) error {
 	s.mu.Lock()
+
 	var increment uint64
 	if offset > s.highestReceived {
 		increment = offset - s.highestReceived
 		s.highestReceived = offset
 	}
+
 	currentWindow := s.receiveWindow
 	s.mu.Unlock()
 
@@ -452,6 +481,7 @@ func (s *StreamFlowController) UpdateHighestReceived(offset uint64) error {
 	if increment > 0 && s.connection != nil {
 		return s.connection.UpdateHighestReceived(increment)
 	}
+
 	return nil
 }
 
@@ -476,11 +506,13 @@ func (s *StreamFlowController) CheckAndQueueWindowUpdate() (newWindow uint64, ok
 	if s.receiveWindow > s.bytesRead {
 		bytesRemaining = s.receiveWindow - s.bytesRead
 	}
+
 	threshold := uint64(float64(s.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
 	if bytesRemaining > threshold {
 		if s.windowUpdateQueued {
 			return s.queuedWindowUpdate, true
 		}
+
 		return 0, false
 	}
 
@@ -488,6 +520,7 @@ func (s *StreamFlowController) CheckAndQueueWindowUpdate() (newWindow uint64, ok
 	s.receiveWindow = s.bytesRead + s.receiveWindowSize
 	s.queuedWindowUpdate = s.receiveWindow
 	s.windowUpdateQueued = true
+
 	return s.receiveWindow, true
 }
 
@@ -500,6 +533,7 @@ func (s *StreamFlowController) GetWindowUpdate() (newOffset uint64, ok bool) {
 		s.windowUpdateQueued = false
 		return s.queuedWindowUpdate, true
 	}
+
 	return 0, false
 }
 
@@ -517,6 +551,7 @@ func (s *StreamFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool
 	if s.receiveWindow > s.bytesRead {
 		bytesRemaining = s.receiveWindow - s.bytesRead
 	}
+
 	threshold := uint64(float64(s.receiveWindowSize) * (1.0 - WindowUpdateThreshold))
 	if bytesRemaining > threshold {
 		return 0, false
@@ -524,6 +559,7 @@ func (s *StreamFlowController) MaybeGetWindowUpdate() (newWindow uint64, ok bool
 
 	s.maybeAdjustWindowSize(time.Now())
 	s.receiveWindow = s.bytesRead + s.receiveWindowSize
+
 	return s.receiveWindow, true
 }
 
@@ -555,6 +591,7 @@ func (s *StreamFlowController) ReclaimBytesSent(n uint64) {
 	} else {
 		s.bytesSent = 0
 	}
+
 	s.mu.Unlock()
 
 	if s.connection != nil {

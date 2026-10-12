@@ -102,10 +102,12 @@ func Parse[S ~string | ~[]byte](s S) (Priority, error) {
 	for start < len(raw) && (raw[start] == ' ' || raw[start] == '\t') {
 		start++
 	}
+
 	end := len(raw)
 	for end > start && (raw[end-1] == ' ' || raw[end-1] == '\t') {
 		end--
 	}
+
 	raw = raw[start:end]
 	if len(raw) == 0 {
 		return p, nil
@@ -133,30 +135,37 @@ func Parse[S ~string | ~[]byte](s S) (Priority, error) {
 		for pStart < len(part) && (part[pStart] == ' ' || part[pStart] == '\t') {
 			pStart++
 		}
+
 		pEnd := len(part)
 		for pEnd > pStart && (part[pEnd-1] == ' ' || part[pEnd-1] == '\t') {
 			pEnd--
 		}
+
 		item := part[pStart:pEnd]
 
 		if equalStr(item, "i") || equalStr(item, "i=?1") {
 			p.Incremental = true
 			continue
 		}
+
 		if equalStr(item, "i=?0") {
 			p.Incremental = false
 			continue
 		}
+
 		if len(item) >= 3 && item[0] == 'u' && item[1] == '=' {
 			valStr := item[2:]
+
 			vStart := 0
 			for vStart < len(valStr) && (valStr[vStart] == ' ' || valStr[vStart] == '\t') {
 				vStart++
 			}
+
 			vEnd := len(valStr)
 			for vEnd > vStart && (valStr[vEnd-1] == ' ' || valStr[vEnd-1] == '\t') {
 				vEnd--
 			}
+
 			valTrim := valStr[vStart:vEnd]
 			if len(valTrim) == 1 && valTrim[0] >= '0' && valTrim[0] <= '7' {
 				p.Urgency = int(valTrim[0] - '0')
@@ -166,7 +175,6 @@ func Parse[S ~string | ~[]byte](s S) (Priority, error) {
 
 	return p, nil
 }
-
 
 func equalStr[S ~string | ~[]byte](s S, target string) bool {
 	return string(s) == target

@@ -34,6 +34,7 @@ type Service struct {
 // invoking yield for each valid [Service] parsed per RFC 7838 §3.
 func ForEach[S ~string | ~[]byte](header S, yield func(Service) bool) bool {
 	raw := stringOrBytesToString(header)
+
 	raw = trimSpace(raw)
 	if raw == "" || raw == "clear" {
 		return true
@@ -42,6 +43,7 @@ func ForEach[S ~string | ~[]byte](header S, yield func(Service) bool) bool {
 	for len(raw) > 0 {
 		part, rest := splitNextEntry(raw)
 		raw = rest
+
 		part = trimSpace(part)
 		if part == "" {
 			continue
@@ -55,6 +57,7 @@ func ForEach[S ~string | ~[]byte](header S, yield func(Service) bool) bool {
 		for len(part) > 0 {
 			param, nextParam := splitNextParam(part)
 			part = nextParam
+
 			param = trimSpace(param)
 			if param == "" {
 				continue
@@ -62,6 +65,7 @@ func ForEach[S ~string | ~[]byte](header S, yield func(Service) bool) bool {
 
 			if !hasFirst {
 				hasFirst = true
+
 				protoID, hostPort, ok := cutByte(param, '=')
 				if !ok {
 					break
@@ -88,11 +92,13 @@ func ForEach[S ~string | ~[]byte](header S, yield func(Service) bool) bool {
 					Port:       port,
 					MaxAge:     DefaultMaxAge,
 				}
+
 				continue
 			}
 
 			key, val, _ := cutByte(param, '=')
 			key = trimSpace(key)
+
 			val = trimSpace(val)
 			switch key {
 			case "ma":
@@ -130,6 +136,7 @@ func AppendParse[S ~string | ~[]byte](dst []Service, header S) []Service {
 		dst = append(dst, s)
 		return true
 	})
+
 	return dst
 }
 
@@ -143,6 +150,7 @@ func Format(services ...Service) string {
 	if len(services) == 0 {
 		return ""
 	}
+
 	return bytesconv.B2S(AppendFormat(nil, services...))
 }
 
@@ -152,11 +160,14 @@ func AppendFormat(dst []byte, services ...Service) []byte {
 		if i > 0 {
 			dst = append(dst, ',', ' ')
 		}
+
 		dst = append(dst, svc.ProtocolID...)
+
 		dst = append(dst, '=', '"')
 		if svc.Host != "" {
 			dst = append(dst, svc.Host...)
 		}
+
 		dst = append(dst, ':')
 		dst = strconv.AppendInt(dst, int64(svc.Port), 10)
 		dst = append(dst, '"')
@@ -165,10 +176,12 @@ func AppendFormat(dst []byte, services ...Service) []byte {
 			dst = append(dst, ';', ' ', 'm', 'a', '=')
 			dst = strconv.AppendInt(dst, int64(svc.MaxAge/time.Second), 10)
 		}
+
 		if svc.Persist {
 			dst = append(dst, ';', ' ', 'p', 'e', 'r', 's', 'i', 's', 't', '=', '1')
 		}
 	}
+
 	return dst
 }
 
@@ -183,16 +196,17 @@ func stringOrBytesToString[S ~string | ~[]byte](s S) string {
 	}
 }
 
-
 func trimSpace(s string) string {
 	start := 0
 	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n') {
 		start++
 	}
+
 	end := len(s)
 	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\r' || s[end-1] == '\n') {
 		end--
 	}
+
 	return s[start:end]
 }
 
@@ -200,6 +214,7 @@ func cutByte(s string, sep byte) (before, after string, ok bool) {
 	if i := indexByte(s, sep); i >= 0 {
 		return s[:i], s[i+1:], true
 	}
+
 	return s, "", false
 }
 
@@ -209,6 +224,7 @@ func indexByte(s string, c byte) int {
 			return i
 		}
 	}
+
 	return -1
 }
 
@@ -218,6 +234,7 @@ func lastIndexByte(s string, c byte) int {
 			return i
 		}
 	}
+
 	return -1
 }
 
@@ -228,10 +245,12 @@ func splitNextEntry(s string) (entry, rest string) {
 			inQuote = !inQuote
 			continue
 		}
+
 		if s[i] == ',' && !inQuote {
 			return s[:i], s[i+1:]
 		}
 	}
+
 	return s, ""
 }
 
@@ -242,10 +261,12 @@ func splitNextParam(s string) (param, rest string) {
 			inQuote = !inQuote
 			continue
 		}
+
 		if s[i] == ';' && !inQuote {
 			return s[:i], s[i+1:]
 		}
 	}
+
 	return s, ""
 }
 
@@ -253,13 +274,16 @@ func parseUint(s string) (int, bool) {
 	if len(s) == 0 {
 		return 0, false
 	}
+
 	n := 0
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if c < '0' || c > '9' {
 			return 0, false
 		}
+
 		n = n*10 + int(c-'0')
 	}
+
 	return n, true
 }

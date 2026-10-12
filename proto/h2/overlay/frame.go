@@ -129,6 +129,7 @@ func (h HeadersFrame) HeaderBlockFragment() []byte {
 		if len(p) == 0 {
 			return nil
 		}
+
 		padLen := int(p[0])
 		start = 1
 		end -= padLen

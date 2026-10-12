@@ -36,9 +36,14 @@ func (m *mockLoopConn) Write(b []byte) (n int, err error) {
 	return n, nil
 }
 
-func (m *mockLoopConn) Close() error                       { return nil }
-func (m *mockLoopConn) LocalAddr() net.Addr                { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1080} }
-func (m *mockLoopConn) RemoteAddr() net.Addr               { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1080} }
+func (m *mockLoopConn) Close() error { return nil }
+func (m *mockLoopConn) LocalAddr() net.Addr {
+	return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1080}
+}
+
+func (m *mockLoopConn) RemoteAddr() net.Addr {
+	return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1080}
+}
 func (m *mockLoopConn) SetDeadline(t time.Time) error      { return nil }
 func (m *mockLoopConn) SetReadDeadline(t time.Time) error  { return nil }
 func (m *mockLoopConn) SetWriteDeadline(t time.Time) error { return nil }

@@ -78,13 +78,14 @@ func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) erro
 	}
 
 	// 3. Connection Header
-	if code == status.SwitchingProtocols {
+	switch {
+	case code == status.SwitchingProtocols:
 		if r.Headers.Get(headkit.Connection) == "" {
 			_, _ = bw.WriteString("Connection: Upgrade\r\n")
 		}
-	} else if !keepAlive {
+	case !keepAlive:
 		_, _ = bw.Write(hdrConnectionClose)
-	} else if r.Headers.Get(headkit.Connection) == "" {
+	case r.Headers.Get(headkit.Connection) == "":
 		_, _ = bw.Write(hdrConnectionKeepAlive)
 	}
 

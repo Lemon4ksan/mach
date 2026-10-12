@@ -35,7 +35,14 @@ func TestPacketNumberEncodingDecoding(t *testing.T) {
 			trunc, pnLen := EncodePacketNumber(pn, largestAcked)
 			rec := DecodePacketNumber(largestAcked, trunc, pnLen)
 			if rec != pn {
-				t.Fatalf("PN round trip failed for pn=%d, largestAcked=%d: got %d (len=%d, trunc=%d)", pn, largestAcked, rec, pnLen, trunc)
+				t.Fatalf(
+					"PN round trip failed for pn=%d, largestAcked=%d: got %d (len=%d, trunc=%d)",
+					pn,
+					largestAcked,
+					rec,
+					pnLen,
+					trunc,
+				)
 			}
 		}
 	}
@@ -45,7 +52,14 @@ func TestPacketNumberEncodingDecoding(t *testing.T) {
 			trunc, pnLen := EncodePacketNumber(pn, largestAcked)
 			rec := DecodePacketNumber(largestAcked, trunc, pnLen)
 			if rec != pn {
-				t.Fatalf("PN round trip failed for large pn=%d, largestAcked=%d: got %d (len=%d, trunc=%d)", pn, largestAcked, rec, pnLen, trunc)
+				t.Fatalf(
+					"PN round trip failed for large pn=%d, largestAcked=%d: got %d (len=%d, trunc=%d)",
+					pn,
+					largestAcked,
+					rec,
+					pnLen,
+					trunc,
+				)
 			}
 		}
 	}
@@ -88,7 +102,10 @@ func TestHeaderRoundTrip_LongHeaders_V1_and_V2(t *testing.T) {
 						buf = append(buf, make([]byte, orig.Length-uint64(pnLen))...)
 
 						// Verify ParseHeaderOffsets
-						parsedPNOffset, isLong, parsedType, parsedVersion, parsedDCID, parsedSCID, err := ParseHeaderOffsets(buf, len(dcid))
+						parsedPNOffset, isLong, parsedType, parsedVersion, parsedDCID, parsedSCID, err := ParseHeaderOffsets(
+							buf,
+							len(dcid),
+						)
 						if err != nil {
 							t.Fatalf("ParseHeaderOffsets failed: %v", err)
 						}
@@ -109,7 +126,13 @@ func TestHeaderRoundTrip_LongHeaders_V1_and_V2(t *testing.T) {
 						}
 
 						if parsed.Type != typ || parsed.Version != v {
-							t.Fatalf("Header type/version mismatch: got %s %s, want %s %s", parsed.Type, parsed.Version, typ, v)
+							t.Fatalf(
+								"Header type/version mismatch: got %s %s, want %s %s",
+								parsed.Type,
+								parsed.Version,
+								typ,
+								v,
+							)
 						}
 						if !bytes.Equal(parsed.DestConnID, dcid) || !bytes.Equal(parsed.SrcConnID, scid) {
 							t.Fatalf("Header CID mismatch")
@@ -118,7 +141,13 @@ func TestHeaderRoundTrip_LongHeaders_V1_and_V2(t *testing.T) {
 							t.Fatalf("Token mismatch: got %s, want %s", parsed.Token, orig.Token)
 						}
 						if parsed.PacketNumber != orig.PacketNumber || parsed.PacketNumberLen != orig.PacketNumberLen {
-							t.Fatalf("PN mismatch: got %d (%d), want %d (%d)", parsed.PacketNumber, parsed.PacketNumberLen, orig.PacketNumber, orig.PacketNumberLen)
+							t.Fatalf(
+								"PN mismatch: got %d (%d), want %d (%d)",
+								parsed.PacketNumber,
+								parsed.PacketNumberLen,
+								orig.PacketNumber,
+								orig.PacketNumberLen,
+							)
 						}
 					}
 				}
@@ -169,7 +198,13 @@ func TestHeaderRoundTrip_ShortHeader(t *testing.T) {
 							t.Fatalf("DCID mismatch")
 						}
 						if parsed.PacketNumber != pn || parsed.PacketNumberLen != pnLen {
-							t.Fatalf("PN mismatch: got %d (%d), want %d (%d)", parsed.PacketNumber, parsed.PacketNumberLen, pn, pnLen)
+							t.Fatalf(
+								"PN mismatch: got %d (%d), want %d (%d)",
+								parsed.PacketNumber,
+								parsed.PacketNumberLen,
+								pn,
+								pnLen,
+							)
 						}
 					}
 				}

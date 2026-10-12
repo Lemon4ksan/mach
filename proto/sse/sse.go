@@ -97,6 +97,7 @@ func (r *Reader) Reset(rd io.Reader) {
 	if c, ok := rd.(io.Closer); ok {
 		closer = c
 	}
+
 	r.closer = closer
 
 	if br, ok := rd.(*bufio.Reader); ok {
@@ -178,6 +179,7 @@ func (r *Reader) NextEvent() (Event, error) {
 			if r.hasData {
 				r.dataBuf = append(r.dataBuf, '\n')
 			}
+
 			r.dataBuf = append(r.dataBuf, value...)
 			r.hasData = true
 
@@ -227,6 +229,7 @@ func (r *Reader) readLine() ([]byte, error) {
 			}
 
 			r.lineBuf = append(r.lineBuf, chunk...)
+
 			return r.lineBuf, nil
 		}
 
@@ -263,6 +266,7 @@ func (r *Reader) Scan() bool {
 	}
 
 	r.cur = ev
+
 	return true
 }
 
@@ -321,10 +325,12 @@ func AppendEvent[S ~string | ~[]byte](dst []byte, event, data, id S, retry int) 
 		raw := data
 		for len(raw) > 0 {
 			dst = append(dst, "data: "...)
+
 			idx := indexNewline(raw)
 			if idx >= 0 {
 				dst = append(dst, raw[:idx]...)
 				dst = append(dst, '\n')
+
 				if idx+1 < len(raw) && raw[idx] == '\r' && raw[idx+1] == '\n' {
 					raw = raw[idx+2:]
 				} else {
@@ -339,6 +345,7 @@ func AppendEvent[S ~string | ~[]byte](dst []byte, event, data, id S, retry int) 
 	}
 
 	dst = append(dst, '\n')
+
 	return dst
 }
 
@@ -362,6 +369,7 @@ func WriteEvent[S ~string | ~[]byte](w io.Writer, event, data, id S, retry int) 
 	bb.B = AppendEvent(bb.B[:0], event, data, id, retry)
 	n, err := w.Write(bb.B)
 	sseBufferPool.Put(bb)
+
 	return n, err
 }
 

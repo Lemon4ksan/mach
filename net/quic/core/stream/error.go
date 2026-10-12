@@ -112,6 +112,7 @@ func (e *StreamError) Error() string {
 	if e.Remote {
 		orig = "remotely"
 	}
+
 	return fmt.Sprintf("stream %d was reset %s with error code %d", e.StreamID, orig, e.ErrorCode)
 }
 
@@ -125,6 +126,7 @@ func (e *TransportError) Error() string {
 	if e.ErrorMessage != "" {
 		return fmt.Sprintf("%s: %s", e.ErrorCode, e.ErrorMessage)
 	}
+
 	return e.ErrorCode.String()
 }
 
@@ -138,6 +140,7 @@ func (e *ApplicationError) Error() string {
 	if e.ErrorMessage != "" {
 		return fmt.Sprintf("application error 0x%x: %s", uint64(e.ErrorCode), e.ErrorMessage)
 	}
+
 	return fmt.Sprintf("application error 0x%x", uint64(e.ErrorCode))
 }
 

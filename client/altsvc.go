@@ -42,6 +42,7 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 	}
 
 	c.mu.RLock()
+
 	entry, ok := c.entries[origin]
 	if !ok {
 		if strings.HasPrefix(origin, "https://") {
@@ -50,8 +51,10 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 			entry, ok = c.entries[origin[7:]]
 		}
 	}
+
 	if !ok && hasUpper(origin) {
 		lower := strings.ToLower(origin)
+
 		entry, ok = c.entries[lower]
 		if !ok {
 			if strings.HasPrefix(lower, "https://") {
@@ -61,6 +64,7 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 			}
 		}
 	}
+
 	if !ok {
 		c.mu.RUnlock()
 
@@ -72,11 +76,13 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 		c.mu.RUnlock()
 		c.mu.Lock()
 		delete(c.entries, origin)
+
 		if strings.HasPrefix(origin, "https://") {
 			delete(c.entries, origin[8:])
 		} else if strings.HasPrefix(origin, "http://") {
 			delete(c.entries, origin[7:])
 		}
+
 		c.mu.Unlock()
 
 		return "", false
@@ -89,6 +95,7 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 	}
 
 	addr := entry.targetAddr
+
 	c.mu.RUnlock()
 
 	return addr, true
@@ -129,6 +136,7 @@ func (c *AltSvcCache) Set(origin string, svc altsvc.Service) {
 	}
 
 	targetAddr := net.JoinHostPort(targetHost, strconv.Itoa(svc.Port))
+
 	maxAge := svc.MaxAge
 	if maxAge <= 0 {
 		maxAge = altsvc.DefaultMaxAge
@@ -141,21 +149,25 @@ func (c *AltSvcCache) Set(origin string, svc altsvc.Service) {
 
 	c.mu.Lock()
 	c.entries[canonical] = entry
+
 	c.entries[origin] = entry
 	if strings.HasPrefix(canonical, "https://") {
 		c.entries[canonical[8:]] = entry
 	} else if strings.HasPrefix(canonical, "http://") {
 		c.entries[canonical[7:]] = entry
 	}
+
 	if strings.HasPrefix(origin, "https://") {
 		c.entries[origin[8:]] = entry
 	} else if strings.HasPrefix(origin, "http://") {
 		c.entries[origin[7:]] = entry
 	}
+
 	if host != "" {
 		c.entries[host] = entry
 		c.entries["https://"+host] = entry
 	}
+
 	c.mu.Unlock()
 }
 
@@ -176,6 +188,7 @@ func (c *AltSvcCache) MarkFailed(origin string, backoff time.Duration) {
 			entry, ok = c.entries[origin[7:]]
 		}
 	}
+
 	if !ok {
 		canonical := canonicalOrigin(origin)
 		entry, ok = c.entries[canonical]
@@ -196,13 +209,16 @@ func (c *AltSvcCache) Clear(origin string) {
 	defer c.mu.Unlock()
 
 	delete(c.entries, origin)
+
 	if strings.HasPrefix(origin, "https://") {
 		delete(c.entries, origin[8:])
 	} else if strings.HasPrefix(origin, "http://") {
 		delete(c.entries, origin[7:])
 	}
+
 	canonical := canonicalOrigin(origin)
 	delete(c.entries, canonical)
+
 	if strings.HasPrefix(canonical, "https://") {
 		delete(c.entries, canonical[8:])
 	}

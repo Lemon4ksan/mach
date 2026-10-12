@@ -179,11 +179,6 @@ func (s *HeaderScanner) skipSpace() bool {
 	return false
 }
 
-func isASCIILetter(b byte) bool {
-	b |= 0x20
-	return 'a' <= b && b <= 'z'
-}
-
 func isValidHeaderKey(a []byte) bool {
 	if len(a) == 0 {
 		return false

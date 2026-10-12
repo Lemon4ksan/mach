@@ -104,6 +104,7 @@ func AppendHeader(dst []byte, h *Header) ([]byte, int, error) {
 		if len(h.DestConnID) > 20 {
 			return dst, 0, ErrInvalidConnectionIDLen
 		}
+
 		if h.PacketNumberLen < 1 || h.PacketNumberLen > 4 {
 			return dst, 0, ErrInvalidPacketNumber
 		}
@@ -112,15 +113,18 @@ func AppendHeader(dst []byte, h *Header) ([]byte, int, error) {
 		if h.SpinBit {
 			firstByte |= 0x20
 		}
+
 		if h.KeyPhase {
 			firstByte |= 0x04
 		}
+
 		firstByte |= byte(h.PacketNumberLen - 1)
 
 		dst = append(dst, firstByte)
 		dst = append(dst, h.DestConnID...)
 		pnOffset := len(dst)
 		dst = AppendPacketNumber(dst, h.PacketNumber, h.PacketNumberLen)
+
 		return dst, pnOffset, nil
 	}
 
@@ -139,6 +143,7 @@ func AppendHeader(dst []byte, h *Header) ([]byte, int, error) {
 		dst = append(dst, h.DestConnID...)
 		dst = append(dst, byte(len(h.SrcConnID)))
 		dst = append(dst, h.SrcConnID...)
+
 		return dst, 0, nil
 	}
 
@@ -179,6 +184,7 @@ func AppendHeader(dst []byte, h *Header) ([]byte, int, error) {
 		if h.PacketNumberLen < 1 || h.PacketNumberLen > 4 {
 			return dst, 0, ErrInvalidPacketNumber
 		}
+
 		firstByte |= byte(h.PacketNumberLen - 1)
 	}
 
@@ -196,12 +202,14 @@ func AppendHeader(dst []byte, h *Header) ([]byte, int, error) {
 		dst = appendVarint(dst, h.Length)
 		pnOffset := len(dst)
 		dst = AppendPacketNumber(dst, h.PacketNumber, h.PacketNumberLen)
+
 		return dst, pnOffset, nil
 
 	case PacketType0RTT, PacketTypeHandshake:
 		dst = appendVarint(dst, h.Length)
 		pnOffset := len(dst)
 		dst = AppendPacketNumber(dst, h.PacketNumber, h.PacketNumberLen)
+
 		return dst, pnOffset, nil
 
 	case PacketTypeRetry:
@@ -231,6 +239,7 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 		if (firstByte & 0x40) == 0 {
 			return h, ErrInvalidFixedBit
 		}
+
 		if (firstByte & 0x18) != 0 {
 			// Reserved bits must be 0
 			return h, ErrInvalidReservedBits
@@ -242,9 +251,11 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 		h.PacketNumberLen = int(firstByte&0x03) + 1
 
 		offset := 1
+
 		if destConnIDLen > 20 || destConnIDLen < 0 {
 			return h, ErrInvalidConnectionIDLen
 		}
+
 		if len(b) < offset+destConnIDLen+h.PacketNumberLen {
 			return h, ErrTruncatedHeader
 		}
@@ -259,6 +270,7 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 
 		h.HeaderLen = offset
 		h.PayloadLen = len(b) - offset
+
 		return h, nil
 	}
 
@@ -275,24 +287,30 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 		if len(b) < offset+2 {
 			return h, ErrTruncatedHeader
 		}
+
 		dcidLen := int(b[offset])
+
 		offset++
 		if len(b) < offset+dcidLen+1 {
 			return h, ErrTruncatedHeader
 		}
+
 		h.DestConnID = b[offset : offset+dcidLen]
 		offset += dcidLen
 
 		scidLen := int(b[offset])
+
 		offset++
 		if len(b) < offset+scidLen {
 			return h, ErrTruncatedHeader
 		}
+
 		h.SrcConnID = b[offset : offset+scidLen]
 		offset += scidLen
 
 		h.HeaderLen = offset
 		h.PayloadLen = len(b) - offset
+
 		return h, nil
 	}
 
@@ -305,26 +323,33 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 	if len(b) < offset+1 {
 		return h, ErrTruncatedHeader
 	}
+
 	dcidLen := int(b[offset])
 	offset++
+
 	if dcidLen > 20 {
 		return h, ErrInvalidConnectionIDLen
 	}
+
 	if len(b) < offset+dcidLen+1 {
 		return h, ErrTruncatedHeader
 	}
+
 	h.DestConnID = b[offset : offset+dcidLen]
 	offset += dcidLen
 
 	// Read Source Connection ID
 	scidLen := int(b[offset])
 	offset++
+
 	if scidLen > 20 {
 		return h, ErrInvalidConnectionIDLen
 	}
+
 	if len(b) < offset+scidLen {
 		return h, ErrTruncatedHeader
 	}
+
 	h.SrcConnID = b[offset : offset+scidLen]
 	offset += scidLen
 
@@ -359,9 +384,11 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 		if len(b) < offset+16 { // Must at least contain 16-byte retry integrity tag
 			return h, ErrTruncatedPacket
 		}
+
 		h.Token = b[offset : len(b)-16]
 		h.HeaderLen = len(b) - 16
 		h.PayloadLen = 16 // Retry integrity tag
+
 		return h, nil
 	}
 
@@ -369,6 +396,7 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 	if (firstByte & 0x0c) != 0 {
 		return h, ErrInvalidReservedBits
 	}
+
 	h.PacketNumberLen = int(firstByte&0x03) + 1
 
 	if h.Type == PacketTypeInitial {
@@ -376,10 +404,12 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 		if err != nil {
 			return h, ErrTruncatedHeader
 		}
+
 		offset += n
 		if uint64(len(b)-offset) < tokenLen {
 			return h, ErrTruncatedHeader
 		}
+
 		h.Token = b[offset : offset+int(tokenLen)]
 		offset += int(tokenLen)
 	}
@@ -388,6 +418,7 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 	if err != nil {
 		return h, ErrTruncatedHeader
 	}
+
 	h.Length = length
 	offset += n
 
@@ -404,14 +435,19 @@ func ParseHeader(b []byte, destConnIDLen int, largestAcked uint64) (Header, erro
 	if length < uint64(h.PacketNumberLen) || uint64(len(b)-offset) < length-uint64(h.PacketNumberLen) {
 		return h, ErrTruncatedPacket
 	}
+
 	h.PayloadLen = int(length) - h.PacketNumberLen
+
 	return h, nil
 }
 
 // ParseHeaderOffsets parses the unprotected structural offsets of a protected packet header.
 // It determines pnOffset (where packet number begins) and lengths without needing the header protection mask.
 // This allows caller to extract the 16-byte sample and decrypt the packet number.
-func ParseHeaderOffsets(b []byte, destConnIDLen int) (pnOffset int, isLong bool, typ PacketType, v Version, dcid, scid []byte, err error) {
+func ParseHeaderOffsets(
+	b []byte,
+	destConnIDLen int,
+) (pnOffset int, isLong bool, typ PacketType, v Version, dcid, scid []byte, err error) {
 	if len(b) < 1 {
 		return 0, false, 0, 0, nil, nil, ErrTruncatedPacket
 	}
@@ -424,15 +460,18 @@ func ParseHeaderOffsets(b []byte, destConnIDLen int) (pnOffset int, isLong bool,
 		if destConnIDLen < 0 || destConnIDLen > 20 {
 			return 0, false, 0, 0, nil, nil, ErrInvalidConnectionIDLen
 		}
+
 		if len(b) < 1+destConnIDLen+4 { // At least 1 byte first + CID + 4 bytes sample offset
 			return 0, false, 0, 0, nil, nil, ErrTruncatedPacket
 		}
+
 		return 1 + destConnIDLen, false, PacketType1RTT, 0, b[1 : 1+destConnIDLen], nil, nil
 	}
 
 	if len(b) < 5 {
 		return 0, true, 0, 0, nil, nil, ErrTruncatedHeader
 	}
+
 	v = Version(binary.BigEndian.Uint32(b[1:5]))
 	offset := 5
 
@@ -443,19 +482,24 @@ func ParseHeaderOffsets(b []byte, destConnIDLen int) (pnOffset int, isLong bool,
 	if len(b) < offset+1 {
 		return 0, true, 0, v, nil, nil, ErrTruncatedHeader
 	}
+
 	dcidLen := int(b[offset])
+
 	offset++
 	if dcidLen > 20 || len(b) < offset+dcidLen+1 {
 		return 0, true, 0, v, nil, nil, ErrTruncatedHeader
 	}
+
 	dcid = b[offset : offset+dcidLen]
 	offset += dcidLen
 
 	scidLen := int(b[offset])
+
 	offset++
 	if scidLen > 20 || len(b) < offset+scidLen {
 		return 0, true, 0, v, nil, nil, ErrTruncatedHeader
 	}
+
 	scid = b[offset : offset+scidLen]
 	offset += scidLen
 
@@ -493,10 +537,12 @@ func ParseHeaderOffsets(b []byte, destConnIDLen int) (pnOffset int, isLong bool,
 		if err != nil {
 			return 0, true, typ, v, dcid, scid, ErrTruncatedHeader
 		}
+
 		offset += n
 		if uint64(len(b)-offset) < tokenLen {
 			return 0, true, typ, v, dcid, scid, ErrTruncatedHeader
 		}
+
 		offset += int(tokenLen)
 	}
 
@@ -504,6 +550,7 @@ func ParseHeaderOffsets(b []byte, destConnIDLen int) (pnOffset int, isLong bool,
 	if err != nil {
 		return 0, true, typ, v, dcid, scid, ErrTruncatedHeader
 	}
+
 	offset += n
 
 	return offset, true, typ, v, dcid, scid, nil

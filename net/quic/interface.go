@@ -43,6 +43,7 @@ func SupportedVersionsSeq() iter.Seq[Version] {
 		if !yield(Version1) {
 			return
 		}
+
 		yield(Version2)
 	}
 }

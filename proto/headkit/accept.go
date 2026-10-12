@@ -37,6 +37,7 @@ func Accepts[S ~string | ~[]byte](header S) iter.Seq[AcceptItem] {
 			}
 
 			var end int
+
 			inQuote := false
 
 			for end = 0; end < len(s); end++ {
@@ -84,6 +85,7 @@ func parseAcceptToken[S ~string | ~[]byte](token S) AcceptItem {
 		}
 
 		k, v, ok := cutDirectives(p, '=')
+
 		k = toLowerDirectives(trimSpaceDirectives(k))
 		if ok {
 			v = trimSpaceDirectives(v)

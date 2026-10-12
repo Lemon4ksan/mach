@@ -54,14 +54,18 @@ func ForEachChallengeParam[S ~string | ~[]byte](header S, scheme string, yield f
 		var val string
 		if len(rest) > 0 && rest[0] == '"' {
 			rest = rest[1:]
+
 			var sb strings.Builder
+
 			escaped := false
 			foundQuote := false
 
 			for i, c := range rest {
 				if escaped {
 					sb.WriteRune(c)
+
 					escaped = false
+
 					continue
 				}
 
@@ -113,6 +117,7 @@ func ForEachChallengeParam[S ~string | ~[]byte](header S, scheme string, yield f
 // ExtractChallengeParams parses auth-param key-value pairs into a map from an authentication challenge header ([string] or [[]byte]) (RFC 9110 §11.2 & RFC 7616 §3.3).
 func ExtractChallengeParams[S ~string | ~[]byte](header S, scheme string) (map[string]string, bool) {
 	m := make(map[string]string)
+
 	ok := ForEachChallengeParam(header, scheme, func(key, val string) bool {
 		m[key] = val
 		return true
@@ -120,5 +125,6 @@ func ExtractChallengeParams[S ~string | ~[]byte](header S, scheme string) (map[s
 	if !ok {
 		return nil, false
 	}
+
 	return m, true
 }

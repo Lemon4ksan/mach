@@ -159,8 +159,8 @@ func (p *pooledConn) Close() error {
 	}
 
 	if p.engine != nil {
-		if !p.Conn.IsClosed() {
-			if p.Conn.Protocol() == "http/1.1" {
+		if !p.IsClosed() {
+			if p.Protocol() == "http/1.1" {
 				p.engine.PoolManager.Put(p.addr, p.Conn)
 
 				return nil
@@ -171,8 +171,8 @@ func (p *pooledConn) Close() error {
 
 		p.engine.PoolManager.Discard(p.addr, p.Conn)
 
-		return p.Conn.CloseRaw()
+		return p.CloseRaw()
 	}
 
-	return p.Conn.CloseRaw()
+	return p.CloseRaw()
 }

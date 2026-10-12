@@ -323,6 +323,7 @@ func (e *Engine) releaseOrigin(origin string, c Conn, res *http.Response, doErr 
 		e.mu.Unlock()
 
 		e.PoolManager.Discard(origin, c)
+
 		if doErr != nil {
 			_ = c.CloseRaw()
 		}
@@ -334,6 +335,7 @@ func (e *Engine) evictH2(origin string, c *h2client.Conn) {
 	if active, ok := e.h2Active[origin]; ok && active.c == c {
 		delete(e.h2Active, origin)
 	}
+
 	e.mu.Unlock()
 
 	// Decrement count in PoolManager to prevent host bricking (EXP-1202)
@@ -345,6 +347,7 @@ func (e *Engine) evictH3(h3Addr string, c *h3Conn) {
 	if active, ok := e.h3Active[h3Addr]; ok && active == c {
 		delete(e.h3Active, h3Addr)
 	}
+
 	e.mu.Unlock()
 
 	if c != nil {
@@ -402,6 +405,7 @@ func (e *Engine) dialOrigin(ctx context.Context, origin string) (Conn, error) {
 		userDisconnect := opts.OnDisconnect
 		opts.OnDisconnect = func(dCtx context.Context, c *h2client.Conn) {
 			e.evictH2(origin, c)
+
 			if userDisconnect != nil {
 				userDisconnect(dCtx, c)
 			}
@@ -422,7 +426,7 @@ func (e *Engine) dialOrigin(ctx context.Context, origin string) (Conn, error) {
 	return newH1Conn(h1c, origin), nil
 }
 
-func (e *Engine) getOrDialH3(ctx context.Context, h3Addr string, originHost string) (*h3Conn, error) {
+func (e *Engine) getOrDialH3(ctx context.Context, h3Addr, originHost string) (*h3Conn, error) {
 	e.mu.RLock()
 	h3c := e.h3Active[h3Addr]
 	e.mu.RUnlock()
@@ -443,7 +447,7 @@ func (e *Engine) getOrDialH3(ctx context.Context, h3Addr string, originHost stri
 	return h3c, nil
 }
 
-func (e *Engine) dialH3(ctx context.Context, h3Addr string, originHost string) (*h3Conn, error) {
+func (e *Engine) dialH3(ctx context.Context, h3Addr, originHost string) (*h3Conn, error) {
 	probeTimeout := 1 * time.Second
 	if dl, ok := ctx.Deadline(); ok {
 		remaining := time.Until(dl)
@@ -459,13 +463,14 @@ func (e *Engine) dialH3(ctx context.Context, h3Addr string, originHost string) (
 	defer cancel()
 
 	clientTLS := e.H3ClientTLS
-	if clientTLS == nil && e.TLSConfig != nil {
+	switch {
+	case clientTLS == nil && e.TLSConfig != nil:
 		clientTLS = e.TLSConfig.Clone()
-	} else if clientTLS == nil {
+	case clientTLS == nil:
 		clientTLS = &tls.Config{
 			MinVersion: tls.VersionTLS13,
 		}
-	} else {
+	default:
 		clientTLS = clientTLS.Clone()
 	}
 
@@ -475,6 +480,7 @@ func (e *Engine) dialH3(ctx context.Context, h3Addr string, originHost string) (
 		if err != nil {
 			host = originHost
 		}
+
 		clientTLS.ServerName = host
 	}
 
@@ -506,16 +512,19 @@ func (e *Engine) Close() error {
 	// Snapshot active multiplexers before invoking CloseRaw to avoid reentrant deadlock
 	// on e.mu when OnDisconnect triggers evictH2 (EXP-1206).
 	e.mu.Lock()
+
 	h2Conns := make([]*h2Conn, 0, len(e.h2Active))
 	for _, h2c := range e.h2Active {
 		h2Conns = append(h2Conns, h2c)
 	}
+
 	clear(e.h2Active)
 
 	h3Conns := make([]*h3Conn, 0, len(e.h3Active))
 	for _, h3c := range e.h3Active {
 		h3Conns = append(h3Conns, h3c)
 	}
+
 	clear(e.h3Active)
 	e.mu.Unlock()
 
@@ -538,9 +547,11 @@ func isStaleConnErr(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed) {
 		return true
 	}
+
 	msg := err.Error()
 
 	return strings.Contains(msg, "EOF") ||
@@ -565,18 +576,18 @@ func parseOriginAndHost(target string, isTLS bool) (origin, host string) {
 	h, p, err := net.SplitHostPort(raw)
 	if err != nil {
 		h = raw
+
 		if isTLS {
 			p = "443"
 		} else {
 			p = "80"
 		}
-	} else {
-		if p == "443" {
-			isTLS = true
-		}
+	} else if p == "443" {
+		isTLS = true
 	}
 
 	host = h
+
 	cleanAddr := net.JoinHostPort(h, p)
 	if isTLS {
 		origin = "https://" + cleanAddr
@@ -589,16 +600,20 @@ func parseOriginAndHost(target string, isTLS bool) (origin, host string) {
 
 func extractRequestOrigin(req *http.Request, isTLS bool) (origin, host string) {
 	var target string
+
 	rawURI := string(req.Header.RequestURI())
 
-	if strings.HasPrefix(rawURI, "http://") {
+	switch {
+	case strings.HasPrefix(rawURI, "http://"):
 		rest := strings.TrimPrefix(rawURI, "http://")
+
 		idx := strings.IndexByte(rest, '/')
 		if idx != -1 {
 			target = rest[:idx]
 			req.SetRequestURI(rest[idx:])
 		} else {
 			target = rest
+
 			req.SetRequestURI("/")
 		}
 
@@ -606,15 +621,19 @@ func extractRequestOrigin(req *http.Request, isTLS bool) (origin, host string) {
 		req.Header.SetHost(target)
 		req.UseHostHeader = true
 		req.URI().SetScheme("http")
+
 		isTLS = false
-	} else if strings.HasPrefix(rawURI, "https://") {
+
+	case strings.HasPrefix(rawURI, "https://"):
 		rest := strings.TrimPrefix(rawURI, "https://")
+
 		idx := strings.IndexByte(rest, '/')
 		if idx != -1 {
 			target = rest[:idx]
 			req.SetRequestURI(rest[idx:])
 		} else {
 			target = rest
+
 			req.SetRequestURI("/")
 		}
 
@@ -622,8 +641,10 @@ func extractRequestOrigin(req *http.Request, isTLS bool) (origin, host string) {
 		req.Header.SetHost(target)
 		req.UseHostHeader = true
 		req.URI().SetScheme("https")
+
 		isTLS = true
-	} else {
+
+	default:
 		if h := req.Header.Host(); len(h) > 0 {
 			target = string(h)
 		} else if uh := req.URI().Host(); len(uh) > 0 {

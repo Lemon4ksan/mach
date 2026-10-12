@@ -33,9 +33,11 @@ func mapLimitError(err error) error {
 	if err == nil {
 		return nil
 	}
+
 	if errors.Is(err, bytesconv.ErrBodyTooLarge) || errors.Is(err, compress.ErrDecompressionBomb) {
 		return ErrBodyTooLarge
 	}
+
 	return err
 }
 
@@ -121,6 +123,7 @@ func (s *compressedBodyStream) Close() error {
 	})
 
 	<-s.done
+
 	err := s.closeReadErr
 	if err == nil {
 		err = s.closeErr
@@ -135,6 +138,7 @@ func (s *compressedBodyStream) write(sw *bufio.Writer) {
 			pErr := &ErrBodyStreamWritePanic{error: fmt.Errorf("panic while writing compressed body stream: %+v", r)}
 			s.closeErr = s.closeOriginal(pErr)
 		}
+
 		close(s.done)
 	}()
 
@@ -229,6 +233,7 @@ func compressZstdBodyStream(sw *bufio.Writer, bodyStream io.Reader, _ int) error
 	if err != nil {
 		return err
 	}
+
 	fw := &flushWriter{wf: zw, bw: sw}
 	_, wErr := copyBodyStream(fw, bodyStream)
 

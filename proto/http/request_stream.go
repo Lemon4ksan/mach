@@ -111,11 +111,9 @@ func (rs *RequestStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
-var (
-	requestStreamStorage = pool.NewPerCorePool[*RequestStream](func() *RequestStream {
-		return &RequestStream{}
-	})
-)
+var requestStreamStorage = pool.NewPerCorePool[*RequestStream](func() *RequestStream {
+	return &RequestStream{}
+})
 
 // AcquireRequestStream acquires a pooled RequestStream instance initialized with prefetched bytes, reader, and header parser.
 //
@@ -127,6 +125,7 @@ func AcquireRequestStream(b *bytesconv.ByteBuffer, r *bufio.Reader, h bodyStream
 	} else {
 		rs.prefetchedBytes.Reset(b.B)
 	}
+
 	rs.reader = r
 	rs.header = h
 
@@ -140,6 +139,7 @@ func ReleaseRequestStream(rs *RequestStream) {
 	if rs == nil {
 		return
 	}
+
 	rs.totalBytesRead = 0
 	rs.chunkLeft = 0
 	rs.reader = nil

@@ -412,6 +412,7 @@ var (
 	// ErrInvalidCookieValue indicates that a cookie contains invalid characters (RFC 6265 §4.1.1).
 	ErrInvalidCookieValue = errors.New("zerocopy: invalid cookie value")
 )
+
 // Parse parses a Set-Cookie header ([string] or [[]byte]) into c (RFC 6265 §4.1).
 func Parse[S ~string | ~[]byte](c *Cookie, src S) error {
 	c.Reset()
@@ -558,12 +559,14 @@ func Parse[S ~string | ~[]byte](c *Cookie, src S) error {
 }
 
 // Parse parses a Set-Cookie header string into c (RFC 6265 §4.1).
+//
 // Deprecated: use [Parse] instead.
 func (c *Cookie) Parse(src string) error {
 	return Parse(c, src)
 }
 
 // ParseBytes parses Set-Cookie header bytes into c (RFC 6265 §4.1).
+//
 // Deprecated: use [Parse] instead.
 func (c *Cookie) ParseBytes(src []byte) error {
 	return Parse(c, src)
@@ -823,7 +826,6 @@ func TrimCookieArgNoCopy(src []byte, skipQuotes bool) []byte {
 
 	return src
 }
-
 
 // KeyScoped borrows the cookie key into the given borrow scope.
 func (c *Cookie) KeyScoped(s *borrow.Scope) borrow.Bytes {

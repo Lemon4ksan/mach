@@ -69,6 +69,7 @@ func (p *Parser) Decode(data []byte, chunks *[]FrameChunk) error {
 	if p.err != nil {
 		return p.err
 	}
+
 	if len(data) == 0 && !p.hasHeader && p.headerBufLen == 0 {
 		return nil
 	}
@@ -78,10 +79,12 @@ func (p *Parser) Decode(data []byte, chunks *[]FrameChunk) error {
 	// Handle incomplete header buffer carried over from previous Decode calls.
 	if p.headerBufLen > 0 {
 		origSize := p.headerBufLen
+
 		needed := maxHeaderSize - origSize
 		if needed > len(data) {
 			needed = len(data)
 		}
+
 		copy(p.headerBuf[origSize:], data[:needed])
 		totalBuffered := origSize + needed
 
@@ -90,6 +93,7 @@ func (p *Parser) Decode(data []byte, chunks *[]FrameChunk) error {
 			p.headerBufLen = totalBuffered
 			return nil
 		}
+
 		if err != nil {
 			p.err = err
 			return err
@@ -113,6 +117,7 @@ func (p *Parser) Decode(data []byte, chunks *[]FrameChunk) error {
 				p.headerBufLen = len(data)
 				return nil
 			}
+
 			if err != nil {
 				p.err = err
 				return err
@@ -138,6 +143,7 @@ func (p *Parser) Decode(data []byte, chunks *[]FrameChunk) error {
 		}
 
 		p.remainingLen -= take
+
 		finalChunk := (p.remainingLen == 0)
 		if finalChunk {
 			p.hasHeader = false

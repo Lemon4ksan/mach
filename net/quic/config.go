@@ -33,7 +33,9 @@ func (c *Config) Clone() *Config {
 	if c == nil {
 		return &Config{}
 	}
+
 	cpy := *c
+
 	return &cpy
 }
 

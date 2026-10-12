@@ -14,9 +14,9 @@ import (
 	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/net/quic"
-
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -200,6 +200,7 @@ func (cc *ClientConn) WaitSettings(ctx context.Context) error {
 	if cc.conn != nil {
 		quicDone = cc.conn.Context().Done()
 	}
+
 	select {
 	case <-cc.settingsReady:
 		return nil
@@ -209,7 +210,9 @@ func (cc *ClientConn) WaitSettings(ctx context.Context) error {
 		if cc.conn != nil {
 			return cc.conn.Context().Err()
 		}
+
 		return errors.New("h3: connection closed")
+
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -229,13 +232,16 @@ func (s *ExtendedConnectStream) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+
 		if frameType == coreh3.FrameTypeData {
 			s.readRemain = int64(frameLen)
 			if s.readRemain == 0 {
 				continue
 			}
+
 			break
 		}
+
 		if frameLen > 0 {
 			lr := io.LimitReader(s.br, int64(frameLen))
 			_, _ = io.Copy(io.Discard, lr)
@@ -246,10 +252,12 @@ func (s *ExtendedConnectStream) Read(p []byte) (int, error) {
 	if toRead > s.readRemain {
 		toRead = s.readRemain
 	}
+
 	n, err := s.br.Read(p[:toRead])
 	if n > 0 {
 		s.readRemain -= int64(n)
 	}
+
 	return n, err
 }
 
@@ -257,15 +265,20 @@ func (s *ExtendedConnectStream) Write(p []byte) (int, error) {
 	if s.closed.Load() {
 		return 0, io.ErrClosedPipe
 	}
+
 	if len(p) == 0 {
 		return 0, nil
 	}
+
 	var hdr [16]byte
+
 	b := varint.Append(hdr[:0], coreh3.FrameTypeData)
+
 	b = varint.Append(b, uint64(len(p)))
 	if _, err := s.stream.Write(b); err != nil {
 		return 0, err
 	}
+
 	return s.stream.Write(p)
 }
 
@@ -273,11 +286,15 @@ func (s *ExtendedConnectStream) Close() error {
 	if s.closed.CompareAndSwap(false, true) {
 		return s.stream.Close()
 	}
+
 	return nil
 }
 
 // StartExtendedConnect initiates an Extended CONNECT stream (RFC 9220 §4).
-func (cc *ClientConn) StartExtendedConnect(ctx context.Context, req *h1.Request) (*ExtendedConnectStream, *h1.Response, error) {
+func (cc *ClientConn) StartExtendedConnect(
+	ctx context.Context,
+	req *h1.Request,
+) (*ExtendedConnectStream, *h1.Response, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -294,6 +311,7 @@ func (cc *ClientConn) StartExtendedConnect(ctx context.Context, req *h1.Request)
 	}
 
 	br := bufio.NewReaderSize(str, 4096)
+
 	frameType, payloadLen, err := coreh3.ReadFrameHeader(br)
 	if err != nil {
 		_ = str.Close()
@@ -312,10 +330,13 @@ func (cc *ClientConn) StartExtendedConnect(ctx context.Context, req *h1.Request)
 	}
 
 	resp := h1.AcquireResponse()
+
 	statusCode, err := cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
 	if err != nil {
 		h1.ReleaseResponse(resp)
+
 		_ = str.Close()
+
 		return nil, nil, err
 	}
 
@@ -328,5 +349,6 @@ func (cc *ClientConn) StartExtendedConnect(ctx context.Context, req *h1.Request)
 		stream: str,
 		br:     br,
 	}
+
 	return stream, resp, nil
 }

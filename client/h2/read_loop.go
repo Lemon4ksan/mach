@@ -37,9 +37,12 @@ func (c *Conn) readLoop() {
 					if !endHeaders {
 						c.continuationStream = fr.Stream()
 						c.headerBuf = append(c.headerBuf, h.Headers()...)
+
 						coreh2.ReleaseFrameHeader(fr)
+
 						continue
 					}
+
 					var fullHeaders []byte
 					if c.continuationStream != 0 {
 						c.continuationStream = 0
@@ -48,8 +51,10 @@ func (c *Conn) readLoop() {
 					} else {
 						fullHeaders = h.Headers()
 					}
+
 					resp := h1.AcquireResponse()
 					_, decErr := c.readHeader(fullHeaders, resp)
+
 					c.headerBuf = c.headerBuf[:0]
 					if decErr != nil {
 						c.setLastError(decErr)
@@ -66,6 +71,7 @@ func (c *Conn) readLoop() {
 				// RFC 9113 §5.2.2: DATA frames received on a closed stream count toward
 				// the connection flow-control window, even if the stream has been closed or reset.
 				dataLen := int32(fr.Len())
+
 				c.currentWindow -= dataLen
 				if c.currentWindow < c.maxWindow/2 {
 					inc := c.maxWindow - c.currentWindow
@@ -94,6 +100,7 @@ func (c *Conn) readLoop() {
 			c.inMu.Lock()
 			shuttingDown := c.inClosed
 			c.inMu.Unlock()
+
 			if shuttingDown && c.openStreams.Load() <= 0 {
 				break
 			}
@@ -108,6 +115,7 @@ func (c *Conn) readLoop() {
 				if r.isTunnel && r.pipeWriter != nil {
 					_ = r.pipeWriter.Close()
 				}
+
 				r.SetState(streamClosed)
 				c.finish(r, fr.Stream(), nil)
 			}
@@ -115,6 +123,7 @@ func (c *Conn) readLoop() {
 			if r.isTunnel && r.pipeWriter != nil {
 				_ = r.pipeWriter.Close()
 			}
+
 			r.SetState(streamClosed)
 			c.finish(r, fr.Stream(), nil)
 		}
@@ -124,6 +133,7 @@ func (c *Conn) readLoop() {
 		c.inMu.Lock()
 		shuttingDown := c.inClosed
 		c.inMu.Unlock()
+
 		if shuttingDown && c.openStreams.Load() <= 0 {
 			break
 		}
@@ -153,6 +163,7 @@ func (c *Conn) readNext() (*coreh2.FrameHeader, error) {
 		} else {
 			c.consecutiveControlFrames++
 		}
+
 		if c.consecutiveControlFrames > maxConsecutiveControlFrames {
 			coreh2.ReleaseFrameHeader(fr)
 			return nil, coreh2.ErrControlFrameFlood
@@ -193,6 +204,7 @@ func (c *Conn) handleConnectionFrame(fr *coreh2.FrameHeader) error {
 				c.handlePingAck(ping)
 				return nil
 			}
+
 			c.handlePing(ping)
 		}
 
@@ -244,6 +256,7 @@ func (c *Conn) handleGoAway(ga *coreh2.GoAway) {
 		c.inClosed = true
 		close(c.in)
 	}
+
 	c.inMu.Unlock()
 
 	// If no in-flight streams remain, close socket now; otherwise readLoop finishes remaining streams.
@@ -266,15 +279,18 @@ func (c *Conn) handleSettings(st *coreh2.Settings) error {
 					if int64(cur)+int64(delta) > int64(1<<31-1) {
 						return coreh2.ErrWindowAboveLimits
 					}
+
 					if ctx.streamWindow.CompareAndSwap(cur, cur+delta) {
 						break
 					}
 				}
 			}
 		}
+
 		for i := range streamNumShards {
 			shard := &c.reqShards[i]
 			shard.mu.RLock()
+
 			for _, ctx := range shard.overflow {
 				if ctx != nil {
 					for {
@@ -283,14 +299,17 @@ func (c *Conn) handleSettings(st *coreh2.Settings) error {
 							shard.mu.RUnlock()
 							return coreh2.ErrWindowAboveLimits
 						}
+
 						if ctx.streamWindow.CompareAndSwap(cur, cur+delta) {
 							break
 						}
 					}
 				}
 			}
+
 			shard.mu.RUnlock()
 		}
+
 		c.broadcastWindowUpdate()
 	}
 
@@ -304,6 +323,7 @@ func (c *Conn) handleSettings(st *coreh2.Settings) error {
 	fr.SetBody(stRes)
 
 	c.out <- fr
+
 	return nil
 }
 
@@ -328,9 +348,11 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 				resp := h1.AcquireResponse()
 				_, decErr := c.readHeader(h.Headers(), resp)
 				h1.ReleaseResponse(resp)
+
 				return decErr
 			}
 		}
+
 		return nil
 	}
 
@@ -342,7 +364,9 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 		}
 
 		endHeaders := fr.Flags().Has(coreh2.FlagEndHeaders)
+
 		var fullHeaders []byte
+
 		if !endHeaders {
 			c.continuationStream = fr.Stream()
 			c.headerBuf = append(c.headerBuf, h.Headers()...)
@@ -362,20 +386,25 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 				c.headerBuf = c.headerBuf[:0]
 				return coreh2.ProtocolError
 			}
+
 			err := c.readTrailers(fullHeaders, reqCtx)
 			c.headerBuf = c.headerBuf[:0]
+
 			if err == nil {
 				reqCtx.trailersReceived = true
 			}
+
 			return err
 		}
 
 		statusCode, err := c.readHeader(fullHeaders, reqCtx.Response)
 		c.headerBuf = c.headerBuf[:0]
+
 		if err == nil {
 			if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
 				reqCtx.headersParsed = true
 			}
+
 			if reqCtx.isTunnel && reqCtx.tunnelHeadersCh != nil {
 				select {
 				case reqCtx.tunnelHeadersCh <- nil:
@@ -411,22 +440,28 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 		if isTunnelActive {
 			pw := reqCtx.pipeWriter
 			reqCtx.streamRxWindow.Add(-dataLen)
+
 			if reqCtx.streamRxWindow.Load() < 3145728 {
 				inc := 6291456 - reqCtx.streamRxWindow.Load()
 				reqCtx.streamRxWindow.Store(6291456)
 				c.updateWindow(fr.Stream(), int(inc))
 			}
+
 			c.currentWindow -= dataLen
 			if c.currentWindow < c.maxWindow/2 {
 				inc := c.maxWindow - c.currentWindow
 				c.currentWindow = c.maxWindow
 				c.updateWindow(0, int(inc))
 			}
+
 			if data.Len() != 0 && pw != nil {
 				reqCtx.mu.Unlock()
+
 				_, _ = pw.Write(data.Data())
+
 				reqCtx.mu.Lock()
 			}
+
 			return nil
 		}
 

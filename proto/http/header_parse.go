@@ -14,8 +14,8 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/simd"
 
-	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
@@ -641,6 +641,7 @@ func (h *ResponseHeader) parseFirstLine(buf []byte) (int, error) {
 		for len(statusMessage) > 0 && (statusMessage[0] == ' ' || statusMessage[0] == '\t') {
 			statusMessage = statusMessage[1:]
 		}
+
 		statusMessage = trimTrailingSpace(statusMessage)
 
 		// RFC 9112 §3.1.2: reason-phrase = *( HTAB / SP / VCHAR / obs-text )

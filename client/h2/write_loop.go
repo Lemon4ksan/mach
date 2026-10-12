@@ -109,7 +109,8 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 		}
 
 		if err := c.writeRequest(ctx); err != nil {
-			if errors.Is(err, coreh2.ErrNoAvailableStreams) || errors.Is(err, coreh2.ErrStreamClosed) || errors.Is(err, context.Canceled) {
+			if errors.Is(err, coreh2.ErrNoAvailableStreams) || errors.Is(err, coreh2.ErrStreamClosed) ||
+				errors.Is(err, context.Canceled) {
 				return false, nil
 			}
 
@@ -156,6 +157,7 @@ func (c *Conn) recoverWriteLoop(lastErr *error) {
 		if !ok {
 			err = fmt.Errorf("h2engine panic: %v", r)
 		}
+
 		*lastErr = err
 	}
 
@@ -178,6 +180,7 @@ func (c *Conn) writePing() error {
 	if err == nil {
 		err = c.bw.Flush()
 	}
+
 	if err == nil {
 		c.pingUnacks.Add(1)
 	}

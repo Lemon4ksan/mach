@@ -89,7 +89,9 @@ func IsJSON[S ~string | ~[]byte](contentType S) bool {
 func IsXML[S ~string | ~[]byte](contentType S) bool {
 	mt := BaseMediaType(contentType)
 	b := stringOrBytesToBytes(mt)
-	return bytes.Equal(b, []byte("application/xml")) || bytes.Equal(b, []byte("text/xml")) || bytes.HasSuffix(b, []byte("+xml"))
+
+	return bytes.Equal(b, []byte("application/xml")) || bytes.Equal(b, []byte("text/xml")) ||
+		bytes.HasSuffix(b, []byte("+xml"))
 }
 
 // IsForm reports whether contentType is standard URL-encoded form data (application/x-www-form-urlencoded).
@@ -114,6 +116,7 @@ func containsByte[S ~string | ~[]byte](s S, b byte) bool {
 			return true
 		}
 	}
+
 	return false
 }
 

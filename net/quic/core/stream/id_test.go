@@ -10,23 +10,95 @@ import (
 
 func TestStreamID_Classification(t *testing.T) {
 	tests := []struct {
-		id            StreamID
-		expectedType  StreamType
-		isClient      bool
-		isServer      bool
-		isBidi        bool
-		isUni         bool
-		streamNum     uint64
-		expectedStr   string
+		id           StreamID
+		expectedType StreamType
+		isClient     bool
+		isServer     bool
+		isBidi       bool
+		isUni        bool
+		streamNum    uint64
+		expectedStr  string
 	}{
-		{id: 0, expectedType: StreamTypeClientBidi, isClient: true, isServer: false, isBidi: true, isUni: false, streamNum: 1, expectedStr: "stream-0(client-bidi,#1)"},
-		{id: 4, expectedType: StreamTypeClientBidi, isClient: true, isServer: false, isBidi: true, isUni: false, streamNum: 2, expectedStr: "stream-4(client-bidi,#2)"},
-		{id: 1, expectedType: StreamTypeServerBidi, isClient: false, isServer: true, isBidi: true, isUni: false, streamNum: 1, expectedStr: "stream-1(server-bidi,#1)"},
-		{id: 5, expectedType: StreamTypeServerBidi, isClient: false, isServer: true, isBidi: true, isUni: false, streamNum: 2, expectedStr: "stream-5(server-bidi,#2)"},
-		{id: 2, expectedType: StreamTypeClientUni, isClient: true, isServer: false, isBidi: false, isUni: true, streamNum: 1, expectedStr: "stream-2(client-uni,#1)"},
-		{id: 6, expectedType: StreamTypeClientUni, isClient: true, isServer: false, isBidi: false, isUni: true, streamNum: 2, expectedStr: "stream-6(client-uni,#2)"},
-		{id: 3, expectedType: StreamTypeServerUni, isClient: false, isServer: true, isBidi: false, isUni: true, streamNum: 1, expectedStr: "stream-3(server-uni,#1)"},
-		{id: 7, expectedType: StreamTypeServerUni, isClient: false, isServer: true, isBidi: false, isUni: true, streamNum: 2, expectedStr: "stream-7(server-uni,#2)"},
+		{
+			id:           0,
+			expectedType: StreamTypeClientBidi,
+			isClient:     true,
+			isServer:     false,
+			isBidi:       true,
+			isUni:        false,
+			streamNum:    1,
+			expectedStr:  "stream-0(client-bidi,#1)",
+		},
+		{
+			id:           4,
+			expectedType: StreamTypeClientBidi,
+			isClient:     true,
+			isServer:     false,
+			isBidi:       true,
+			isUni:        false,
+			streamNum:    2,
+			expectedStr:  "stream-4(client-bidi,#2)",
+		},
+		{
+			id:           1,
+			expectedType: StreamTypeServerBidi,
+			isClient:     false,
+			isServer:     true,
+			isBidi:       true,
+			isUni:        false,
+			streamNum:    1,
+			expectedStr:  "stream-1(server-bidi,#1)",
+		},
+		{
+			id:           5,
+			expectedType: StreamTypeServerBidi,
+			isClient:     false,
+			isServer:     true,
+			isBidi:       true,
+			isUni:        false,
+			streamNum:    2,
+			expectedStr:  "stream-5(server-bidi,#2)",
+		},
+		{
+			id:           2,
+			expectedType: StreamTypeClientUni,
+			isClient:     true,
+			isServer:     false,
+			isBidi:       false,
+			isUni:        true,
+			streamNum:    1,
+			expectedStr:  "stream-2(client-uni,#1)",
+		},
+		{
+			id:           6,
+			expectedType: StreamTypeClientUni,
+			isClient:     true,
+			isServer:     false,
+			isBidi:       false,
+			isUni:        true,
+			streamNum:    2,
+			expectedStr:  "stream-6(client-uni,#2)",
+		},
+		{
+			id:           3,
+			expectedType: StreamTypeServerUni,
+			isClient:     false,
+			isServer:     true,
+			isBidi:       false,
+			isUni:        true,
+			streamNum:    1,
+			expectedStr:  "stream-3(server-uni,#1)",
+		},
+		{
+			id:           7,
+			expectedType: StreamTypeServerUni,
+			isClient:     false,
+			isServer:     true,
+			isBidi:       false,
+			isUni:        true,
+			streamNum:    2,
+			expectedStr:  "stream-7(server-uni,#2)",
+		},
 	}
 
 	for _, tc := range tests {

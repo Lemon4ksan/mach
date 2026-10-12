@@ -125,7 +125,11 @@ func TestChromium_NullFails(t *testing.T) {
 		var req h1.Request
 		err := req.ReadRequest(br, nil, 1024)
 		if err == nil {
-			t.Fatalf("Chromium NullFails violation: request with null byte at position %d was accepted: %q", i, corrupted[:i+20])
+			t.Fatalf(
+				"Chromium NullFails violation: request with null byte at position %d was accepted: %q",
+				i,
+				corrupted[:i+20],
+			)
 		}
 	}
 }

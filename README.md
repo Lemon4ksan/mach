@@ -23,7 +23,7 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 Named after the Mach number and aerodynamic concept of **Zero Drag**, `mach` eliminates computational friction from network pipelines:
 
 * **Agnostic Wire Core**: The engine accepts raw bytes from a socket, enforces RFC constraints, and emits protocol frames. It contains zero application routing, middleware, or business logic.
-* **Forever-Frozen Standard**: Mechanics strictly implement IETF RFCs (HTTP/1.1 RFC 9112, HTTP/2 RFC 9113, HPACK RFC 7541, HTTP/3 RFC 9114, QPACK RFC 9204).
+* **Forever-Frozen Standard**: Mechanics strictly implement IETF RFCs (HTTP/1.1 RFC 9112, HTTP/2 RFC 9113, HPACK RFC 7541, HTTP/3 RFC 9114, QPACK RFC 9204, WebSocket RFC 6455, Extended CONNECT RFC 8441 & RFC 9220).
 * **Symmetric Isolation**: Client and server architectures require fundamentally distinct memory layouts, buffer reuse patterns, and concurrency lifecycles. `mach` isolates them into distinct packages (`mach/client` vs `mach/server`).
 * **Zero Heap Allocation on Hot Path**: Every frame, header slice, and URI component is read and recycled using multi-tiered arenas, Per-P pools, and scoped borrow semantics.
 
@@ -34,9 +34,10 @@ mach/
 ├── client/                   # Client protocol engines (optimized for `aoni`)
 │   ├── h1/                   # HTTP/1.1 Client Engine. Connection reuse, chunked transfers
 │   ├── h2/                   # HTTP/2 Client Engine. Concurrent stream multiplexing
-│   └── h3/                   # HTTP/3 Client Engine. QUIC stream lifecycle, 0-RTT transactions
+│   ├── h3/                   # HTTP/3 Client Engine. QUIC stream lifecycle, 0-RTT transactions
+│   └── websocket.go          # Multi-protocol WebSocket dialer (H1 RFC 6455, H2 RFC 8441, H3 RFC 9220)
 ├── net/                      # Network & Transport layers
-│   ├── proxy/                # SOCKS5 proxy support
+│   ├── proxy/                # SOCKS5 and HTTP CONNECT tunnel proxy support
 │   └── quic/                 # L4 QUIC transport engine (RFC 9000, RFC 9001, RFC 9002)
 ├── proto/                    # RFC-conforming wire mechanics (client/server agnostic)
 │   ├── codec/                # Wire codecs & compression
@@ -50,13 +51,15 @@ mach/
 │   ├── http/                 # HTTP/1.1 wire parser, SIMD scanner, zero-alloc Request/Response
 │   │   └── stackless/        # Goroutine-free async I/O dispatch
 │   ├── packet/               # L3/L4 packet parsers (ICMP, TCP)
-│   └── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
+│   ├── raptor/               # Ultra-low-latency layer-7 proxy and tunneling core
+│   └── ws/                   # RFC 6455 WebSocket framing, 64-bit SWAR vector masking, Channel FSM
 ├── scripts/                  # CI & Fuzzing suites
 │   └── fuzz_all.go           # Heavy automated fuzz harness
 ├── server/                   # Unified multi-protocol L7 server (Server & Context)
 │   ├── h1/                   # HTTP/1.1 Server Engine. High-throughput edge listener
 │   ├── h2/                   # HTTP/2 Server Engine. Prioritized stream dispatch
-│   └── h3/                   # HTTP/3 Server Engine. Connection ID routing
+│   ├── h3/                   # HTTP/3 Server Engine. Connection ID routing
+│   └── websocket.go          # Universal WebSocket upgrade across H1, H2, and H3
 └── tests/                    # Integration and E2E tests
 ```
 
@@ -104,6 +107,16 @@ Comparison of object recycling strategies across parallel execution threads:
 | **QPACK Response Decode** | Decode headers into map | **`943.8 ns/op`** | 693 B/op | 13 allocs/op |
 | **QPACK Request Decode** | Decode headers into map | **`1,056.0 ns/op`** | 696 B/op | 9 allocs/op |
 | **QPACK Request Encode** | Encode dynamic headers | **`1,962.0 ns/op`** | 2,208 B/op | 34 allocs/op |
+
+### 5. WebSocket 64-bit SWAR Vector Masking (RFC 6455)
+
+The RFC 6455 client-to-server payload masking kernel is vectorized using 64-bit SWAR (SIMD Within A Register), unrolled across 32-byte iterations:
+
+| Masking Kernel | Vector Loop | Throughput | Memory Overhead | Allocations |
+| :--- | :--- | :--- | :--- | :--- |
+| Standard Scalar XOR | 8-bit byte loop | `2,450 MB/s` (~2.45 GB/s) | 0 B/op | 0 allocs/op |
+| **`mach/proto/ws.MaskSWAR`** | **64-bit 4x unrolled** | **`39,240 MB/s` (~39.2 GB/s)** | **0 B/op** | **0 allocs/op** |
+| **Improvement** | **Hardware-agnostic** | **16.0x faster** | **Zero heap impact** | **0 allocs/op** |
 
 ## Engineering Invariants
 

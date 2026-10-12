@@ -69,6 +69,7 @@ func NewReceiveStream(
 		deadlineCh:     make(chan struct{}),
 		dataReadyCh:    make(chan struct{}, 1),
 	}
+
 	return s
 }
 
@@ -95,6 +96,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 			close(s.deadlineCh)
 		}
 	}
+
 	s.deadlineCh = make(chan struct{})
 
 	if !t.IsZero() {
@@ -106,6 +108,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 			s.deadlineTimer = time.AfterFunc(dur, func() {
 				s.mu.Lock()
 				defer s.mu.Unlock()
+
 				select {
 				case <-ch:
 				default:
@@ -114,6 +117,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 			})
 		}
 	}
+
 	return nil
 }
 
@@ -121,6 +125,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 func (s *ReceiveStream) SetReceiveFinalSizeCallback(callback func(int64)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.receiveFinalSizeCallback = callback
 	if s.finalSizeKnown {
 		sz, _ := s.reassembly.FinalSize()
@@ -151,18 +156,22 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 			s.mu.Unlock()
 			return 0, s.cancelErr
 		}
+
 		if s.shutdownErr != nil {
 			s.mu.Unlock()
 			return 0, s.shutdownErr
 		}
+
 		if s.state == RecvStateDataRead || s.reassembly.IsAllDataRead() {
 			s.mu.Unlock()
 			return 0, io.EOF
 		}
+
 		if !s.readDeadline.IsZero() && time.Now().After(s.readDeadline) {
 			s.mu.Unlock()
 			return 0, ErrDeadline
 		}
+
 		select {
 		case <-s.ctx.Done():
 			s.mu.Unlock()
@@ -179,6 +188,7 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 				s.state = RecvStateDataRead
 				completed = true
 			}
+
 			sender := s.sender
 			streamID := s.streamID
 			s.mu.Unlock()
@@ -188,6 +198,7 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 			}
 
 			s.maybeTriggerWindowUpdate()
+
 			return n, err
 		}
 
@@ -200,6 +211,7 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 			if sender != nil {
 				sender.OnStreamCompleted(streamID)
 			}
+
 			return 0, io.EOF
 		}
 
@@ -235,14 +247,17 @@ func (s *ReceiveStream) Peek(b []byte) (int, error) {
 			s.mu.Unlock()
 			return 0, s.cancelErr
 		}
+
 		if s.shutdownErr != nil {
 			s.mu.Unlock()
 			return 0, s.shutdownErr
 		}
+
 		if s.state == RecvStateDataRead || s.reassembly.IsAllDataRead() {
 			s.mu.Unlock()
 			return 0, io.EOF
 		}
+
 		if !s.readDeadline.IsZero() && time.Now().After(s.readDeadline) {
 			s.mu.Unlock()
 			return 0, ErrDeadline
@@ -253,6 +268,7 @@ func (s *ReceiveStream) Peek(b []byte) (int, error) {
 			s.mu.Unlock()
 			return n, err
 		}
+
 		if errors.Is(err, io.EOF) && n == 0 {
 			s.mu.Unlock()
 			return 0, io.EOF
@@ -334,10 +350,12 @@ func (s *ReceiveStream) HandleStreamFrame(offset uint64, data []byte, fin bool) 
 
 	if fin && !s.finalSizeKnown {
 		s.finalSizeKnown = true
+
 		sz, _ := s.reassembly.FinalSize()
 		if s.receiveFinalSizeCallback != nil {
 			s.receiveFinalSizeCallback(int64(sz))
 		}
+
 		if s.reassembly.AvailableContiguous() >= int(sz-s.reassembly.ReadOffset()) {
 			s.state = RecvStateDataRecvd
 		} else {
@@ -351,6 +369,7 @@ func (s *ReceiveStream) HandleStreamFrame(offset uint64, data []byte, fin bool) 
 	}
 
 	s.signalDataReady()
+
 	return nil
 }
 
@@ -368,6 +387,7 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 		existingSz, _ := s.reassembly.FinalSize()
 		if finalSize != existingSz {
 			s.mu.Unlock()
+
 			return &TransportError{
 				ErrorCode: FinalSizeError,
 				ErrorMessage: fmt.Sprintf(
@@ -380,6 +400,7 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 
 	if finalSize < s.reassembly.HighestOffset() {
 		s.mu.Unlock()
+
 		return &TransportError{
 			ErrorCode: FinalSizeError,
 			ErrorMessage: fmt.Sprintf(
@@ -424,6 +445,7 @@ func (s *ReceiveStream) HandleResetStreamFrame(code StreamErrorCode, finalSize u
 	if sender != nil {
 		sender.OnStreamCompleted(streamID)
 	}
+
 	return nil
 }
 
@@ -439,12 +461,14 @@ func (s *ReceiveStream) maybeTriggerWindowUpdate() {
 	if _, ok := s.flowController.CheckAndQueueWindowUpdate(); ok {
 		streamUpdate = true
 	}
+
 	connUpdate := false
 	if s.flowController.connection != nil {
 		if _, ok := s.flowController.connection.CheckAndQueueWindowUpdate(); ok {
 			connUpdate = true
 		}
 	}
+
 	if (streamUpdate || connUpdate) && s.sender != nil {
 		s.sender.OnHasStreamControlFrame(s.streamID)
 	}
@@ -464,6 +488,7 @@ func (s *ReceiveStream) GetStopSendingFrame() (code StreamErrorCode, ok bool) {
 		s.stopSendingQueued = false
 		return s.stopSendingCode, true
 	}
+
 	return 0, false
 }
 

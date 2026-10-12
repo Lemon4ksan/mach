@@ -100,6 +100,7 @@ func (c *Context) Method() string {
 			return c.h3Req.Method
 		}
 	}
+
 	return ""
 }
 
@@ -115,8 +116,10 @@ func (c *Context) parseURI() {
 			c.path = c.h1Req.Path
 			c.query = c.h1Req.Query
 			c.parsedURI = true
+
 			return
 		}
+
 	case ProtoHTTP2:
 		if c.h2Req != nil {
 			raw = c.h2Req.Path
@@ -134,6 +137,7 @@ func (c *Context) parseURI() {
 		c.path = raw
 		c.query = ""
 	}
+
 	c.parsedURI = true
 }
 
@@ -157,8 +161,10 @@ func (c *Context) RequestURI() string {
 			if c.h1Req.Query != "" {
 				return c.h1Req.Path + "?" + c.h1Req.Query
 			}
+
 			return c.h1Req.Path
 		}
+
 	case ProtoHTTP2:
 		if c.h2Req != nil {
 			return c.h2Req.Path
@@ -168,6 +174,7 @@ func (c *Context) RequestURI() string {
 			return c.h3Req.Path
 		}
 	}
+
 	return ""
 }
 
@@ -183,16 +190,20 @@ func (c *Context) Host() string {
 			if c.h2Req.Authority != "" {
 				return c.h2Req.Authority
 			}
+
 			return c.h2Req.Headers.Get("Host")
 		}
+
 	case ProtoHTTP3:
 		if c.h3Req != nil {
 			if c.h3Req.Authority != "" {
 				return c.h3Req.Authority
 			}
+
 			return c.h3Req.Headers.Get("Host")
 		}
 	}
+
 	return ""
 }
 
@@ -208,22 +219,28 @@ func (c *Context) Scheme() string {
 		if c.h1Req != nil && c.h1Req.TLS != nil {
 			return "https"
 		}
+
 		return "http"
+
 	case ProtoHTTP2:
 		if c.h2Req != nil {
 			if c.h2Req.Scheme != "" {
 				return c.h2Req.Scheme
 			}
+
 			return "https"
 		}
+
 	case ProtoHTTP3:
 		if c.h3Req != nil {
 			if c.h3Req.Scheme != "" {
 				return c.h3Req.Scheme
 			}
+
 			return "https"
 		}
 	}
+
 	return "http"
 }
 
@@ -235,10 +252,12 @@ func (c *Context) RemoteAddr() string {
 			if c.h1Req.RemoteAddr != "" {
 				return c.h1Req.RemoteAddr
 			}
+
 			if c.h1Req.Conn != nil && c.h1Req.Conn.RemoteAddr() != nil {
 				return c.h1Req.Conn.RemoteAddr().String()
 			}
 		}
+
 	case ProtoHTTP2:
 		if c.h2Req != nil {
 			return c.h2Req.RemoteAddr
@@ -248,6 +267,7 @@ func (c *Context) RemoteAddr() string {
 			return c.h3Req.RemoteAddr
 		}
 	}
+
 	return ""
 }
 
@@ -256,6 +276,7 @@ func (c *Context) Context() context.Context {
 	if c.ctx != nil {
 		return c.ctx
 	}
+
 	switch c.proto {
 	case ProtoHTTP2:
 		if c.h2Req != nil && c.h2Req.Ctx != nil {
@@ -266,6 +287,7 @@ func (c *Context) Context() context.Context {
 			return c.h3Req.Ctx
 		}
 	}
+
 	return context.Background()
 }
 
@@ -279,6 +301,7 @@ func (c *Context) TLS() *tls.ConnectionState {
 	if c.proto == ProtoHTTP11 && c.h1Req != nil {
 		return c.h1Req.TLS
 	}
+
 	return nil
 }
 
@@ -294,6 +317,7 @@ func (c *Context) StreamID() uint64 {
 			return c.h3Req.StreamID
 		}
 	}
+
 	return 0
 }
 
@@ -313,6 +337,7 @@ func (c *Context) Header(key string) string {
 			return c.h3Req.Headers.Get(key)
 		}
 	}
+
 	return ""
 }
 
@@ -332,6 +357,7 @@ func (c *Context) HasHeader(key string) bool {
 			return c.h3Req.Headers.Has(key)
 		}
 	}
+
 	return false
 }
 
@@ -347,6 +373,7 @@ func (c *Context) RequestHeaders() iter.Seq2[string, string] {
 					}
 				}
 			}
+
 		case ProtoHTTP2:
 			if c.h2Req != nil {
 				for k, vals := range c.h2Req.Headers {
@@ -357,6 +384,7 @@ func (c *Context) RequestHeaders() iter.Seq2[string, string] {
 					}
 				}
 			}
+
 		case ProtoHTTP3:
 			if c.h3Req != nil {
 				for k, v := range c.h3Req.Headers.All() {
@@ -392,6 +420,7 @@ func (c *Context) Body() []byte {
 			return c.h3Req.Body
 		}
 	}
+
 	return nil
 }
 
@@ -426,23 +455,29 @@ func (c *Context) StatusCode() int {
 			if c.h1Res.StatusCode != 0 {
 				return c.h1Res.StatusCode
 			}
+
 			return status.OK
 		}
+
 	case ProtoHTTP2:
 		if c.h2Res != nil {
 			if c.h2Res.StatusCode != 0 {
 				return c.h2Res.StatusCode
 			}
+
 			return status.OK
 		}
+
 	case ProtoHTTP3:
 		if c.h3Res != nil {
 			if c.h3Res.StatusCode != 0 {
 				return c.h3Res.StatusCode
 			}
+
 			return status.OK
 		}
 	}
+
 	return status.OK
 }
 
@@ -458,6 +493,7 @@ func (c *Context) SetHeader(key, val string) {
 			if c.h2Res.Headers == nil {
 				c.h2Res.Headers = make(http.Header, 4)
 			}
+
 			canonicalKey := http.CanonicalHeaderKey(key)
 			if existing, ok := c.h2Res.Headers[canonicalKey]; ok && cap(existing) > 0 {
 				c.h2Res.Headers[canonicalKey] = append(existing[:0], val)
@@ -465,6 +501,7 @@ func (c *Context) SetHeader(key, val string) {
 				c.h2Res.Headers[canonicalKey] = []string{val}
 			}
 		}
+
 	case ProtoHTTP3:
 		if c.h3Res != nil {
 			c.h3Res.Headers.Set(key, val)
@@ -524,6 +561,7 @@ func (c *Context) ResponseHeader(key string) string {
 			return c.h3Res.Headers.Get(key)
 		}
 	}
+
 	return ""
 }
 
@@ -539,6 +577,7 @@ func (c *Context) ResponseHeaders() iter.Seq2[string, string] {
 					}
 				}
 			}
+
 		case ProtoHTTP2:
 			if c.h2Res != nil {
 				for k, vals := range c.h2Res.Headers {
@@ -549,6 +588,7 @@ func (c *Context) ResponseHeaders() iter.Seq2[string, string] {
 					}
 				}
 			}
+
 		case ProtoHTTP3:
 			if c.h3Res != nil {
 				for k, v := range c.h3Res.Headers.All() {
@@ -623,6 +663,7 @@ func (c *Context) Write(p []byte) (int, error) {
 			return len(p), nil
 		}
 	}
+
 	return 0, io.ErrClosedPipe
 }
 
@@ -647,6 +688,7 @@ func (c *Context) ResponseBody() []byte {
 			return c.h3Res.Body
 		}
 	}
+
 	return nil
 }
 
@@ -663,9 +705,11 @@ func (c *Context) JSON(code int, v any) error {
 	if err != nil {
 		return err
 	}
+
 	c.SetStatusCode(code)
 	c.SetHeader(headkit.ContentType, "application/json; charset=utf-8")
 	c.SetBody(data)
+
 	return nil
 }
 
@@ -688,6 +732,7 @@ func (c *Context) SetUserValue(key, val any) {
 	if c.userValues == nil {
 		c.userValues = make(map[any]any, 4)
 	}
+
 	c.userValues[key] = val
 }
 
@@ -696,6 +741,7 @@ func (c *Context) UserValue(key any) any {
 	if c.userValues == nil {
 		return nil
 	}
+
 	return c.userValues[key]
 }
 
@@ -714,6 +760,7 @@ func (c *Context) H1() (*h1.Request, *h1.Response, bool) {
 	if c.proto == ProtoHTTP11 {
 		return c.h1Req, c.h1Res, true
 	}
+
 	return nil, nil, false
 }
 
@@ -722,6 +769,7 @@ func (c *Context) H2() (*h2.ServerRequest, *h2.ServerResponse, bool) {
 	if c.proto == ProtoHTTP2 {
 		return c.h2Req, c.h2Res, true
 	}
+
 	return nil, nil, false
 }
 
@@ -730,6 +778,7 @@ func (c *Context) H3() (*h3.ServerRequest, *h3.ServerResponse, bool) {
 	if c.proto == ProtoHTTP3 {
 		return c.h3Req, c.h3Res, true
 	}
+
 	return nil, nil, false
 }
 

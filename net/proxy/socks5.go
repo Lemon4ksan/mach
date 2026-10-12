@@ -28,6 +28,7 @@ func NewSOCKS5Dialer(network, address string, auth *Auth, forward Dialer) *SOCKS
 			}
 		}
 	}
+
 	if auth != nil {
 		up := socks.UsernamePassword{
 			Username: auth.User,
@@ -39,6 +40,7 @@ func NewSOCKS5Dialer(network, address string, auth *Auth, forward Dialer) *SOCKS
 		}
 		d.Authenticate = up.Authenticate
 	}
+
 	return d
 }
 

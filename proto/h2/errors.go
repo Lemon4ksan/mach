@@ -92,9 +92,11 @@ func (e Error) Is(target error) bool {
 	if t, ok := target.(Error); ok {
 		return e.code == t.code
 	}
+
 	if t, ok := target.(ErrorCode); ok {
 		return e.code == t
 	}
+
 	return errors.Is(e.code, target)
 }
 

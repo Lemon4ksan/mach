@@ -105,6 +105,7 @@ func ValidateSendTransition(from, to SendState) bool {
 	if from == to {
 		return true
 	}
+
 	switch from {
 	case SendStateReady:
 		return to == SendStateSend || to == SendStateDataSent || to == SendStateResetSent
@@ -126,6 +127,7 @@ func ValidateRecvTransition(from, to RecvState) bool {
 	if from == to {
 		return true
 	}
+
 	switch from {
 	case RecvStateRecv:
 		return to == RecvStateSizeKnown || to == RecvStateDataRecvd || to == RecvStateResetRecvd

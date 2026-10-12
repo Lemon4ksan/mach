@@ -57,6 +57,7 @@ func ReleaseRequest(r *Request) {
 	if cap(r.Body) > 64*1024 {
 		r.Body = make([]byte, 0, 1024)
 	}
+
 	r.Reset()
 	reqStorage.Put(r)
 }
@@ -170,7 +171,8 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		keepAlive := req.Headers.IsKeepAlive(req.Proto)
 		// RFC 9112 §6.3 Item 3 & §11.2: To mitigate Request Smuggling when both Transfer-Encoding
 		// and Content-Length were received, or when forced by CloseConnection, close the connection.
-		if req.CloseConnection || (req.Headers.Has(headkit.TransferEncoding) && req.Headers.Has(headkit.ContentLength)) {
+		if req.CloseConnection ||
+			(req.Headers.Has(headkit.TransferEncoding) && req.Headers.Has(headkit.ContentLength)) {
 			keepAlive = false
 		}
 

@@ -21,7 +21,9 @@ func TestRepro_ChunkedTrailingWhitespaceWithoutSemicolon(t *testing.T) {
 	cr := h1.NewChunkedReader(bufio.NewReader(strings.NewReader(raw)))
 	_, err := io.ReadAll(cr)
 	if err == nil {
-		t.Fatal("RFC 9112 §7.1 violation: trailing whitespace on chunk-size without extension semicolon should be rejected")
+		t.Fatal(
+			"RFC 9112 §7.1 violation: trailing whitespace on chunk-size without extension semicolon should be rejected",
+		)
 	}
 }
 

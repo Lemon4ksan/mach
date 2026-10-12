@@ -89,10 +89,12 @@ func (a *Addr) String() string {
 	if a == nil {
 		return "<nil>"
 	}
+
 	port := strconv.Itoa(a.Port)
 	if a.IP == nil {
 		return net.JoinHostPort(a.Name, port)
 	}
+
 	return net.JoinHostPort(a.IP.String(), port)
 }
 
@@ -109,6 +111,7 @@ func (c *Conn) BoundAddr() net.Addr {
 	if c == nil {
 		return nil
 	}
+
 	return c.boundAddr
 }
 
@@ -148,8 +151,10 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 		proxy, dst, _ := d.pathAddrs(address)
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
+
 	if ctx == nil {
 		proxy, dst, _ := d.pathAddrs(address)
+
 		return nil, &net.OpError{
 			Op:     d.cmd.String(),
 			Net:    network,
@@ -158,24 +163,33 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 			Err:    errors.New("nil context"),
 		}
 	}
-	var err error
-	var c net.Conn
+
+	var (
+		err error
+		c   net.Conn
+	)
 	if d.ProxyDial != nil {
 		c, err = d.ProxyDial(ctx, d.proxyNetwork, d.proxyAddress)
 	} else {
 		var dd net.Dialer
+
 		c, err = dd.DialContext(ctx, d.proxyNetwork, d.proxyAddress)
 	}
+
 	if err != nil {
 		proxy, dst, _ := d.pathAddrs(address)
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
+
 	a, err := d.connect(ctx, c, address)
 	if err != nil {
 		c.Close()
+
 		proxy, dst, _ := d.pathAddrs(address)
+
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
+
 	return &Conn{Conn: c, boundAddr: a}, nil
 }
 
@@ -190,8 +204,10 @@ func (d *Dialer) DialWithConn(ctx context.Context, c net.Conn, network, address 
 		proxy, dst, _ := d.pathAddrs(address)
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
+
 	if ctx == nil {
 		proxy, dst, _ := d.pathAddrs(address)
+
 		return nil, &net.OpError{
 			Op:     d.cmd.String(),
 			Net:    network,
@@ -200,11 +216,13 @@ func (d *Dialer) DialWithConn(ctx context.Context, c net.Conn, network, address 
 			Err:    errors.New("nil context"),
 		}
 	}
+
 	a, err := d.connect(ctx, c, address)
 	if err != nil {
 		proxy, dst, _ := d.pathAddrs(address)
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
+
 	return a, nil
 }
 
@@ -219,22 +237,29 @@ func (d *Dialer) Dial(network, address string) (net.Conn, error) {
 		proxy, dst, _ := d.pathAddrs(address)
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
-	var err error
-	var c net.Conn
+
+	var (
+		err error
+		c   net.Conn
+	)
 	if d.ProxyDial != nil {
 		c, err = d.ProxyDial(context.Background(), d.proxyNetwork, d.proxyAddress)
 	} else {
 		var dialer net.Dialer
+
 		c, err = dialer.DialContext(context.Background(), d.proxyNetwork, d.proxyAddress)
 	}
+
 	if err != nil {
 		proxy, dst, _ := d.pathAddrs(address)
 		return nil, &net.OpError{Op: d.cmd.String(), Net: network, Source: proxy, Addr: dst, Err: err}
 	}
+
 	if _, err := d.DialWithConn(context.Background(), c, network, address); err != nil {
 		c.Close()
 		return nil, err
 	}
+
 	return c, nil
 }
 
@@ -244,11 +269,13 @@ func (d *Dialer) validateTarget(network, address string) error {
 	default:
 		return errors.New("network not implemented")
 	}
+
 	switch d.cmd {
 	case CmdConnect, cmdBind:
 	default:
 		return errors.New("command not implemented")
 	}
+
 	return nil
 }
 
@@ -258,17 +285,21 @@ func (d *Dialer) pathAddrs(address string) (proxy, dst net.Addr, err error) {
 		if err != nil {
 			return nil, nil, err
 		}
+
 		a := &Addr{Port: port}
+
 		a.IP = net.ParseIP(host)
 		if a.IP == nil {
 			a.Name = host
 		}
+
 		if i == 0 {
 			proxy = a
 		} else {
 			dst = a
 		}
 	}
+
 	return
 }
 
@@ -300,7 +331,9 @@ func (up *UsernamePassword) Authenticate(ctx context.Context, rw io.ReadWriter, 
 		if len(up.Username) == 0 || len(up.Username) > 255 || len(up.Password) > 255 {
 			return errors.New("invalid username/password")
 		}
+
 		var b [514]byte
+
 		b[0] = authUsernamePasswordVersion
 		b[1] = byte(len(up.Username))
 		copy(b[2:], up.Username)
@@ -312,16 +345,21 @@ func (up *UsernamePassword) Authenticate(ctx context.Context, rw io.ReadWriter, 
 		if _, err := rw.Write(b[:tot]); err != nil {
 			return err
 		}
+
 		if _, err := io.ReadFull(rw, b[:2]); err != nil {
 			return err
 		}
+
 		if b[0] != authUsernamePasswordVersion {
 			return errors.New("invalid username/password version")
 		}
+
 		if b[1] != authStatusSucceeded {
 			return errors.New("username/password authentication failed")
 		}
+
 		return nil
 	}
+
 	return errors.New("unsupported authentication method " + strconv.Itoa(int(auth)))
 }

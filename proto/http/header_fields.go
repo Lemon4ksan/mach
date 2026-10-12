@@ -15,8 +15,8 @@ import (
 
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/semantic/altsvc"
-	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
@@ -474,6 +474,7 @@ func (h *RequestHeader) setSpecialHeader(key, value []byte) bool {
 
 			h.ResetConnectionClose()
 			h.setNonSpecial(key, value)
+
 			return true
 
 		case CaseInsensitiveCompare(StrCookie, key):
@@ -1042,6 +1043,7 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 
 			h.ResetConnectionClose()
 			h.setNonSpecial(key, value)
+
 			return true
 		}
 
@@ -1050,6 +1052,7 @@ func (h *ResponseHeader) setSpecialHeader(key, value []byte) bool {
 			h.SetServerBytes(value)
 			return true
 		}
+
 		if CaseInsensitiveCompare(StrSetCookie, key) {
 			var kv *uri.ArgsKV
 
@@ -1089,7 +1092,6 @@ func (h *ResponseHeader) Add(key, value string) {
 
 	h.h.Add(key, value)
 }
-
 
 // AddBytesKV adds the given 'Key: value' header (RFC 9110 Section 5.2).
 //
@@ -1291,6 +1293,7 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 			dst = append(dst, ' ')
 			continue
 		}
+
 		dst = append(dst, c)
 	}
 
@@ -1300,6 +1303,7 @@ func appendHeaderLine(dst, key, value []byte) []byte {
 func hasHeaderValue(s, value []byte) bool {
 	for len(s) > 0 {
 		var before []byte
+
 		idx := bytes.IndexByte(s, ',')
 		if idx >= 0 {
 			before = s[:idx]
@@ -1308,6 +1312,7 @@ func hasHeaderValue(s, value []byte) bool {
 			before = s
 			s = nil
 		}
+
 		if CaseInsensitiveCompare(bytes.Trim(before, " \t"), value) {
 			return true
 		}
@@ -1315,7 +1320,6 @@ func hasHeaderValue(s, value []byte) bool {
 
 	return false
 }
-
 
 // peekArgBytesHeaders returns the header value matching key from h.
 func peekArgBytesHeaders(h *headkit.Headers, key []byte) []byte {

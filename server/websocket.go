@@ -46,12 +46,38 @@ func (h *h1HijackedConn) Write(p []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
+
 	return n, h.w.Flush()
 }
 
 func (h *h1HijackedConn) Close() error {
 	_ = h.w.Flush()
 	return h.Conn.Close()
+}
+
+// IsWebSocket reports whether the incoming request is a WebSocket upgrade request
+// across HTTP/1.1 (RFC 6455), HTTP/2 Extended CONNECT (RFC 8441), or HTTP/3 Extended CONNECT (RFC 9220).
+func (c *Context) IsWebSocket() bool {
+	switch c.proto {
+	case ProtoHTTP11:
+		if c.h1Req == nil {
+			return false
+		}
+
+		upgrade := c.h1Req.Headers.Get("Upgrade")
+		connHdr := c.h1Req.Headers.Get("Connection")
+
+		return ws.HeaderContainsToken(upgrade, "websocket") && ws.HeaderContainsToken(connHdr, "Upgrade")
+
+	case ProtoHTTP2:
+		return c.h2Req != nil && c.h2Req.Method == "CONNECT" && c.h2Req.Protocol == "websocket"
+
+	case ProtoHTTP3:
+		return c.h3Req != nil && c.h3Req.Method == "CONNECT" && c.h3Req.Protocol == "websocket"
+
+	default:
+		return false
+	}
 }
 
 // UpgradeWebSocket upgrades the current exchange across HTTP/1.1 (RFC 6455),
@@ -81,6 +107,7 @@ func (c *Context) upgradeWebSocketH1(options *WebSocketUpgradeOptions) (*ws.Conn
 	}
 
 	upgrade := c.h1Req.Headers.Get("Upgrade")
+
 	connHdr := c.h1Req.Headers.Get("Connection")
 	if !ws.HeaderContainsToken(upgrade, "websocket") || !ws.HeaderContainsToken(connHdr, "Upgrade") {
 		return nil, ws.ErrNotWebSocketUpgrade
@@ -127,12 +154,14 @@ func (c *Context) upgradeWebSocketH1(options *WebSocketUpgradeOptions) (*ws.Conn
 		resp.WriteString(selectedProto)
 		resp.WriteString("\r\n")
 	}
+
 	resp.WriteString("\r\n")
 
 	if _, err := rw.WriteString(resp.String()); err != nil {
 		_ = netConn.Close()
 		return nil, err
 	}
+
 	if err := rw.Flush(); err != nil {
 		_ = netConn.Close()
 		return nil, err
@@ -169,6 +198,7 @@ func (c *Context) upgradeWebSocketH2(options *WebSocketUpgradeOptions) (*ws.Conn
 	if ver == "" {
 		ver = c.h2Req.Headers.Get("sec-websocket-version")
 	}
+
 	if ver != "" && ver != "13" {
 		return nil, ws.ErrUnsupportedVersion
 	}
@@ -179,6 +209,7 @@ func (c *Context) upgradeWebSocketH2(options *WebSocketUpgradeOptions) (*ws.Conn
 		if clientProtos == "" {
 			clientProtos = c.h2Req.Headers.Get("sec-websocket-protocol")
 		}
+
 		for _, sp := range options.Subprotocols {
 			if ws.HeaderContainsToken(clientProtos, sp) {
 				selectedProto = sp

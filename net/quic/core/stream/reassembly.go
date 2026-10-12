@@ -67,6 +67,7 @@ func (b *ReassemblyBuffer) Push(offset uint64, data []byte, fin bool) error {
 			),
 		}
 	}
+
 	end := offset + uint64(len(data))
 	if end < offset || end > varint.Max {
 		return &TransportError{
@@ -89,6 +90,7 @@ func (b *ReassemblyBuffer) Push(offset uint64, data []byte, fin bool) error {
 				),
 			}
 		}
+
 		if end > b.finalSize {
 			return &TransportError{
 				ErrorCode: FinalSizeError,
@@ -111,6 +113,7 @@ func (b *ReassemblyBuffer) Push(offset uint64, data []byte, fin bool) error {
 					),
 				}
 			}
+
 			b.finalSize = end
 			b.hasFinalSize = true
 		}
@@ -152,6 +155,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 			offset: offset,
 			data:   append([]byte(nil), data...),
 		})
+
 		return nil
 	}
 
@@ -161,12 +165,14 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 		last.data = append(last.data, data...)
 		return nil
 	}
+
 	if offset > last.end() {
 		// Disjoint gap after last chunk.
 		b.chunks = append(b.chunks, reassemblyChunk{
 			offset: offset,
 			data:   append([]byte(nil), data...),
 		})
+
 		return nil
 	}
 
@@ -182,11 +188,13 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 			if firstOverlap == -1 {
 				firstOverlap = i
 			}
+
 			lastOverlap = i
 		} else if c.offset > end && firstOverlap == -1 {
 			insertIdx = i
 			break
 		}
+
 		if i == n-1 && firstOverlap == -1 {
 			insertIdx = n
 		}
@@ -200,6 +208,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 			offset: offset,
 			data:   append([]byte(nil), data...),
 		}
+
 		return nil
 	}
 
@@ -208,9 +217,11 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 	for i := firstOverlap; i <= lastOverlap; i++ {
 		c := &b.chunks[i]
 		overlapStart := max(offset, c.offset)
+
 		overlapEnd := min(end, c.end())
 		if overlapEnd > overlapStart {
 			existingPart := c.data[overlapStart-c.offset : overlapEnd-c.offset]
+
 			newPart := data[overlapStart-offset : overlapEnd-offset]
 			if !bytes.Equal(existingPart, newPart) {
 				return &TransportError{
@@ -258,11 +269,14 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 	if numRemoved > 0 {
 		newLen := len(b.chunks) - numRemoved
 		copy(b.chunks[firstOverlap+1:], b.chunks[lastOverlap+1:])
+
 		for k := newLen; k < len(b.chunks); k++ {
 			b.chunks[k] = reassemblyChunk{}
 		}
+
 		b.chunks = b.chunks[:newLen]
 	}
+
 	return nil
 }
 
@@ -282,6 +296,7 @@ func (b *ReassemblyBuffer) Read(p []byte) (int, error) {
 		if b.hasFinalSize && b.readOffset >= b.finalSize {
 			return 0, io.EOF
 		}
+
 		return 0, nil
 	}
 
@@ -296,6 +311,7 @@ func (b *ReassemblyBuffer) Read(p []byte) (int, error) {
 	if toCopy == available {
 		// Consumed entire first chunk; zero out reference to prevent leaking memory
 		b.chunks[0] = reassemblyChunk{}
+
 		b.chunks = b.chunks[1:]
 		if len(b.chunks) == 0 {
 			b.chunks = b.chunks[:0]
@@ -327,6 +343,7 @@ func (b *ReassemblyBuffer) Peek(p []byte) (int, error) {
 		if b.hasFinalSize && b.readOffset >= b.finalSize {
 			return 0, io.EOF
 		}
+
 		return 0, nil
 	}
 
@@ -349,6 +366,7 @@ func (b *ReassemblyBuffer) AvailableContiguous() int {
 	if len(b.chunks) == 0 || b.chunks[0].offset > b.readOffset {
 		return 0
 	}
+
 	return len(b.chunks[0].data)
 }
 
@@ -377,7 +395,9 @@ func (b *ReassemblyBuffer) FinalSize() (uint64, bool) {
 func (b *ReassemblyBuffer) SetFinalSize(finalSize uint64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.finalSize = finalSize
+
 	b.hasFinalSize = true
 	if finalSize > b.highestOffset {
 		b.highestOffset = finalSize

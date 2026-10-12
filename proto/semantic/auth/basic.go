@@ -61,6 +61,7 @@ func AppendBasic[S ~string | ~[]byte](dst []byte, username, password S) []byte {
 
 	if totalLen <= 128 {
 		var buf [128]byte
+
 		n := copy(buf[:], u)
 		buf[n] = ':'
 		copy(buf[n+1:], p)
@@ -85,11 +86,13 @@ func FormatBasic(username, password string) string {
 	totalLen := len(username) + 1 + len(password)
 	if totalLen <= 128 {
 		var buf [128]byte
+
 		n := copy(buf[:], username)
 		buf[n] = ':'
 		copy(buf[n+1:], password)
 
 		var outBuf [256]byte
+
 		nOut := copy(outBuf[:], "Basic ")
 		base64.StdEncoding.Encode(outBuf[nOut:], buf[:totalLen])
 		encodedLen := nOut + base64.StdEncoding.EncodedLen(totalLen)
@@ -98,6 +101,7 @@ func FormatBasic(username, password string) string {
 	}
 
 	auth := username + ":" + password
+
 	return "Basic " + base64.StdEncoding.EncodeToString(bytesconv.S2B(auth))
 }
 
@@ -118,12 +122,14 @@ func ParseBasic[S ~string | ~[]byte](authHeader S) (username, password S, err er
 		}
 
 		payload := bytes.TrimSpace(h[6:])
+
 		n, errDecode := base64.StdEncoding.Decode(payload, payload)
 		if errDecode != nil {
 			return zero, zero, ErrInvalidBase64
 		}
 
 		decoded := payload[:n]
+
 		before, after, ok := bytes.Cut(decoded, []byte{':'})
 		if !ok {
 			return zero, zero, errMissingColon
@@ -138,17 +144,22 @@ func ParseBasic[S ~string | ~[]byte](authHeader S) (username, password S, err er
 		}
 
 		payload := strings.TrimSpace(h[6:])
-		var buf [256]byte
-		var decoded []byte
+
+		var (
+			buf     [256]byte
+			decoded []byte
+		)
 
 		if base64.StdEncoding.DecodedLen(len(payload)) <= len(buf) {
 			n, errDecode := base64.StdEncoding.Decode(buf[:], bytesconv.S2B(payload))
 			if errDecode != nil {
 				return zero, zero, ErrInvalidBase64
 			}
+
 			decoded = buf[:n]
 		} else {
 			var errDecode error
+
 			decoded, errDecode = base64.StdEncoding.DecodeString(payload)
 			if errDecode != nil {
 				return zero, zero, ErrInvalidBase64
@@ -156,6 +167,7 @@ func ParseBasic[S ~string | ~[]byte](authHeader S) (username, password S, err er
 		}
 
 		raw := bytesconv.B2S(decoded)
+
 		before, after, ok := strings.Cut(raw, ":")
 		if !ok {
 			return zero, zero, errMissingColon
@@ -165,10 +177,12 @@ func ParseBasic[S ~string | ~[]byte](authHeader S) (username, password S, err er
 
 	default:
 		str := stringOrBytes(authHeader)
+
 		u, p, err := ParseBasic(str)
 		if err != nil {
 			return zero, zero, err
 		}
+
 		return S(u), S(p), nil
 	}
 }
@@ -176,13 +190,16 @@ func ParseBasic[S ~string | ~[]byte](authHeader S) (username, password S, err er
 // ParseBasicChallenge extracts the realm and optional charset parameter from a "WWW-Authenticate: Basic ..." header (RFC 7617 §2).
 func ParseBasicChallenge[S ~string | ~[]byte](challengeHeader S) (BasicChallenge, bool) {
 	ch := stringOrBytes(challengeHeader)
+
 	ch = strings.TrimSpace(ch)
 	if len(ch) < 6 || !strings.EqualFold(ch[:6], "Basic ") {
 		return BasicChallenge{}, false
 	}
 
 	parsedParams, _ := ExtractChallengeParams(ch, "Basic")
+
 	var res BasicChallenge
+
 	foundRealm := false
 
 	if realm, ok := parsedParams["realm"]; ok {
@@ -202,6 +219,7 @@ func ParseBasicChallenge[S ~string | ~[]byte](challengeHeader S) (BasicChallenge
 // InScope verifies whether a target request URI falls within the canonical protection space (RFC 7617 §2.2).
 func InScope(reqURL, scopeRootURL string) bool {
 	parsedReq, errReq := url.Parse(reqURL)
+
 	parsedScope, errScope := url.Parse(scopeRootURL)
 	if errReq != nil || errScope != nil {
 		return false

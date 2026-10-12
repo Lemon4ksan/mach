@@ -193,3 +193,46 @@ func BenchmarkContextLifecycle_H3(b *testing.B) {
 	}
 }
 
+func TestContextWebSocketAllocations(t *testing.T) {
+	s := server.New()
+
+	h1Req := &h1.Request{
+		Method:  "GET",
+		Path:    "/chat",
+		Headers: headkit.NewWithCapacity(8),
+	}
+	h1Req.Headers.Set("Upgrade", "websocket")
+	h1Req.Headers.Set("Connection", "Upgrade")
+	h1Res := &h1.Response{
+		Headers: headkit.NewWithCapacity(8),
+	}
+
+	h2Req := &h2.ServerRequest{
+		Method:   "CONNECT",
+		Protocol: "websocket",
+		Path:     "/chat",
+		Headers:  make(http.Header),
+		Ctx:      context.Background(),
+	}
+	h2Res := &h2.ServerResponse{
+		Headers: make(http.Header),
+	}
+
+	allocsH1 := testing.AllocsPerRun(1000, func() {
+		ctx := s.NewTestContextH1(h1Req, h1Res)
+		if !ctx.IsWebSocket() {
+			t.Fatal("expected H1 IsWebSocket to be true")
+		}
+		s.ReleaseTestContext(ctx)
+	})
+	assert.Equal(t, 0.0, allocsH1, "H1 WebSocket check must have 0 allocations")
+
+	allocsH2 := testing.AllocsPerRun(1000, func() {
+		ctx := s.NewTestContextH2(h2Req, h2Res)
+		if !ctx.IsWebSocket() {
+			t.Fatal("expected H2 IsWebSocket to be true")
+		}
+		s.ReleaseTestContext(ctx)
+	})
+	assert.Equal(t, 0.0, allocsH2, "H2 WebSocket check must have 0 allocations")
+}

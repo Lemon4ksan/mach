@@ -237,6 +237,7 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 		}
 
 		r.headerBuf = append(r.headerBuf, trimmed...)
+
 		reqLine := r.headerBuf[:len(trimmed)]
 		if err := r.parseRequestLine(reqLine); err != nil {
 			return err
@@ -310,15 +311,19 @@ func mapHeaderError(err error) error {
 	if err == nil {
 		return nil
 	}
+
 	if errors.Is(err, headkit.ErrDuplicateContentLength) {
 		return ErrDuplicateContentLength
 	}
+
 	if errors.Is(err, headkit.ErrMultipleHostHeaders) {
 		return ErrMultipleHostHeaders
 	}
+
 	if errors.Is(err, headkit.ErrWhitespaceBeforeColon) {
 		return ErrWhitespaceBeforeColon
 	}
+
 	return err
 }
 
@@ -348,16 +353,18 @@ func (r *Request) parseRequestLine(line []byte) error {
 
 	protoBytes := line[s2+1:]
 	// RFC 9112 §3.1.1: Whitespace other than single SP prohibited between elements or trailing
-	if protoBytes[0] == ' ' || protoBytes[0] == '\t' || protoh1.IndexByte(protoBytes, ' ') != -1 || protoh1.IndexByte(protoBytes, '\t') != -1 {
+	if protoBytes[0] == ' ' || protoBytes[0] == '\t' || protoh1.IndexByte(protoBytes, ' ') != -1 ||
+		protoh1.IndexByte(protoBytes, '\t') != -1 {
 		return ErrMalformedRequestLine
 	}
 
 	// RFC 9112 §2.3: Validate HTTP version
-	if bytes.Equal(protoBytes, []byte("HTTP/1.1")) {
+	switch {
+	case bytes.Equal(protoBytes, []byte("HTTP/1.1")):
 		r.Proto = "HTTP/1.1"
-	} else if bytes.Equal(protoBytes, []byte("HTTP/1.0")) {
+	case bytes.Equal(protoBytes, []byte("HTTP/1.0")):
 		r.Proto = "HTTP/1.0"
-	} else {
+	default:
 		return ErrUnsupportedProtocol
 	}
 
@@ -416,6 +423,7 @@ func (r *Request) finishRequestBodyRead(
 		if !bytesconv.EqualFoldASCII(expectVal, headkit.Value100Continue) {
 			return ErrExpectationFailed
 		}
+
 		if r.Proto == "HTTP/1.1" && bw != nil {
 			_, _ = bw.WriteString("HTTP/1.1 100 Continue\r\n\r\n")
 			if r.Conn != nil {
@@ -429,6 +437,7 @@ func (r *Request) finishRequestBodyRead(
 	if hasTE {
 		// RFC 9112 §6.1: Verify all Transfer-Encoding entries
 		teCount := 0
+
 		var teVal string
 		for k, v := range r.Headers.All() {
 			if bytesconv.EqualFoldASCII(k, headkit.TransferEncoding) {

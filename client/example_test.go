@@ -14,7 +14,7 @@ import (
 
 func ExampleEngine() {
 	engine := client.NewEngine(
-		client.WithIdleTimeout(60 * time.Second),
+		client.WithIdleTimeout(60*time.Second),
 		client.WithMaxConnsPerHost(20),
 	)
 	defer func() { _ = engine.Close() }()

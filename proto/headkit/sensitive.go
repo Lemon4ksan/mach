@@ -22,9 +22,11 @@ func IsSensitive[S ~string | ~[]byte](headerName S) bool {
 	for len(b) > 0 && (b[0] == ' ' || b[0] == '\t' || b[0] == '\r' || b[0] == '\n') {
 		b = b[1:]
 	}
+
 	for len(b) > 0 && (b[len(b)-1] == ' ' || b[len(b)-1] == '\t' || b[len(b)-1] == '\r' || b[len(b)-1] == '\n') {
 		b = b[:len(b)-1]
 	}
+
 	if len(b) == 0 {
 		return false
 	}
@@ -63,7 +65,6 @@ func IsSensitive[S ~string | ~[]byte](headerName S) bool {
 		return false
 	}
 }
-
 
 // RedactValue masks the secret value of a sensitive header while preserving recognizable prefix formats
 // (e.g. "Bearer [REDACTED]" or "Basic [REDACTED]").

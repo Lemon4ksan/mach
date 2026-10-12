@@ -78,7 +78,9 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 	defer hpack.ReleaseHeaderField(hf)
 
 	var hasSeenRegularHeader bool
+
 	sc.hpackDec.BeginHeaderBlock()
+
 	for len(rawBlock) > 0 {
 		hf.Reset()
 
@@ -181,21 +183,21 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 			if !sc.EnableConnectProtocol {
 				return coreh2.ProtocolError
 			}
+
 			// RFC 8441 §4: Extended CONNECT requires :scheme, :path, and :authority
 			if st.scheme == "" || st.path == "" || st.authority == "" {
 				return coreh2.ProtocolError
 			}
-		} else {
+		} else if st.scheme != "" || st.path != "" || st.authority == "" {
 			// RFC 9113 §8.5: Standard CONNECT requires :scheme and :path to be omitted, and :authority present
-			if st.scheme != "" || st.path != "" || st.authority == "" {
-				return coreh2.ProtocolError
-			}
+			return coreh2.ProtocolError
 		}
 	} else {
 		// RFC 8441 §4: :protocol pseudo-header is only valid on CONNECT requests
 		if st.protocol != "" {
 			return coreh2.ProtocolError
 		}
+
 		// RFC 9113 §8.3.1: All other requests MUST include exactly one :method, :scheme, and :path
 		if st.scheme == "" || st.path == "" {
 			return coreh2.ProtocolError
@@ -225,6 +227,7 @@ func (a *h2ServerStreamAdapter) Write(p []byte) (int, error) {
 	if a.closed.Load() {
 		return 0, io.ErrClosedPipe
 	}
+
 	return a.sc.writeStreamData(a.streamID, p, false)
 }
 
@@ -234,6 +237,7 @@ func (a *h2ServerStreamAdapter) Close() error {
 		_ = a.pw.Close()
 		_, _ = a.sc.writeStreamData(a.streamID, nil, true)
 	}
+
 	return nil
 }
 
@@ -242,11 +246,13 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 	defer st.cancel()
 
 	isExtConnect := (st.method == "CONNECT" && st.protocol != "")
+
 	var adapter *h2ServerStreamAdapter
 	if isExtConnect {
 		pr, pw := io.Pipe()
 		st.pipeReader = pr
 		st.pipeWriter = pw
+
 		adapter = &h2ServerStreamAdapter{
 			sc:       sc,
 			streamID: st.id,

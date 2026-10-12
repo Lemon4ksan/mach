@@ -50,4 +50,3 @@ func BenchmarkDecodeRFC8187(b *testing.B) {
 		_, _, _ = contentdisposition.DecodeRFC8187(encoded)
 	}
 }
-

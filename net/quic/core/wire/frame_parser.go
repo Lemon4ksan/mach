@@ -23,11 +23,14 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 	if b[0] == 0x00 {
 		f.Reset()
 		f.Type = FrameTypePadding
+
 		padCount := 0
 		for padCount < len(b) && b[padCount] == 0x00 {
 			padCount++
 		}
+
 		f.PaddingCount = padCount
+
 		return padCount, nil
 	}
 
@@ -37,6 +40,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 	}
 
 	f.Reset()
+
 	offset := n
 
 	// Handle STREAM frame range (0x08 - 0x0f)
@@ -50,6 +54,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		var streamOffset uint64
@@ -58,6 +63,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 		}
 
@@ -67,10 +73,12 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 			if uint64(len(b)-offset) < dataLen {
 				return 0, ErrTruncatedFrame
 			}
+
 			data = b[offset : offset+int(dataLen)]
 			offset += int(dataLen)
 		} else {
@@ -85,6 +93,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			HasLen:   hasLen,
 			Data:     data,
 		}
+
 		return offset, nil
 	}
 
@@ -100,25 +109,30 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		ackDelay, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		rangeCount, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		firstRange, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
+
 		if firstRange > largestAcked {
 			return 0, ErrTruncatedFrame
 		}
@@ -132,12 +146,14 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 
 			length, n, err := varint.Decode(b[offset:])
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 
 			f.Ack.AppendRange(gap, length)
@@ -145,22 +161,26 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 
 		if typ == FrameTypeAckECN {
 			f.Ack.HasECN = true
+
 			ect0, n, err := varint.Decode(b[offset:])
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 
 			ect1, n, err := varint.Decode(b[offset:])
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 
 			ecnce, n, err := varint.Decode(b[offset:])
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 
 			f.Ack.ECN = ECNCounts{
@@ -169,6 +189,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 				ECNCE: ecnce,
 			}
 		}
+
 		return offset, nil
 
 	case FrameTypeResetStream:
@@ -176,18 +197,21 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		errorCode, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		finalSize, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		f.ResetStream = ResetStreamFrame{
@@ -195,6 +219,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			ErrorCode: errorCode,
 			FinalSize: finalSize,
 		}
+
 		return offset, nil
 
 	case FrameTypeStopSending:
@@ -202,18 +227,21 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		errorCode, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		f.StopSending = StopSendingFrame{
 			StreamID:  streamID,
 			ErrorCode: errorCode,
 		}
+
 		return offset, nil
 
 	case FrameTypeCrypto:
@@ -221,22 +249,26 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		length, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		if uint64(len(b)-offset) < length {
 			return 0, ErrTruncatedFrame
 		}
+
 		f.Crypto = CryptoFrame{
 			Offset: cryptoOffset,
 			Data:   b[offset : offset+int(length)],
 		}
 		offset += int(length)
+
 		return offset, nil
 
 	case FrameTypeNewToken:
@@ -244,15 +276,18 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		if uint64(len(b)-offset) < length {
 			return 0, ErrTruncatedFrame
 		}
+
 		f.NewToken = NewTokenFrame{
 			Token: b[offset : offset+int(length)],
 		}
 		offset += int(length)
+
 		return offset, nil
 
 	case FrameTypeMaxData:
@@ -260,8 +295,10 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.MaxData = MaxDataFrame{MaximumData: maxData}
+
 		return offset, nil
 
 	case FrameTypeMaxStreamData:
@@ -269,17 +306,20 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		maxStreamData, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.MaxStreamData = MaxStreamDataFrame{
 			StreamID:          streamID,
 			MaximumStreamData: maxStreamData,
 		}
+
 		return offset, nil
 
 	case FrameTypeMaxStreamsBidi, FrameTypeMaxStreamsUni:
@@ -287,11 +327,13 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.MaxStreams = MaxStreamsFrame{
-			MaxStreams:    maxStreams,
+			MaxStreams:     maxStreams,
 			Unidirectional: typ == FrameTypeMaxStreamsUni,
 		}
+
 		return offset, nil
 
 	case FrameTypeDataBlocked:
@@ -299,8 +341,10 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.DataBlocked = DataBlockedFrame{MaximumData: maxData}
+
 		return offset, nil
 
 	case FrameTypeStreamDataBlocked:
@@ -308,17 +352,20 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		maxStreamData, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.StreamDataBlocked = StreamDataBlockedFrame{
 			StreamID:          streamID,
 			MaximumStreamData: maxStreamData,
 		}
+
 		return offset, nil
 
 	case FrameTypeStreamsBlockedBidi, FrameTypeStreamsBlockedUni:
@@ -326,11 +373,13 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.StreamsBlocked = StreamsBlockedFrame{
 			StreamLimit:    streamLimit,
 			Unidirectional: typ == FrameTypeStreamsBlockedUni,
 		}
+
 		return offset, nil
 
 	case FrameTypeNewConnectionID:
@@ -338,18 +387,22 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		retirePriorTo, n, err := varint.Decode(b[offset:])
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		if len(b) < offset+1 {
 			return 0, ErrTruncatedFrame
 		}
+
 		cidLen := int(b[offset])
+
 		offset++
 		if cidLen < 1 || cidLen > 20 || len(b) < offset+cidLen+16 {
 			return 0, ErrTruncatedFrame
@@ -362,6 +415,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 
 		copy(f.NewConnectionID.StatelessResetToken[:], b[offset:offset+16])
 		offset += 16
+
 		return offset, nil
 
 	case FrameTypeRetireConnectionID:
@@ -369,24 +423,30 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 		f.RetireConnectionID = RetireConnectionIDFrame{SequenceNumber: seq}
+
 		return offset, nil
 
 	case FrameTypePathChallenge:
 		if len(b) < offset+8 {
 			return 0, ErrTruncatedFrame
 		}
+
 		copy(f.PathChallenge.Data[:], b[offset:offset+8])
 		offset += 8
+
 		return offset, nil
 
 	case FrameTypePathResponse:
 		if len(b) < offset+8 {
 			return 0, ErrTruncatedFrame
 		}
+
 		copy(f.PathResponse.Data[:], b[offset:offset+8])
 		offset += 8
+
 		return offset, nil
 
 	case FrameTypeConnectionCloseTransport, FrameTypeConnectionCloseApp:
@@ -394,6 +454,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		var triggerFrameType uint64
@@ -402,6 +463,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 		}
 
@@ -409,11 +471,13 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 		if err != nil {
 			return 0, ErrTruncatedFrame
 		}
+
 		offset += n
 
 		if uint64(len(b)-offset) < reasonLen {
 			return 0, ErrTruncatedFrame
 		}
+
 		f.ConnectionClose = ConnectionCloseFrame{
 			IsApplication: typ == FrameTypeConnectionCloseApp,
 			ErrorCode:     errorCode,
@@ -421,6 +485,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			Reason:        b[offset : offset+int(reasonLen)],
 		}
 		offset += int(reasonLen)
+
 		return offset, nil
 
 	case FrameTypeHandshakeDone:
@@ -432,10 +497,12 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			if err != nil {
 				return 0, ErrTruncatedFrame
 			}
+
 			offset += n
 			if uint64(len(b)-offset) < dataLen {
 				return 0, ErrTruncatedFrame
 			}
+
 			f.Datagram = DatagramFrame{
 				HasLen: true,
 				Data:   b[offset : offset+int(dataLen)],
@@ -448,6 +515,7 @@ func ParseNextFrame(b []byte, f *Frame) (int, error) {
 			}
 			offset = len(b)
 		}
+
 		return offset, nil
 
 	default:
@@ -466,9 +534,11 @@ func Frames(payload []byte) iter.Seq2[*Frame, error] {
 				yield(nil, err)
 				return
 			}
+
 			if !yield(&f, nil) {
 				return
 			}
+
 			payload = payload[n:]
 		}
 	}

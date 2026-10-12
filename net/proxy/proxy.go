@@ -58,6 +58,7 @@ func FromEnvironmentUsing(forward Dialer) Dialer {
 
 	perHost := NewPerHost(proxy, forward)
 	perHost.AddFromString(noProxy)
+
 	return perHost
 }
 
@@ -74,6 +75,7 @@ var (
 func RegisterDialerType(scheme string, f func(*url.URL, Dialer) (Dialer, error)) {
 	proxyMu.Lock()
 	defer proxyMu.Unlock()
+
 	if proxySchemes == nil {
 		proxySchemes = make(map[string]func(*url.URL, Dialer) (Dialer, error))
 	}

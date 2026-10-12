@@ -122,11 +122,13 @@ func New(opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(s)
 	}
+
 	if s.CustomAltSvc != "" {
 		s.altSvcHeader.Store(&s.CustomAltSvc)
 	} else if s.AltSvcPort > 0 {
 		s.updateAltSvcHeader(s.AltSvcPort)
 	}
+
 	return s
 }
 
@@ -156,15 +158,18 @@ func (s *Server) acquireContext() *Context {
 	if poolInstance == nil {
 		poolInstance = defaultContextPool
 	}
+
 	return poolInstance.Get()
 }
 
 func (s *Server) releaseContext(ctx *Context) {
 	ctx.Reset()
+
 	poolInstance := s.ctxPool
 	if poolInstance == nil {
 		poolInstance = defaultContextPool
 	}
+
 	poolInstance.Put(ctx)
 }
 
@@ -172,11 +177,14 @@ func (s *Server) dispatch(ctx *Context) error {
 	if s.Handler != nil {
 		return s.Handler.Handle(ctx)
 	}
+
 	if s.HandlerFunc != nil {
 		return s.HandlerFunc(ctx)
 	}
+
 	ctx.SetStatusCode(status.NotImplemented)
 	ctx.SetBodyString("No handler configured")
+
 	return nil
 }
 
@@ -190,6 +198,7 @@ func (s *Server) updateAltSvcHeader(port int) {
 	if s.DisableAltSvc || port <= 0 {
 		return
 	}
+
 	if s.CustomAltSvc != "" {
 		s.altSvcHeader.Store(&s.CustomAltSvc)
 		return
@@ -214,6 +223,7 @@ func (s *Server) getAltSvcHeader() string {
 	if ptr != nil {
 		return *ptr
 	}
+
 	return ""
 }
 
@@ -221,6 +231,7 @@ func (s *Server) shouldEmitAltSvc(ctx *Context) bool {
 	if s.DisableAltSvc || ctx.IsAltSvcDisabled() {
 		return false
 	}
+
 	return s.getAltSvcHeader() != ""
 }
 
@@ -236,9 +247,11 @@ func (s *Server) ensureTLSConfig(cfg *tls.Config) *tls.Config {
 	} else {
 		cloned = &tls.Config{}
 	}
+
 	if len(cloned.NextProtos) == 0 {
 		cloned.NextProtos = []string{"h2", "http/1.1"}
 	}
+
 	return cloned
 }
 
@@ -246,8 +259,10 @@ func (s *Server) getPreparedTLS() *tls.Config {
 	if cfg := s.preparedTLS.Load(); cfg != nil {
 		return cfg
 	}
+
 	cfg := s.ensureTLSConfig(s.TLSConfig)
 	s.preparedTLS.Store(cfg)
+
 	return cfg
 }
 
@@ -256,6 +271,7 @@ func (s *Server) trackConn(c net.Conn, add bool) {
 	if s.activeConns == nil {
 		s.activeConns = make(map[net.Conn]struct{})
 	}
+
 	if add {
 		if !s.isClosed.Load() {
 			s.activeConns[c] = struct{}{}
@@ -263,6 +279,7 @@ func (s *Server) trackConn(c net.Conn, add bool) {
 	} else {
 		delete(s.activeConns, c)
 	}
+
 	s.mu.Unlock()
 }
 
@@ -274,15 +291,19 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.mu.Unlock()
 		return ErrServerClosed
 	}
+
 	if s.activeConns == nil {
 		s.activeConns = make(map[net.Conn]struct{})
 	}
+
 	if s.ctxPool == nil {
 		s.ctxPool = defaultContextPool
 	}
+
 	if s.AltSvcPort > 0 && s.altSvcHeader.Load() == nil {
 		s.updateAltSvcHeader(s.AltSvcPort)
 	}
+
 	s.activeTCP = append(s.activeTCP, ln)
 	s.mu.Unlock()
 
@@ -296,16 +317,19 @@ func (s *Server) Serve(ln net.Listener) error {
 			if s.isClosed.Load() {
 				return nil
 			}
+
 			return err
 		}
 
 		s.trackConn(conn, true)
+
 		s.wg.Add(1)
 		go func(c net.Conn) {
 			defer func() {
 				s.trackConn(c, false)
 				s.wg.Done()
 			}()
+
 			s.serveTCPConn(c)
 		}(conn)
 	}
@@ -317,10 +341,12 @@ func (s *Server) serveTCPConn(conn net.Conn) {
 		if s.ReadTimeout > 0 {
 			_ = conn.SetDeadline(time.Now().Add(s.ReadTimeout))
 		}
-		if err := tlsConn.Handshake(); err != nil {
+
+		if err := tlsConn.HandshakeContext(context.Background()); err != nil {
 			_ = conn.Close()
 			return
 		}
+
 		_ = conn.SetDeadline(time.Time{})
 
 		proto := tlsConn.ConnectionState().NegotiatedProtocol
@@ -332,20 +358,24 @@ func (s *Server) serveTCPConn(conn net.Conn) {
 		default:
 			s.serveH1(tlsConn)
 		}
+
 		return
 	}
 
 	// 2. If Server.TLSConfig is configured, wrap cleartext socket with tls.Server
 	if s.TLSConfig != nil {
 		cfg := s.getPreparedTLS()
+
 		tlsConn := tls.Server(conn, cfg)
 		if s.ReadTimeout > 0 {
 			_ = conn.SetDeadline(time.Now().Add(s.ReadTimeout))
 		}
-		if err := tlsConn.Handshake(); err != nil {
+
+		if err := tlsConn.HandshakeContext(context.Background()); err != nil {
 			_ = conn.Close()
 			return
 		}
+
 		_ = conn.SetDeadline(time.Time{})
 
 		proto := tlsConn.ConnectionState().NegotiatedProtocol
@@ -357,6 +387,7 @@ func (s *Server) serveTCPConn(conn net.Conn) {
 		default:
 			s.serveH1(tlsConn)
 		}
+
 		return
 	}
 
@@ -374,6 +405,7 @@ func (s *Server) serveCleartextConn(conn net.Conn) {
 	if s.ReadTimeout > 0 {
 		_ = conn.SetReadDeadline(time.Now().Add(s.ReadTimeout))
 	}
+
 	n, err := conn.Read(bConn.buf[:])
 	if s.ReadTimeout > 0 {
 		_ = conn.SetReadDeadline(time.Time{})
@@ -385,9 +417,12 @@ func (s *Server) serveCleartextConn(conn net.Conn) {
 			s.serveH1(bConn)
 			return
 		}
+
 		_ = conn.Close()
+
 		return
 	}
+
 	bConn.n = n
 
 	// EXP-1201 & EXP-1210 fix: Check if request starts with HTTP/2 preface without blocking on short HTTP/1 requests.
@@ -398,13 +433,16 @@ func (s *Server) serveCleartextConn(conn net.Conn) {
 		if s.ReadTimeout > 0 {
 			_ = conn.SetReadDeadline(time.Now().Add(s.ReadTimeout))
 		}
+
 		nr, rErr := conn.Read(bConn.buf[bConn.n:len(bConn.buf)])
 		if s.ReadTimeout > 0 {
 			_ = conn.SetReadDeadline(time.Time{})
 		}
+
 		if nr > 0 {
 			bConn.n += nr
 		}
+
 		if rErr != nil {
 			break
 		}
@@ -427,6 +465,7 @@ func (s *Server) serveH1(conn net.Conn) {
 		StreamHandler: s.StreamHandler,
 		Handler: func(req *h1.Request, res *h1.Response) error {
 			ctx := s.acquireContext()
+
 			ctx.initH1(s, req, res)
 			defer func() {
 				s.releaseContext(ctx)
@@ -456,6 +495,7 @@ func (s *Server) serveH1(conn net.Conn) {
 func (s *Server) serveH2(conn net.Conn) {
 	h2Handler := func(req *h2.ServerRequest, res *h2.ServerResponse) error {
 		ctx := s.acquireContext()
+
 		ctx.initH2(s, req, res)
 		defer func() {
 			s.releaseContext(ctx)
@@ -480,6 +520,7 @@ func (s *Server) serveH2(conn net.Conn) {
 
 	sc := h2.NewServerConn(conn, h2Handler)
 	defer sc.Release()
+
 	_ = sc.Serve()
 }
 
@@ -490,9 +531,11 @@ func (s *Server) ServeQUIC(qln *quic.Listener) error {
 		s.mu.Unlock()
 		return ErrServerClosed
 	}
+
 	if s.ctxPool == nil {
 		s.ctxPool = defaultContextPool
 	}
+
 	s.activeQUIC = append(s.activeQUIC, qln)
 
 	// Automatically extract UDP port if AltSvcPort is not explicitly set
@@ -501,6 +544,7 @@ func (s *Server) ServeQUIC(qln *quic.Listener) error {
 			s.updateAltSvcHeader(udpAddr.Port)
 		}
 	}
+
 	s.mu.Unlock()
 
 	defer func() {
@@ -517,12 +561,14 @@ func (s *Server) ServeQUIC(qln *quic.Listener) error {
 			if s.isClosed.Load() {
 				return nil
 			}
+
 			return err
 		}
 
 		s.wg.Add(1)
 		go func(qc *quic.Conn) {
 			defer s.wg.Done()
+
 			s.serveH3(qc)
 		}(conn)
 	}
@@ -533,6 +579,7 @@ func (s *Server) serveH3(qc *quic.Conn) {
 
 	h3Handler := func(req *h3.ServerRequest, res *h3.ServerResponse) error {
 		ctx := s.acquireContext()
+
 		ctx.initH3(s, req, res)
 		defer func() {
 			s.releaseContext(ctx)
@@ -554,11 +601,13 @@ func (s *Server) serveH3(qc *quic.Conn) {
 // ServeMultiProtocol concurrently serves both a TCP listener (HTTP/1.1 + HTTP/2) and a QUIC listener (HTTP/3).
 func (s *Server) ServeMultiProtocol(tcpLn net.Listener, quicLn *quic.Listener) error {
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, 2)
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
+
 		if err := s.Serve(tcpLn); err != nil && !s.isClosed.Load() {
 			errChan <- err
 		}
@@ -566,6 +615,7 @@ func (s *Server) ServeMultiProtocol(tcpLn net.Listener, quicLn *quic.Listener) e
 
 	go func() {
 		defer wg.Done()
+
 		if err := s.ServeQUIC(quicLn); err != nil && !s.isClosed.Load() {
 			errChan <- err
 		}
@@ -596,24 +646,31 @@ func (s *Server) ServeTLS(ln net.Listener, certFile, keyFile string) error {
 	cfg := s.ensureTLSConfig(s.TLSConfig)
 	cfg.Certificates = []tls.Certificate{cert}
 	tlsLn := tls.NewListener(ln, cfg)
+
 	return s.Serve(tlsLn)
 }
 
 // Listen listens on TCP address addr and serves incoming HTTP requests.
 func (s *Server) Listen(addr string) error {
-	ln, err := net.Listen("tcp", addr)
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return err
 	}
+
 	return s.Serve(ln)
 }
 
 // ListenTLS listens on TCP address addr with TLS and serves incoming HTTPS requests.
 func (s *Server) ListenTLS(addr, certFile, keyFile string) error {
-	ln, err := net.Listen("tcp", addr)
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return err
 	}
+
 	return s.ServeTLS(ln, certFile, keyFile)
 }
 
@@ -621,10 +678,12 @@ func (s *Server) ListenTLS(addr, certFile, keyFile string) error {
 func (s *Server) ListenQUIC(addr string, tlsConf *tls.Config) error {
 	cfg := tlsConf.Clone()
 	cfg.NextProtos = []string{"h3"}
+
 	qln, err := quic.ListenAddr(addr, cfg, quic.WithDatagrams(true))
 	if err != nil {
 		return err
 	}
+
 	return s.ServeQUIC(qln)
 }
 
@@ -645,6 +704,7 @@ func (s *Server) ListenAndServeMultiProtocol(tcpAddr, udpAddr string, tlsConf *t
 	}
 
 	tcpTLS := s.ensureTLSConfig(tlsConf)
+
 	tcpLn, err := tls.Listen("tcp", tcpAddr, tcpTLS)
 	if err != nil {
 		return fmt.Errorf("server: tcp listen failed: %w", err)
@@ -652,6 +712,7 @@ func (s *Server) ListenAndServeMultiProtocol(tcpAddr, udpAddr string, tlsConf *t
 
 	quicTLS := tlsConf.Clone()
 	quicTLS.NextProtos = []string{"h3"}
+
 	quicLn, err := quic.ListenAddr(udpAddr, quicTLS, quic.WithDatagrams(true))
 	if err != nil {
 		_ = tcpLn.Close()
@@ -671,16 +732,19 @@ func (s *Server) Close() error {
 	for _, ln := range s.activeTCP {
 		_ = ln.Close()
 	}
+
 	s.activeTCP = nil
 
 	for _, qln := range s.activeQUIC {
 		_ = qln.Close()
 	}
+
 	s.activeQUIC = nil
 
 	for conn := range s.activeConns {
 		_ = conn.Close()
 	}
+
 	clear(s.activeConns)
 	s.mu.Unlock()
 
@@ -695,11 +759,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	for _, ln := range s.activeTCP {
 		_ = ln.Close()
 	}
+
 	s.activeTCP = nil
 
 	for _, qln := range s.activeQUIC {
 		_ = qln.Close()
 	}
+
 	s.activeQUIC = nil
 	s.mu.Unlock()
 
@@ -717,8 +783,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		for conn := range s.activeConns {
 			_ = conn.Close()
 		}
+
 		clear(s.activeConns)
 		s.mu.Unlock()
+
 		return ctx.Err()
 	}
 }
@@ -736,5 +804,6 @@ func (c *bufferConn) Read(b []byte) (int, error) {
 		c.off += n
 		return n, nil
 	}
+
 	return c.Conn.Read(b)
 }

@@ -87,27 +87,35 @@ func NewConn(cfg ConnConfig) *Conn {
 	if cfg.InitialStreamReceiveWindow == 0 {
 		cfg.InitialStreamReceiveWindow = DefaultInitialStreamReceiveWindow
 	}
+
 	if cfg.MaxStreamReceiveWindow == 0 {
 		cfg.MaxStreamReceiveWindow = DefaultMaxStreamReceiveWindow
 	}
+
 	if cfg.InitialConnectionReceiveWindow == 0 {
 		cfg.InitialConnectionReceiveWindow = DefaultInitialConnReceiveWindow
 	}
+
 	if cfg.MaxConnectionReceiveWindow == 0 {
 		cfg.MaxConnectionReceiveWindow = DefaultMaxConnReceiveWindow
 	}
+
 	if cfg.InitialMaxStreamsBidi == 0 {
 		cfg.InitialMaxStreamsBidi = 100
 	}
+
 	if cfg.InitialMaxStreamsUni == 0 {
 		cfg.InitialMaxStreamsUni = 100
 	}
+
 	if cfg.InitialPeerMaxStreamsBidi == 0 {
 		cfg.InitialPeerMaxStreamsBidi = 100
 	}
+
 	if cfg.InitialPeerMaxStreamsUni == 0 {
 		cfg.InitialPeerMaxStreamsUni = 100
 	}
+
 	if cfg.InitialPeerMaxData == 0 {
 		cfg.InitialPeerMaxData = DefaultInitialConnReceiveWindow
 	}
@@ -141,6 +149,7 @@ func NewConn(cfg ConnConfig) *Conn {
 		closedStreams:          make(map[StreamID]struct{}),
 		closedCh:               make(chan struct{}),
 	}
+
 	return c
 }
 
@@ -190,10 +199,12 @@ func (c *Conn) OpenStream() (*Stream, error) {
 	if c.config.Perspective == PerspectiveServer {
 		st = StreamTypeServerBidi
 	}
+
 	streamID := NewStreamID(st, c.nextLocalBidiStreamNum)
 	c.nextLocalBidiStreamNum++
 
 	str := c.createBidiStreamLocked(streamID)
+
 	return str, nil
 }
 
@@ -211,11 +222,13 @@ func (c *Conn) OpenStreamSync(ctx context.Context) (*Stream, error) {
 			if c.config.Perspective == PerspectiveServer {
 				st = StreamTypeServerBidi
 			}
+
 			streamID := NewStreamID(st, c.nextLocalBidiStreamNum)
 			c.nextLocalBidiStreamNum++
 
 			str := c.createBidiStreamLocked(streamID)
 			c.mu.Unlock()
+
 			return str, nil
 		}
 
@@ -255,6 +268,7 @@ func (c *Conn) OpenUniStream() (*SendStream, error) {
 	if c.config.Perspective == PerspectiveServer {
 		st = StreamTypeServerUni
 	}
+
 	streamID := NewStreamID(st, c.nextLocalUniStreamNum)
 	c.nextLocalUniStreamNum++
 
@@ -270,6 +284,7 @@ func (c *Conn) OpenUniStream() (*SendStream, error) {
 
 	str := NewSendStream(c.ctx, streamID, c, sfc)
 	c.sendStreams[streamID] = str
+
 	return str, nil
 }
 
@@ -287,6 +302,7 @@ func (c *Conn) OpenUniStreamSync(ctx context.Context) (*SendStream, error) {
 			if c.config.Perspective == PerspectiveServer {
 				st = StreamTypeServerUni
 			}
+
 			streamID := NewStreamID(st, c.nextLocalUniStreamNum)
 			c.nextLocalUniStreamNum++
 
@@ -303,6 +319,7 @@ func (c *Conn) OpenUniStreamSync(ctx context.Context) (*SendStream, error) {
 			str := NewSendStream(c.ctx, streamID, c, sfc)
 			c.sendStreams[streamID] = str
 			c.mu.Unlock()
+
 			return str, nil
 		}
 
@@ -328,7 +345,9 @@ func (c *Conn) AcceptStream(ctx context.Context) (*Stream, error) {
 		if !ok {
 			return nil, ErrConnClosed
 		}
+
 		return str, nil
+
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-c.ctx.Done():
@@ -343,7 +362,9 @@ func (c *Conn) AcceptUniStream(ctx context.Context) (*ReceiveStream, error) {
 		if !ok {
 			return nil, ErrConnClosed
 		}
+
 		return str, nil
+
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-c.ctx.Done():
@@ -366,24 +387,30 @@ func (c *Conn) CloseWithError(code ApplicationErrorCode, reason string) error {
 		for _, w := range c.bidiStreamsWaiters {
 			close(w)
 		}
+
 		c.bidiStreamsWaiters = nil
 		for _, w := range c.uniStreamsWaiters {
 			close(w)
 		}
+
 		c.uniStreamsWaiters = nil
 
 		// Shutdown all active streams
 		for _, str := range c.bidiStreams {
 			str.CloseForShutdown(c.closeErr)
 		}
+
 		for _, str := range c.sendStreams {
 			str.CloseForShutdown(c.closeErr)
 		}
+
 		for _, str := range c.recvStreams {
 			str.CloseForShutdown(c.closeErr)
 		}
+
 		c.mu.Unlock()
 	})
+
 	return nil
 }
 
@@ -404,6 +431,7 @@ func (c *Conn) createBidiStreamLocked(id StreamID) *Stream {
 	)
 	str := NewStream(c.ctx, id, c, sfc, c)
 	c.bidiStreams[id] = str
+
 	return str
 }
 
@@ -426,31 +454,43 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 				c.mu.Unlock()
 				return nil
 			}
+
 			if !isPeerInitiated {
 				if id.StreamNum() < c.nextLocalBidiStreamNum {
 					c.mu.Unlock()
 					return nil
 				}
+
 				c.mu.Unlock()
+
 				return &TransportError{
 					ErrorCode:    StreamStateError,
 					ErrorMessage: fmt.Sprintf("received frame for non-existent locally-initiated stream %d", id),
 				}
 			}
+
 			if id.StreamNum() > c.maxLocalBidiStreams {
 				c.mu.Unlock()
+
 				return &TransportError{
-					ErrorCode:    StreamLimitError,
-					ErrorMessage: fmt.Sprintf("peer stream %d exceeded max bidirectional streams %d", id, c.maxLocalBidiStreams),
+					ErrorCode: StreamLimitError,
+					ErrorMessage: fmt.Sprintf(
+						"peer stream %d exceeded max bidirectional streams %d",
+						id,
+						c.maxLocalBidiStreams,
+					),
 				}
 			}
+
 			str = c.createBidiStreamLocked(id)
 			select {
 			case c.acceptBidiCh <- str:
 			default:
 			}
 		}
+
 		c.mu.Unlock()
+
 		return str.recvStr.HandleStreamFrame(offset, data, fin)
 	}
 
@@ -459,12 +499,15 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 		c.mu.Unlock()
 		return nil
 	}
+
 	if !isPeerInitiated {
 		if id.StreamNum() < c.nextLocalUniStreamNum {
 			c.mu.Unlock()
 			return nil
 		}
+
 		c.mu.Unlock()
+
 		return &TransportError{
 			ErrorCode:    StreamStateError,
 			ErrorMessage: fmt.Sprintf("received stream frame for outbound-only uni stream %d", id),
@@ -475,11 +518,17 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 	if !exists {
 		if id.StreamNum() > c.maxLocalUniStreams {
 			c.mu.Unlock()
+
 			return &TransportError{
-				ErrorCode:    StreamLimitError,
-				ErrorMessage: fmt.Sprintf("peer stream %d exceeded max unidirectional streams %d", id, c.maxLocalUniStreams),
+				ErrorCode: StreamLimitError,
+				ErrorMessage: fmt.Sprintf(
+					"peer stream %d exceeded max unidirectional streams %d",
+					id,
+					c.maxLocalUniStreams,
+				),
 			}
 		}
+
 		sfc := NewStreamFlowController(
 			id,
 			c.connFlowController,
@@ -490,13 +539,16 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 			nil,
 		)
 		rStr = NewReceiveStream(c.ctx, id, c, sfc)
+
 		c.recvStreams[id] = rStr
 		select {
 		case c.acceptUniCh <- rStr:
 		default:
 		}
 	}
+
 	c.mu.Unlock()
+
 	return rStr.HandleStreamFrame(offset, data, fin)
 }
 
@@ -515,16 +567,27 @@ func (c *Conn) HandleResetStreamFrame(id StreamID, code StreamErrorCode, finalSi
 	if isPeerInitiated {
 		if id.IsBidi() && id.StreamNum() > c.maxLocalBidiStreams {
 			c.mu.Unlock()
+
 			return &TransportError{
-				ErrorCode:    StreamLimitError,
-				ErrorMessage: fmt.Sprintf("RESET_STREAM for stream %d exceeded max bidirectional streams %d", id, c.maxLocalBidiStreams),
+				ErrorCode: StreamLimitError,
+				ErrorMessage: fmt.Sprintf(
+					"RESET_STREAM for stream %d exceeded max bidirectional streams %d",
+					id,
+					c.maxLocalBidiStreams,
+				),
 			}
 		}
+
 		if !id.IsBidi() && id.StreamNum() > c.maxLocalUniStreams {
 			c.mu.Unlock()
+
 			return &TransportError{
-				ErrorCode:    StreamLimitError,
-				ErrorMessage: fmt.Sprintf("RESET_STREAM for stream %d exceeded max unidirectional streams %d", id, c.maxLocalUniStreams),
+				ErrorCode: StreamLimitError,
+				ErrorMessage: fmt.Sprintf(
+					"RESET_STREAM for stream %d exceeded max unidirectional streams %d",
+					id,
+					c.maxLocalUniStreams,
+				),
 			}
 		}
 	}
@@ -542,6 +605,7 @@ func (c *Conn) HandleResetStreamFrame(id StreamID, code StreamErrorCode, finalSi
 			case c.acceptBidiCh <- str:
 			default:
 			}
+
 			recvStr = str.recvStr
 		}
 	} else {
@@ -561,19 +625,23 @@ func (c *Conn) HandleResetStreamFrame(id StreamID, code StreamErrorCode, finalSi
 				nil,
 			)
 			rStr = NewReceiveStream(c.ctx, id, c, sfc)
+
 			c.recvStreams[id] = rStr
 			select {
 			case c.acceptUniCh <- rStr:
 			default:
 			}
+
 			recvStr = rStr
 		}
 	}
+
 	c.mu.Unlock()
 
 	if recvStr != nil {
 		return recvStr.HandleResetStreamFrame(code, finalSize)
 	}
+
 	return nil
 }
 
@@ -625,6 +693,7 @@ func (c *Conn) HandleMaxStreamsFrame(st StreamType, maxStreams uint64) {
 			for _, w := range c.bidiStreamsWaiters {
 				close(w)
 			}
+
 			c.bidiStreamsWaiters = nil
 		}
 	} else {
@@ -633,6 +702,7 @@ func (c *Conn) HandleMaxStreamsFrame(st StreamType, maxStreams uint64) {
 			for _, w := range c.uniStreamsWaiters {
 				close(w)
 			}
+
 			c.uniStreamsWaiters = nil
 		}
 	}
@@ -669,6 +739,7 @@ func (c *Conn) GetSendStream(id StreamID) (*SendStream, bool) {
 			return sStr, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -686,6 +757,7 @@ func (c *Conn) GetReceiveStream(id StreamID) (*ReceiveStream, bool) {
 			return rStr, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -698,4 +770,3 @@ func (c *Conn) MaybeGetConnWindowUpdate() (newWindow uint64, ok bool) {
 func (c *Conn) GetDataBlockedFrame() (offset uint64, ok bool) {
 	return c.connFlowController.GetDataBlockedFrame()
 }
-

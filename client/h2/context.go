@@ -85,4 +85,3 @@ func (ctx *Context) SetState(s streamState) {
 func (ctx *Context) Close() bool {
 	return ctx.state.Swap(int32(streamClosed)) != int32(streamClosed)
 }
-

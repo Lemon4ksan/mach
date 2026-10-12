@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
+
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -20,7 +21,7 @@ func TestH3_DropInCompatibility_ControlAndRequestStreams(t *testing.T) {
 	serverConn := NewConn(ConnConfig{Perspective: PerspectiveServer})
 
 	// Network pipe between clientConn and serverConn
-	pipeFrames := func(cStr *Stream, sStr *Stream) {
+	pipeFrames := func(cStr, sStr *Stream) {
 		for {
 			data, offset, fin, ok := cStr.SendStream().PopStreamFrame(4096)
 			if ok {

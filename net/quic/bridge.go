@@ -116,6 +116,7 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 	if cfg.TLSConfig == nil {
 		return nil, errors.New("quic: bridge requires non-nil TLSConfig")
 	}
+
 	if cfg.Version == 0 {
 		cfg.Version = wire.Version1
 	}
@@ -152,13 +153,16 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 		Version:     handshake.Version(cfg.Version),
 	}
 
-	var driver *handshake.HandshakeDriver
-	var err error
+	var (
+		driver *handshake.HandshakeDriver
+		err    error
+	)
 	if cfg.Perspective == handshake.PerspectiveClient {
 		driver, err = handshake.NewClientHandshake(handshakeCfg)
 	} else {
 		driver, err = handshake.NewServerHandshake(handshakeCfg)
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("quic: failed to create handshake driver: %w", err)
 	}
@@ -194,6 +198,7 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		b.initialOpener, err = wire.NewPacketOpener(
 			wire.TLS_AES_128_GCM_SHA256,
 			initKeys.ServerKey,
@@ -213,6 +218,7 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		b.initialOpener, err = wire.NewPacketOpener(
 			wire.TLS_AES_128_GCM_SHA256,
 			initKeys.ClientKey,
@@ -232,7 +238,9 @@ func (b *CoreSessionBridge) Start(ctx context.Context) error {
 	if err := b.handshakeDriver.Start(ctx); err != nil {
 		return err
 	}
+
 	b.checkHandshakeProgressLocked()
+
 	return nil
 }
 
@@ -280,6 +288,7 @@ func (b *CoreSessionBridge) HandshakeDoneWait() <-chan struct{} {
 func (b *CoreSessionBridge) SetDestConnID(cid handshake.ConnectionID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.destConnID = cid
 }
 
@@ -298,6 +307,7 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 	}
 
 	isLong := (packetData[0] & 0x80) != 0
+
 	var pktType wire.PacketType
 	if isLong {
 		typeBits := (packetData[0] & 0x30) >> 4
@@ -313,6 +323,7 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 		if (packetData[0] & 0x40) == 0 {
 			return errors.New("quic: invalid fixed bit in short header")
 		}
+
 		pktType = wire.PacketType1RTT
 	}
 
@@ -320,68 +331,87 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 	pktCopy := append([]byte(nil), packetData...)
 	connIDLen := b.srcConnID.Len()
 
-	var hdr wire.Header
-	var decryptedPayload []byte
-	var err error
+	var (
+		hdr              wire.Header
+		decryptedPayload []byte
+		err              error
+	)
 
 	switch pktType {
 	case wire.PacketTypeInitial:
 		if b.initialOpener == nil {
 			return errors.New("quic: initial opener not available")
 		}
+
 		largestAcked := b.largestRecvPNInitial.Load()
+
 		hdr, decryptedPayload, err = b.initialOpener.OpenPacket(nil, pktCopy, connIDLen, largestAcked)
 		if err != nil {
 			return fmt.Errorf("quic: initial open error: %w", err)
 		}
+
 		if largestAcked == wire.InvalidPacketNumber || hdr.PacketNumber > largestAcked {
 			b.largestRecvPNInitial.Store(hdr.PacketNumber)
 		}
+
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevelInitial, decryptedPayload); err != nil {
 			return err
 		}
+
 		if b.perspective == handshake.PerspectiveClient && len(hdr.SrcConnID) > 0 {
 			b.destConnID = handshake.NewConnectionID(hdr.SrcConnID)
 		}
 
 	case wire.PacketTypeHandshake:
 		b.ensureHandshakeKeysLocked()
+
 		if b.handshakeOpener == nil {
 			// Early packet reordering: buffer handshake packet until handshake keys are derived
 			if len(b.earlyHandshakePackets) < 32 {
 				b.earlyHandshakePackets = append(b.earlyHandshakePackets, pktCopy)
 			}
+
 			return nil
 		}
+
 		largestAcked := b.largestRecvPNHs.Load()
+
 		hdr, decryptedPayload, err = b.handshakeOpener.OpenPacket(nil, pktCopy, connIDLen, largestAcked)
 		if err != nil {
 			return fmt.Errorf("quic: handshake open error: %w", err)
 		}
+
 		if largestAcked == wire.InvalidPacketNumber || hdr.PacketNumber > largestAcked {
 			b.largestRecvPNHs.Store(hdr.PacketNumber)
 		}
+
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevelHandshake, decryptedPayload); err != nil {
 			return err
 		}
 
 	case wire.PacketType1RTT:
 		b.ensure1RTTKeysLocked()
+
 		if b.oneRTTOpener == nil {
 			// Early packet reordering: buffer 1-RTT packet until 1-RTT keys are derived
 			if len(b.early1RTTPackets) < 32 {
 				b.early1RTTPackets = append(b.early1RTTPackets, pktCopy)
 			}
+
 			return nil
 		}
+
 		largestAcked := b.largestRecvPN1RTT.Load()
+
 		hdr, decryptedPayload, err = b.oneRTTOpener.OpenPacket(nil, pktCopy, connIDLen, largestAcked)
 		if err != nil {
 			return fmt.Errorf("quic: 1-RTT open error: %w", err)
 		}
+
 		if largestAcked == wire.InvalidPacketNumber || hdr.PacketNumber > largestAcked {
 			b.largestRecvPN1RTT.Store(hdr.PacketNumber)
 		}
+
 		if err := b.processDecryptedFramesLocked(handshake.EncryptionLevel1RTT, decryptedPayload); err != nil {
 			return err
 		}
@@ -391,12 +421,14 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) error {
 	}
 
 	b.checkHandshakeProgressLocked()
+
 	if b.packetConn != nil && b.remoteAddr != nil {
 		packets := b.drainCryptoPacketsLocked()
 		for _, pkt := range packets {
 			_, _ = b.packetConn.WriteTo(pkt, b.remoteAddr)
 		}
 	}
+
 	return nil
 }
 
@@ -473,6 +505,7 @@ func (b *CoreSessionBridge) processDecryptedFramesLocked(level handshake.Encrypt
 			// Other frames ignored or handled cleanly
 		}
 	}
+
 	return nil
 }
 
@@ -483,6 +516,7 @@ func (b *CoreSessionBridge) checkHandshakeProgressLocked() {
 	// Drain early Handshake packets if opener became available
 	if b.handshakeOpener != nil && len(b.earlyHandshakePackets) > 0 {
 		pkts := b.earlyHandshakePackets
+
 		b.earlyHandshakePackets = nil
 		for _, pkt := range pkts {
 			_ = b.handleSinglePacketLocked(pkt)
@@ -492,6 +526,7 @@ func (b *CoreSessionBridge) checkHandshakeProgressLocked() {
 	// Drain early 1-RTT packets if opener became available
 	if b.oneRTTOpener != nil && len(b.early1RTTPackets) > 0 {
 		pkts := b.early1RTTPackets
+
 		b.early1RTTPackets = nil
 		for _, pkt := range pkts {
 			_ = b.handleSinglePacketLocked(pkt)
@@ -517,6 +552,7 @@ func (b *CoreSessionBridge) ensureHandshakeKeysLocked() {
 			}
 		}
 	}
+
 	if b.handshakeOpener == nil {
 		rKeys := b.handshakeDriver.ReadKeys(handshake.EncryptionLevelHandshake)
 		if rKeys != nil {
@@ -538,6 +574,7 @@ func (b *CoreSessionBridge) ensure1RTTKeysLocked() {
 			}
 		}
 	}
+
 	if b.oneRTTOpener == nil {
 		rKeys := b.handshakeDriver.ReadKeys(handshake.EncryptionLevel1RTT)
 		if rKeys != nil {
@@ -551,6 +588,7 @@ func (b *CoreSessionBridge) ensure1RTTKeysLocked() {
 
 func (b *CoreSessionBridge) drainCryptoPacketsLocked() [][]byte {
 	var packets [][]byte
+
 	levels := []handshake.EncryptionLevel{
 		handshake.EncryptionLevelInitial,
 		handshake.EncryptionLevelHandshake,
@@ -559,12 +597,14 @@ func (b *CoreSessionBridge) drainCryptoPacketsLocked() [][]byte {
 	for _, lvl := range levels {
 		if b.handshakeDriver.HasCryptoData(lvl) {
 			data := b.handshakeDriver.DrainCryptoData(lvl)
+
 			pkt, err := b.packCryptoPacketLocked(lvl, data)
 			if err == nil && len(pkt) > 0 {
 				packets = append(packets, pkt)
 			}
 		}
 	}
+
 	return packets
 }
 
@@ -593,6 +633,7 @@ func (b *CoreSessionBridge) FlushPendingPackets() error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -608,6 +649,7 @@ func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel
 	}
 
 	var cf wire.CryptoFrame
+
 	cf.Offset = 0
 	cf.Data = cryptoData
 
@@ -616,6 +658,7 @@ func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel
 	// RFC 9000 §14.1: Client Initial packets must be padded to at least 1200 bytes
 	if lvl == handshake.EncryptionLevelInitial && b.perspective == handshake.PerspectiveClient {
 		const minInitialLen = 1200
+
 		curLen := len(payload) + 30 // Approximate header + AEAD overhead
 		if curLen < minInitialLen {
 			payload = wire.AppendPadding(payload, minInitialLen-curLen)
@@ -623,6 +666,7 @@ func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel
 	}
 
 	var h wire.Header
+
 	h.IsLong = true
 	h.Version = b.version
 	h.DestConnID = b.destConnID.Bytes()
@@ -637,6 +681,7 @@ func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel
 		protector = b.initialProtector
 	case handshake.EncryptionLevelHandshake:
 		h.Type = wire.PacketTypeHandshake
+
 		b.ensureHandshakeKeysLocked()
 		protector = b.handshakeProtector
 	default:
@@ -650,8 +695,14 @@ func (b *CoreSessionBridge) packCryptoPacketLocked(lvl handshake.EncryptionLevel
 	return protector.SealPacket(nil, &h, payload)
 }
 
-func (b *CoreSessionBridge) packStreamPacketLocked(id stream.StreamID, offset uint64, data []byte, fin bool) ([]byte, error) {
+func (b *CoreSessionBridge) packStreamPacketLocked(
+	id stream.StreamID,
+	offset uint64,
+	data []byte,
+	fin bool,
+) ([]byte, error) {
 	b.ensure1RTTKeysLocked()
+
 	if b.oneRTTProtector == nil {
 		return nil, errors.New("quic: 1-RTT protector not ready")
 	}
@@ -669,6 +720,7 @@ func (b *CoreSessionBridge) packStreamPacketLocked(id stream.StreamID, offset ui
 	payload := wire.AppendStreamFrame(nil, &sf)
 
 	var h wire.Header
+
 	h.IsLong = false
 	h.Type = wire.PacketType1RTT
 	h.DestConnID = b.destConnID.Bytes()
@@ -696,6 +748,7 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 	defer b.mu.Unlock()
 
 	b.ensure1RTTKeysLocked()
+
 	if b.oneRTTProtector == nil {
 		return nil
 	}
@@ -710,10 +763,12 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 		if !ok {
 			break
 		}
+
 		pkt, err := b.packStreamPacketLocked(id, offset, data, fin)
 		if err != nil {
 			return err
 		}
+
 		if b.packetConn != nil && b.remoteAddr != nil {
 			if _, err := b.packetConn.WriteTo(pkt, b.remoteAddr); err != nil {
 				return err
@@ -725,6 +780,7 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -734,6 +790,7 @@ func (b *CoreSessionBridge) SendResetStream(id stream.StreamID, code stream.Stre
 	defer b.mu.Unlock()
 
 	b.ensure1RTTKeysLocked()
+
 	if b.oneRTTProtector == nil || b.packetConn == nil || b.remoteAddr == nil {
 		return nil
 	}
@@ -746,6 +803,7 @@ func (b *CoreSessionBridge) SendResetStream(id stream.StreamID, code stream.Stre
 	payload := wire.AppendResetStreamFrame(nil, &rsf)
 
 	var h wire.Header
+
 	h.IsLong = false
 	h.Type = wire.PacketType1RTT
 	h.DestConnID = b.destConnID.Bytes()
@@ -756,7 +814,9 @@ func (b *CoreSessionBridge) SendResetStream(id stream.StreamID, code stream.Stre
 	if err != nil {
 		return err
 	}
+
 	_, err = b.packetConn.WriteTo(pkt, b.remoteAddr)
+
 	return err
 }
 
@@ -766,6 +826,7 @@ func (b *CoreSessionBridge) SendStopSending(id stream.StreamID, code stream.Stre
 	defer b.mu.Unlock()
 
 	b.ensure1RTTKeysLocked()
+
 	if b.oneRTTProtector == nil || b.packetConn == nil || b.remoteAddr == nil {
 		return nil
 	}
@@ -777,6 +838,7 @@ func (b *CoreSessionBridge) SendStopSending(id stream.StreamID, code stream.Stre
 	payload := wire.AppendStopSendingFrame(nil, &ssf)
 
 	var h wire.Header
+
 	h.IsLong = false
 	h.Type = wire.PacketType1RTT
 	h.DestConnID = b.destConnID.Bytes()
@@ -787,7 +849,9 @@ func (b *CoreSessionBridge) SendStopSending(id stream.StreamID, code stream.Stre
 	if err != nil {
 		return err
 	}
+
 	_, err = b.packetConn.WriteTo(pkt, b.remoteAddr)
+
 	return err
 }
 
@@ -808,5 +872,6 @@ func (b *CoreSessionBridge) Close() error {
 	}
 
 	_ = b.handshakeDriver.Close()
+
 	return b.streamConn.Close()
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
 	"github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/proto/semantic/cookie"
 )
@@ -264,8 +265,12 @@ func TestHeader_TrailersAndSerialization_ZeroAlloc(t *testing.T) {
 }
 
 func TestHeader_ParseRead_ZeroAlloc(t *testing.T) {
-	rawReq := []byte("GET /api/v1/test HTTP/1.1\r\nHost: example.com\r\nUser-Agent: mach-client/1.0\r\nContent-Type: application/json\r\nContent-Length: 18\r\nConnection: keep-alive\r\n\r\n")
-	rawResp := []byte("HTTP/1.1 200 OK\r\nServer: mach-edge\r\nContent-Type: text/plain\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\n")
+	rawReq := []byte(
+		"GET /api/v1/test HTTP/1.1\r\nHost: example.com\r\nUser-Agent: mach-client/1.0\r\nContent-Type: application/json\r\nContent-Length: 18\r\nConnection: keep-alive\r\n\r\n",
+	)
+	rawResp := []byte(
+		"HTTP/1.1 200 OK\r\nServer: mach-edge\r\nContent-Type: text/plain\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\n",
+	)
 
 	reqHdr := http.AcquireRequestHeader()
 	defer http.ReleaseRequestHeader(reqHdr)

@@ -108,7 +108,11 @@ func TestRFC9001AppendixA2_ClientInitial(t *testing.T) {
 
 	// Verify protected header prefix matches
 	if !bytes.Equal(protectedPacket[:len(expectedProtectedHeader)], expectedProtectedHeader) {
-		t.Fatalf("Protected header mismatch:\ngot  %x\nwant %x", protectedPacket[:len(expectedProtectedHeader)], expectedProtectedHeader)
+		t.Fatalf(
+			"Protected header mismatch:\ngot  %x\nwant %x",
+			protectedPacket[:len(expectedProtectedHeader)],
+			expectedProtectedHeader,
+		)
 	}
 
 	// Verify sample matches
@@ -196,7 +200,11 @@ func TestRFC9001AppendixA3_ServerInitial(t *testing.T) {
 	}
 
 	if !bytes.Equal(protectedPacket[:len(expectedProtectedHeader)], expectedProtectedHeader) {
-		t.Fatalf("Protected header mismatch:\ngot  %x\nwant %x", protectedPacket[:len(expectedProtectedHeader)], expectedProtectedHeader)
+		t.Fatalf(
+			"Protected header mismatch:\ngot  %x\nwant %x",
+			protectedPacket[:len(expectedProtectedHeader)],
+			expectedProtectedHeader,
+		)
 	}
 
 	sample := protectedPacket[pnOffset+4 : pnOffset+4+16]
@@ -320,7 +328,11 @@ func TestRFC9001AppendixA5_ChaCha20Poly1305(t *testing.T) {
 	}
 
 	if !bytes.Equal(protectedPacket[:len(expectedProtectedHdr)], expectedProtectedHdr) {
-		t.Fatalf("Protected header mismatch:\ngot  %x\nwant %x", protectedPacket[:len(expectedProtectedHdr)], expectedProtectedHdr)
+		t.Fatalf(
+			"Protected header mismatch:\ngot  %x\nwant %x",
+			protectedPacket[:len(expectedProtectedHdr)],
+			expectedProtectedHdr,
+		)
 	}
 
 	// Verify sample matches

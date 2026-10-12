@@ -258,6 +258,7 @@ func (h *RequestHeader) SetFromHeadkit(src *headkit.Headers) {
 	if src == nil {
 		return
 	}
+
 	for k, v := range src.All() {
 		h.Set(k, v)
 	}
@@ -354,6 +355,7 @@ func (h *ResponseHeader) SetFromHeadkit(src *headkit.Headers) {
 	if src == nil {
 		return
 	}
+
 	for k, v := range src.All() {
 		h.Set(k, v)
 	}
@@ -384,6 +386,7 @@ func ReleaseRequestHeader(h *RequestHeader) {
 	if h == nil {
 		return
 	}
+
 	h.Reset()
 	requestHeaderStorage.Put(h)
 }
@@ -404,7 +407,7 @@ func ReleaseResponseHeader(h *ResponseHeader) {
 	if h == nil {
 		return
 	}
+
 	h.Reset()
 	responseHeaderStorage.Put(h)
 }
-

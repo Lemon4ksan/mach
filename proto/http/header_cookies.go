@@ -125,7 +125,7 @@ func (h *ResponseHeader) Cookie(c *cookie.Cookie) bool {
 		return false
 	}
 
-	return c.ParseBytes(v) == nil
+	return cookie.Parse(c, v) == nil
 }
 
 // PeekCookie returns the raw Set-Cookie header value matching key (RFC 6265 Section 4.1).

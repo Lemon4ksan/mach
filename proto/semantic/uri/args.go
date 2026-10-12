@@ -140,18 +140,21 @@ func Parse[S ~string | ~[]byte](a *Args, src S) {
 }
 
 // ParseArgs parses query args from a [string] or [[]byte] into a.
+//
 // Deprecated: use [Parse] instead.
 func ParseArgs[S ~string | ~[]byte](a *Args, src S) {
 	Parse(a, src)
 }
 
 // Parse parses the given string containing query args.
+//
 // Deprecated: use [Parse] instead.
 func (a *Args) Parse(s string) {
 	Parse(a, s)
 }
 
 // ParseBytes parses the given b containing query args.
+//
 // Deprecated: use [Parse] instead.
 func (a *Args) ParseBytes(b []byte) {
 	Parse(a, b)
@@ -485,6 +488,7 @@ func DelAllArgsStable[S ~string | ~[]byte](args []ArgsKV, key S) []ArgsKV {
 // DelAllArgs removes all occurrences of key from args without preserving entry order ([string] or [[]byte]).
 func DelAllArgs[S ~string | ~[]byte](args []ArgsKV, key S) []ArgsKV {
 	kBytes := bytesOrString(key)
+
 	n := len(args)
 	for i := 0; i < n; i++ {
 		if bytes.Equal(args[i].Key, kBytes) {
@@ -498,8 +502,9 @@ func DelAllArgs[S ~string | ~[]byte](args []ArgsKV, key S) []ArgsKV {
 }
 
 // SetArg sets key and value in h ([string] or [[]byte]), replacing existing entries.
-func SetArg[SK ~string | ~[]byte, SV ~string | ~[]byte](h []ArgsKV, key SK, value SV, noValue bool) []ArgsKV {
+func SetArg[SK, SV ~string | ~[]byte](h []ArgsKV, key SK, value SV, noValue bool) []ArgsKV {
 	kBytes := bytesOrString(key)
+
 	n := len(h)
 	for i := range n {
 		kv := &h[i]
@@ -521,12 +526,13 @@ func SetArg[SK ~string | ~[]byte, SV ~string | ~[]byte](h []ArgsKV, key SK, valu
 }
 
 // AppendArg appends a key-value argument ([string] or [[]byte]) to args.
-func AppendArg[SK ~string | ~[]byte, SV ~string | ~[]byte](args []ArgsKV, key SK, value SV, noValue bool) []ArgsKV {
+func AppendArg[SK, SV ~string | ~[]byte](args []ArgsKV, key SK, value SV, noValue bool) []ArgsKV {
 	var kv *ArgsKV
 
 	args, kv = AllocArg(args)
 
 	kBytes := bytesOrString(key)
+
 	kv.Key = append(kv.Key[:0], kBytes...)
 	if noValue {
 		kv.Value = kv.Value[:0]

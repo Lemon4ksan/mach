@@ -288,6 +288,7 @@ func (hp *HPACK) SetMaxTableSize(size uint32) {
 	if hp.maxTableSize != size {
 		hp.pendingTableSizeUpdate = true
 	}
+
 	hp.maxTableSize = size
 	if size > hp.MaxCapacity {
 		hp.MaxCapacity = size
@@ -386,6 +387,7 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 2, false, true
 		}
+
 	case ":path":
 		switch string(val) {
 		case "/":
@@ -395,6 +397,7 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 4, false, true
 		}
+
 	case ":scheme":
 		switch string(val) {
 		case "http":
@@ -404,16 +407,21 @@ func fastStaticLookup(key, val []byte) (n uint64, fullMatch, found bool) {
 		default:
 			return 7, false, true
 		}
+
 	case ":status":
 		if string(val) == "200" {
 			return 8, true, true
 		}
+
 		return 8, false, true
+
 	case "accept-encoding":
 		if string(val) == "gzip, deflate" {
 			return 16, true, true
 		}
+
 		return 16, false, true
+
 	case "accept":
 		return 19, false, true
 	case "content-type":
@@ -675,7 +683,9 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 func (hp *HPACK) AppendHeader(dst []byte, hf *HeaderField, store bool) []byte {
 	if hp.pendingTableSizeUpdate {
 		hp.pendingTableSizeUpdate = false
+
 		var tmp [8]byte
+
 		b := appendInt(tmp[:0], 5, uint64(hp.maxTableSize))
 		b[0] |= 0x20
 		dst = append(dst, b...)
@@ -864,7 +874,6 @@ func readString(dst, b []byte) ([]byte, []byte, error) {
 func AppendHuffman[S ~string | ~[]byte](dst []byte, s S) []byte {
 	return HuffmanEncode(dst, s)
 }
-
 
 // appendString encodes a string literal with optional static Huffman coding and 7-bit length prefix (RFC 7541 §5.2).
 func appendString(dst, src []byte, encode bool) []byte {

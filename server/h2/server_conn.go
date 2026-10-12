@@ -111,6 +111,7 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	if sc.bw == nil {
 		sc.bw = bufio.NewWriterSize(netConn, 4096)
 	}
+
 	sc.bw.Reset(netConn)
 
 	sc.muBuf = sc.muBuf[:0]
@@ -158,13 +159,16 @@ func (sc *ServerConn) Serve() error {
 			if st.cancel != nil {
 				st.cancel()
 			}
+
 			if st.pipeWriter != nil {
 				_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
 			}
+
 			if st.pipeReader != nil {
 				_ = st.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
 			}
 		}
+
 		sc.streamsMu.Unlock()
 
 		// Wait for in-flight streams to complete (RFC 9113 §6.8 graceful shutdown)

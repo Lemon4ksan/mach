@@ -33,9 +33,11 @@ var (
 func getDefaultEngine() *Engine {
 	defaultEngineMu.Lock()
 	defer defaultEngineMu.Unlock()
+
 	if defaultEngine == nil {
 		defaultEngine = NewEngine()
 	}
+
 	return defaultEngine
 }
 
@@ -56,6 +58,7 @@ func WithWebSocketHeader(key, val string) WebSocketOption {
 		if c.Headers == nil {
 			c.Headers = make(map[string]string)
 		}
+
 		c.Headers[key] = val
 	}
 }
@@ -91,6 +94,7 @@ func (h *h1HijackedConn) Read(p []byte) (int, error) {
 	if h.r != nil {
 		return h.r.Read(p)
 	}
+
 	return h.Conn.Read(p)
 }
 
@@ -100,8 +104,10 @@ func (h *h1HijackedConn) Write(p []byte) (int, error) {
 		if err != nil {
 			return n, err
 		}
+
 		return n, h.w.Flush()
 	}
+
 	return h.Conn.Write(p)
 }
 
@@ -109,6 +115,7 @@ func (h *h1HijackedConn) Close() error {
 	if h.w != nil {
 		_ = h.w.Flush()
 	}
+
 	return h.Conn.Close()
 }
 
@@ -121,7 +128,11 @@ func DialWebSocket(ctx context.Context, urlStr string, opts ...WebSocketOption) 
 
 // DialWebSocket establishes a WebSocket connection over HTTP/1.1 (RFC 6455),
 // HTTP/2 Extended CONNECT (RFC 8441), or HTTP/3 Extended CONNECT (RFC 9220).
-func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSocketOption) (*ws.Conn, *http.Response, error) {
+func (e *Engine) DialWebSocket(
+	ctx context.Context,
+	urlStr string,
+	opts ...WebSocketOption,
+) (*ws.Conn, *http.Response, error) {
 	cfg := &WebSocketDialConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -136,6 +147,7 @@ func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSo
 		isTLS       bool
 		defaultPort string
 	)
+
 	scheme := strings.ToLower(u.Scheme)
 	switch scheme {
 	case "ws":
@@ -158,18 +170,21 @@ func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSo
 	if !strings.Contains(host, ":") {
 		host = net.JoinHostPort(host, defaultPort)
 	}
+
 	authority := u.Host
+
 	path := u.RequestURI()
 	if path == "" {
 		path = "/"
 	}
 
 	tlsConf := cfg.TLSConfig
-	if tlsConf == nil && e.TLSConfig != nil {
+	switch {
+	case tlsConf == nil && e.TLSConfig != nil:
 		tlsConf = e.TLSConfig.Clone()
-	} else if tlsConf != nil {
+	case tlsConf != nil:
 		tlsConf = tlsConf.Clone()
-	} else if isTLS {
+	case isTLS:
 		tlsConf = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
@@ -178,6 +193,7 @@ func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSo
 		if err != nil {
 			h = u.Host
 		}
+
 		tlsConf.ServerName = h
 	}
 
@@ -185,12 +201,15 @@ func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSo
 	if proto == "h3" {
 		return e.dialH3WebSocket(ctx, host, authority, path, cfg, tlsConf)
 	}
+
 	if proto == "h2" {
 		if !isTLS {
 			return nil, nil, errors.New("client: HTTP/2 Extended CONNECT requires TLS")
 		}
+
 		return e.dialH2WebSocket(ctx, host, authority, path, cfg, tlsConf)
 	}
+
 	if proto == "http/1.1" || proto == "h1" {
 		return e.dialH1WebSocket(ctx, host, authority, path, isTLS, cfg, tlsConf)
 	}
@@ -208,6 +227,7 @@ func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSo
 			if err == nil {
 				return wsConn, resp, nil
 			}
+
 			e.AltSvcCache.MarkFailed(origin, 5*time.Minute)
 		}
 	}
@@ -234,15 +254,18 @@ func (e *Engine) DialWebSocket(ctx context.Context, urlStr string, opts ...WebSo
 			_ = tlsConn.Close()
 			return nil, nil, err
 		}
+
 		if !h2c.EnableConnect() {
 			_ = h2c.Close()
 			return nil, nil, errors.New("client: server did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL")
 		}
+
 		return e.startH2WebSocketSession(ctx, h2c, authority, path, cfg)
 	}
 
 	// Fallback to HTTP/1.1 over the negotiated TLS connection
 	h1c := h1client.NewClientConn(tlsConn)
+
 	return e.startH1WebSocketSession(ctx, h1c, authority, path, cfg)
 }
 
@@ -259,25 +282,30 @@ func (e *Engine) dialH1WebSocket(
 	if isTLS {
 		h1TLS := tlsConf.Clone()
 		h1TLS.NextProtos = []string{"http/1.1"}
+
 		tcpConn, err := e.Dialer.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		tc := tls.Client(tcpConn, h1TLS)
 		if err := tc.HandshakeContext(ctx); err != nil {
 			_ = tcpConn.Close()
 			return nil, nil, err
 		}
+
 		rawConn = tc
 	} else {
 		tcpConn, err := e.Dialer.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		rawConn = tcpConn
 	}
 
 	h1c := h1client.NewClientConn(rawConn)
+
 	return e.startH1WebSocketSession(ctx, h1c, authority, path, cfg)
 }
 
@@ -301,9 +329,11 @@ func (e *Engine) startH1WebSocketSession(
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Sec-WebSocket-Key", challengeKey)
 	req.Header.Set("Sec-WebSocket-Version", "13")
+
 	if len(cfg.Subprotocols) > 0 {
 		req.Header.Set("Sec-WebSocket-Protocol", strings.Join(cfg.Subprotocols, ", "))
 	}
+
 	for k, v := range cfg.Headers {
 		req.Header.Set(k, v)
 	}
@@ -311,7 +341,9 @@ func (e *Engine) startH1WebSocketSession(
 	resp := http.AcquireResponse()
 	if err := h1c.Do(ctx, req, resp); err != nil {
 		http.ReleaseResponse(resp)
+
 		_ = h1c.Close()
+
 		return nil, nil, err
 	}
 
@@ -331,6 +363,7 @@ func (e *Engine) startH1WebSocketSession(
 		_ = h1c.Close()
 		return nil, resp, err
 	}
+
 	if bw != nil {
 		_ = bw.Flush()
 	}
@@ -342,10 +375,12 @@ func (e *Engine) startH1WebSocketSession(
 	}
 
 	wsConn := ws.NewConnWithReader(buffered, br, false)
+
 	selectedSubproto := string(resp.Header.Peek("Sec-WebSocket-Protocol"))
 	if selectedSubproto != "" {
 		wsConn.SetSubprotocol(selectedSubproto)
 	}
+
 	return wsConn, resp, nil
 }
 
@@ -402,9 +437,11 @@ func (e *Engine) startH2WebSocketSession(
 	req.Header.SetHost(authority)
 	req.URI().SetScheme("https")
 	req.Header.Set("sec-websocket-version", "13")
+
 	if len(cfg.Subprotocols) > 0 {
 		req.Header.Set("sec-websocket-protocol", strings.Join(cfg.Subprotocols, ", "))
 	}
+
 	for k, v := range cfg.Headers {
 		req.Header.Set(strings.ToLower(k), v)
 	}
@@ -416,13 +453,16 @@ func (e *Engine) startH2WebSocketSession(
 	}
 
 	wsConn := ws.NewConn(stream, false)
+
 	selectedSubproto := string(resp.Header.Peek("sec-websocket-protocol"))
 	if selectedSubproto == "" {
 		selectedSubproto = string(resp.Header.Peek("Sec-WebSocket-Protocol"))
 	}
+
 	if selectedSubproto != "" {
 		wsConn.SetSubprotocol(selectedSubproto)
 	}
+
 	return wsConn, resp, nil
 }
 
@@ -435,6 +475,7 @@ func (e *Engine) dialH3WebSocket(
 	tlsConf *tls.Config,
 ) (*ws.Conn, *http.Response, error) {
 	h3TLS := tlsConf.Clone()
+
 	h3TLS.NextProtos = []string{"h3"}
 	if h3TLS.MinVersion < tls.VersionTLS13 {
 		h3TLS.MinVersion = tls.VersionTLS13
@@ -463,6 +504,7 @@ func (e *Engine) dialH3WebSocket(
 	// Wait for peer SETTINGS frame per RFC 9220 §3
 	waitCtx, waitCancel := context.WithTimeout(ctx, 3*time.Second)
 	defer waitCancel()
+
 	if err := h3cc.WaitSettings(waitCtx); err != nil {
 		_ = h3cc.Close()
 		return nil, nil, fmt.Errorf("client: failed waiting for H3 settings: %w", err)
@@ -483,9 +525,11 @@ func (e *Engine) dialH3WebSocket(
 	req.Header.SetHost(authority)
 	req.URI().SetScheme("https")
 	req.Header.Set("sec-websocket-version", "13")
+
 	if len(cfg.Subprotocols) > 0 {
 		req.Header.Set("sec-websocket-protocol", strings.Join(cfg.Subprotocols, ", "))
 	}
+
 	for k, v := range cfg.Headers {
 		req.Header.Set(strings.ToLower(k), v)
 	}
@@ -497,12 +541,15 @@ func (e *Engine) dialH3WebSocket(
 	}
 
 	wsConn := ws.NewConn(stream, false)
+
 	selectedSubproto := string(resp.Header.Peek("sec-websocket-protocol"))
 	if selectedSubproto == "" {
 		selectedSubproto = string(resp.Header.Peek("Sec-WebSocket-Protocol"))
 	}
+
 	if selectedSubproto != "" {
 		wsConn.SetSubprotocol(selectedSubproto)
 	}
+
 	return wsConn, resp, nil
 }

@@ -32,16 +32,20 @@ type Transport struct {
 func (t *Transport) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	if t.closed {
 		return nil
 	}
+
 	t.closed = true
 	if t.listener != nil {
 		_ = t.listener.Close()
 	}
+
 	if t.Conn != nil && t.createdConn {
 		return t.Conn.Close()
 	}
+
 	return nil
 }
 
@@ -50,6 +54,7 @@ func (t *Transport) Listen(tlsConf *tls.Config, opts ...Option) (*Listener, erro
 	if tlsConf == nil {
 		return nil, errors.New("quic: nil tls.Config")
 	}
+
 	conf := &Config{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -78,6 +83,7 @@ func (t *Transport) Listen(tlsConf *tls.Config, opts ...Option) (*Listener, erro
 	t.mu.Unlock()
 
 	go ln.readLoop()
+
 	return ln, nil
 }
 
@@ -89,6 +95,7 @@ func (t *Transport) Dial(ctx context.Context, addr net.Addr, tlsConf *tls.Config
 			opt(conf)
 		}
 	}
+
 	return dialInternal(ctx, t.Conn, addr, tlsConf, conf, false)
 }
 
@@ -134,11 +141,14 @@ func (l *Listener) Close() error {
 		for _, s := range l.sessions {
 			_ = s.Close()
 		}
+
 		l.mu.Unlock()
+
 		if l.tr != nil {
 			_ = l.tr.Close()
 		}
 	}
+
 	return nil
 }
 
@@ -147,6 +157,7 @@ func (l *Listener) Addr() net.Addr {
 	if l.conn != nil {
 		return l.conn.LocalAddr()
 	}
+
 	return nil
 }
 
@@ -163,8 +174,10 @@ func (l *Listener) readLoop() {
 				default:
 				}
 			}
+
 			return
 		}
+
 		if n < 5 {
 			continue
 		}
@@ -176,15 +189,19 @@ func (l *Listener) readLoop() {
 			if len(packetData) < 6 {
 				continue
 			}
+
 			dcil := int(packetData[5])
 			if len(packetData) < 6+dcil+1 {
 				continue
 			}
+
 			dcid := packetData[6 : 6+dcil]
+
 			scil := int(packetData[6+dcil])
 			if len(packetData) < 7+dcil+scil {
 				continue
 			}
+
 			scid := packetData[7+dcil : 7+dcil+scil]
 
 			l.mu.Lock()
@@ -203,6 +220,7 @@ func (l *Listener) readLoop() {
 			}
 
 			var serverCIDBytes [8]byte
+
 			_, _ = rand.Read(serverCIDBytes[:])
 			serverCID := handshake.NewConnectionID(serverCIDBytes[:])
 			clientDCID := handshake.NewConnectionID(dcid)
@@ -259,7 +277,9 @@ func (l *Listener) readLoop() {
 			if len(packetData) < 9 {
 				continue
 			}
+
 			dcid := packetData[1:9]
+
 			l.mu.Lock()
 			session, exists := l.sessions[string(dcid)]
 			l.mu.Unlock()
@@ -277,16 +297,19 @@ func ListenAddr(addr string, tlsConf *tls.Config, opts ...Option) (*Listener, er
 	if err != nil {
 		return nil, err
 	}
+
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		return nil, err
 	}
+
 	_ = conn.SetReadBuffer(16 * 1024 * 1024)
 	_ = conn.SetWriteBuffer(16 * 1024 * 1024)
 	tr := &Transport{
 		Conn:        conn,
 		createdConn: true,
 	}
+
 	return tr.Listen(tlsConf, opts...)
 }
 
@@ -296,6 +319,7 @@ func Listen(conn net.PacketConn, tlsConf *tls.Config, opts ...Option) (*Listener
 		Conn:        conn,
 		createdConn: false,
 	}
+
 	return tr.Listen(tlsConf, opts...)
 }
 
@@ -312,10 +336,12 @@ func DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, opts ...Opt
 	if err != nil {
 		return nil, err
 	}
+
 	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return nil, err
 	}
+
 	_ = udpConn.SetReadBuffer(16 * 1024 * 1024)
 	_ = udpConn.SetWriteBuffer(16 * 1024 * 1024)
 
@@ -335,11 +361,18 @@ func Dial(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tls.Con
 			opt(conf)
 		}
 	}
+
 	return dialInternal(ctx, c, addr, tlsConf, conf, false)
 }
 
 // DialEarly establishes a 0-RTT client QUIC connection on an existing PacketConn.
-func DialEarly(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tls.Config, opts ...Option) (*Conn, error) {
+func DialEarly(
+	ctx context.Context,
+	c net.PacketConn,
+	addr net.Addr,
+	tlsConf *tls.Config,
+	opts ...Option,
+) (*Conn, error) {
 	return Dial(ctx, c, addr, tlsConf, opts...)
 }
 
@@ -355,6 +388,7 @@ func dialInternal(
 		if ownsConn {
 			_ = packetConn.Close()
 		}
+
 		return nil, errors.New("quic: nil tls.Config")
 	}
 
@@ -364,6 +398,7 @@ func dialInternal(
 	}
 
 	var clientDestCIDBytes, clientSrcCIDBytes [8]byte
+
 	_, _ = rand.Read(clientDestCIDBytes[:])
 	_, _ = rand.Read(clientSrcCIDBytes[:])
 	destCID := handshake.NewConnectionID(clientDestCIDBytes[:])
@@ -397,6 +432,7 @@ func dialInternal(
 		if ownsConn {
 			_ = packetConn.Close()
 		}
+
 		return nil, err
 	}
 
@@ -404,6 +440,7 @@ func dialInternal(
 		if ownsConn {
 			_ = packetConn.Close()
 		}
+
 		return nil, err
 	}
 
@@ -414,6 +451,7 @@ func dialInternal(
 			if err != nil {
 				return
 			}
+
 			if n > 0 {
 				_ = session.HandleIncomingPacket(buf[:n])
 			}

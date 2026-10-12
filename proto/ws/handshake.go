@@ -6,7 +6,7 @@ package ws
 
 import (
 	crand "crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // RFC 6455 §1.3 mandates SHA-1 for WebSocket handshake
 	"encoding/base64"
 	"io"
 	"slices"
@@ -41,12 +41,14 @@ const (
 // Calculation: base64(SHA-1(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")).
 func ComputeAccept(key string) string {
 	var buf [128]byte
+
 	n := copy(buf[:], key)
 	n += copy(buf[n:], MagicGUID)
-	h := sha1.Sum(buf[:n])
+	h := sha1.Sum(buf[:n]) //nolint:gosec // RFC 6455 §1.3 mandates SHA-1
 
 	var out [28]byte
 	base64.StdEncoding.Encode(out[:], h[:])
+
 	return string(out[:])
 }
 
@@ -55,14 +57,16 @@ func ComputeAccept(key string) string {
 // Zero-allocation: testing.AllocsPerRun == 0 when dst has sufficient capacity.
 func AppendAccept(dst []byte, key string) []byte {
 	var buf [128]byte
+
 	n := copy(buf[:], key)
 	n += copy(buf[n:], MagicGUID)
-	h := sha1.Sum(buf[:n])
+	h := sha1.Sum(buf[:n]) //nolint:gosec // RFC 6455 §1.3 mandates SHA-1
 
 	start := len(dst)
 	dst = slices.Grow(dst, 28)
 	dst = dst[:start+28]
 	base64.StdEncoding.Encode(dst[start:], h[:])
+
 	return dst
 }
 
@@ -74,11 +78,15 @@ func ValidateKey(key string) bool {
 	if len(key) != 24 {
 		return false
 	}
+
 	if key[22] != '=' || key[23] != '=' {
 		return false
 	}
+
 	var raw [16]byte
+
 	n, err := base64.StdEncoding.Decode(raw[:], bytesconv.S2B(key))
+
 	return err == nil && n == 16
 }
 
@@ -91,8 +99,10 @@ func GenerateKey() string {
 			raw[i] = byte(i*37 + 13)
 		}
 	}
+
 	var out [24]byte
 	base64.StdEncoding.Encode(out[:], raw[:])
+
 	return string(out[:])
 }
 
@@ -100,7 +110,9 @@ func GenerateKey() string {
 // for client-to-server frames (RFC 6455 §5.3).
 func GenerateMaskKey() MaskKey {
 	var k MaskKey
+
 	_, _ = io.ReadFull(crand.Reader, k[:])
+
 	return k
 }
 
@@ -116,11 +128,13 @@ func HasToken(header, token string) bool {
 			tok = header
 			header = ""
 		}
+
 		tok = strings.TrimSpace(tok)
 		if bytesconv.EqualFoldASCII(tok, token) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -138,18 +152,23 @@ func ValidateHandshakeRequest(method, version, upgrade, connection, wsKey, wsVer
 	if method != "GET" {
 		return ErrInvalidMethod
 	}
+
 	if !HasToken(upgrade, "websocket") {
 		return ErrInvalidUpgrade
 	}
+
 	if !HasToken(connection, "upgrade") {
 		return ErrInvalidConnection
 	}
+
 	if !ValidateKey(wsKey) {
 		return ErrInvalidKey
 	}
+
 	if wsVersion != WebSocketVersion {
 		return ErrInvalidVersion
 	}
+
 	return nil
 }
 
@@ -176,9 +195,10 @@ func FormatHandshakeResponse(dst []byte, wsKey string) ([]byte, error) {
 	n := copy(dst[start:], respPrefix)
 
 	var buf [128]byte
+
 	nb := copy(buf[:], wsKey)
 	nb += copy(buf[nb:], MagicGUID)
-	h := sha1.Sum(buf[:nb])
+	h := sha1.Sum(buf[:nb]) //nolint:gosec // RFC 6455 §1.3 mandates SHA-1
 
 	base64.StdEncoding.Encode(dst[start+n:start+n+28], h[:])
 	copy(dst[start+n+28:], respSuffix)

@@ -203,4 +203,3 @@ func TestGenericParseAndAll(t *testing.T) {
 	}
 	assert.Equal(t, 2, count)
 }
-

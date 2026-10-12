@@ -172,7 +172,7 @@ func TestReassemblyBuffer_FinalSizeErrors(t *testing.T) {
 
 	// 2. Conflicting final sizes
 	rb2 := NewReassemblyBuffer()
-	_ = rb2.Push(0, []byte("abc"), true) // Final size = 3
+	_ = rb2.Push(0, []byte("abc"), true)    // Final size = 3
 	err = rb2.Push(0, []byte("abcd"), true) // Final size = 4
 	if err == nil {
 		t.Fatal("expected FinalSizeError for conflicting final sizes")
@@ -183,7 +183,7 @@ func TestReassemblyBuffer_FinalSizeErrors(t *testing.T) {
 
 	// 3. Final size less than highest received offset
 	rb3 := NewReassemblyBuffer()
-	_ = rb3.Push(10, []byte("data"), false) // Highest offset = 14
+	_ = rb3.Push(10, []byte("data"), false)  // Highest offset = 14
 	err = rb3.Push(0, []byte("short"), true) // Final size = 5 < 14
 	if err == nil {
 		t.Fatal("expected FinalSizeError for final size less than highest offset")

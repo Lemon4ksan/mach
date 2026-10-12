@@ -92,21 +92,27 @@ func Decode(payload []byte) (val uint64, readLen int, err error) {
 		if len(payload) < 2 {
 			return 0, 0, ErrTruncated
 		}
+
 		v := binary.BigEndian.Uint16(payload[:2]) & 0x3fff
+
 		return uint64(v), 2, nil
 
 	case 2:
 		if len(payload) < 4 {
 			return 0, 0, ErrTruncated
 		}
+
 		v := binary.BigEndian.Uint32(payload[:4]) & 0x3fffffff
+
 		return uint64(v), 4, nil
 
 	case 3:
 		if len(payload) < 8 {
 			return 0, 0, ErrTruncated
 		}
+
 		v := binary.BigEndian.Uint64(payload[:8]) & 0x3fffffffffffffff
+
 		return v, 8, nil
 	}
 
@@ -126,9 +132,11 @@ func DecodeSeq(payload []byte) iter.Seq2[uint64, int] {
 			if err != nil {
 				return
 			}
+
 			if !yield(val, n) {
 				return
 			}
+
 			payload = payload[n:]
 		}
 	}
@@ -147,9 +155,11 @@ func Values(payload []byte) iter.Seq[uint64] {
 			if err != nil {
 				return
 			}
+
 			if !yield(val) {
 				return
 			}
+
 			payload = payload[n:]
 		}
 	}

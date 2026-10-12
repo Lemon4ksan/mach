@@ -49,6 +49,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 		// RFC 9113 §5.1.1: Stream identifiers must be 31-bit unsigned integers.
 		// When reaching 2^31-1, stream identifiers cannot be reused and connection must close.
 		_ = c.Close()
+
 		return coreh2.ErrStreamClosed
 	}
 
@@ -79,6 +80,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	c.encodeRequestHeaders(h, req)
 
 	endStream := !hasBody && !ctx.isTunnel
+
 	h.SetPadding(false)
 	h.SetEndStream(endStream)
 	h.SetEndHeaders(true)
@@ -104,6 +106,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	if err != nil {
 		c.setLastError(err)
 		c.deleteStream(id)
+
 		if ctx.Close() {
 			c.openStreams.Add(-1)
 		}
@@ -124,9 +127,11 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	if err != nil {
 		c.setLastError(err)
 		c.deleteStream(id)
+
 		if ctx.Close() {
 			c.openStreams.Add(-1)
 		}
+
 		return err
 	}
 
@@ -208,6 +213,7 @@ func (c *Conn) WriteTunnelData(ctx *Context, body []byte, endStream bool) error 
 
 	fh := coreh2.AcquireFrameHeader()
 	defer coreh2.ReleaseFrameHeader(fh)
+
 	fh.SetStream(id)
 
 	data := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
@@ -220,13 +226,17 @@ func (c *Conn) WriteTunnelData(ctx *Context, body []byte, endStream bool) error 
 			data.SetData(nil)
 
 			c.writeMu.Lock()
+
 			_, wErr := fh.WriteTo(c.bw)
 			if wErr == nil {
 				wErr = c.bw.Flush()
 			}
+
 			c.writeMu.Unlock()
+
 			return wErr
 		}
+
 		return nil
 	}
 
@@ -252,10 +262,12 @@ func (c *Conn) WriteTunnelData(ctx *Context, body []byte, endStream bool) error 
 		data.SetData(body[offset:end])
 
 		c.writeMu.Lock()
+
 		_, wErr := fh.WriteTo(c.bw)
 		if wErr == nil {
 			wErr = c.bw.Flush()
 		}
+
 		c.writeMu.Unlock()
 
 		if wErr != nil {

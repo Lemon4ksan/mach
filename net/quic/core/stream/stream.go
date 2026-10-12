@@ -63,6 +63,7 @@ func NewStream(
 
 	s.sendStr = NewSendStream(ctx, streamID, sendCoordSender, flowController)
 	s.recvStr = NewReceiveStream(ctx, streamID, recvCoordSender, flowController)
+
 	return s
 }
 
@@ -76,6 +77,7 @@ func (s *Stream) LocalAddr() net.Addr {
 	if s.addrProvider != nil {
 		return s.addrProvider.LocalAddr()
 	}
+
 	return nil
 }
 
@@ -84,6 +86,7 @@ func (s *Stream) RemoteAddr() net.Addr {
 	if s.addrProvider != nil {
 		return s.addrProvider.RemoteAddr()
 	}
+
 	return nil
 }
 
@@ -174,9 +177,11 @@ func (s *Stream) SetWriteDeadline(t time.Time) error {
 func (s *Stream) SetDeadline(t time.Time) error {
 	rErr := s.recvStr.SetReadDeadline(t)
 	wErr := s.sendStr.SetWriteDeadline(t)
+
 	if rErr != nil {
 		return rErr
 	}
+
 	return wErr
 }
 
@@ -208,6 +213,7 @@ func (s *Stream) onHalfCompleted(isSend bool) {
 	if complete {
 		s.streamComplete = true
 	}
+
 	s.mu.Unlock()
 
 	if complete && s.sender != nil {

@@ -66,11 +66,13 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if dl, ok := ctx.Deadline(); ok {
 			_ = c.SetDeadline(dl)
 		}
+
 		stop = context.AfterFunc(ctx, func() {
 			_ = c.SetDeadline(time.Unix(1, 0))
 		})
 		defer func() {
 			stop()
+
 			_ = c.SetDeadline(time.Time{})
 		}()
 	}
@@ -93,10 +95,12 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if len(ams) > 255 {
 			return errors.New("too many authentication methods")
 		}
+
 		buf[1] = byte(len(ams))
 		for i, am := range ams {
 			buf[2+i] = byte(am)
 		}
+
 		n = 2 + len(ams)
 	}
 
@@ -104,6 +108,7 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
+
 		return err
 	}
 
@@ -111,6 +116,7 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
+
 		return err
 	}
 
@@ -160,17 +166,20 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 				buf[3] = AddrTypeIPv4
 				a4 := addr.As4()
 				copy(buf[4:8], a4[:])
+
 				n = 8
 			} else {
 				buf[3] = AddrTypeIPv6
 				a16 := addr.As16()
 				copy(buf[4:20], a16[:])
+
 				n = 20
 			}
 		} else {
 			if len(host) > 255 {
 				return errors.New("FQDN too long")
 			}
+
 			buf[3] = AddrTypeFQDN
 			buf[4] = byte(len(host))
 			copy(buf[5:], host)
@@ -180,6 +189,7 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if len(host) > 255 {
 			return errors.New("FQDN too long")
 		}
+
 		buf[3] = AddrTypeFQDN
 		buf[4] = byte(len(host))
 		copy(buf[5:], host)
@@ -194,6 +204,7 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
+
 		return err
 	}
 
@@ -202,15 +213,18 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
+
 		return err
 	}
 
 	if buf[0] != Version5 {
 		return errors.New("unexpected protocol version " + strconv.Itoa(int(buf[0])))
 	}
+
 	if cmdErr := Reply(buf[1]); cmdErr != StatusSucceeded {
 		return errors.New("unknown error " + cmdErr.String())
 	}
+
 	if buf[2] != 0 {
 		return errors.New("non-zero reserved field")
 	}
@@ -222,29 +236,37 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
+
 			return err
 		}
+
 	case AddrTypeIPv6:
 		if _, err := io.ReadFull(c, buf[:18]); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
+
 			return err
 		}
+
 	case AddrTypeFQDN:
 		if _, err := io.ReadFull(c, buf[:1]); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
+
 			return err
 		}
+
 		l := int(buf[0])
 		if _, err := io.ReadFull(c, buf[:l+2]); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
 			}
+
 			return err
 		}
+
 	default:
 		return errors.New("unknown address type " + strconv.Itoa(int(buf[3])))
 	}
@@ -267,11 +289,13 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if dl, ok := ctx.Deadline(); ok {
 			_ = c.SetDeadline(dl)
 		}
+
 		stop = context.AfterFunc(ctx, func() {
 			_ = c.SetDeadline(time.Unix(1, 0))
 		})
 		defer func() {
 			stop()
+
 			_ = c.SetDeadline(time.Time{})
 		}()
 	}
@@ -294,10 +318,12 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if len(ams) > 255 {
 			return nil, errors.New("too many authentication methods")
 		}
+
 		buf[1] = byte(len(ams))
 		for i, am := range ams {
 			buf[2+i] = byte(am)
 		}
+
 		n = 2 + len(ams)
 	}
 
@@ -305,6 +331,7 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
+
 		return nil, err
 	}
 
@@ -312,6 +339,7 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
+
 		return nil, err
 	}
 
@@ -361,17 +389,20 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 				buf[3] = AddrTypeIPv4
 				a4 := addr.As4()
 				copy(buf[4:8], a4[:])
+
 				n = 8
 			} else {
 				buf[3] = AddrTypeIPv6
 				a16 := addr.As16()
 				copy(buf[4:20], a16[:])
+
 				n = 20
 			}
 		} else {
 			if len(host) > 255 {
 				return nil, errors.New("FQDN too long")
 			}
+
 			buf[3] = AddrTypeFQDN
 			buf[4] = byte(len(host))
 			copy(buf[5:], host)
@@ -381,6 +412,7 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if len(host) > 255 {
 			return nil, errors.New("FQDN too long")
 		}
+
 		buf[3] = AddrTypeFQDN
 		buf[4] = byte(len(host))
 		copy(buf[5:], host)
@@ -395,6 +427,7 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
+
 		return nil, err
 	}
 
@@ -403,15 +436,18 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
+
 		return nil, err
 	}
 
 	if buf[0] != Version5 {
 		return nil, errors.New("unexpected protocol version " + strconv.Itoa(int(buf[0])))
 	}
+
 	if cmdErr := Reply(buf[1]); cmdErr != StatusSucceeded {
 		return nil, errors.New("unknown error " + cmdErr.String())
 	}
+
 	if buf[2] != 0 {
 		return nil, errors.New("non-zero reserved field")
 	}
@@ -423,37 +459,48 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
+
 			return nil, err
 		}
+
 		a.IP = net.IPv4(buf[0], buf[1], buf[2], buf[3])
 		a.Port = int(buf[4])<<8 | int(buf[5])
+
 	case AddrTypeIPv6:
 		if _, err := io.ReadFull(c, buf[:18]); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
+
 			return nil, err
 		}
+
 		ip := make(net.IP, 16)
 		copy(ip, buf[:16])
 		a.IP = ip
 		a.Port = int(buf[16])<<8 | int(buf[17])
+
 	case AddrTypeFQDN:
 		if _, err := io.ReadFull(c, buf[:1]); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
+
 			return nil, err
 		}
+
 		l := int(buf[0])
 		if _, err := io.ReadFull(c, buf[:l+2]); err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
+
 			return nil, err
 		}
+
 		a.Name = string(buf[:l])
 		a.Port = int(buf[l])<<8 | int(buf[l+1])
+
 	default:
 		return nil, errors.New("unknown address type " + strconv.Itoa(int(buf[3])))
 	}
@@ -469,31 +516,38 @@ func splitHostPortNoAlloc(address string) (host string, port int, err error) {
 			break
 		}
 	}
+
 	if colon < 0 {
 		return "", 0, errors.New("missing port in address")
 	}
+
 	host = address[:colon]
 	if len(host) >= 2 && host[0] == '[' && host[len(host)-1] == ']' {
 		host = host[1 : len(host)-1]
 	}
+
 	portStr := address[colon+1:]
 	if len(portStr) == 0 {
 		return "", 0, errors.New("empty port in address")
 	}
+
 	p := 0
 	for i := 0; i < len(portStr); i++ {
 		b := portStr[i]
 		if b < '0' || b > '9' {
 			return "", 0, errors.New("invalid port")
 		}
+
 		p = p*10 + int(b-'0')
 		if p > 65535 {
 			return "", 0, errors.New("port out of range")
 		}
 	}
+
 	if p == 0 {
 		return "", 0, errors.New("port out of range 0")
 	}
+
 	return host, p, nil
 }
 
