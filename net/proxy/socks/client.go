@@ -11,16 +11,15 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
-	"sync"
 	"time"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
-var socksBufPool = sync.Pool{
-	New: func() any {
-		b := make([]byte, 512)
-		return &b
-	},
-}
+var socksBufPool = generic.NewPool(func() *[]byte {
+	b := make([]byte, 512)
+	return &b
+})
 
 func isIPAddress(host string) bool {
 	if len(host) == 0 {
@@ -77,7 +76,7 @@ func (d *Dialer) Handshake(ctx context.Context, c net.Conn, address string) erro
 		}()
 	}
 
-	bufPtr := socksBufPool.Get().(*[]byte)
+	bufPtr := socksBufPool.Get()
 	defer socksBufPool.Put(bufPtr)
 
 	buf := *bufPtr
@@ -300,7 +299,7 @@ func (d *Dialer) connect(ctx context.Context, c net.Conn, address string) (net.A
 		}()
 	}
 
-	bufPtr := socksBufPool.Get().(*[]byte)
+	bufPtr := socksBufPool.Get()
 	defer socksBufPool.Put(bufPtr)
 
 	buf := *bufPtr

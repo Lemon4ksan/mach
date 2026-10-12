@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach"
@@ -110,7 +111,7 @@ type Server struct {
 	wg           sync.WaitGroup
 	ctxPool      *pool.PerCorePool[*Context]
 	altSvcHeader atomic.Pointer[string]
-	preparedTLS  atomic.Pointer[tls.Config]
+	preparedTLS  *generic.Lazy[*tls.Config]
 }
 
 // New creates a new unified Server configured with the provided options.
@@ -122,6 +123,10 @@ func New(opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	s.preparedTLS = generic.NewLazyValue(func() *tls.Config {
+		return s.ensureTLSConfig(s.TLSConfig)
+	})
 
 	if s.CustomAltSvc != "" {
 		s.altSvcHeader.Store(&s.CustomAltSvc)
@@ -256,14 +261,18 @@ func (s *Server) ensureTLSConfig(cfg *tls.Config) *tls.Config {
 }
 
 func (s *Server) getPreparedTLS() *tls.Config {
-	if cfg := s.preparedTLS.Load(); cfg != nil {
-		return cfg
+	if s.preparedTLS == nil {
+		s.mu.Lock()
+		if s.preparedTLS == nil {
+			s.preparedTLS = generic.NewLazyValue(func() *tls.Config {
+				return s.ensureTLSConfig(s.TLSConfig)
+			})
+		}
+
+		s.mu.Unlock()
 	}
 
-	cfg := s.ensureTLSConfig(s.TLSConfig)
-	s.preparedTLS.Store(cfg)
-
-	return cfg
+	return s.preparedTLS.Value()
 }
 
 func (s *Server) trackConn(c net.Conn, add bool) {

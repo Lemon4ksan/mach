@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // Trailing bytes stripped by permessage-deflate (RFC 7692 Section 7.2.1).
@@ -35,22 +36,20 @@ func DefaultDeflateOptions() DeflateOptions {
 }
 
 type flateWriterPool struct {
-	pool sync.Pool
+	pool *generic.Pool[flate.Writer]
 }
 
 func newFlateWriterPool() *flateWriterPool {
 	return &flateWriterPool{
-		pool: sync.Pool{
-			New: func() any {
-				w, _ := flate.NewWriter(io.Discard, flate.DefaultCompression)
-				return w
-			},
-		},
+		pool: generic.NewPool(func() *flate.Writer {
+			w, _ := flate.NewWriter(io.Discard, flate.DefaultCompression)
+			return w
+		}),
 	}
 }
 
 func (p *flateWriterPool) get(w io.Writer, level int) *flate.Writer {
-	fw := p.pool.Get().(*flate.Writer)
+	fw := p.pool.Get()
 	fw.Reset(w)
 	return fw
 }

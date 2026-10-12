@@ -12,8 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"time"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 var (
@@ -21,12 +22,10 @@ var (
 	crlf        = []byte("\r\n")
 	http1Prefix = []byte("HTTP/1.")
 
-	connectBufPool = sync.Pool{
-		New: func() any {
-			b := make([]byte, 1024)
-			return &b
-		},
-	}
+	connectBufPool = generic.NewPool(func() *[]byte {
+		b := make([]byte, 1024)
+		return &b
+	})
 )
 
 // HTTPConnectDialer establishes an HTTP CONNECT tunnel to an arbitrary destination
@@ -146,7 +145,7 @@ func (d *HTTPConnectDialer) Handshake(ctx context.Context, c net.Conn, address s
 		}()
 	}
 
-	bufPtr := connectBufPool.Get().(*[]byte)
+	bufPtr := connectBufPool.Get()
 	defer connectBufPool.Put(bufPtr)
 
 	buf := *bufPtr

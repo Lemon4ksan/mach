@@ -9,8 +9,9 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"sync"
 	"sync/atomic"
+
+	"github.com/lemon4ksan/foundation/generic"
 
 	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
@@ -48,25 +49,19 @@ type serverStream struct {
 }
 
 var (
-	serverStreamPool = sync.Pool{
-		New: func() any {
-			return &serverStream{
-				headers: make(http.Header, 8),
-			}
-		},
-	}
-	serverRequestPool = sync.Pool{
-		New: func() any {
-			return &ServerRequest{}
-		},
-	}
-	serverResponsePool = sync.Pool{
-		New: func() any {
-			return &ServerResponse{
-				Headers: make(http.Header, 8),
-			}
-		},
-	}
+	serverStreamPool = generic.NewPool(func() *serverStream {
+		return &serverStream{
+			headers: make(http.Header, 8),
+		}
+	})
+	serverRequestPool = generic.NewPool(func() *ServerRequest {
+		return &ServerRequest{}
+	})
+	serverResponsePool = generic.NewPool(func() *ServerResponse {
+		return &ServerResponse{
+			Headers: make(http.Header, 8),
+		}
+	})
 )
 
 func acquireServerStream(
@@ -76,7 +71,7 @@ func acquireServerStream(
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) *serverStream {
-	st := serverStreamPool.Get().(*serverStream)
+	st := serverStreamPool.Get()
 	st.id = streamID
 	st.endHeaders = endHeaders
 	st.endStream = endStream
@@ -329,7 +324,7 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 		}()
 	}
 
-	req := serverRequestPool.Get().(*ServerRequest)
+	req := serverRequestPool.Get()
 	defer func() {
 		*req = ServerRequest{}
 		serverRequestPool.Put(req)
@@ -352,7 +347,7 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 		return sc.writeHeaders(st.id, statusCode, header, false)
 	}
 
-	res := serverResponsePool.Get().(*ServerResponse)
+	res := serverResponsePool.Get()
 	defer func() {
 		clear(res.Headers)
 		res.Body = nil

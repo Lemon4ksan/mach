@@ -7,8 +7,8 @@ package h2
 import (
 	"bufio"
 	"io"
-	"sync"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/offheap"
 
 	"github.com/lemon4ksan/mach/proto/codec/hpack"
@@ -39,9 +39,9 @@ const (
 	FlagPriority FrameFlags = 0x20
 )
 
-var frameHeaderPool = sync.Pool{
-	New: func() any { return &FrameHeader{} },
-}
+var frameHeaderPool = generic.NewPool(func() *FrameHeader {
+	return &FrameHeader{}
+})
 
 // FrameHeader encapsulates the fixed 9-octet wire header and payload of an HTTP/2 frame (RFC 9113 §4.1 & §4.2).
 type FrameHeader struct {
@@ -58,7 +58,7 @@ type FrameHeader struct {
 
 // AcquireFrameHeader fetches a clean FrameHeader from memory pools.
 func AcquireFrameHeader() *FrameHeader {
-	fr := frameHeaderPool.Get().(*FrameHeader)
+	fr := frameHeaderPool.Get()
 	fr.Reset()
 
 	return fr

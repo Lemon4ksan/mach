@@ -9,16 +9,16 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/lemon4ksan/foundation/generic"
 
 	"github.com/lemon4ksan/mach/proto/semantic/altsvc"
 )
 
 // AltSvcCache stores and tracks origin-to-alternative-service mappings per RFC 7838.
 type AltSvcCache struct {
-	mu      sync.RWMutex
-	entries map[string]*altSvcEntry
+	entries generic.SyncMap[string, *altSvcEntry]
 }
 
 type altSvcEntry struct {
@@ -29,9 +29,7 @@ type altSvcEntry struct {
 
 // NewAltSvcCache creates a new thread-safe AltSvcCache.
 func NewAltSvcCache() *AltSvcCache {
-	return &AltSvcCache{
-		entries: make(map[string]*altSvcEntry),
-	}
+	return &AltSvcCache{}
 }
 
 // GetH3 returns the cached alternative service address for HTTP/3, if fresh and not failing.
@@ -41,64 +39,50 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 		return "", false
 	}
 
-	c.mu.RLock()
-
-	entry, ok := c.entries[origin]
+	entry, ok := c.entries.Load(origin)
 	if !ok {
 		if strings.HasPrefix(origin, "https://") {
-			entry, ok = c.entries[origin[8:]]
+			entry, ok = c.entries.Load(origin[8:])
 		} else if strings.HasPrefix(origin, "http://") {
-			entry, ok = c.entries[origin[7:]]
+			entry, ok = c.entries.Load(origin[7:])
 		}
 	}
 
 	if !ok && hasUpper(origin) {
 		lower := strings.ToLower(origin)
 
-		entry, ok = c.entries[lower]
+		entry, ok = c.entries.Load(lower)
 		if !ok {
 			if strings.HasPrefix(lower, "https://") {
-				entry, ok = c.entries[lower[8:]]
+				entry, ok = c.entries.Load(lower[8:])
 			} else if strings.HasPrefix(lower, "http://") {
-				entry, ok = c.entries[lower[7:]]
+				entry, ok = c.entries.Load(lower[7:])
 			}
 		}
 	}
 
 	if !ok {
-		c.mu.RUnlock()
-
 		return "", false
 	}
 
 	now := time.Now()
 	if now.After(entry.expiresAt) {
-		c.mu.RUnlock()
-		c.mu.Lock()
-		delete(c.entries, origin)
+		c.entries.Delete(origin)
 
 		if strings.HasPrefix(origin, "https://") {
-			delete(c.entries, origin[8:])
+			c.entries.Delete(origin[8:])
 		} else if strings.HasPrefix(origin, "http://") {
-			delete(c.entries, origin[7:])
+			c.entries.Delete(origin[7:])
 		}
-
-		c.mu.Unlock()
 
 		return "", false
 	}
 
 	if now.Before(entry.failedUntil) {
-		c.mu.RUnlock()
-
 		return "", false
 	}
 
-	addr := entry.targetAddr
-
-	c.mu.RUnlock()
-
-	return addr, true
+	return entry.targetAddr, true
 }
 
 func hasUpper(s string) bool {
@@ -147,28 +131,25 @@ func (c *AltSvcCache) Set(origin string, svc altsvc.Service) {
 		expiresAt:  time.Now().Add(maxAge),
 	}
 
-	c.mu.Lock()
-	c.entries[canonical] = entry
+	c.entries.Store(canonical, entry)
+	c.entries.Store(origin, entry)
 
-	c.entries[origin] = entry
 	if strings.HasPrefix(canonical, "https://") {
-		c.entries[canonical[8:]] = entry
+		c.entries.Store(canonical[8:], entry)
 	} else if strings.HasPrefix(canonical, "http://") {
-		c.entries[canonical[7:]] = entry
+		c.entries.Store(canonical[7:], entry)
 	}
 
 	if strings.HasPrefix(origin, "https://") {
-		c.entries[origin[8:]] = entry
+		c.entries.Store(origin[8:], entry)
 	} else if strings.HasPrefix(origin, "http://") {
-		c.entries[origin[7:]] = entry
+		c.entries.Store(origin[7:], entry)
 	}
 
 	if host != "" {
-		c.entries[host] = entry
-		c.entries["https://"+host] = entry
+		c.entries.Store(host, entry)
+		c.entries.Store("https://"+host, entry)
 	}
-
-	c.mu.Unlock()
 }
 
 // MarkFailed puts an origin's alternative service in temporary failure backoff (RFC 7838 §3.4).
@@ -177,21 +158,18 @@ func (c *AltSvcCache) MarkFailed(origin string, backoff time.Duration) {
 		return
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	entry, ok := c.entries[origin]
+	entry, ok := c.entries.Load(origin)
 	if !ok {
 		if strings.HasPrefix(origin, "https://") {
-			entry, ok = c.entries[origin[8:]]
+			entry, ok = c.entries.Load(origin[8:])
 		} else if strings.HasPrefix(origin, "http://") {
-			entry, ok = c.entries[origin[7:]]
+			entry, ok = c.entries.Load(origin[7:])
 		}
 	}
 
 	if !ok {
 		canonical := canonicalOrigin(origin)
-		entry, ok = c.entries[canonical]
+		entry, ok = c.entries.Load(canonical)
 	}
 
 	if ok {
@@ -205,22 +183,19 @@ func (c *AltSvcCache) Clear(origin string) {
 		return
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	delete(c.entries, origin)
+	c.entries.Delete(origin)
 
 	if strings.HasPrefix(origin, "https://") {
-		delete(c.entries, origin[8:])
+		c.entries.Delete(origin[8:])
 	} else if strings.HasPrefix(origin, "http://") {
-		delete(c.entries, origin[7:])
+		c.entries.Delete(origin[7:])
 	}
 
 	canonical := canonicalOrigin(origin)
-	delete(c.entries, canonical)
+	c.entries.Delete(canonical)
 
 	if strings.HasPrefix(canonical, "https://") {
-		delete(c.entries, canonical[8:])
+		c.entries.Delete(canonical[8:])
 	}
 }
 
@@ -230,9 +205,7 @@ func (c *AltSvcCache) ClearAll() {
 		return
 	}
 
-	c.mu.Lock()
-	clear(c.entries)
-	c.mu.Unlock()
+	c.entries.Clear()
 }
 
 // UpdateFromHeader parses the raw Alt-Svc header and updates cache entries accordingly.
