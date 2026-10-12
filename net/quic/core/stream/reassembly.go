@@ -42,10 +42,12 @@ func allocChunkData(size int) ([]byte, *[]byte, bool) {
 		ptr := smallChunkPool.Get().(*[]byte)
 		return (*ptr)[:size], ptr, false
 	}
+
 	if size <= largeChunkSize {
 		ptr := largeChunkPool.Get().(*[]byte)
 		return (*ptr)[:size], ptr, true
 	}
+
 	return make([]byte, size), nil, false
 }
 
@@ -53,6 +55,7 @@ func freeChunkData(ptr *[]byte, isLarge bool) {
 	if ptr == nil {
 		return
 	}
+
 	if isLarge {
 		largeChunkPool.Put(ptr)
 	} else {
@@ -216,6 +219,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 			last.data = append(last.data, data...)
 			return nil
 		}
+
 		buf, pooled, isLarge := allocChunkData(len(data))
 		copy(buf, data)
 		b.chunks = append(b.chunks, reassemblyChunk{
@@ -224,6 +228,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 			pooled:  pooled,
 			isLarge: isLarge,
 		})
+
 		return nil
 	}
 
@@ -269,6 +274,7 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 		// No overlap: insert new chunk at insertIdx.
 		buf, pooled, isLarge := allocChunkData(len(data))
 		copy(buf, data)
+
 		b.chunks = append(b.chunks, reassemblyChunk{})
 		copy(b.chunks[insertIdx+1:], b.chunks[insertIdx:])
 		b.chunks[insertIdx] = reassemblyChunk{
@@ -384,6 +390,7 @@ func (b *ReassemblyBuffer) Read(p []byte) (int, error) {
 	if toCopy == available {
 		// Consumed entire first chunk; release pooled buffer
 		freeChunkData(c.pooled, c.isLarge)
+
 		b.chunks[0] = reassemblyChunk{}
 
 		b.chunks = b.chunks[1:]
@@ -412,6 +419,7 @@ func (b *ReassemblyBuffer) Reset() {
 		freeChunkData(b.chunks[i].pooled, b.chunks[i].isLarge)
 		b.chunks[i] = reassemblyChunk{}
 	}
+
 	b.chunks = b.initialChunks[:0]
 	b.readOffset = 0
 	b.highestOffset = 0

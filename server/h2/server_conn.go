@@ -97,12 +97,16 @@ type ServerConn struct {
 
 func (sc *ServerConn) getStream(streamID uint32) (*serverStream, bool) {
 	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+
 	shard.mu.RLock()
 	defer shard.mu.RUnlock()
+
 	if shard.streams == nil {
 		return nil, false
 	}
+
 	st, ok := shard.streams[streamID]
+
 	return st, ok
 }
 
@@ -112,6 +116,7 @@ func (sc *ServerConn) putStream(streamID uint32, st *serverStream) {
 	if shard.streams == nil {
 		shard.streams = make(map[uint32]*serverStream, 8)
 	}
+
 	shard.streams[streamID] = st
 	shard.mu.Unlock()
 }
@@ -120,13 +125,16 @@ func (sc *ServerConn) deleteStream(streamID uint32) (*serverStream, bool) {
 	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
+
 	if shard.streams == nil {
 		return nil, false
 	}
+
 	st, ok := shard.streams[streamID]
 	if ok {
 		delete(shard.streams, streamID)
 	}
+
 	return st, ok
 }
 
@@ -182,6 +190,7 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 		if shard.streams != nil {
 			clear(shard.streams)
 		}
+
 		shard.mu.Unlock()
 	}
 
@@ -217,6 +226,7 @@ func (sc *ServerConn) Serve() error {
 					_ = st.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
 				}
 			}
+
 			clear(shard.streams)
 			shard.mu.Unlock()
 		}

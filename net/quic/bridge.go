@@ -305,11 +305,14 @@ func (b *CoreSessionBridge) HandleIncomingPacket(packetData []byte) error {
 		if err != nil {
 			return err
 		}
+
 		if consumed <= 0 || consumed >= len(packetData) {
 			break
 		}
+
 		packetData = packetData[consumed:]
 	}
+
 	return nil
 }
 
@@ -443,6 +446,7 @@ func (b *CoreSessionBridge) handleSinglePacketLocked(packetData []byte) (int, er
 	if isLong && hdr.HeaderLen+hdr.PayloadLen > 0 && hdr.HeaderLen+hdr.PayloadLen <= len(packetData) {
 		consumed = hdr.HeaderLen + hdr.PayloadLen
 	}
+
 	return consumed, nil
 }
 
@@ -647,10 +651,12 @@ func (b *CoreSessionBridge) FlushPendingPackets() error {
 			default:
 			}
 		}
+
 		return nil
 	}
 
 	const maxCoalescedSize = 1200
+
 	var coalesced []byte
 
 	for _, pkt := range packets {
@@ -658,6 +664,7 @@ func (b *CoreSessionBridge) FlushPendingPackets() error {
 			if _, err := b.packetConn.WriteTo(coalesced, b.remoteAddr); err != nil {
 				return err
 			}
+
 			coalesced = nil
 		}
 

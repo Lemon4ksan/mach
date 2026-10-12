@@ -673,11 +673,10 @@ func (hp *HPACK) decodeIndexed(hf *HeaderField, b []byte) ([]byte, error) {
 func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error) {
 	c := b[0]
 
+	var err error
+
 	if c != 64 {
-		var (
-			n   uint64
-			err error
-		)
+		var n uint64
 
 		b, n, err = readInt(6, b)
 		if err != nil {
@@ -693,8 +692,6 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 	} else {
 		b = b[1:]
 
-		var err error
-
 		b, hf.keyBuf, err = readString(hf.keyBuf[:0], b)
 		if err != nil {
 			return b, err
@@ -706,8 +703,6 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 			hf.key = hf.keyBuf
 		}
 	}
-
-	var err error
 
 	b, hf.valBuf, err = readString(hf.valBuf[:0], b)
 	if err != nil {
@@ -729,11 +724,10 @@ func (hp *HPACK) decodeLiteralIndexed(hf *HeaderField, b []byte) ([]byte, error)
 func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error) {
 	c := b[0]
 
+	var err error
+
 	if c&15 != 0 {
-		var (
-			n   uint64
-			err error
-		)
+		var n uint64
 
 		b, n, err = readInt(4, b)
 		if err != nil {
@@ -749,8 +743,6 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 	} else {
 		b = b[1:]
 
-		var err error
-
 		b, hf.keyBuf, err = readString(hf.keyBuf[:0], b)
 		if err != nil {
 			return b, err
@@ -762,8 +754,6 @@ func (hp *HPACK) decodeLiteralNoIndex(hf *HeaderField, b []byte) ([]byte, error)
 			hf.key = hf.keyBuf
 		}
 	}
-
-	var err error
 
 	b, hf.valBuf, err = readString(hf.valBuf[:0], b)
 	if err != nil {

@@ -55,10 +55,13 @@ func isValidHeaderKey(b []byte) bool {
 			return false
 		}
 	}
-	for ; i < n; i++ {
+
+	for i < n {
 		if validTokenTable[b[i]] == 0 {
 			return false
 		}
+
+		i++
 	}
 
 	return true

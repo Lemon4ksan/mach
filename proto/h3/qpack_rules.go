@@ -79,6 +79,7 @@ func isForbiddenH3HeaderString(key, val string) bool {
 			bytesconv.EqualFoldASCII(key, "sec-websocket-accept") {
 			return true
 		}
+
 		if bytesconv.EqualFoldASCII(key, "te") {
 			return !bytesconv.EqualFoldASCII(val, "trailers")
 		}

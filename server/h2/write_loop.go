@@ -59,6 +59,7 @@ func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bo
 			dataFr.SetStream(streamID)
 			dataFr.SetFlags(coreh2.FlagEndStream)
 			dataFr.SetBody(dFrame)
+
 			if _, err := dataFr.WriteTo(sc.bw); err != nil {
 				return 0, err
 			}
@@ -109,10 +110,12 @@ func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error 
 	sc.encMu.Unlock()
 
 	hdrFr.SetStream(streamID)
+
 	flags := coreh2.FlagEndHeaders
 	if len(res.Body) == 0 {
 		flags |= coreh2.FlagEndStream
 	}
+
 	hdrFr.SetFlags(flags)
 	hdrFr.SetBody(hFrame)
 
@@ -217,6 +220,7 @@ func (sc *ServerConn) sendBatchedWindowUpdates(connInc uint32, st *serverStream,
 		wuFr.SetBody(wu)
 		_, err := wuFr.WriteTo(sc.bw)
 		coreh2.ReleaseFrameHeader(wuFr)
+
 		if err != nil {
 			return err
 		}
@@ -230,6 +234,7 @@ func (sc *ServerConn) sendBatchedWindowUpdates(connInc uint32, st *serverStream,
 		wuFr.SetBody(wu)
 		_, err := wuFr.WriteTo(sc.bw)
 		coreh2.ReleaseFrameHeader(wuFr)
+
 		if err != nil {
 			return err
 		}

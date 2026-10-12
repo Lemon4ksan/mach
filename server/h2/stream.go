@@ -69,7 +69,13 @@ var (
 	}
 )
 
-func acquireServerStream(streamID uint32, endHeaders, endStream bool, initWin int32, ctx context.Context, cancel context.CancelFunc) *serverStream {
+func acquireServerStream(
+	streamID uint32,
+	endHeaders, endStream bool,
+	initWin int32,
+	ctx context.Context,
+	cancel context.CancelFunc,
+) *serverStream {
 	st := serverStreamPool.Get().(*serverStream)
 	st.id = streamID
 	st.endHeaders = endHeaders
@@ -90,6 +96,7 @@ func acquireServerStream(streamID uint32, endHeaders, endStream bool, initWin in
 	st.headerBlock.Reset()
 	st.body.Reset()
 	clear(st.headers)
+
 	return st
 }
 
@@ -97,9 +104,11 @@ func releaseServerStream(st *serverStream) {
 	if st == nil {
 		return
 	}
+
 	if st.cancel != nil {
 		st.cancel()
 	}
+
 	st.pipeReader = nil
 	st.pipeWriter = nil
 	st.headerBlock.Reset()

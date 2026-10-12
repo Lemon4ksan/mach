@@ -128,21 +128,21 @@ func Decode(payload []byte) (val uint64, readLen int, err error) {
 		if len(payload) < 2 {
 			return 0, 0, ErrTruncated
 		}
-		_ = payload[1]
+
 		return uint64(binary.BigEndian.Uint16(payload[:2]) & 0x3fff), 2, nil
 
 	case 2:
 		if len(payload) < 4 {
 			return 0, 0, ErrTruncated
 		}
-		_ = payload[3]
+
 		return uint64(binary.BigEndian.Uint32(payload[:4]) & 0x3fffffff), 4, nil
 
 	default: // case 3
 		if len(payload) < 8 {
 			return 0, 0, ErrTruncated
 		}
-		_ = payload[7]
+
 		return binary.BigEndian.Uint64(payload[:8]) & 0x3fffffffffffffff, 8, nil
 	}
 }

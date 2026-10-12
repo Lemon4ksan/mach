@@ -273,6 +273,7 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 
 					st.sendWindow.Store(old + delta)
 				}
+
 				shard.mu.Unlock()
 			}
 

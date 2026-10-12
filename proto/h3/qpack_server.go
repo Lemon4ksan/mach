@@ -193,9 +193,11 @@ func toLowerASCII(s string) string {
 			break
 		}
 	}
+
 	if !hasUpper {
 		return s
 	}
+
 	return strings.ToLower(s)
 }
 
@@ -228,6 +230,7 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 	}()
 
 	var handler requestHeaderHandler
+
 	handler.reqHeaders = reqHeaders
 	decoder := q.decoder.CreateProgressiveDecoder(streamID, &handler)
 	decoder.Decode(headerBlock)
@@ -283,6 +286,7 @@ func (q *QPACKCodec) EncodeResponseHeaders(
 	}()
 
 	var initialList [16]qpack.HeaderField
+
 	list := initialList[:0]
 
 	list = append(list, qpack.HeaderField{Name: ":status", Value: statusCodeToString(statusCode)})

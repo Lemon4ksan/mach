@@ -208,6 +208,7 @@ func ToLowerCopy(b []byte) []byte {
 			break
 		}
 	}
+
 	if !hasUpper {
 		return b
 	}
@@ -240,6 +241,7 @@ func ResponseHeaders(dst *Headers, hp *hpack.HPACK, res *h1.Response) {
 	defer hpack.ReleaseHeaderField(hf)
 
 	hf.SetKeyBytes(StringStatus)
+
 	code := res.Header.StatusCode()
 	if b := statusCodeToBytes(code); b != nil {
 		hf.SetValueBytes(b)
@@ -274,23 +276,27 @@ func SerializeResponseHeaders(dst *Headers, hp *hpack.HPACK, statusCode int, hea
 	hf := hpack.AcquireHeaderField()
 	defer hpack.ReleaseHeaderField(hf)
 
+	var numBuf [32]byte
+
 	hf.SetKeyBytes(StringStatus)
+
 	if b := statusCodeToBytes(statusCode); b != nil {
 		hf.SetValueBytes(b)
 	} else {
-		var numBuf [16]byte
 		hf.SetValueBytes(strconv.AppendInt(numBuf[:0], int64(statusCode), 10))
 	}
+
 	dst.AppendHeaderField(hp, hf, false)
 
 	if bodyLen >= 0 {
 		hf.SetKeyBytes(StringContentLength)
+
 		if bodyLen == 0 {
 			hf.SetValueBytes(valZero)
 		} else {
-			var numBuf [24]byte
 			hf.SetValueBytes(strconv.AppendInt(numBuf[:0], int64(bodyLen), 10))
 		}
+
 		dst.AppendHeaderField(hp, hf, false)
 	}
 

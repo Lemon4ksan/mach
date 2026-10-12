@@ -234,6 +234,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 				for start < len(peek) && (peek[start] == '\r' || peek[start] == '\n') {
 					start++
 				}
+
 				if start < len(peek) && protoh1.IndexCRLFCRLF(peek[start:]) != -1 {
 					hasMorePipelined = true
 				}

@@ -328,10 +328,12 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 					respBlock := sc.qpack.EncodeResponseHeaders(streamID, statusCode, resHdrs, -1)
 
 					var initialBuf [256]byte
+
 					b := varint.Append(initialBuf[:0], coreh3.FrameTypeHeaders)
 					b = varint.Append(b, uint64(len(respBlock)))
 					b = append(b, respBlock...)
 					_, err := stream.Write(b)
+
 					return err
 				}
 
@@ -347,6 +349,7 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 				respBlock := sc.qpack.EncodeResponseHeaders(streamID, res.StatusCode, res.Headers, len(res.Body))
 
 				var initialBuf [256]byte
+
 				b := varint.Append(initialBuf[:0], coreh3.FrameTypeHeaders)
 				b = varint.Append(b, uint64(len(respBlock)))
 				b = append(b, respBlock...)
