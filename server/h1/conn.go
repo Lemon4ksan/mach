@@ -16,16 +16,17 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
 	"github.com/lemon4ksan/mach"
+	protoh1 "github.com/lemon4ksan/mach/proto/h1"
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 var (
 	readerStorage = pool.NewPerCorePool(func() *bufio.Reader {
-		return bufio.NewReaderSize(nil, 4096)
+		return bufio.NewReaderSize(nil, 64*1024)
 	})
 	writerStorage = pool.NewPerCorePool(func() *bytesconv.ByteBuffer {
-		return &bytesconv.ByteBuffer{B: make([]byte, 0, 4096)}
+		return &bytesconv.ByteBuffer{B: make([]byte, 0, 64*1024)}
 	})
 	reqStorage = pool.NewPerCorePool(func() *Request {
 		r := &Request{
@@ -149,14 +150,16 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		req.br = br
 		req.TLS = tlsState
 
-		// Set read timeout
-		readDeadline := ch.ReadTimeout
-		if readDeadline <= 0 {
-			readDeadline = ch.IdleTimeout
-		}
+		// Set read timeout only when waiting for new wire data
+		if br.Buffered() == 0 {
+			readDeadline := ch.ReadTimeout
+			if readDeadline <= 0 {
+				readDeadline = ch.IdleTimeout
+			}
 
-		if readDeadline > 0 {
-			_ = conn.SetReadDeadline(time.Now().Add(readDeadline))
+			if readDeadline > 0 {
+				_ = conn.SetReadDeadline(time.Now().Add(readDeadline))
+			}
 		}
 
 		err := req.ReadRequest(br, bw, maxBody)
@@ -174,11 +177,6 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		if req.CloseConnection ||
 			(req.Headers.Has(headkit.TransferEncoding) && req.Headers.Has(headkit.ContentLength)) {
 			keepAlive = false
-		}
-
-		// Set write timeout
-		if ch.WriteTimeout > 0 {
-			_ = conn.SetWriteDeadline(time.Now().Add(ch.WriteTimeout))
 		}
 
 		if ch.Handler != nil {
@@ -229,13 +227,28 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		// High-Throughput HTTP Pipelining Coalescing:
 		// If more unread request bytes already reside in br and connection is keep-alive,
 		// defer bw.Flush() to combine multiple pipelined responses into a single TCP write.
-		hasMorePipelined := keepAlive && br.Buffered() > 0
+		hasMorePipelined := false
+		if keepAlive && br.Buffered() >= 4 {
+			if peek, _ := br.Peek(br.Buffered()); len(peek) >= 4 {
+				start := 0
+				for start < len(peek) && (peek[start] == '\r' || peek[start] == '\n') {
+					start++
+				}
+				if start < len(peek) && protoh1.IndexCRLFCRLF(peek[start:]) != -1 {
+					hasMorePipelined = true
+				}
+			}
+		}
 
 		if err := res.WriteTo(bw, keepAlive, false); err != nil {
 			return err
 		}
 
-		if !hasMorePipelined {
+		if !hasMorePipelined || len(bw.B) >= 64*1024 {
+			if ch.WriteTimeout > 0 {
+				_ = conn.SetWriteDeadline(time.Now().Add(ch.WriteTimeout))
+			}
+
 			if _, err := bw.WriteTo(conn); err != nil {
 				return err
 			}

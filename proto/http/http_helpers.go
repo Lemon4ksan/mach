@@ -17,9 +17,16 @@ const (
 )
 
 // validTokenMask defines the 128-bit bitset for RFC 9110 §5.6.2 token characters.
-var validTokenMask = [2]uint64{
-	0x03ff6cfa00000000,
-	0x57ffffffc7fffffe,
+var validTokenTable = [256]byte{
+	'!': 1, '#': 1, '$': 1, '%': 1, '&': 1, '\'': 1, '*': 1, '+': 1,
+	'-': 1, '.': 1, '^': 1, '_': 1, '`': 1, '|': 1, '~': 1,
+	'0': 1, '1': 1, '2': 1, '3': 1, '4': 1, '5': 1, '6': 1, '7': 1, '8': 1, '9': 1,
+	'a': 1, 'b': 1, 'c': 1, 'd': 1, 'e': 1, 'f': 1, 'g': 1, 'h': 1, 'i': 1, 'j': 1,
+	'k': 1, 'l': 1, 'm': 1, 'n': 1, 'o': 1, 'p': 1, 'q': 1, 'r': 1, 's': 1, 't': 1,
+	'u': 1, 'v': 1, 'w': 1, 'x': 1, 'y': 1, 'z': 1,
+	'A': 1, 'B': 1, 'C': 1, 'D': 1, 'E': 1, 'F': 1, 'G': 1, 'H': 1, 'I': 1, 'J': 1,
+	'K': 1, 'L': 1, 'M': 1, 'N': 1, 'O': 1, 'P': 1, 'Q': 1, 'R': 1, 'S': 1, 'T': 1,
+	'U': 1, 'V': 1, 'W': 1, 'X': 1, 'Y': 1, 'Z': 1,
 }
 
 // CaseInsensitiveCompare reports whether byte slices a and b are equal under ASCII case-insensitivity.
@@ -29,17 +36,27 @@ func CaseInsensitiveCompare(a, b []byte) bool {
 
 // ValidHeaderFieldByte reports whether c is a valid HTTP header field byte (RFC 9110 §5.1, §5.6.2).
 func ValidHeaderFieldByte(c byte) bool {
-	return c < 128 && ((validTokenMask[c/64] & (uint64(1) << (c % 64))) != 0)
+	return validTokenTable[c] != 0
 }
 
 // isValidHeaderKey reports whether b is a valid non-empty HTTP header token (RFC 9110 §5.6.2).
 func isValidHeaderKey(b []byte) bool {
-	if len(b) == 0 {
+	n := len(b)
+	if n == 0 {
 		return false
 	}
 
-	for _, c := range b {
-		if !ValidHeaderFieldByte(c) {
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		if validTokenTable[b[i]] == 0 ||
+			validTokenTable[b[i+1]] == 0 ||
+			validTokenTable[b[i+2]] == 0 ||
+			validTokenTable[b[i+3]] == 0 {
+			return false
+		}
+	}
+	for ; i < n; i++ {
+		if validTokenTable[b[i]] == 0 {
 			return false
 		}
 	}

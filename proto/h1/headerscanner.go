@@ -105,7 +105,11 @@ func (s *HeaderScanner) Next() bool {
 	}
 
 	s.KeyVal = k
-	s.ValVal = TrimSpace(v)
+	if len(v) > 1 && v[0] == ' ' && v[1] > ' ' && v[len(v)-1] > ' ' {
+		s.ValVal = v[1:]
+	} else {
+		s.ValVal = TrimSpace(v)
+	}
 
 	if err != nil {
 		s.ScanErr = err
@@ -180,12 +184,22 @@ func (s *HeaderScanner) skipSpace() bool {
 }
 
 func isValidHeaderKey(a []byte) bool {
-	if len(a) == 0 {
+	n := len(a)
+	if n == 0 {
 		return false
 	}
 
-	for _, c := range a {
-		if c >= 128 || validTokenTable[c] == 0 {
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		if validTokenTable[a[i]] == 0 ||
+			validTokenTable[a[i+1]] == 0 ||
+			validTokenTable[a[i+2]] == 0 ||
+			validTokenTable[a[i+3]] == 0 {
+			return false
+		}
+	}
+	for ; i < n; i++ {
+		if validTokenTable[a[i]] == 0 {
 			return false
 		}
 	}
@@ -193,7 +207,7 @@ func isValidHeaderKey(a []byte) bool {
 	return true
 }
 
-var validTokenTable = [128]byte{
+var validTokenTable = [256]byte{
 	'!': 1, '#': 1, '$': 1, '%': 1, '&': 1, '\'': 1, '*': 1, '+': 1,
 	'-': 1, '.': 1, '^': 1, '_': 1, '`': 1, '|': 1, '~': 1,
 	'0': 1, '1': 1, '2': 1, '3': 1, '4': 1, '5': 1, '6': 1, '7': 1, '8': 1, '9': 1,
