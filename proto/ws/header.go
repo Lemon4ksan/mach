@@ -38,6 +38,9 @@ type Header struct {
 
 	// PayloadLen is the payload length in bytes (unextended or extended).
 	PayloadLen int64
+
+	// Length is an alias field for PayloadLen for channel FSM compatibility.
+	Length int64
 }
 
 // Frame represents a complete RFC 6455 frame with its header and payload slice.
@@ -138,6 +141,7 @@ func ParseHeader(b []byte) (h Header, headerLen int, err error) {
 		}
 	}
 
+	h.Length = h.PayloadLen
 	return h, hlen, nil
 }
 
@@ -147,6 +151,9 @@ func ParseHeader(b []byte) (h Header, headerLen int, err error) {
 //
 // Zero-allocation: testing.AllocsPerRun == 0.
 func WriteHeader(dst []byte, h Header) (int, error) {
+	if h.PayloadLen == 0 && h.Length > 0 {
+		h.PayloadLen = h.Length
+	}
 	if h.PayloadLen < 0 {
 		return 0, ErrInvalidLength
 	}
