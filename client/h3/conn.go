@@ -5,16 +5,20 @@
 package h3
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
 
+	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/net/quic"
 
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	h1 "github.com/lemon4ksan/mach/proto/http"
 )
 
 var _ mach.Conn = (*ClientConn)(nil)
@@ -168,4 +172,130 @@ func (cc *ClientConn) readBidirectionalStreams() {
 		"server-initiated bidirectional stream (RFC 9114 §6.1)",
 	)
 	_ = str.Close()
+}
+
+// EnableConnect reports whether the peer advertised SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 §3).
+func (cc *ClientConn) EnableConnect() bool {
+	return cc.settings.EnableConnect
+}
+
+// Settings returns the active settings received from the peer.
+func (cc *ClientConn) Settings() coreh3.Settings {
+	return cc.settings
+}
+
+// ExtendedConnectStream adapts an HTTP/3 Extended CONNECT stream to io.ReadWriteCloser.
+type ExtendedConnectStream struct {
+	stream     *quic.Stream
+	br         *bufio.Reader
+	readRemain int64
+	closed     atomic.Bool
+}
+
+func (s *ExtendedConnectStream) Read(p []byte) (int, error) {
+	for s.readRemain == 0 {
+		frameType, frameLen, err := coreh3.ReadFrameHeader(s.br)
+		if err != nil {
+			return 0, err
+		}
+		if frameType == coreh3.FrameTypeData {
+			s.readRemain = int64(frameLen)
+			if s.readRemain == 0 {
+				continue
+			}
+			break
+		}
+		if frameLen > 0 {
+			lr := io.LimitReader(s.br, int64(frameLen))
+			_, _ = io.Copy(io.Discard, lr)
+		}
+	}
+
+	toRead := int64(len(p))
+	if toRead > s.readRemain {
+		toRead = s.readRemain
+	}
+	n, err := s.br.Read(p[:toRead])
+	if n > 0 {
+		s.readRemain -= int64(n)
+	}
+	return n, err
+}
+
+func (s *ExtendedConnectStream) Write(p []byte) (int, error) {
+	if s.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	var hdr [16]byte
+	b := varint.Append(hdr[:0], coreh3.FrameTypeData)
+	b = varint.Append(b, uint64(len(p)))
+	if _, err := s.stream.Write(b); err != nil {
+		return 0, err
+	}
+	return s.stream.Write(p)
+}
+
+func (s *ExtendedConnectStream) Close() error {
+	if s.closed.CompareAndSwap(false, true) {
+		return s.stream.Close()
+	}
+	return nil
+}
+
+// StartExtendedConnect initiates an Extended CONNECT stream (RFC 9220 §4).
+func (cc *ClientConn) StartExtendedConnect(ctx context.Context, req *h1.Request) (*ExtendedConnectStream, *h1.Response, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	str, err := cc.conn.OpenStreamSync(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	streamID := uint64(str.StreamID()) //nolint:gosec
+	if err := cc.sendRequestTo(str, req, nil, streamID); err != nil {
+		_ = str.Close()
+		return nil, nil, err
+	}
+
+	br := bufio.NewReaderSize(str, 4096)
+	frameType, payloadLen, err := coreh3.ReadFrameHeader(br)
+	if err != nil {
+		_ = str.Close()
+		return nil, nil, err
+	}
+
+	if frameType != coreh3.FrameTypeHeaders {
+		_ = str.Close()
+		return nil, nil, fmt.Errorf("h3: expected HEADERS frame (0x01), got 0x%x", frameType)
+	}
+
+	headerBlock := make([]byte, payloadLen)
+	if _, err := io.ReadFull(br, headerBlock); err != nil {
+		_ = str.Close()
+		return nil, nil, err
+	}
+
+	resp := h1.AcquireResponse()
+	statusCode, err := cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
+	if err != nil {
+		h1.ReleaseResponse(resp)
+		_ = str.Close()
+		return nil, nil, err
+	}
+
+	if statusCode != 200 {
+		_ = str.Close()
+		return nil, resp, fmt.Errorf("h3: unexpected Extended CONNECT response status: %d", statusCode)
+	}
+
+	stream := &ExtendedConnectStream{
+		stream: str,
+		br:     br,
+	}
+	return stream, resp, nil
 }

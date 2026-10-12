@@ -5,8 +5,88 @@
 package h2
 
 import (
+	"net/http"
+
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )
+
+func (sc *ServerConn) writeHeaders(streamID uint32, statusCode int, headers http.Header, endStream bool) error {
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	hdrFr := coreh2.AcquireFrameHeader()
+	defer coreh2.ReleaseFrameHeader(hdrFr)
+
+	sc.encMu.Lock()
+	hFrame := coreh2.AcquireFrame(coreh2.FrameHeaders).(*coreh2.Headers)
+	coreh2.SerializeResponseHeaders(hFrame, sc.hpackEnc, statusCode, headers, -1)
+	sc.encMu.Unlock()
+
+	hdrFr.SetStream(streamID)
+	flags := coreh2.FlagEndHeaders
+	if endStream {
+		flags |= coreh2.FlagEndStream
+	}
+	hdrFr.SetFlags(flags)
+	hdrFr.SetBody(hFrame)
+
+	if _, err := hdrFr.WriteTo(sc.bw); err != nil {
+		return err
+	}
+	return sc.bw.Flush()
+}
+
+func (sc *ServerConn) writeStreamData(streamID uint32, body []byte, endStream bool) (int, error) {
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	maxChunk := int(sc.peerMaxFrameSize)
+	if maxChunk <= 0 {
+		maxChunk = coreh2.DefaultMaxLen
+	}
+
+	written := len(body)
+	if len(body) == 0 {
+		if endStream {
+			dataFr := coreh2.AcquireFrameHeader()
+			dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
+			dFrame.SetData(nil)
+			dataFr.SetStream(streamID)
+			dataFr.SetFlags(coreh2.FlagEndStream)
+			dataFr.SetBody(dFrame)
+			_, err := dataFr.WriteTo(sc.bw)
+			coreh2.ReleaseFrameHeader(dataFr)
+			if err != nil {
+				return 0, err
+			}
+			return 0, sc.bw.Flush()
+		}
+		return 0, nil
+	}
+
+	for len(body) > 0 {
+		chunkSize := min(len(body), maxChunk)
+		chunk := body[:chunkSize]
+		body = body[chunkSize:]
+
+		dataFr := coreh2.AcquireFrameHeader()
+		dFrame := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
+		dFrame.SetData(chunk)
+		dataFr.SetStream(streamID)
+		if endStream && len(body) == 0 {
+			dataFr.SetFlags(coreh2.FlagEndStream)
+		}
+		dataFr.SetBody(dFrame)
+
+		_, err := dataFr.WriteTo(sc.bw)
+		coreh2.ReleaseFrameHeader(dataFr)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return written, sc.bw.Flush()
+}
 
 func (sc *ServerConn) writeResponse(streamID uint32, res *ServerResponse) error {
 	sc.writeMu.Lock()

@@ -31,14 +31,17 @@ type ServerConn struct {
 	hasControlIn    atomic.Bool
 	hasQPACKEncoder atomic.Bool
 	hasQPACKDecoder atomic.Bool
+
+	EnableConnectProtocol bool
 }
 
 // NewServerConn creates a new HTTP/3 server connection wrapping a QUIC connection (RFC 9114).
 func NewServerConn(quicConn *quic.Conn, handler ServerHandlerFunc) *ServerConn {
 	return &ServerConn{
-		quicConn: quicConn,
-		handler:  handler,
-		qpack:    coreh3.NewQPACKCodec(),
+		quicConn:              quicConn,
+		handler:               handler,
+		qpack:                 coreh3.NewQPACKCodec(),
+		EnableConnectProtocol: true,
 	}
 }
 
@@ -73,6 +76,7 @@ func (sc *ServerConn) Serve() error {
 	// Write initial server SETTINGS frame (RFC 9114 §7.2.4)
 	st := &coreh3.Settings{
 		MaxFieldSectionSize: 64 * 1024,
+		EnableConnect:       sc.EnableConnectProtocol,
 	}
 	if _, err := ctrlStream.Write(st.Encode()); err != nil {
 		return err

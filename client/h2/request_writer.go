@@ -78,11 +78,12 @@ func (c *Conn) writeRequest(ctx *Context) error {
 
 	c.encodeRequestHeaders(h, req)
 
+	endStream := !hasBody && !ctx.isTunnel
 	h.SetPadding(false)
-	h.SetEndStream(!hasBody)
+	h.SetEndStream(endStream)
 	h.SetEndHeaders(true)
 
-	if !hasBody {
+	if endStream {
 		ctx.SetState(streamHalfClosed)
 	}
 
@@ -94,7 +95,7 @@ func (c *Conn) writeRequest(ctx *Context) error {
 	c.writeMu.Lock()
 
 	_, err := fr.WriteTo(c.bw)
-	if err == nil && !hasBody {
+	if err == nil {
 		err = c.bw.Flush()
 	}
 
@@ -196,4 +197,76 @@ func (c *Conn) finish(r *Context, stream uint32, err error) {
 	c.deleteStream(stream)
 	close(r.Err)
 	c.broadcastWindowUpdate()
+}
+
+// WriteTunnelData transmits raw payload bytes framed as DATA frames on a tunnel stream.
+func (c *Conn) WriteTunnelData(ctx *Context, body []byte, endStream bool) error {
+	id := ctx.StreamID.Load()
+	if c.Closed() || ctx.State() == streamClosed {
+		return coreh2.ErrStreamClosed
+	}
+
+	fh := coreh2.AcquireFrameHeader()
+	defer coreh2.ReleaseFrameHeader(fh)
+	fh.SetStream(id)
+
+	data := coreh2.AcquireFrame(coreh2.FrameData).(*coreh2.Data)
+	fh.SetBody(data)
+
+	if len(body) == 0 {
+		if endStream {
+			data.SetEndStream(true)
+			data.SetPadding(false)
+			data.SetData(nil)
+
+			c.writeMu.Lock()
+			_, wErr := fh.WriteTo(c.bw)
+			if wErr == nil {
+				wErr = c.bw.Flush()
+			}
+			c.writeMu.Unlock()
+			return wErr
+		}
+		return nil
+	}
+
+	offset := 0
+	bodyLen := len(body)
+
+	for offset < bodyLen {
+		if c.Closed() || ctx.State() == streamClosed {
+			return coreh2.ErrStreamClosed
+		}
+
+		remaining := bodyLen - offset
+		chunkSize := c.calculateChunkSize(ctx, remaining)
+
+		if chunkSize <= 0 {
+			c.waitForWindowUpdate(ctx, remaining)
+			continue
+		}
+
+		end := offset + chunkSize
+		data.SetEndStream(endStream && (end == bodyLen))
+		data.SetPadding(false)
+		data.SetData(body[offset:end])
+
+		c.writeMu.Lock()
+		_, wErr := fh.WriteTo(c.bw)
+		if wErr == nil {
+			wErr = c.bw.Flush()
+		}
+		c.writeMu.Unlock()
+
+		if wErr != nil {
+			return wErr
+		}
+
+		c.serverWindow.Add(-int32(chunkSize))
+		ctx.streamWindow.Add(-int32(chunkSize))
+
+		offset = end
+	}
+
+	return nil
 }

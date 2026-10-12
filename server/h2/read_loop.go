@@ -85,6 +85,22 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 		return
 	}
 
+	if st.isTunnel {
+		if len(payload) > 0 {
+			if st.pipeWriter != nil {
+				_, _ = st.pipeWriter.Write(payload)
+			}
+			sc.replenishReceiveWindow(streamID, len(payload))
+		}
+		if endStream {
+			st.endStream = true
+			if st.pipeWriter != nil {
+				_ = st.pipeWriter.Close()
+			}
+		}
+		return
+	}
+
 	st.body.Write(payload)
 
 	if len(payload) > 0 {
@@ -365,6 +381,9 @@ func (sc *ServerConn) OnStreamReset(streamID, errorCode uint32) {
 	if st, ok := sc.streams[streamID]; ok {
 		if st.cancel != nil {
 			st.cancel()
+		}
+		if st.pipeWriter != nil {
+			_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
 		}
 
 		delete(sc.streams, streamID)

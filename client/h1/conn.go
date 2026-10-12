@@ -321,6 +321,15 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 	return nil
 }
 
+// Hijack takes over the underlying network connection and I/O buffers after protocol upgrade.
+func (cc *ClientConn) Hijack() (net.Conn, *bufio.Reader, *bufio.Writer, error) {
+	if cc.isClosed {
+		return nil, nil, nil, ErrConnClosed
+	}
+	cc.isUpgraded = true
+	return cc.conn, cc.br, cc.bw, nil
+}
+
 // Close terminates the HTTP/1.1 client connection and releases the underlying socket (RFC 9112 §9.6).
 // Any active or pending Do operation on cc will immediately fail with a closed connection error.
 func (cc *ClientConn) Close() error {

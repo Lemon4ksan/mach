@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -30,16 +31,19 @@ type ServerHandlerFunc func(req *ServerRequest, res *ServerResponse) error
 
 // ServerRequest represents a parsed incoming HTTP/2 stream request (RFC 9113 §8.3, RFC 8441 §4).
 type ServerRequest struct {
-	StreamID   uint32          // StreamID is the odd-numbered stream identifier (RFC 9113 §5.1.1).
-	Method     string          // Method is the :method pseudo-header value (RFC 9113 §8.3.1).
-	Path       string          // Path is the :path pseudo-header value (RFC 9113 §8.3.1).
-	Scheme     string          // Scheme is the :scheme pseudo-header value (RFC 9113 §8.3.1).
-	Authority  string          // Authority is the :authority pseudo-header value (RFC 9113 §8.3.1).
-	Protocol   string          // Protocol is the :protocol pseudo-header for extended CONNECT (RFC 8441 §4).
-	Headers    http.Header     // Headers contains regular, lowercase header fields (RFC 9113 §8.2).
-	Body       []byte          // Body contains the reassembled payload from DATA frames (RFC 9113 §6.1).
-	RemoteAddr string          // RemoteAddr is the peer network address.
-	Ctx        context.Context // Ctx is the stream context cancelled upon stream termination or reset.
+	StreamID          uint32          // StreamID is the odd-numbered stream identifier (RFC 9113 §5.1.1).
+	Method            string          // Method is the :method pseudo-header value (RFC 9113 §8.3.1).
+	Path              string          // Path is the :path pseudo-header value (RFC 9113 §8.3.1).
+	Scheme            string          // Scheme is the :scheme pseudo-header value (RFC 9113 §8.3.1).
+	Authority         string          // Authority is the :authority pseudo-header value (RFC 9113 §8.3.1).
+	Protocol          string          // Protocol is the :protocol pseudo-header for extended CONNECT (RFC 8441 §4).
+	Headers           http.Header     // Headers contains regular, lowercase header fields (RFC 9113 §8.2).
+	Body              []byte          // Body contains the reassembled payload from DATA frames (RFC 9113 §6.1).
+	RemoteAddr        string          // RemoteAddr is the peer network address.
+	Ctx               context.Context // Ctx is the stream context cancelled upon stream termination or reset.
+	Stream            io.ReadWriteCloser
+	UpgradeFn         func(statusCode int, header http.Header) error
+	IsExtendedConnect bool
 }
 
 // ServerResponse represents an outgoing HTTP/2 stream response (RFC 9113 §8.4, RFC 9110 §15).
@@ -77,6 +81,8 @@ type ServerConn struct {
 	isReleased     atomic.Bool
 	connSendWindow atomic.Int32
 	closeErr       error
+
+	EnableConnectProtocol bool
 
 	ctx      context.Context
 	cancelFn context.CancelFunc
@@ -118,6 +124,7 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc.peerMaxFrameSize = coreh2.DefaultMaxLen
 	sc.peerInitialWin = 65535
 	sc.connSendWindow.Store(65535)
+	sc.EnableConnectProtocol = true
 
 	sc.ctx, sc.cancelFn = context.WithCancel(context.Background())
 	sc.sm.Handler = sc
@@ -142,12 +149,26 @@ func (sc *ServerConn) Serve() error {
 	defer func() {
 		sc.isClosed.Store(true)
 
-		// Wait for in-flight streams to complete (RFC 9113 §6.8 graceful shutdown)
-		sc.streamsWg.Wait()
-
 		if sc.cancelFn != nil {
 			sc.cancelFn()
 		}
+
+		sc.streamsMu.Lock()
+		for _, st := range sc.streams {
+			if st.cancel != nil {
+				st.cancel()
+			}
+			if st.pipeWriter != nil {
+				_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
+			}
+			if st.pipeReader != nil {
+				_ = st.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
+			}
+		}
+		sc.streamsMu.Unlock()
+
+		// Wait for in-flight streams to complete (RFC 9113 §6.8 graceful shutdown)
+		sc.streamsWg.Wait()
 
 		if sc.conn != nil {
 			_ = sc.conn.Close()
@@ -164,6 +185,7 @@ func (sc *ServerConn) Serve() error {
 	st.SetMaxConcurrentStreams(1000)
 	st.SetMaxFrameSize(coreh2.DefaultMaxLen)
 	st.SetMaxWindowSize(65535)
+	st.SetEnableConnect(sc.EnableConnectProtocol)
 
 	if err := sc.sendSettings(st, false); err != nil {
 		return err

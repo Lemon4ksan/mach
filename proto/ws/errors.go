@@ -75,8 +75,14 @@ var (
 	// ErrMaskRequired indicates an unmasked frame was received by the server.
 	ErrMaskRequired = errors.New("ws: unmasked frame received by server")
 
+	// ErrUnmaskedClientFrame is an alias for ErrMaskRequired.
+	ErrUnmaskedClientFrame = ErrMaskRequired
+
 	// ErrMaskForbidden indicates a masked frame was received by the client.
 	ErrMaskForbidden = errors.New("ws: masked frame received by client")
+
+	// ErrMaskedServerFrame is an alias for ErrMaskForbidden.
+	ErrMaskedServerFrame = ErrMaskForbidden
 
 	// ErrRSVSet indicates non-zero RSV bits were set without negotiated extension.
 	ErrRSVSet = errors.New("ws: reserved bits RSV1/2/3 set without extension")
@@ -95,5 +101,11 @@ var (
 
 	// ErrUnknownOpcode is an alias for ErrInvalidOpcode.
 	ErrUnknownOpcode = ErrInvalidOpcode
+
+	// Handshake and Upgrade Errors
+	ErrNotWebSocketUpgrade = errors.New("websocket: not a websocket upgrade request")
+	ErrInvalidChallengeKey = errors.New("websocket: invalid challenge key")
+	ErrUnsupportedVersion  = errors.New("websocket: unsupported version")
+	ErrInvalidAcceptKey    = errors.New("websocket: invalid Sec-WebSocket-Accept header")
 )
 

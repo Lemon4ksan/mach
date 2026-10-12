@@ -7,7 +7,9 @@ package h2
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
@@ -38,6 +40,9 @@ type serverStream struct {
 	sendWindow  int32
 	ctx         context.Context
 	cancel      context.CancelFunc
+	isTunnel    bool
+	pipeReader  *io.PipeReader
+	pipeWriter  *io.PipeWriter
 }
 
 func (sc *ServerConn) newServerStream(streamID uint32, endHeaders, endStream bool) *serverStream {
@@ -56,7 +61,11 @@ func (sc *ServerConn) newServerStream(streamID uint32, endHeaders, endStream boo
 }
 
 func (sc *ServerConn) startStream(st *serverStream) {
-	st.state = streamHalfClosedRemote
+	if st.method == "CONNECT" && st.protocol != "" {
+		st.state = streamOpen
+	} else {
+		st.state = streamHalfClosedRemote
+	}
 
 	sc.streamsWg.Add(1) // Escalation 2 fix: Track active stream goroutine
 	go sc.dispatchStream(st)
@@ -169,6 +178,9 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 
 	if st.method == "CONNECT" {
 		if st.protocol != "" {
+			if !sc.EnableConnectProtocol {
+				return coreh2.ProtocolError
+			}
 			// RFC 8441 §4: Extended CONNECT requires :scheme, :path, and :authority
 			if st.scheme == "" || st.path == "" || st.authority == "" {
 				return coreh2.ProtocolError
@@ -190,10 +202,38 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 		}
 	}
 
-	if st.endStream {
+	if st.endStream || (st.method == "CONNECT" && st.protocol != "") {
 		sc.startStream(st)
 	}
 
+	return nil
+}
+
+type h2ServerStreamAdapter struct {
+	sc       *ServerConn
+	streamID uint32
+	pr       *io.PipeReader
+	pw       *io.PipeWriter
+	closed   atomic.Bool
+}
+
+func (a *h2ServerStreamAdapter) Read(p []byte) (int, error) {
+	return a.pr.Read(p)
+}
+
+func (a *h2ServerStreamAdapter) Write(p []byte) (int, error) {
+	if a.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+	return a.sc.writeStreamData(a.streamID, p, false)
+}
+
+func (a *h2ServerStreamAdapter) Close() error {
+	if a.closed.CompareAndSwap(false, true) {
+		_ = a.pr.Close()
+		_ = a.pw.Close()
+		_, _ = a.sc.writeStreamData(a.streamID, nil, true)
+	}
 	return nil
 }
 
@@ -201,17 +241,40 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 	defer sc.streamsWg.Done() // Escalation 2 fix: Decrement wait group on exit
 	defer st.cancel()
 
+	isExtConnect := (st.method == "CONNECT" && st.protocol != "")
+	var adapter *h2ServerStreamAdapter
+	if isExtConnect {
+		pr, pw := io.Pipe()
+		st.pipeReader = pr
+		st.pipeWriter = pw
+		adapter = &h2ServerStreamAdapter{
+			sc:       sc,
+			streamID: st.id,
+			pr:       pr,
+			pw:       pw,
+		}
+		defer func() {
+			_ = adapter.Close()
+		}()
+	}
+
 	req := &ServerRequest{
-		StreamID:   st.id,
-		Method:     st.method,
-		Path:       st.path,
-		Scheme:     st.scheme,
-		Authority:  st.authority,
-		Protocol:   st.protocol,
-		Headers:    st.headers,
-		Body:       st.body.Bytes(),
-		RemoteAddr: sc.conn.RemoteAddr().String(),
-		Ctx:        st.ctx,
+		StreamID:          st.id,
+		Method:            st.method,
+		Path:              st.path,
+		Scheme:            st.scheme,
+		Authority:         st.authority,
+		Protocol:          st.protocol,
+		Headers:           st.headers,
+		Body:              st.body.Bytes(),
+		RemoteAddr:        sc.conn.RemoteAddr().String(),
+		Ctx:               st.ctx,
+		Stream:            adapter,
+		IsExtendedConnect: isExtConnect,
+		UpgradeFn: func(statusCode int, header http.Header) error {
+			st.isTunnel = true
+			return sc.writeHeaders(st.id, statusCode, header, false)
+		},
 	}
 
 	res := &ServerResponse{
@@ -223,7 +286,13 @@ func (sc *ServerConn) dispatchStream(st *serverStream) {
 		_ = sc.handler(req, res)
 	}
 
-	_ = sc.writeResponse(st.id, res)
+	if st.isTunnel {
+		if adapter != nil {
+			_ = adapter.Close()
+		}
+	} else {
+		_ = sc.writeResponse(st.id, res)
+	}
 
 	st.state = streamClosed
 

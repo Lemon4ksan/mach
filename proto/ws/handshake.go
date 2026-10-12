@@ -19,6 +19,9 @@ const (
 	// MagicGUID is the globally unique identifier defined in RFC 6455 §1.3 for handshake accept calculation.
 	MagicGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+	// WSGUID is an alias for MagicGUID.
+	WSGUID = MagicGUID
+
 	// WebSocketVersion is the RFC 6455 supported protocol version ("13").
 	WebSocketVersion = "13"
 
@@ -181,4 +184,19 @@ func FormatHandshakeResponse(dst []byte, wsKey string) ([]byte, error) {
 	copy(dst[start+n+28:], respSuffix)
 
 	return dst, nil
+}
+
+// ComputeAcceptKey is an alias for ComputeAccept.
+func ComputeAcceptKey(key string) string {
+	return ComputeAccept(key)
+}
+
+// GenerateChallengeKey is an alias for GenerateKey.
+func GenerateChallengeKey() string {
+	return GenerateKey()
+}
+
+// HeaderContainsToken reports whether header contains token in a comma-separated list.
+func HeaderContainsToken(header, token string) bool {
+	return HasToken(header, token)
 }

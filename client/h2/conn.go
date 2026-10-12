@@ -171,6 +171,13 @@ func (c *Conn) CancelStream(ctx *Context) {
 		return
 	}
 
+	if ctx.pipeWriter != nil {
+		_ = ctx.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
+	}
+	if ctx.pipeReader != nil {
+		_ = ctx.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
+	}
+
 	if !ctx.Close() {
 		return
 	}
@@ -412,4 +419,109 @@ func (c *Conn) setLastError(err error) {
 	}
 	c.errMu.Unlock()
 }
+
+// EnableConnect reports whether the server advertised SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441 §3).
+func (c *Conn) EnableConnect() bool {
+	return c.serverS.EnableConnect()
+}
+
+// ServerSettings returns a copy of the settings received from the server.
+func (c *Conn) ServerSettings() coreh2.Settings {
+	var s coreh2.Settings
+	c.serverS.CopyTo(&s)
+	return s
+}
+
+// ExtendedConnectStream adapts an HTTP/2 Extended CONNECT stream to io.ReadWriteCloser.
+type ExtendedConnectStream struct {
+	conn   *Conn
+	reqCtx *Context
+	pr     *io.PipeReader
+	pw     *io.PipeWriter
+	closed atomic.Bool
+}
+
+func (s *ExtendedConnectStream) Read(p []byte) (int, error) {
+	return s.pr.Read(p)
+}
+
+func (s *ExtendedConnectStream) Write(p []byte) (int, error) {
+	if s.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+	err := s.conn.WriteTunnelData(s.reqCtx, p, false)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (s *ExtendedConnectStream) Close() error {
+	if s.closed.CompareAndSwap(false, true) {
+		_ = s.pr.Close()
+		_ = s.pw.Close()
+		_ = s.conn.WriteTunnelData(s.reqCtx, nil, true)
+		s.conn.CancelStream(s.reqCtx)
+	}
+	return nil
+}
+
+// StartExtendedConnect initiates an Extended CONNECT stream (RFC 8441 §4).
+func (c *Conn) StartExtendedConnect(ctx context.Context, req *h1.Request) (*ExtendedConnectStream, *h1.Response, error) {
+	if !c.EnableConnect() {
+		return nil, nil, errors.New("h2: server did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL")
+	}
+
+	pr, pw := io.Pipe()
+	res := h1.AcquireResponse()
+	errCh := make(chan error, 1)
+	tunnelHdrCh := make(chan error, 1)
+
+	reqCtx := &Context{
+		Request:         req,
+		Response:        res,
+		Err:             errCh,
+		isTunnel:        true,
+		tunnelHeadersCh: tunnelHdrCh,
+		pipeWriter:      pw,
+		pipeReader:      pr,
+	}
+
+	if err := c.Write(reqCtx); err != nil {
+		h1.ReleaseResponse(res)
+		return nil, nil, err
+	}
+
+	select {
+	case <-ctx.Done():
+		c.CancelStream(reqCtx)
+		h1.ReleaseResponse(res)
+		return nil, nil, ctx.Err()
+	case err := <-tunnelHdrCh:
+		if err != nil {
+			c.CancelStream(reqCtx)
+			h1.ReleaseResponse(res)
+			return nil, nil, err
+		}
+	case err := <-errCh:
+		if err != nil {
+			h1.ReleaseResponse(res)
+			return nil, nil, err
+		}
+	}
+
+	if res.StatusCode() != 200 {
+		c.CancelStream(reqCtx)
+		return nil, res, fmt.Errorf("h2: unexpected Extended CONNECT response status: %d", res.StatusCode())
+	}
+
+	stream := &ExtendedConnectStream{
+		conn:   c,
+		reqCtx: reqCtx,
+		pr:     pr,
+		pw:     pw,
+	}
+	return stream, res, nil
+}
+
 

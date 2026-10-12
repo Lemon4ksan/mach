@@ -118,6 +118,11 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 		h.AppendHeaderField(enc, hf, true)
 	}
 
+	if protoVal := req.Header.Peek(":protocol"); len(protoVal) > 0 {
+		hf.SetBytes([]byte(":protocol"), protoVal)
+		h.AppendHeaderField(enc, hf, true)
+	}
+
 	if len(c.orderedKeys) > 0 {
 		c.appendOrderedHeaders(h, req, hf)
 		return

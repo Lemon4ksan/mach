@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/mach/net/quic"
@@ -26,15 +27,19 @@ type ServerHandlerFunc func(req *ServerRequest, res *ServerResponse) error
 
 // ServerRequest represents a parsed incoming HTTP/3 request over QUIC (RFC 9114 §4.1, RFC 9204).
 type ServerRequest struct {
-	StreamID   uint64          // StreamID is the client-initiated bidirectional stream ID (RFC 9000 §2.1, RFC 9114 §6.1).
-	Method     string          // Method is the :method pseudo-header (RFC 9114 §4.1.2).
-	Path       string          // Path is the :path pseudo-header (RFC 9114 §4.1.2).
-	Scheme     string          // Scheme is the :scheme pseudo-header (RFC 9114 §4.1.2).
-	Authority  string          // Authority is the :authority pseudo-header (RFC 9114 §4.1.2).
-	Headers    headkit.Headers // Headers contains QPACK-decoded request header fields (RFC 9204).
-	Body       []byte          // Body contains payload bytes from DATA frames (RFC 9114 §7.2.1).
-	RemoteAddr string          // RemoteAddr is the peer network address.
-	Ctx        context.Context // Ctx is the stream context.
+	StreamID          uint64          // StreamID is the client-initiated bidirectional stream ID (RFC 9000 §2.1, RFC 9114 §6.1).
+	Method            string          // Method is the :method pseudo-header (RFC 9114 §4.1.2).
+	Path              string          // Path is the :path pseudo-header (RFC 9114 §4.1.2).
+	Scheme            string          // Scheme is the :scheme pseudo-header (RFC 9114 §4.1.2).
+	Authority         string          // Authority is the :authority pseudo-header (RFC 9114 §4.1.2).
+	Protocol          string          // Protocol is the :protocol pseudo-header (RFC 9220 §4).
+	Headers           headkit.Headers // Headers contains QPACK-decoded request header fields (RFC 9204).
+	Body              []byte          // Body contains payload bytes from DATA frames (RFC 9114 §7.2.1).
+	RemoteAddr        string          // RemoteAddr is the peer network address.
+	Ctx               context.Context // Ctx is the stream context.
+	Stream            io.ReadWriteCloser
+	UpgradeFn         func(statusCode int, header headkit.Headers) error
+	IsExtendedConnect bool
 }
 
 // Reset clears the ServerRequest structure for reuse.
@@ -44,7 +49,11 @@ func (r *ServerRequest) Reset() {
 	r.Path = ""
 	r.Scheme = ""
 	r.Authority = ""
+	r.Protocol = ""
 	r.Headers.Reset()
+	r.Stream = nil
+	r.UpgradeFn = nil
+	r.IsExtendedConnect = false
 
 	r.Body = r.Body[:0]
 	if cap(r.Body) > 64*1024 {
@@ -99,6 +108,67 @@ var (
 		return &bytesconv.ByteBuffer{}
 	})
 )
+
+// h3DataStreamAdapter encapsulates reading and writing HTTP/3 DATA frames over a QUIC stream (RFC 9114 §7.2.1, RFC 9220 §4).
+type h3DataStreamAdapter struct {
+	stream     *quic.Stream
+	br         *bufio.Reader
+	readRemain int64
+	closed     atomic.Bool
+}
+
+func (a *h3DataStreamAdapter) Read(p []byte) (int, error) {
+	for a.readRemain == 0 {
+		frameType, frameLen, err := coreh3.ReadFrameHeader(a.br)
+		if err != nil {
+			return 0, err
+		}
+		if frameType == coreh3.FrameTypeData {
+			a.readRemain = int64(frameLen)
+			if a.readRemain == 0 {
+				continue
+			}
+			break
+		}
+		if frameLen > 0 {
+			lr := io.LimitReader(a.br, int64(frameLen))
+			_, _ = io.Copy(io.Discard, lr)
+		}
+	}
+
+	toRead := int64(len(p))
+	if toRead > a.readRemain {
+		toRead = a.readRemain
+	}
+	n, err := a.br.Read(p[:toRead])
+	if n > 0 {
+		a.readRemain -= int64(n)
+	}
+	return n, err
+}
+
+func (a *h3DataStreamAdapter) Write(p []byte) (int, error) {
+	if a.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	var hdr [16]byte
+	b := varint.Append(hdr[:0], coreh3.FrameTypeData)
+	b = varint.Append(b, uint64(len(p)))
+	if _, err := a.stream.Write(b); err != nil {
+		return 0, err
+	}
+	return a.stream.Write(p)
+}
+
+func (a *h3DataStreamAdapter) Close() error {
+	if a.closed.CompareAndSwap(false, true) {
+		return a.stream.Close()
+	}
+	return nil
+}
 
 // handleRequestStream processes an incoming client bidirectional request stream (RFC 9114 §4.1 & §7.1).
 func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
@@ -202,6 +272,73 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 				return
 			}
 
+			streamID := uint64(stream.StreamID()) //nolint:gosec
+			m, p, s, a, decErr := sc.qpack.DecodeRequestHeaders(
+				streamID,
+				headerBlock,
+				&req.Headers,
+			)
+			if decErr != nil {
+				stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+				stream.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+				return
+			}
+
+			req.StreamID = streamID
+			req.Method = m
+			req.Path = p
+			req.Scheme = s
+			req.Authority = a
+			req.Protocol = req.Headers.Get(":protocol")
+
+			if req.Method == "CONNECT" && req.Protocol != "" {
+				if !sc.EnableConnectProtocol || req.Scheme == "" || req.Path == "" || req.Authority == "" {
+					stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3GeneralProtocolError))
+					stream.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3GeneralProtocolError))
+					return
+				}
+				req.IsExtendedConnect = true
+				req.RemoteAddr = sc.quicConn.RemoteAddr().String()
+				req.Ctx = stream.Context()
+
+				adapter := &h3DataStreamAdapter{
+					stream: stream,
+					br:     br,
+				}
+				req.Stream = adapter
+
+				var isUpgraded bool
+				req.UpgradeFn = func(statusCode int, resHdrs headkit.Headers) error {
+					isUpgraded = true
+					respBlock := sc.qpack.EncodeResponseHeaders(streamID, statusCode, resHdrs, -1)
+					var frameHdr [16]byte
+					hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+					hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
+					if _, err := stream.Write(hdrBytes); err != nil {
+						return err
+					}
+					_, err := stream.Write(respBlock)
+					return err
+				}
+
+				if sc.handler != nil {
+					_ = sc.handler(req, res)
+				}
+
+				if isUpgraded {
+					_ = adapter.Close()
+					return
+				}
+
+				respBlock := sc.qpack.EncodeResponseHeaders(streamID, res.StatusCode, res.Headers, len(res.Body))
+				var frameHdr [16]byte
+				hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
+				hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
+				_, _ = stream.Write(hdrBytes)
+				_, _ = stream.Write(respBlock)
+				return
+			}
+
 		case coreh3.FrameTypeData:
 			if !hasSeenHeaders || hasSeenTrailer {
 				_ = sc.quicConn.CloseWithError(
@@ -257,23 +394,6 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 	}
 
 	streamID := uint64(stream.StreamID()) //nolint:gosec
-
-	method, path, scheme, authority, err := sc.qpack.DecodeRequestHeaders(
-		streamID,
-		headerBlock,
-		&req.Headers,
-	)
-	if err != nil {
-		stream.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
-		stream.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
-		return
-	}
-
-	req.StreamID = streamID
-	req.Method = method
-	req.Path = path
-	req.Scheme = scheme
-	req.Authority = authority
 	req.Body = bodyBuf.B
 	req.RemoteAddr = sc.quicConn.RemoteAddr().String()
 	req.Ctx = stream.Context()

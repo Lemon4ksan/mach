@@ -105,10 +105,16 @@ func (c *Conn) readLoop() {
 			if c.continuationStream != 0 {
 				r.endStreamPending = true
 			} else {
+				if r.isTunnel && r.pipeWriter != nil {
+					_ = r.pipeWriter.Close()
+				}
 				r.SetState(streamClosed)
 				c.finish(r, fr.Stream(), nil)
 			}
 		} else if c.continuationStream == 0 && r.endStreamPending {
+			if r.isTunnel && r.pipeWriter != nil {
+				_ = r.pipeWriter.Close()
+			}
 			r.SetState(streamClosed)
 			c.finish(r, fr.Stream(), nil)
 		}
@@ -370,6 +376,17 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 			if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
 				reqCtx.headersParsed = true
 			}
+			if reqCtx.isTunnel && reqCtx.tunnelHeadersCh != nil {
+				select {
+				case reqCtx.tunnelHeadersCh <- nil:
+				default:
+				}
+			}
+		} else if reqCtx.isTunnel && reqCtx.tunnelHeadersCh != nil {
+			select {
+			case reqCtx.tunnelHeadersCh <- err:
+			default:
+			}
 		}
 
 		return err
@@ -389,6 +406,29 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 
 		data := fr.Body().(*coreh2.Data)
 		dataLen := int32(fr.Len()) //nolint:gosec // H2 frame length is 24-bit max (<= 16MB)
+
+		isTunnelActive := reqCtx.isTunnel && (reqCtx.Response == nil || reqCtx.Response.StatusCode() == 200)
+		if isTunnelActive {
+			pw := reqCtx.pipeWriter
+			reqCtx.streamRxWindow.Add(-dataLen)
+			if reqCtx.streamRxWindow.Load() < 3145728 {
+				inc := 6291456 - reqCtx.streamRxWindow.Load()
+				reqCtx.streamRxWindow.Store(6291456)
+				c.updateWindow(fr.Stream(), int(inc))
+			}
+			c.currentWindow -= dataLen
+			if c.currentWindow < c.maxWindow/2 {
+				inc := c.maxWindow - c.currentWindow
+				c.currentWindow = c.maxWindow
+				c.updateWindow(0, int(inc))
+			}
+			if data.Len() != 0 && pw != nil {
+				reqCtx.mu.Unlock()
+				_, _ = pw.Write(data.Data())
+				reqCtx.mu.Lock()
+			}
+			return nil
+		}
 
 		if data.Len() != 0 {
 			reqCtx.Response.AppendBody(data.Data())
@@ -410,6 +450,10 @@ func (c *Conn) readStream(fr *coreh2.FrameHeader, reqCtx *Context) error {
 		}
 
 	case coreh2.FrameResetStream:
+		if reqCtx.isTunnel && reqCtx.pipeWriter != nil {
+			_ = reqCtx.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
+		}
+
 		if rst, ok := fr.Body().(*coreh2.RstStream); ok {
 			return rst.Error()
 		}

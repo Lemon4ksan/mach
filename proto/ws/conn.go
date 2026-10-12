@@ -5,6 +5,7 @@
 package ws
 
 import (
+	"bufio"
 	crand "crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -61,6 +62,9 @@ type Conn struct {
 
 	// Preallocated frame buffer protected by writeMu for 0-allocation writes
 	writeFrameBuf []byte
+
+	// Negotiated subprotocol
+	subprotocol string
 }
 
 // NewConn initializes a new WebSocket connection wrapping rw.
@@ -158,6 +162,55 @@ func (c *Conn) SetPongHandler(h func(appData []byte) error) {
 // SetCloseHandler sets the callback for incoming Close control frames.
 func (c *Conn) SetCloseHandler(h func(code CloseCode, reason string) error) {
 	c.closeHandler = h
+}
+
+// Subprotocol returns the negotiated subprotocol.
+func (c *Conn) Subprotocol() string {
+	return c.subprotocol
+}
+
+// SetSubprotocol sets the negotiated subprotocol.
+func (c *Conn) SetSubprotocol(sub string) {
+	c.subprotocol = sub
+}
+
+// WriteText writes an unfragmented Text message (OpcodeText).
+func (c *Conn) WriteText(text string) error {
+	return c.WriteMessage(OpcodeText, []byte(text))
+}
+
+// WriteBinary writes an unfragmented Binary message (OpcodeBinary).
+func (c *Conn) WriteBinary(data []byte) error {
+	return c.WriteMessage(OpcodeBinary, data)
+}
+
+type connReaderWriter struct {
+	io.Reader
+	io.Writer
+}
+
+func (rw *connReaderWriter) Read(p []byte) (int, error) {
+	return rw.Reader.Read(p)
+}
+
+func (rw *connReaderWriter) Write(p []byte) (int, error) {
+	return rw.Writer.Write(p)
+}
+
+// NewConnWithReader initializes a WebSocket connection using an existing bufio.Reader.
+func NewConnWithReader(rwc io.ReadWriteCloser, br *bufio.Reader, isServer bool) *Conn {
+	var rw io.ReadWriter
+	if br != nil {
+		rw = &connReaderWriter{Reader: br, Writer: rwc}
+	} else {
+		rw = rwc
+	}
+	c := NewConn(rw, isServer)
+	c.closer = rwc
+	if nc, ok := rwc.(net.Conn); ok {
+		c.netConn = nc
+	}
+	return c
 }
 
 // Underlying returns the underlying io.ReadWriter.
