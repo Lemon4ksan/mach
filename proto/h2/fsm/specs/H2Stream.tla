@@ -8,10 +8,10 @@ EXTENDS TLC, Sequences
 \* The set of possible states for an HTTP/2 stream (RFC 7540).
 \* We omit Push Promise (RESERVED_LOCAL/REMOTE) for simplicity.
 STATES == {
-    "IDLE", 
-    "OPEN", 
-    "HALF_CLOSED_LOCAL", 
-    "HALF_CLOSED_REMOTE", 
+    "IDLE",
+    "OPEN",
+    "HALF_CLOSED_LOCAL",
+    "HALF_CLOSED_REMOTE",
     "CLOSED"
 }
 
@@ -33,12 +33,12 @@ TypeOK == state \in STATES
 Init == state = "IDLE"
 
 \* ACTION: Local sends HEADERS (starts the stream)
-SendHeaders == 
+SendHeaders ==
     /\ state = "IDLE"
     /\ state' = "OPEN"
 
 \* ACTION: Remote sends HEADERS (starts the stream)
-RcvHeaders == 
+RcvHeaders ==
     /\ state = "IDLE"
     /\ state' = "OPEN"
 
@@ -67,7 +67,7 @@ AbortStream ==
 
 \* NEXT STATE: The system moves to the next state if ANY of these actions occur.
 \* If it reaches CLOSED, it stays CLOSED forever (allowed stuttering to prevent deadlock errors).
-Next == 
+Next ==
     \/ SendHeaders
     \/ RcvHeaders
     \/ SendEndStream

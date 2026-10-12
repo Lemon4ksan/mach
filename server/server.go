@@ -207,7 +207,8 @@ func (s *Server) updateAltSvcHeader(port int) {
 		Port:       port,
 		MaxAge:     maxAge,
 	}
-	s.altSvcHeader.Store(generic.Ptr(altsvc.Format(svc)))
+	headerVal := altsvc.Format(svc)
+	s.altSvcHeader.Store(&headerVal)
 }
 
 func (s *Server) getAltSvcHeader() string {

@@ -13,11 +13,9 @@ import (
 )
 
 const (
-	headerAcknowledgement          = "\x81"
 	defaultMaxDynamicTableCapacity = 1024
 	defaultMaxBlockedStreams       = 1
 
-	kHeaderAcknowledgement          = headerAcknowledgement
 	kDefaultMaxDynamicTableCapacity = defaultMaxDynamicTableCapacity
 	kDefaultMaxBlockedStreams       = defaultMaxBlockedStreams
 )
@@ -155,21 +153,6 @@ func runDecoderTest(t *testing.T, testFn func(t *testing.T, f *qpackDecoderTestF
 			kDefaultMaxDynamicTableCapacity,
 			kDefaultMaxBlockedStreams,
 		)
-		testFn(t, f)
-	})
-}
-
-func runDecoderTestWithParams(
-	t *testing.T,
-	maxCapacity, maxBlocked uint64,
-	testFn func(t *testing.T, f *qpackDecoderTestFixture),
-) {
-	t.Run("SingleChunk", func(t *testing.T) {
-		f := newDecoderTestFixture(t, FragmentModeSingleChunk, maxCapacity, maxBlocked)
-		testFn(t, f)
-	})
-	t.Run("OctetByOctet", func(t *testing.T) {
-		f := newDecoderTestFixture(t, FragmentModeOctetByOctet, maxCapacity, maxBlocked)
 		testFn(t, f)
 	})
 }
