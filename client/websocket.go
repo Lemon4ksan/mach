@@ -452,7 +452,7 @@ func (e *Engine) startH2WebSocketSession(
 		return nil, resp, err
 	}
 
-	wsConn := ws.NewConn(stream, false)
+	wsConn := ws.NewConn(&h2WebSocketStreamCloser{ExtendedConnectStream: stream, h2c: h2c}, false)
 
 	selectedSubproto := string(resp.Header.Peek("sec-websocket-protocol"))
 	if selectedSubproto == "" {
@@ -540,7 +540,7 @@ func (e *Engine) dialH3WebSocket(
 		return nil, resp, err
 	}
 
-	wsConn := ws.NewConn(stream, false)
+	wsConn := ws.NewConn(&h3WebSocketStreamCloser{ExtendedConnectStream: stream, h3cc: h3cc}, false)
 
 	selectedSubproto := string(resp.Header.Peek("sec-websocket-protocol"))
 	if selectedSubproto == "" {
@@ -552,4 +552,24 @@ func (e *Engine) dialH3WebSocket(
 	}
 
 	return wsConn, resp, nil
+}
+
+type h2WebSocketStreamCloser struct {
+	*h2client.ExtendedConnectStream
+	h2c *h2client.Conn
+}
+
+func (s *h2WebSocketStreamCloser) Close() error {
+	_ = s.ExtendedConnectStream.Close()
+	return s.h2c.Close()
+}
+
+type h3WebSocketStreamCloser struct {
+	*h3client.ExtendedConnectStream
+	h3cc *h3client.ClientConn
+}
+
+func (s *h3WebSocketStreamCloser) Close() error {
+	_ = s.ExtendedConnectStream.Close()
+	return s.h3cc.Close()
 }

@@ -116,7 +116,6 @@ func (c *Conn) readLoop() {
 					_ = r.pipeWriter.Close()
 				}
 
-				r.SetState(streamClosed)
 				c.finish(r, fr.Stream(), nil)
 			}
 		} else if c.continuationStream == 0 && r.endStreamPending {
@@ -124,7 +123,6 @@ func (c *Conn) readLoop() {
 				_ = r.pipeWriter.Close()
 			}
 
-			r.SetState(streamClosed)
 			c.finish(r, fr.Stream(), nil)
 		}
 

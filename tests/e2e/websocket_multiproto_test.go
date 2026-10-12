@@ -31,7 +31,7 @@ import (
 
 // setupEchoServer starts a unified server that upgrades incoming requests
 // across HTTP/1.1, HTTP/2, and HTTP/3 and runs a full-duplex WebSocket echo loop.
-func setupEchoServer(t *testing.T, upgradeOpts ...server.WebSocketUpgradeOption) (tcpAddr string, quicAddr string, clientTLS *tls.Config, cleanup func()) {
+func setupEchoServer(t testing.TB, upgradeOpts ...server.WebSocketUpgradeOption) (tcpAddr string, quicAddr string, clientTLS *tls.Config, cleanup func()) {
 	t.Helper()
 
 	serverTLS, cTLS := generateTestTLSConfig(t)
