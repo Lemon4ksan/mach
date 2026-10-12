@@ -62,10 +62,7 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 		return
 	}
 
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
+	st, ok := sc.getStream(streamID)
 	if !ok {
 		// RFC 9113 §5.4.2 & §5.2.2: Even if stream is closed, DATA frames consume connection window
 		// and MUST be replenished to prevent connection window leaks!
@@ -95,7 +92,7 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 				_, _ = st.pipeWriter.Write(payload)
 			}
 
-			sc.replenishReceiveWindow(streamID, len(payload))
+			sc.replenishReceiveWindow(st, len(payload))
 		}
 
 		if endStream {
@@ -111,7 +108,7 @@ func (sc *ServerConn) OnStreamData(streamID uint32, payload []byte, endStream bo
 	st.body.Write(payload)
 
 	if len(payload) > 0 {
-		sc.replenishReceiveWindow(streamID, len(payload))
+		sc.replenishReceiveWindow(st, len(payload))
 	}
 
 	if endStream {
@@ -147,18 +144,14 @@ func (sc *ServerConn) OnHeaders(streamID uint32, payload []byte, endHeaders, end
 	st := sc.newServerStream(streamID, endHeaders, endStream)
 	st.headerBlock.Write(payload)
 
-	sc.streamsMu.Lock()
-	sc.streams[streamID] = st
-	sc.streamsMu.Unlock()
+	sc.putStream(streamID, st)
 
 	if endHeaders {
 		if err := sc.finishHeaderBlock(st); err != nil {
 			// RFC 9113 §8.1.1: Malformed requests MUST be treated as a stream error of type PROTOCOL_ERROR.
 			if errors.Is(err, coreh2.ProtocolError) {
 				_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
-				sc.streamsMu.Lock()
-				delete(sc.streams, streamID)
-				sc.streamsMu.Unlock()
+				sc.deleteStream(streamID)
 
 				return
 			}
@@ -180,10 +173,7 @@ func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders
 		return
 	}
 
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
+	st, ok := sc.getStream(streamID)
 	if !ok {
 		sc.closeWithGoAway(sc.maxStreamID, coreh2.ProtocolError)
 		return
@@ -205,9 +195,7 @@ func (sc *ServerConn) OnContinuation(streamID uint32, payload []byte, endHeaders
 			// RFC 9113 §8.1.1: Malformed requests MUST be treated as a stream error of type PROTOCOL_ERROR.
 			if errors.Is(err, coreh2.ProtocolError) {
 				_ = sc.writeRstStream(streamID, coreh2.ProtocolError)
-				sc.streamsMu.Lock()
-				delete(sc.streams, streamID)
-				sc.streamsMu.Unlock()
+				sc.deleteStream(streamID)
 
 				return
 			}
@@ -272,18 +260,21 @@ func (sc *ServerConn) OnSettings(payload []byte, ack bool) {
 			sc.peerInitialWin = newWin
 
 			// RFC 9113 §6.9.2: Adjust flow-control window of all active streams by delta
-			sc.streamsMu.Lock()
-			for _, st := range sc.streams {
-				if int64(st.sendWindow)+int64(delta) > int64(1<<31-1) {
-					sc.streamsMu.Unlock()
-					sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
-					return
+			for i := range streamShardsCount {
+				shard := &sc.streamShards[i]
+				shard.mu.Lock()
+				for _, st := range shard.streams {
+					old := st.sendWindow.Load()
+					if int64(old)+int64(delta) > int64(1<<31-1) {
+						shard.mu.Unlock()
+						sc.closeWithGoAway(sc.maxStreamID, coreh2.FlowControlError)
+						return
+					}
+
+					st.sendWindow.Store(old + delta)
 				}
-
-				st.sendWindow += delta
+				shard.mu.Unlock()
 			}
-
-			sc.streamsMu.Unlock()
 
 		case 5: // MAX_FRAME_SIZE
 			if val < 16384 || val > 16777215 {
@@ -348,21 +339,16 @@ func (sc *ServerConn) OnWindowUpdate(streamID, increment uint32) {
 		return
 	}
 
-	sc.streamsMu.RLock()
-	st, ok := sc.streams[streamID]
-	sc.streamsMu.RUnlock()
-
+	st, ok := sc.getStream(streamID)
 	if ok {
 		if err := sc.updateStreamSendWindow(st, int32(increment)); err != nil {
 			// RFC 9113 §6.9.1: Stream flow control overflow is a STREAM ERROR of type FLOW_CONTROL_ERROR
 			_ = sc.writeRstStream(streamID, coreh2.FlowControlError)
-			sc.streamsMu.Lock()
-			if st.cancel != nil {
-				st.cancel()
+			if st, ok := sc.deleteStream(streamID); ok {
+				if st.cancel != nil {
+					st.cancel()
+				}
 			}
-
-			delete(sc.streams, streamID)
-			sc.streamsMu.Unlock()
 		}
 	}
 }
@@ -399,8 +385,7 @@ func (sc *ServerConn) OnStreamReset(streamID, errorCode uint32) {
 		return
 	}
 
-	sc.streamsMu.Lock()
-	if st, ok := sc.streams[streamID]; ok {
+	if st, ok := sc.deleteStream(streamID); ok {
 		if st.cancel != nil {
 			st.cancel()
 		}
@@ -408,11 +393,7 @@ func (sc *ServerConn) OnStreamReset(streamID, errorCode uint32) {
 		if st.pipeWriter != nil {
 			_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
 		}
-
-		delete(sc.streams, streamID)
 	}
-
-	sc.streamsMu.Unlock()
 }
 
 func (sc *ServerConn) OnGoAway(lastStreamID, errorCode uint32) {

@@ -53,21 +53,27 @@ type ServerResponse struct {
 	Body       []byte      // Body contains response payload framed into DATA frames (RFC 9113 §6.1).
 }
 
+const streamShardsCount = 16
+
+type streamShard struct {
+	mu      sync.RWMutex
+	streams map[uint32]*serverStream
+}
+
 // ServerConn manages a single server-side HTTP/2 connection session (RFC 9113 §3).
 type ServerConn struct {
-	conn      net.Conn
-	bw        *bufio.Writer
-	sm        fsm.StateMachine
-	readBuf   []byte
-	muBuf     []byte
-	handler   ServerHandlerFunc
-	hpackDec  *hpack.HPACK
-	hpackEnc  *hpack.HPACK
-	encMu     sync.Mutex
-	writeMu   sync.Mutex
-	streamsMu sync.RWMutex
-	streams   map[uint32]*serverStream
-	streamsWg sync.WaitGroup
+	conn         net.Conn
+	bw           *bufio.Writer
+	sm           fsm.StateMachine
+	readBuf      []byte
+	muBuf        []byte
+	handler      ServerHandlerFunc
+	hpackDec     *hpack.HPACK
+	hpackEnc     *hpack.HPACK
+	encMu        sync.Mutex
+	writeMu      sync.Mutex
+	streamShards [streamShardsCount]streamShard
+	streamsWg    sync.WaitGroup
 
 	peerMaxFrameSize uint32
 	peerInitialWin   int32
@@ -77,15 +83,51 @@ type ServerConn struct {
 
 	_ cpu.CacheLinePad
 
-	isClosed       atomic.Bool
-	isReleased     atomic.Bool
-	connSendWindow atomic.Int32
-	closeErr       error
+	isClosed        atomic.Bool
+	isReleased      atomic.Bool
+	connSendWindow  atomic.Int32
+	connRecvUnacked atomic.Int32
+	closeErr        error
 
 	EnableConnectProtocol bool
 
 	ctx      context.Context
 	cancelFn context.CancelFunc
+}
+
+func (sc *ServerConn) getStream(streamID uint32) (*serverStream, bool) {
+	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+	shard.mu.RLock()
+	defer shard.mu.RUnlock()
+	if shard.streams == nil {
+		return nil, false
+	}
+	st, ok := shard.streams[streamID]
+	return st, ok
+}
+
+func (sc *ServerConn) putStream(streamID uint32, st *serverStream) {
+	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+	shard.mu.Lock()
+	if shard.streams == nil {
+		shard.streams = make(map[uint32]*serverStream, 8)
+	}
+	shard.streams[streamID] = st
+	shard.mu.Unlock()
+}
+
+func (sc *ServerConn) deleteStream(streamID uint32) (*serverStream, bool) {
+	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if shard.streams == nil {
+		return nil, false
+	}
+	st, ok := shard.streams[streamID]
+	if ok {
+		delete(shard.streams, streamID)
+	}
+	return st, ok
 }
 
 var serverConnStorage = pool.NewPerCorePool(func() *ServerConn {
@@ -95,7 +137,6 @@ var serverConnStorage = pool.NewPerCorePool(func() *ServerConn {
 		muBuf:            make([]byte, 0, 32768),
 		hpackDec:         hpack.AcquireHPACK(),
 		hpackEnc:         hpack.AcquireHPACK(),
-		streams:          make(map[uint32]*serverStream, 64),
 		peerMaxFrameSize: coreh2.DefaultMaxLen,
 		peerInitialWin:   65535,
 	}
@@ -125,6 +166,7 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc.peerMaxFrameSize = coreh2.DefaultMaxLen
 	sc.peerInitialWin = 65535
 	sc.connSendWindow.Store(65535)
+	sc.connRecvUnacked.Store(0)
 	sc.EnableConnectProtocol = true
 
 	sc.ctx, sc.cancelFn = context.WithCancel(context.Background())
@@ -134,9 +176,14 @@ func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc.hpackEnc.Reset()
 	sc.hpackEnc.DisableDynamicTable = true
 
-	sc.streamsMu.Lock()
-	clear(sc.streams)
-	sc.streamsMu.Unlock()
+	for i := range streamShardsCount {
+		shard := &sc.streamShards[i]
+		shard.mu.Lock()
+		if shard.streams != nil {
+			clear(shard.streams)
+		}
+		shard.mu.Unlock()
+	}
 
 	return sc
 }
@@ -154,22 +201,25 @@ func (sc *ServerConn) Serve() error {
 			sc.cancelFn()
 		}
 
-		sc.streamsMu.Lock()
-		for _, st := range sc.streams {
-			if st.cancel != nil {
-				st.cancel()
-			}
+		for i := range streamShardsCount {
+			shard := &sc.streamShards[i]
+			shard.mu.Lock()
+			for _, st := range shard.streams {
+				if st.cancel != nil {
+					st.cancel()
+				}
 
-			if st.pipeWriter != nil {
-				_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
-			}
+				if st.pipeWriter != nil {
+					_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
+				}
 
-			if st.pipeReader != nil {
-				_ = st.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
+				if st.pipeReader != nil {
+					_ = st.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
+				}
 			}
+			clear(shard.streams)
+			shard.mu.Unlock()
 		}
-
-		sc.streamsMu.Unlock()
 
 		// Wait for in-flight streams to complete (RFC 9113 §6.8 graceful shutdown)
 		sc.streamsWg.Wait()
@@ -241,10 +291,13 @@ func (sc *ServerConn) Release() {
 	// Wait for all in-flight stream dispatch goroutines to exit (Resolves Escalation 2)
 	sc.streamsWg.Wait()
 
-	// Mutex-protected map cleanup
-	sc.streamsMu.Lock()
-	clear(sc.streams)
-	sc.streamsMu.Unlock()
+	// Mutex-protected map cleanup across shards
+	for i := range streamShardsCount {
+		shard := &sc.streamShards[i]
+		shard.mu.Lock()
+		clear(shard.streams)
+		shard.mu.Unlock()
+	}
 
 	if sc.bw != nil {
 		sc.bw.Reset(nil)
