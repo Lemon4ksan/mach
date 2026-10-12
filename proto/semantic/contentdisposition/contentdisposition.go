@@ -106,18 +106,20 @@ func Parse[S ~string | ~[]byte](header S) ContentDisposition {
 
 	dispType = generic.Coalesce(strings.ToLower(strings.TrimSpace(dispType)), DispositionAttachment)
 
+	extFnOpt := generic.From(params["filename*"], len(params["filename*"]) > 0)
+	stdFnOpt := generic.From(params["filename"], len(params["filename"]) > 0)
+
 	var filename string
-	if extFn, ok := params["filename*"]; ok && extFn != "" {
+	if extFnOpt.IsPresent() {
 		// RFC 6266 §4.3: Pick filename* over filename when both are present
-		_, _, filename = DecodeRFC8187(extFn)
-	} else if stdFn, ok := params["filename"]; ok {
-		filename = stdFn
+		_, _, filename = DecodeRFC8187(extFnOpt.MustValue())
+	} else {
+		filename = stdFnOpt.ValueOr("")
 	}
 
-	sanitized := "downloaded_file"
-	if filename != "" {
-		sanitized = FileName(filename)
-	}
+	sanitized := generic.From(filename, filename != "").
+		Map(func(fn string) string { return FileName(fn) }).
+		ValueOr("downloaded_file")
 
 	return ContentDisposition{
 		Type:       dispType,
@@ -131,6 +133,14 @@ func Parse[S ~string | ~[]byte](header S) ContentDisposition {
 func ExtractFilename[S ~string | ~[]byte](contentDispositionHeader S) string {
 	cd := Parse(contentDispositionHeader)
 	return cd.Filename
+}
+
+// ExtractFilenameOptional extracts, RFC 8187-decodes, and cleans the filename parameter
+// from a Content-Disposition HTTP header ([string] or [[]byte]) according to RFC 6266 §4.3,
+// returning an Optional wrapping the filename if present and not default.
+func ExtractFilenameOptional[S ~string | ~[]byte](contentDispositionHeader S) generic.Optional[string] {
+	cd := Parse(contentDispositionHeader)
+	return generic.From(cd.Filename, cd.Filename != "" && cd.Filename != "downloaded_file")
 }
 
 // AppendFormatContentDisposition serializes an RFC 6266 Content-Disposition header and appends it to dst without heap allocations.

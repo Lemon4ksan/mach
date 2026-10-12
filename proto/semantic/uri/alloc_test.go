@@ -199,4 +199,41 @@ func TestStandaloneArgs_ZeroAlloc(t *testing.T) {
 			t.Errorf("expected 0 allocs, got %v", allocs)
 		}
 	})
+
+	t.Run("PeekArgOptional_ZeroAlloc", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(1000, func() {
+			opt := uri.PeekArgOptional(kvs, keyStr)
+			if !opt.IsPresent() {
+				t.Fatal("missing key")
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for PeekArgOptional, got %v", allocs)
+		}
+	})
+
+	t.Run("Args_Optional_And_Result_ZeroAlloc", func(t *testing.T) {
+		a := uri.AcquireArgs()
+		a.Set("count", "42")
+		a.Set("rate", "3.14")
+		defer uri.ReleaseArgs(a)
+
+		allocs := testing.AllocsPerRun(1000, func() {
+			opt := a.PeekOptional("count")
+			if !opt.IsPresent() {
+				t.Fatal("missing count")
+			}
+			val := a.GetUintOr("count", 0)
+			if val != 42 {
+				t.Fatalf("expected 42, got %d", val)
+			}
+			rate := a.GetUfloatOr("rate", 0.0)
+			if rate != 3.14 {
+				t.Fatalf("expected 3.14, got %v", rate)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for Args Optional and Result methods, got %v", allocs)
+		}
+	})
 }

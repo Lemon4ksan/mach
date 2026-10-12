@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
@@ -187,20 +188,14 @@ func (c *Context) Host() string {
 		}
 	case ProtoHTTP2:
 		if c.h2Req != nil {
-			if c.h2Req.Authority != "" {
-				return c.h2Req.Authority
-			}
-
-			return c.h2Req.Headers.Get("Host")
+			return generic.From(c.h2Req.Authority, c.h2Req.Authority != "").
+				ValueOr(c.h2Req.Headers.Get("Host"))
 		}
 
 	case ProtoHTTP3:
 		if c.h3Req != nil {
-			if c.h3Req.Authority != "" {
-				return c.h3Req.Authority
-			}
-
-			return c.h3Req.Headers.Get("Host")
+			return generic.From(c.h3Req.Authority, c.h3Req.Authority != "").
+				ValueOr(c.h3Req.Headers.Get("Host"))
 		}
 	}
 
@@ -224,20 +219,12 @@ func (c *Context) Scheme() string {
 
 	case ProtoHTTP2:
 		if c.h2Req != nil {
-			if c.h2Req.Scheme != "" {
-				return c.h2Req.Scheme
-			}
-
-			return "https"
+			return generic.From(c.h2Req.Scheme, c.h2Req.Scheme != "").ValueOr("https")
 		}
 
 	case ProtoHTTP3:
 		if c.h3Req != nil {
-			if c.h3Req.Scheme != "" {
-				return c.h3Req.Scheme
-			}
-
-			return "https"
+			return generic.From(c.h3Req.Scheme, c.h3Req.Scheme != "").ValueOr("https")
 		}
 	}
 
@@ -339,6 +326,12 @@ func (c *Context) Header(key string) string {
 	}
 
 	return ""
+}
+
+// HeaderOptional returns an Optional wrapping the first request header value associated with key, or None if absent.
+func (c *Context) HeaderOptional(key string) generic.Optional[string] {
+	val := c.Header(key)
+	return generic.From(val, val != "")
 }
 
 // HasHeader reports whether the request contains a non-empty header for key.
@@ -452,29 +445,17 @@ func (c *Context) StatusCode() int {
 	switch c.proto {
 	case ProtoHTTP11:
 		if c.h1Res != nil {
-			if c.h1Res.StatusCode != 0 {
-				return c.h1Res.StatusCode
-			}
-
-			return status.OK
+			return generic.From(c.h1Res.StatusCode, c.h1Res.StatusCode != 0).ValueOr(status.OK)
 		}
 
 	case ProtoHTTP2:
 		if c.h2Res != nil {
-			if c.h2Res.StatusCode != 0 {
-				return c.h2Res.StatusCode
-			}
-
-			return status.OK
+			return generic.From(c.h2Res.StatusCode, c.h2Res.StatusCode != 0).ValueOr(status.OK)
 		}
 
 	case ProtoHTTP3:
 		if c.h3Res != nil {
-			if c.h3Res.StatusCode != 0 {
-				return c.h3Res.StatusCode
-			}
-
-			return status.OK
+			return generic.From(c.h3Res.StatusCode, c.h3Res.StatusCode != 0).ValueOr(status.OK)
 		}
 	}
 

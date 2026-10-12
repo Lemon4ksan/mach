@@ -42,4 +42,21 @@ func TestAlloc(t *testing.T) {
 			t.Errorf("expected 0 allocs for ParseBytes, got %v", allocs)
 		}
 	})
+
+	t.Run("ParseResult", func(t *testing.T) {
+		raw := "u=1, i"
+		allocs := testing.AllocsPerRun(1000, func() {
+			res := priority.ParseResult(raw)
+			if !res.IsSuccess() {
+				t.Fatal("unexpected failure")
+			}
+			p := res.ValueOr(priority.Priority{})
+			if p.Urgency != 1 || !p.Incremental {
+				t.Fatalf("unexpected priority: %v", p)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for ParseResult, got %v", allocs)
+		}
+	})
 }

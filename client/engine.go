@@ -85,8 +85,8 @@ func NewEngine(opts ...EngineOption) *Engine {
 	}
 
 	e.PoolManager = NewPoolManager[Conn]()
-	e.PoolManager.IdleTimeout = e.IdleTimeout
-	e.PoolManager.MaxConnsPerHost = e.MaxConnsPerHost
+	e.PoolManager.IdleTimeout = generic.From(e.IdleTimeout, e.IdleTimeout > 0).ValueOr(90 * time.Second)
+	e.PoolManager.MaxConnsPerHost = generic.From(e.MaxConnsPerHost, e.MaxConnsPerHost > 0).ValueOr(100)
 	e.PoolManager.Dial = func(ctx context.Context, addr string) (Conn, error) {
 		return e.dialOrigin(ctx, addr)
 	}
@@ -179,7 +179,8 @@ func (e *Engine) Dial(ctx context.Context, addr string) (mach.Conn, error) {
 
 	// 1. Transparent Alt-Svc Upgrade to HTTP/3 if cached
 	if !e.DisableAltSvc && e.AltSvcCache != nil {
-		if h3Addr, ok := e.AltSvcCache.GetH3(origin); ok {
+		if h3Opt := e.AltSvcCache.GetH3Optional(origin); h3Opt.IsPresent() {
+			h3Addr := h3Opt.MustValue()
 			h3c, err := e.getOrDialH3(ctx, h3Addr, host)
 			if err == nil {
 				return newPooledConn(e, origin, h3c), nil
@@ -216,7 +217,8 @@ func (e *Engine) Do(ctx context.Context, req *http.Request, res *http.Response) 
 
 	// 1. Transparent Alt-Svc Upgrade to HTTP/3
 	if !e.DisableAltSvc && e.AltSvcCache != nil {
-		if h3Addr, ok := e.AltSvcCache.GetH3(origin); ok {
+		if h3Opt := e.AltSvcCache.GetH3Optional(origin); h3Opt.IsPresent() {
+			h3Addr := h3Opt.MustValue()
 			h3c, err := e.getOrDialH3(ctx, h3Addr, host)
 			if err == nil {
 				err = h3c.Do(ctx, req, res)
@@ -279,6 +281,12 @@ func (e *Engine) Do(ctx context.Context, req *http.Request, res *http.Response) 
 	e.releaseOrigin(origin, c, res, err)
 
 	return err
+}
+
+// DoResult executes an HTTP request returning a Result wrapping the response or error.
+func (e *Engine) DoResult(ctx context.Context, req *http.Request, res *http.Response) generic.Result[*http.Response] {
+	err := e.Do(ctx, req, res)
+	return generic.ToResult(res, err)
 }
 
 func (e *Engine) getOrDialOrigin(ctx context.Context, origin string) (Conn, error) {

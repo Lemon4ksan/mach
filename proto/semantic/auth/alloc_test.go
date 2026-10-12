@@ -86,4 +86,17 @@ func TestAlloc(t *testing.T) {
 			t.Errorf("expected 0 allocs for BearerChallenge.AppendFormat, got %v", allocs)
 		}
 	})
+
+	t.Run("ParseBearerOptional_ZeroAlloc", func(t *testing.T) {
+		bearerHeader := "Bearer mF_9.B5f-4.1JqM"
+		allocs := testing.AllocsPerRun(1000, func() {
+			opt := auth.ParseBearerOptional(bearerHeader)
+			if !opt.IsPresent() || opt.MustValue() != "mF_9.B5f-4.1JqM" {
+				t.Fatalf("unexpected parse: opt=%v", opt)
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for ParseBearerOptional, got %v", allocs)
+		}
+	})
 }

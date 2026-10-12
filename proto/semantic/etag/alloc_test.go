@@ -5,6 +5,7 @@
 package etag_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/lemon4ksan/mach/proto/semantic/etag"
@@ -59,6 +60,21 @@ func TestAlloc(t *testing.T) {
 		})
 		if allocs != 0 {
 			t.Errorf("expected 0 allocs, got %v", allocs)
+		}
+	})
+
+	t.Run("GetETagOptional_ZeroAlloc", func(t *testing.T) {
+		auto := etag.NewAutomaton()
+		auto.Record("res-1", tagA, &http.Response{Status: "200 OK"}, []byte("body"))
+
+		allocs := testing.AllocsPerRun(1000, func() {
+			opt := auto.GetETagOptional("res-1")
+			if !opt.IsPresent() {
+				t.Fatal("missing etag")
+			}
+		})
+		if allocs != 0 {
+			t.Errorf("expected 0 allocs for GetETagOptional, got %v", allocs)
 		}
 	})
 }

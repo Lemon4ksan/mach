@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/generic"
-
 	"github.com/lemon4ksan/mach/proto/semantic/altsvc"
 )
 
@@ -83,6 +82,13 @@ func (c *AltSvcCache) GetH3(origin string) (string, bool) {
 	}
 
 	return entry.targetAddr, true
+}
+
+// GetH3Optional returns the cached alternative service address for HTTP/3 wrapped in an Optional[string].
+// Preserves zero heap allocations on the hot path (EXP-1207).
+func (c *AltSvcCache) GetH3Optional(origin string) generic.Optional[string] {
+	addr, ok := c.GetH3(origin)
+	return generic.From(addr, ok)
 }
 
 func hasUpper(s string) bool {

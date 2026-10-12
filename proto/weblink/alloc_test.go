@@ -56,4 +56,20 @@ func TestAlloc(t *testing.T) {
 			t.Errorf("expected minimal allocs, got %v", allocs)
 		}
 	})
+
+	t.Run("OptionalPaginationZeroAlloc", func(t *testing.T) {
+		group, err := weblink.Parse(header)
+		if err != nil {
+			t.Fatalf("unexpected parse error: %v", err)
+		}
+
+		allocs := testing.AllocsPerRun(1000, func() {
+			_ = group.NextOptional()
+			_ = group.PrevOptional()
+			_ = group.CanonicalOptional()
+		})
+		if allocs != 0 {
+			t.Fatalf("expected exactly 0 allocs for Optional pagination queries, got %v", allocs)
+		}
+	})
 }

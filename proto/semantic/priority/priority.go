@@ -5,6 +5,7 @@
 package priority
 
 import (
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -174,6 +175,13 @@ func Parse[S ~string | ~[]byte](s S) (Priority, error) {
 	}
 
 	return p, nil
+}
+
+// ParseResult deserializes an RFC 9218 §4 priority header value ([string] or [[]byte])
+// into a Result[Priority] without heap allocations.
+func ParseResult[S ~string | ~[]byte](s S) generic.Result[Priority] {
+	p, err := Parse(s)
+	return generic.ToResult(p, err)
 }
 
 func equalStr[S ~string | ~[]byte](s S, target string) bool {

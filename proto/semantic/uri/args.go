@@ -12,6 +12,7 @@ import (
 	"sort"
 
 	"github.com/lemon4ksan/foundation/borrow"
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 )
@@ -327,6 +328,18 @@ func (a *Args) PeekBytes(key []byte) []byte {
 	return PeekArg(a.args, key)
 }
 
+// PeekOptional returns an Optional wrapping the query arg value for key, or None if absent.
+func (a *Args) PeekOptional(key string) generic.Optional[[]byte] {
+	val := a.Peek(key)
+	return generic.From(val, val != nil)
+}
+
+// PeekBytesOptional returns an Optional wrapping the query arg value for key, or None if absent.
+func (a *Args) PeekBytesOptional(key []byte) generic.Optional[[]byte] {
+	val := a.PeekBytes(key)
+	return generic.From(val, val != nil)
+}
+
 // PeekMulti returns all the arg values for the given key.
 func (a *Args) PeekMulti(key string) [][]byte {
 	var values [][]byte
@@ -378,16 +391,21 @@ func (a *Args) SetUintBytes(key []byte, value int) {
 	a.SetUint(bytesconv.B2S(key), value)
 }
 
+// GetUintResult returns a Result wrapping the parsed uint value or parsing error.
+func (a *Args) GetUintResult(key string) generic.Result[int] {
+	return generic.ToResult(a.GetUint(key))
+}
+
+// GetUintOr returns the parsed uint value for key, or fallback if absent or invalid.
+func (a *Args) GetUintOr(key string, fallback int) int {
+	return a.GetUintResult(key).ValueOr(fallback)
+}
+
 // GetUintOrZero returns uint value for the given key.
 //
 // Zero (0) is returned on error.
 func (a *Args) GetUintOrZero(key string) int {
-	n, err := a.GetUint(key)
-	if err != nil {
-		n = 0
-	}
-
-	return n
+	return a.GetUintOr(key, 0)
 }
 
 // GetUfloat returns ufloat value for the given key.
@@ -400,16 +418,21 @@ func (a *Args) GetUfloat(key string) (float64, error) {
 	return parseUfloat(value)
 }
 
+// GetUfloatResult returns a Result wrapping the parsed float value or parsing error.
+func (a *Args) GetUfloatResult(key string) generic.Result[float64] {
+	return generic.ToResult(a.GetUfloat(key))
+}
+
+// GetUfloatOr returns the parsed float value for key, or fallback if absent or invalid.
+func (a *Args) GetUfloatOr(key string, fallback float64) float64 {
+	return a.GetUfloatResult(key).ValueOr(fallback)
+}
+
 // GetUfloatOrZero returns ufloat value for the given key.
 //
 // Zero (0) is returned on error.
 func (a *Args) GetUfloatOrZero(key string) float64 {
-	f, err := a.GetUfloat(key)
-	if err != nil {
-		f = 0
-	}
-
-	return f
+	return a.GetUfloatOr(key, 0)
 }
 
 // GetBool returns boolean value for the given key.
@@ -587,6 +610,12 @@ func PeekArg[S ~string | ~[]byte](h []ArgsKV, k S) []byte {
 	}
 
 	return nil
+}
+
+// PeekArgOptional returns an Optional wrapping the argument value corresponding to k in h.
+func PeekArgOptional[S ~string | ~[]byte](h []ArgsKV, k S) generic.Optional[[]byte] {
+	val := PeekArg(h, k)
+	return generic.From(val, val != nil)
 }
 
 func bytesOrString[S ~string | ~[]byte](s S) []byte {

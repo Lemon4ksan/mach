@@ -77,4 +77,18 @@ func TestBearerAuth_RFC6750(t *testing.T) {
 	assert.Equal(t, "example", chB.Realm)
 	assert.Equal(t, "invalid_token", chB.Error)
 	assert.Equal(t, "The access token expired", ch.ErrorDescription)
+
+	// Optional challenge and token tests
+	optTok := auth.ParseBearerOptional(formatted)
+	assert.True(t, optTok.IsPresent())
+	assert.Equal(t, token, optTok.MustValue())
+
+	optCh := auth.ParseBearerChallengeOptional(`Bearer realm="example", error="invalid_token"`)
+	assert.True(t, optCh.IsPresent())
+	assert.Equal(t, "example", optCh.MustValue().Realm)
+
+	basicChOpt := auth.ParseBasicChallengeOptional(`Basic realm="WallyWorld", charset="UTF-8"`)
+	assert.True(t, basicChOpt.IsPresent())
+	assert.Equal(t, "WallyWorld", basicChOpt.MustValue().Realm)
+	assert.Equal(t, "UTF-8", basicChOpt.MustValue().Charset)
 }

@@ -27,6 +27,17 @@ func TestAlloc(t *testing.T) {
 	if allocs > 0 {
 		t.Fatalf("expected 0 allocations in AltSvcCache.GetH3 hit, got %v", allocs)
 	}
+
+	allocsOpt := testing.AllocsPerRun(1000, func() {
+		opt := cache.GetH3Optional("fast.origin:443")
+		if !opt.IsPresent() {
+			t.Fatal("expected present")
+		}
+	})
+
+	if allocsOpt > 0 {
+		t.Fatalf("expected 0 allocations in AltSvcCache.GetH3Optional hit, got %v", allocsOpt)
+	}
 }
 
 func BenchmarkAltSvcCache_GetH3(b *testing.B) {

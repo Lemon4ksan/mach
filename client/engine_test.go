@@ -276,3 +276,45 @@ func TestEngine_EXP1209_StaleSocketEOFRetry(t *testing.T) {
 	assert.Equal(t, "success", string(resp.Body()))
 	assert.Equal(t, int32(2), attempts.Load())
 }
+
+func TestEngine_DoResult(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				buf := make([]byte, 1024)
+				_, _ = c.Read(buf)
+				respStr := "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nmonad"
+				_, _ = c.Write([]byte(respStr))
+			}(conn)
+		}
+	}()
+
+	engine := client.NewEngine()
+	defer func() { _ = engine.Close() }()
+
+	req := machhttp.AcquireRequest()
+	resp := machhttp.AcquireResponse()
+	defer machhttp.ReleaseRequest(req)
+	defer machhttp.ReleaseResponse(resp)
+
+	req.Header.SetMethod("GET")
+	req.SetRequestURI("http://" + ln.Addr().String() + "/monad-test")
+
+	res := engine.DoResult(t.Context(), req, resp)
+	assert.True(t, res.IsSuccess())
+	r, err := res.Unwrap()
+	require.NoError(t, err)
+	assert.Equal(t, 200, r.StatusCode())
+	assert.Equal(t, "monad", string(r.Body()))
+}

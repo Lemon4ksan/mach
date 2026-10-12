@@ -6,6 +6,8 @@ package auth
 
 import (
 	"strings"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // Standard OAuth 2.0 Bearer error codes in WWW-Authenticate headers (RFC 6750 §3.1 & §6.2).
@@ -151,6 +153,12 @@ func ParseBearer[S ~string | ~[]byte](authHeader S) (token S, ok bool) {
 	return token, true
 }
 
+// ParseBearerOptional extracts the bearer token wrapped in an Optional[S] (RFC 6750 §2.1).
+func ParseBearerOptional[S ~string | ~[]byte](authHeader S) generic.Optional[S] {
+	token, ok := ParseBearer(authHeader)
+	return generic.From(token, ok)
+}
+
 func trimSpaceGeneric[S ~string | ~[]byte](s S) S {
 	start := 0
 	for start < len(s) && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n') {
@@ -246,4 +254,10 @@ func ParseBearerChallenge[S ~string | ~[]byte](challengeHeader S) (BearerChallen
 	}
 
 	return challenge, true
+}
+
+// ParseBearerChallengeOptional parses a Bearer challenge wrapped in an Optional[BearerChallenge] (RFC 6750 §3).
+func ParseBearerChallengeOptional[S ~string | ~[]byte](challengeHeader S) generic.Optional[BearerChallenge] {
+	ch, ok := ParseBearerChallenge(challengeHeader)
+	return generic.From(ch, ok)
 }

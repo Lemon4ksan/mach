@@ -159,22 +159,13 @@ func NewWithHandlerFunc(fn HandlerFunc, opts ...Option) *Server {
 }
 
 func (s *Server) acquireContext() *Context {
-	poolInstance := s.ctxPool
-	if poolInstance == nil {
-		poolInstance = defaultContextPool
-	}
-
+	poolInstance := generic.FromPtr(s.ctxPool).ValueOr(defaultContextPool)
 	return poolInstance.Get()
 }
 
 func (s *Server) releaseContext(ctx *Context) {
 	ctx.Reset()
-
-	poolInstance := s.ctxPool
-	if poolInstance == nil {
-		poolInstance = defaultContextPool
-	}
-
+	poolInstance := generic.FromPtr(s.ctxPool).ValueOr(defaultContextPool)
 	poolInstance.Put(ctx)
 }
 

@@ -216,6 +216,12 @@ func ParseBasicChallenge[S ~string | ~[]byte](challengeHeader S) (BasicChallenge
 	return res, foundRealm
 }
 
+// ParseBasicChallengeOptional extracts the realm and optional charset parameter wrapped in an Optional[BasicChallenge] (RFC 7617 §2).
+func ParseBasicChallengeOptional[S ~string | ~[]byte](challengeHeader S) generic.Optional[BasicChallenge] {
+	ch, ok := ParseBasicChallenge(challengeHeader)
+	return generic.From(ch, ok)
+}
+
 // InScope verifies whether a target request URI falls within the canonical protection space (RFC 7617 §2.2).
 func InScope(reqURL, scopeRootURL string) bool {
 	parsedReq, errReq := url.Parse(reqURL)

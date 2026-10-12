@@ -69,4 +69,13 @@ func TestContentDisposition_Hardening(t *testing.T) {
 	// 2. NTFS Alternate Data Streams (ADS) colon sanitization
 	assert.Equal(t, "test.txt__$DATA", contentdisposition.FileName("test.txt::$DATA"))
 	assert.Equal(t, "malicious.exe_payload", contentdisposition.FileName("malicious.exe:payload"))
+
+	// 3. ExtractFilenameOptional
+	opt1 := contentdisposition.ExtractFilenameOptional(`attachment; filename="report.pdf"`)
+	assert.True(t, opt1.IsPresent())
+	assert.Equal(t, "report.pdf", opt1.MustValue())
+
+	optEmpty := contentdisposition.ExtractFilenameOptional(`attachment`)
+	assert.False(t, optEmpty.IsPresent())
+	assert.Equal(t, "default.pdf", optEmpty.OrElse("default.pdf"))
 }
