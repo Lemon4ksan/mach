@@ -118,15 +118,92 @@ func (h *requestHeaderHandler) OnDecodingErrorDetected(errorCode uint64, errorMe
 	h.err = ErrQPACKDecompressFailed
 }
 
+func statusCodeToString(code int) string {
+	switch code {
+	case 200:
+		return "200"
+	case 204:
+		return "204"
+	case 206:
+		return "206"
+	case 301:
+		return "301"
+	case 302:
+		return "302"
+	case 304:
+		return "304"
+	case 400:
+		return "400"
+	case 401:
+		return "401"
+	case 403:
+		return "403"
+	case 404:
+		return "404"
+	case 405:
+		return "405"
+	case 500:
+		return "500"
+	case 502:
+		return "502"
+	case 503:
+		return "503"
+	default:
+		return strconv.Itoa(code)
+	}
+}
+
+func contentLengthToString(l int) string {
+	switch l {
+	case 0:
+		return "0"
+	case 1:
+		return "1"
+	case 2:
+		return "2"
+	case 4:
+		return "4"
+	case 8:
+		return "8"
+	case 16:
+		return "16"
+	case 32:
+		return "32"
+	case 64:
+		return "64"
+	case 128:
+		return "128"
+	case 256:
+		return "256"
+	case 512:
+		return "512"
+	case 1024:
+		return "1024"
+	default:
+		return strconv.Itoa(l)
+	}
+}
+
+func toLowerASCII(s string) string {
+	hasUpper := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			hasUpper = true
+			break
+		}
+	}
+	if !hasUpper {
+		return s
+	}
+	return strings.ToLower(s)
+}
+
 // DecodeRequestHeaders decodes a QPACK-encoded request header block from a client stream (RFC 9204 §4.5, RFC 9114 §4.1.2).
 //
 // It validates mandatory pseudo-headers (:method, :scheme, :authority, :path) according to HTTP/3
 // semantics, handles extended CONNECT tunnels (RFC 9114 §4.4), and populates reqHeaders with regular
 // headers while discarding or rejecting prohibited hop-by-hop headers.
-//
-// Complexity:
-//   - Time: O(B) progressive parsing across the header block of B bytes with in-place ASCII character checks.
-//   - Space: O(H) where H is the count of decoded headers stored in reqHeaders.
 func (q *QPACKCodec) DecodeRequestHeaders(
 	streamID uint64,
 	headerBlock []byte,
@@ -150,8 +227,9 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 		}
 	}()
 
-	handler := &requestHeaderHandler{reqHeaders: reqHeaders}
-	decoder := q.decoder.CreateProgressiveDecoder(streamID, handler)
+	var handler requestHeaderHandler
+	handler.reqHeaders = reqHeaders
+	decoder := q.decoder.CreateProgressiveDecoder(streamID, &handler)
 	decoder.Decode(headerBlock)
 
 	if handler.err != nil {
@@ -188,10 +266,6 @@ func (q *QPACKCodec) DecodeRequestHeaders(
 //
 // It serializes the :status pseudo-header, optional content-length header if bodyLen >= 0,
 // and all supplied response headers, filtering out prohibited HTTP/3 connection-specific headers (RFC 9114 §4.1).
-//
-// Complexity:
-//   - Time: O(H + B) where H is the header entry count and B is the cumulative byte length of names and values.
-//   - Space: O(B) buffer allocation for the generated QPACK instruction block.
 func (q *QPACKCodec) EncodeResponseHeaders(
 	streamID uint64,
 	statusCode int,
@@ -208,16 +282,17 @@ func (q *QPACKCodec) EncodeResponseHeaders(
 		}
 	}()
 
-	var list []qpack.HeaderField
+	var initialList [16]qpack.HeaderField
+	list := initialList[:0]
 
-	list = append(list, qpack.HeaderField{Name: ":status", Value: strconv.Itoa(statusCode)})
+	list = append(list, qpack.HeaderField{Name: ":status", Value: statusCodeToString(statusCode)})
 	if bodyLen >= 0 {
-		list = append(list, qpack.HeaderField{Name: "content-length", Value: strconv.Itoa(bodyLen)})
+		list = append(list, qpack.HeaderField{Name: "content-length", Value: contentLengthToString(bodyLen)})
 	}
 
 	for k, v := range headers.All() {
-		kLower := strings.ToLower(k)
-		if isForbiddenH3Header([]byte(kLower), []byte(v)) {
+		kLower := toLowerASCII(k)
+		if isForbiddenH3HeaderString(kLower, v) {
 			continue
 		}
 

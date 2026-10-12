@@ -7,7 +7,6 @@ package wire
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -42,14 +41,18 @@ func (cs CipherSuite) String() string {
 
 // ComputeNonce computes the 12-byte AEAD nonce for a given packet number and IV (RFC 9001 §5.3).
 func ComputeNonce(iv []byte, pn uint64, nonce *[12]byte) {
-	copy(nonce[:], iv[:12])
+	_ = iv[11]
+	_ = nonce[11]
+	copy(nonce[:12], iv[:12])
 
-	var pnBytes [8]byte
-	binary.BigEndian.PutUint64(pnBytes[:], pn)
-
-	for i := 0; i < 8; i++ {
-		nonce[4+i] ^= pnBytes[i]
-	}
+	nonce[4] ^= byte(pn >> 56)
+	nonce[5] ^= byte(pn >> 48)
+	nonce[6] ^= byte(pn >> 40)
+	nonce[7] ^= byte(pn >> 32)
+	nonce[8] ^= byte(pn >> 24)
+	nonce[9] ^= byte(pn >> 16)
+	nonce[10] ^= byte(pn >> 8)
+	nonce[11] ^= byte(pn)
 }
 
 // PacketProtector encrypts packet payloads and applies header protection without allocations.
@@ -240,6 +243,10 @@ func (o *PacketOpener) OpenPacket(dst, packet []byte, destConnIDLen int, largest
 
 	aad := packet[:h.HeaderLen]
 	ciphertext := packet[h.HeaderLen : h.HeaderLen+h.PayloadLen]
+
+	if dst == nil {
+		dst = ciphertext[:0]
+	}
 
 	decrypted, err := o.aead.Open(dst, o.nonce[:], ciphertext, aad)
 	if err != nil {

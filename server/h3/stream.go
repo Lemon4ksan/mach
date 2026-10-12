@@ -327,17 +327,11 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 					isUpgraded = true
 					respBlock := sc.qpack.EncodeResponseHeaders(streamID, statusCode, resHdrs, -1)
 
-					var frameHdr [16]byte
-
-					hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-
-					hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
-					if _, err := stream.Write(hdrBytes); err != nil {
-						return err
-					}
-
-					_, err := stream.Write(respBlock)
-
+					var initialBuf [256]byte
+					b := varint.Append(initialBuf[:0], coreh3.FrameTypeHeaders)
+					b = varint.Append(b, uint64(len(respBlock)))
+					b = append(b, respBlock...)
+					_, err := stream.Write(b)
 					return err
 				}
 
@@ -352,12 +346,11 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 				respBlock := sc.qpack.EncodeResponseHeaders(streamID, res.StatusCode, res.Headers, len(res.Body))
 
-				var frameHdr [16]byte
-
-				hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-				hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
-				_, _ = stream.Write(hdrBytes)
-				_, _ = stream.Write(respBlock)
+				var initialBuf [256]byte
+				b := varint.Append(initialBuf[:0], coreh3.FrameTypeHeaders)
+				b = varint.Append(b, uint64(len(respBlock)))
+				b = append(b, respBlock...)
+				_, _ = stream.Write(b)
 
 				return
 			}
@@ -427,29 +420,20 @@ func (sc *ServerConn) handleRequestStream(stream *quic.Stream) {
 
 	respBlock := sc.qpack.EncodeResponseHeaders(streamID, res.StatusCode, res.Headers, len(res.Body))
 
-	var frameHdr [16]byte
-
-	hdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeHeaders)
-	hdrBytes = varint.Append(hdrBytes, uint64(len(respBlock)))
-
-	if _, err := stream.Write(hdrBytes); err != nil {
-		return
-	}
-
-	if _, err := stream.Write(respBlock); err != nil {
-		return
-	}
+	respBufPtr := h3HeaderBlockStorage.Get()
+	b := (*respBufPtr)[:0]
+	b = varint.Append(b, coreh3.FrameTypeHeaders)
+	b = varint.Append(b, uint64(len(respBlock)))
+	b = append(b, respBlock...)
 
 	if len(res.Body) > 0 {
-		dataHdrBytes := varint.Append(frameHdr[:0], coreh3.FrameTypeData)
-		dataHdrBytes = varint.Append(dataHdrBytes, uint64(len(res.Body)))
-
-		if _, err := stream.Write(dataHdrBytes); err != nil {
-			return
-		}
-
-		if _, err := stream.Write(res.Body); err != nil {
-			return
-		}
+		b = varint.Append(b, coreh3.FrameTypeData)
+		b = varint.Append(b, uint64(len(res.Body)))
+		b = append(b, res.Body...)
 	}
+
+	_, _ = stream.Write(b)
+
+	*respBufPtr = (*respBufPtr)[:0]
+	h3HeaderBlockStorage.Put(respBufPtr)
 }

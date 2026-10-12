@@ -17,10 +17,55 @@ import (
 // ErrDuplicateData is returned when incoming stream data is entirely redundant.
 var ErrDuplicateData = errors.New("duplicate stream data")
 
+const (
+	smallChunkSize = 2048
+	largeChunkSize = 16384
+)
+
+var (
+	smallChunkPool = sync.Pool{
+		New: func() any {
+			b := make([]byte, smallChunkSize)
+			return &b
+		},
+	}
+	largeChunkPool = sync.Pool{
+		New: func() any {
+			b := make([]byte, largeChunkSize)
+			return &b
+		},
+	}
+)
+
+func allocChunkData(size int) ([]byte, *[]byte, bool) {
+	if size <= smallChunkSize {
+		ptr := smallChunkPool.Get().(*[]byte)
+		return (*ptr)[:size], ptr, false
+	}
+	if size <= largeChunkSize {
+		ptr := largeChunkPool.Get().(*[]byte)
+		return (*ptr)[:size], ptr, true
+	}
+	return make([]byte, size), nil, false
+}
+
+func freeChunkData(ptr *[]byte, isLarge bool) {
+	if ptr == nil {
+		return
+	}
+	if isLarge {
+		largeChunkPool.Put(ptr)
+	} else {
+		smallChunkPool.Put(ptr)
+	}
+}
+
 // reassemblyChunk represents a buffered contiguous range of stream bytes.
 type reassemblyChunk struct {
-	offset uint64
-	data   []byte
+	offset  uint64
+	data    []byte
+	pooled  *[]byte
+	isLarge bool
 }
 
 func (c *reassemblyChunk) end() uint64 {
@@ -39,14 +84,15 @@ type ReassemblyBuffer struct {
 	finalSize     uint64 // final stream size when FIN is received
 	hasFinalSize  bool   // true once FIN or RESET_STREAM final size is recorded
 
-	chunks []reassemblyChunk // sorted by chunk.offset with disjoint non-adjacent intervals
+	initialChunks [8]reassemblyChunk
+	chunks        []reassemblyChunk // sorted by chunk.offset with disjoint non-adjacent intervals
 }
 
 // NewReassemblyBuffer initializes an empty reassembly buffer starting at byte offset 0.
 func NewReassemblyBuffer() *ReassemblyBuffer {
-	return &ReassemblyBuffer{
-		chunks: make([]reassemblyChunk, 0, 8),
-	}
+	b := &ReassemblyBuffer{}
+	b.chunks = b.initialChunks[:0]
+	return b
 }
 
 // Push inserts stream data at the given offset. It handles out-of-order chunks,
@@ -151,9 +197,13 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 
 	// Fast path: append to empty or after last chunk without overlap.
 	if n == 0 {
+		buf, pooled, isLarge := allocChunkData(len(data))
+		copy(buf, data)
 		b.chunks = append(b.chunks, reassemblyChunk{
-			offset: offset,
-			data:   append([]byte(nil), data...),
+			offset:  offset,
+			data:    buf,
+			pooled:  pooled,
+			isLarge: isLarge,
 		})
 
 		return nil
@@ -161,16 +211,31 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 
 	last := &b.chunks[n-1]
 	if offset == last.end() {
-		// Exactly contiguous with last chunk: extend it.
-		last.data = append(last.data, data...)
+		// Exactly contiguous with last chunk: extend in-place if pooled buffer has space
+		if last.pooled != nil && cap(*last.pooled)-len(last.data) >= len(data) {
+			last.data = append(last.data, data...)
+			return nil
+		}
+		buf, pooled, isLarge := allocChunkData(len(data))
+		copy(buf, data)
+		b.chunks = append(b.chunks, reassemblyChunk{
+			offset:  offset,
+			data:    buf,
+			pooled:  pooled,
+			isLarge: isLarge,
+		})
 		return nil
 	}
 
 	if offset > last.end() {
 		// Disjoint gap after last chunk.
+		buf, pooled, isLarge := allocChunkData(len(data))
+		copy(buf, data)
 		b.chunks = append(b.chunks, reassemblyChunk{
-			offset: offset,
-			data:   append([]byte(nil), data...),
+			offset:  offset,
+			data:    buf,
+			pooled:  pooled,
+			isLarge: isLarge,
 		})
 
 		return nil
@@ -202,11 +267,15 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 
 	if firstOverlap == -1 {
 		// No overlap: insert new chunk at insertIdx.
+		buf, pooled, isLarge := allocChunkData(len(data))
+		copy(buf, data)
 		b.chunks = append(b.chunks, reassemblyChunk{})
 		copy(b.chunks[insertIdx+1:], b.chunks[insertIdx:])
 		b.chunks[insertIdx] = reassemblyChunk{
-			offset: offset,
-			data:   append([]byte(nil), data...),
+			offset:  offset,
+			data:    buf,
+			pooled:  pooled,
+			isLarge: isLarge,
 		}
 
 		return nil
@@ -247,13 +316,15 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 	// Merge with all overlapping chunks from firstOverlap to lastOverlap.
 	mergedOffset := min(offset, b.chunks[firstOverlap].offset)
 	mergedEnd := max(end, b.chunks[lastOverlap].end())
-	mergedData := make([]byte, mergedEnd-mergedOffset)
+	mergedLen := int(mergedEnd - mergedOffset)
+	mergedData, mergedPooled, mergedIsLarge := allocChunkData(mergedLen)
 
 	// Copy existing overlapping chunks into merged buffer.
 	for i := firstOverlap; i <= lastOverlap; i++ {
 		c := &b.chunks[i]
 		startInMerged := c.offset - mergedOffset
 		copy(mergedData[startInMerged:], c.data)
+		freeChunkData(c.pooled, c.isLarge)
 	}
 
 	// Copy new data into merged buffer (overwriting duplicate bytes with identical data).
@@ -261,8 +332,10 @@ func (b *ReassemblyBuffer) insertChunk(offset uint64, data []byte) error {
 
 	// Replace the overlapping range [firstOverlap..lastOverlap] with the single merged chunk.
 	b.chunks[firstOverlap] = reassemblyChunk{
-		offset: mergedOffset,
-		data:   mergedData,
+		offset:  mergedOffset,
+		data:    mergedData,
+		pooled:  mergedPooled,
+		isLarge: mergedIsLarge,
 	}
 
 	numRemoved := lastOverlap - firstOverlap
@@ -309,12 +382,13 @@ func (b *ReassemblyBuffer) Read(p []byte) (int, error) {
 	b.readOffset += uint64(toCopy)
 
 	if toCopy == available {
-		// Consumed entire first chunk; zero out reference to prevent leaking memory
+		// Consumed entire first chunk; release pooled buffer
+		freeChunkData(c.pooled, c.isLarge)
 		b.chunks[0] = reassemblyChunk{}
 
 		b.chunks = b.chunks[1:]
 		if len(b.chunks) == 0 {
-			b.chunks = b.chunks[:0]
+			b.chunks = b.initialChunks[:0]
 		}
 	} else {
 		// Partially consumed first chunk.
@@ -327,6 +401,22 @@ func (b *ReassemblyBuffer) Read(p []byte) (int, error) {
 	}
 
 	return toCopy, nil
+}
+
+// Reset releases all buffered chunks back to the pool and resets read offsets.
+func (b *ReassemblyBuffer) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := range b.chunks {
+		freeChunkData(b.chunks[i].pooled, b.chunks[i].isLarge)
+		b.chunks[i] = reassemblyChunk{}
+	}
+	b.chunks = b.initialChunks[:0]
+	b.readOffset = 0
+	b.highestOffset = 0
+	b.finalSize = 0
+	b.hasFinalSize = false
 }
 
 // Peek inspects contiguous buffered data starting at readOffset into p without advancing readOffset.
