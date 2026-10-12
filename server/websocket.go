@@ -8,9 +8,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"strings"
+
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
 	"github.com/lemon4ksan/mach/proto/ws"
@@ -139,27 +141,38 @@ func (c *Context) upgradeWebSocketH1(options *WebSocketUpgradeOptions) (*ws.Conn
 		return nil, err
 	}
 
-	acceptKey := ws.ComputeAcceptKey(key)
+	var respBuf [512]byte
 
-	var resp strings.Builder
-	resp.WriteString("HTTP/1.1 101 Switching Protocols\r\n")
-	resp.WriteString("Upgrade: websocket\r\n")
-	resp.WriteString("Connection: Upgrade\r\n")
-	resp.WriteString("Sec-WebSocket-Accept: ")
-	resp.WriteString(acceptKey)
-	resp.WriteString("\r\n")
+	buf := respBuf[:0]
 
-	if selectedProto != "" {
-		resp.WriteString("Sec-WebSocket-Protocol: ")
-		resp.WriteString(selectedProto)
-		resp.WriteString("\r\n")
-	}
+	if selectedProto == "" {
+		res, fmtErr := ws.FormatHandshakeResponse(buf, key)
+		if fmtErr != nil {
+			_ = netConn.Close()
+			return nil, fmtErr
+		}
 
-	resp.WriteString("\r\n")
+		if _, writeErr := rw.Write(res); writeErr != nil {
+			_ = netConn.Close()
+			return nil, writeErr
+		}
+	} else {
+		const (
+			p1 = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
+			p2 = "\r\nSec-WebSocket-Protocol: "
+			p3 = "\r\n\r\n"
+		)
 
-	if _, err := rw.WriteString(resp.String()); err != nil {
-		_ = netConn.Close()
-		return nil, err
+		buf = append(buf, p1...)
+		buf = ws.AppendAccept(buf, key)
+		buf = append(buf, p2...)
+		buf = append(buf, selectedProto...)
+		buf = append(buf, p3...)
+
+		if _, writeErr := rw.Write(buf); writeErr != nil {
+			_ = netConn.Close()
+			return nil, writeErr
+		}
 	}
 
 	if err := rw.Flush(); err != nil {
@@ -282,4 +295,78 @@ func (c *Context) upgradeWebSocketH3(options *WebSocketUpgradeOptions) (*ws.Conn
 	}
 
 	return wsConn, nil
+}
+
+// EchoSession handles a full-duplex WebSocket frame echo streaming loop on wsConn using pooled buffers,
+// echoing incoming frames back to the client with strictly 0 allocs/op on the hot path.
+func EchoSession(wsConn *ws.Conn) error {
+	buf := bytesconv.AcquireByteBuffer()
+	defer bytesconv.ReleaseByteBuffer(buf)
+
+	if cap(buf.B) < 65536 {
+		buf.B = make([]byte, 65536)
+	}
+
+	raw := buf.B[:cap(buf.B)]
+
+	for {
+		hdr, payload, err := wsConn.ReadFrame(raw)
+		if err != nil {
+			if errors.Is(err, ws.ErrBufferTooSmall) {
+				raw = make([]byte, len(raw)*2)
+				continue
+			}
+
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+
+			var closeErr *ws.CloseError
+			if errors.As(err, &closeErr) {
+				return nil
+			}
+
+			return err
+		}
+
+		if err := wsConn.WriteMessage(hdr.Opcode, payload); err != nil {
+			return err
+		}
+	}
+}
+
+// EchoMessageSession handles an unfragmented or fragmented message-level echo loop using ReadMessageBuf,
+// achieving strictly 0 allocs/op with internal buffer reuse.
+func EchoMessageSession(wsConn *ws.Conn) error {
+	for {
+		op, payload, err := wsConn.ReadMessageBuf()
+		if err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+
+			var closeErr *ws.CloseError
+			if errors.As(err, &closeErr) {
+				return nil
+			}
+
+			return err
+		}
+
+		if err := wsConn.WriteMessage(op, payload); err != nil {
+			return err
+		}
+	}
+}
+
+// EchoWebSocket upgrades the current exchange to a full-duplex WebSocket connection and runs EchoSession,
+// automatically closing the connection upon termination.
+func (c *Context) EchoWebSocket(opts ...WebSocketUpgradeOption) error {
+	wsConn, err := c.UpgradeWebSocket(opts...)
+	if err != nil {
+		return err
+	}
+	defer wsConn.Close()
+
+	return EchoSession(wsConn)
 }

@@ -62,6 +62,9 @@ type Conn struct {
 	// Preallocated frame buffer protected by writeMu for 0-allocation writes
 	writeFrameBuf []byte
 
+	// Preallocated payload buffer protected by readMu for 0-allocation reads
+	readPayloadBuf []byte
+
 	// Negotiated subprotocol
 	subprotocol string
 }
@@ -70,9 +73,11 @@ type Conn struct {
 // isServer indicates whether this endpoint is a server (true) or client (false).
 func NewConn(rw io.ReadWriter, isServer bool) *Conn {
 	c := &Conn{
-		rw:        rw,
-		isServer:  isServer,
-		readLimit: 32 << 20, // 32MB default read limit
+		rw:             rw,
+		isServer:       isServer,
+		readLimit:      32 << 20, // 32MB default read limit
+		writeFrameBuf:  make([]byte, 4096),
+		readPayloadBuf: make([]byte, 4096),
 		writeBufPool: sync.Pool{
 			New: func() any {
 				b := make([]byte, 32*1024)
@@ -383,26 +388,26 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 			return 0, nil, ErrMessageTooBig
 		}
 
-		// Read payload safely
-		var framePayload []byte
-		if hdr.PayloadLen > 0 {
-			framePayload = make([]byte, hdr.PayloadLen)
-			if _, err := io.ReadFull(c.rw, framePayload); err != nil {
-				c.state.Store(uint32(StateClosed))
-				return 0, nil, err
-			}
-
-			if hdr.Masked {
-				Mask(framePayload, hdr.MaskKey)
-			}
-		}
-
-		// Dispatch Control Frames (Ping / Pong / Close)
+		// Dispatch Control Frames (Ping / Pong / Close) with stack buffer (0 allocs)
 		if hdr.Opcode.IsControl() {
+			var ctrlBuf [128]byte
+
+			ctrlPayload := ctrlBuf[:hdr.PayloadLen]
+			if hdr.PayloadLen > 0 {
+				if _, err := io.ReadFull(c.rw, ctrlPayload); err != nil {
+					c.state.Store(uint32(StateClosed))
+					return 0, nil, err
+				}
+
+				if hdr.Masked {
+					Mask(ctrlPayload, hdr.MaskKey)
+				}
+			}
+
 			switch hdr.Opcode {
 			case OpcodePing:
 				if c.pingHandler != nil {
-					if err := c.pingHandler(framePayload); err != nil {
+					if err := c.pingHandler(ctrlPayload); err != nil {
 						return 0, nil, err
 					}
 				}
@@ -411,7 +416,7 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 
 			case OpcodePong:
 				if c.pongHandler != nil {
-					if err := c.pongHandler(framePayload); err != nil {
+					if err := c.pongHandler(ctrlPayload); err != nil {
 						return 0, nil, err
 					}
 				}
@@ -421,7 +426,7 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 			case OpcodeClose:
 				c.seenClose = true
 
-				code, reason, parseErr := ParseClosePayload(framePayload)
+				code, reason, parseErr := ParseClosePayload(ctrlPayload)
 				if parseErr != nil {
 					if errors.Is(parseErr, ErrInvalidUTF8) {
 						c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in Close frame")
@@ -464,6 +469,59 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 			}
 		}
 
+		// Fast-path: unfragmented message (FIN=true and not in middle of fragmented message)
+		if hdr.Fin && c.fragmentOpcode == 0 {
+			if hdr.Opcode == OpcodeContinuation {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Unexpected continuation frame")
+				return 0, nil, ErrUnexpectedContinuation
+			}
+
+			var payload []byte
+			if hdr.PayloadLen > 0 {
+				payload = make([]byte, hdr.PayloadLen)
+				if _, err := io.ReadFull(c.rw, payload); err != nil {
+					c.state.Store(uint32(StateClosed))
+					return 0, nil, err
+				}
+
+				if hdr.Masked {
+					Mask(payload, hdr.MaskKey)
+				}
+			}
+
+			if hdr.Rsv1 {
+				decompressed, err := DecompressDeflate(payload, c.readLimit)
+				if err != nil {
+					c.writeProtocolErrorAndClose(StatusProtocolError, "Deflate decompression error")
+					return 0, nil, err
+				}
+
+				payload = decompressed
+			}
+
+			if hdr.Opcode == OpcodeText && !utf8.Valid(payload) {
+				c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in text message")
+				return 0, nil, ErrInvalidUTF8
+			}
+
+			return hdr.Opcode, payload, nil
+		}
+
+		// Read fragmented frame payload safely
+		var framePayload []byte
+		if hdr.PayloadLen > 0 {
+			framePayload = make([]byte, hdr.PayloadLen)
+			if _, err := io.ReadFull(c.rw, framePayload); err != nil {
+				c.state.Store(uint32(StateClosed))
+				return 0, nil, err
+			}
+
+			if hdr.Masked {
+				Mask(framePayload, hdr.MaskKey)
+			}
+		}
+
 		// Handle Data Frames (Continuation, Text, Binary)
 		if hdr.Opcode == OpcodeContinuation {
 			if c.fragmentOpcode == 0 {
@@ -478,6 +536,7 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 
 			c.fragmentOpcode = hdr.Opcode
 			c.fragmentRsv1 = hdr.Rsv1
+			c.fragmentBuf = c.fragmentBuf[:0]
 		}
 
 		c.fragmentBuf = append(c.fragmentBuf, framePayload...)
@@ -485,12 +544,13 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 		// If this is the final fragment, complete message reassembly
 		if hdr.Fin {
 			msgType := c.fragmentOpcode
-			msgPayload := c.fragmentBuf
+			msgPayload := make([]byte, len(c.fragmentBuf))
+			copy(msgPayload, c.fragmentBuf)
 			isCompressed := c.fragmentRsv1
 
 			// Reset fragmentation state
 			c.fragmentOpcode = 0
-			c.fragmentBuf = nil
+			c.fragmentBuf = c.fragmentBuf[:0]
 			c.fragmentRsv1 = false
 
 			if isCompressed {
@@ -511,6 +571,482 @@ func (c *Conn) ReadMessage() (messageType Opcode, payload []byte, err error) {
 
 			return msgType, msgPayload, nil
 		}
+	}
+}
+
+// ReadMessageBuf reads the next complete message into an internal reusable buffer,
+// reassembling fragmented frames and unmasking payload bytes in-place.
+//
+// The returned payload slice is valid ONLY until the next call to ReadMessage or
+// ReadMessageBuf on this connection.
+//
+// Zero-allocation: achieves strictly 0 allocs/op during payload streaming for uncompressed messages.
+func (c *Conn) ReadMessageBuf() (messageType Opcode, payload []byte, err error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+
+	for {
+		st := c.State()
+		if st == StateClosed {
+			return 0, nil, ErrClosed
+		}
+
+		hdr, err := ReadHeader(c.rw, c.readHdrBuf[:])
+		if err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				c.state.Store(uint32(StateClosed))
+				return 0, nil, io.EOF
+			}
+
+			if errors.Is(err, ErrInvalidOpcode) || errors.Is(err, ErrProtocolViolation) ||
+				errors.Is(err, ErrControlFrameFragmented) || errors.Is(err, ErrControlFrameTooLarge) ||
+				errors.Is(err, ErrInvalidLength) || errors.Is(err, ErrPayloadTooLarge) {
+				c.writeProtocolErrorAndClose(StatusProtocolError, err.Error())
+				return 0, nil, err
+			}
+
+			return 0, nil, err
+		}
+
+		if !hdr.Opcode.IsValid() || hdr.Opcode.IsReserved() {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Unknown or reserved opcode")
+			return 0, nil, ErrInvalidOpcode
+		}
+
+		if c.seenClose && !hdr.Opcode.IsControl() {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Data frame received after close")
+			return 0, nil, ErrDataAfterClose
+		}
+
+		if !c.skipMaskCheck {
+			if c.isServer && !hdr.Masked {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Server requires masked frames")
+				return 0, nil, ErrMaskRequired
+			}
+
+			if !c.isServer && hdr.Masked {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Client requires unmasked frames")
+				return 0, nil, ErrMaskForbidden
+			}
+		}
+
+		if hdr.Rsv2 || hdr.Rsv3 {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Reserved bits RSV2/RSV3 set")
+			return 0, nil, ErrRSVSet
+		}
+
+		if hdr.Rsv1 {
+			if !c.enableDeflate {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 set without deflate extension")
+				return 0, nil, ErrRSVSet
+			}
+
+			if hdr.Opcode.IsControl() || hdr.Opcode == OpcodeContinuation {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 not allowed on control or continuation frame")
+				return 0, nil, ErrRSVSet
+			}
+		}
+
+		if hdr.Opcode.IsControl() {
+			if !hdr.Fin {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame must not be fragmented")
+				return 0, nil, ErrControlFrameFragmented
+			}
+
+			if hdr.PayloadLen > 125 {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame payload exceeds 125 bytes")
+				return 0, nil, ErrControlFrameTooLarge
+			}
+
+			var ctrlBuf [128]byte
+
+			ctrlPayload := ctrlBuf[:hdr.PayloadLen]
+			if hdr.PayloadLen > 0 {
+				if _, err := io.ReadFull(c.rw, ctrlPayload); err != nil {
+					c.state.Store(uint32(StateClosed))
+					return 0, nil, err
+				}
+
+				if hdr.Masked {
+					Mask(ctrlPayload, hdr.MaskKey)
+				}
+			}
+
+			switch hdr.Opcode {
+			case OpcodePing:
+				if c.pingHandler != nil {
+					if err := c.pingHandler(ctrlPayload); err != nil {
+						return 0, nil, err
+					}
+				}
+
+				continue
+
+			case OpcodePong:
+				if c.pongHandler != nil {
+					if err := c.pongHandler(ctrlPayload); err != nil {
+						return 0, nil, err
+					}
+				}
+
+				continue
+
+			case OpcodeClose:
+				c.seenClose = true
+
+				code, reason, parseErr := ParseClosePayload(ctrlPayload)
+				if parseErr != nil {
+					if errors.Is(parseErr, ErrInvalidUTF8) {
+						c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in Close frame")
+					} else {
+						c.writeProtocolErrorAndClose(StatusProtocolError, parseErr.Error())
+					}
+
+					return 0, nil, parseErr
+				}
+
+				if c.closeHandler != nil {
+					_ = c.closeHandler(code, reason)
+				}
+
+				// RFC 6455 §5.5.1 / §7.1.1: If we haven't sent a Close yet, echo Close back
+				oldState := c.State()
+				if oldState == StateOpen || oldState == StateConnecting {
+					c.state.Store(uint32(StateClosing))
+
+					if code == StatusNoStatusReceived {
+						_ = c.writeControlFrame(OpcodeClose, nil)
+					} else {
+						var buf [128]byte
+
+						n, _ := FormatClosePayload(buf[:], code, reason)
+						_ = c.writeControlFrame(OpcodeClose, buf[:n])
+					}
+
+					c.state.Store(uint32(StateClosed))
+					_ = c.closeTransport()
+
+					return OpcodeClose, nil, &CloseError{Code: code, Reason: reason}
+				}
+
+				c.state.Store(uint32(StateClosed))
+				_ = c.closeTransport()
+
+				return OpcodeClose, nil, &CloseError{Code: code, Reason: reason}
+			}
+		}
+
+		// Data Frame
+		if c.readLimit > 0 && hdr.PayloadLen > c.readLimit {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Frame payload exceeds read limit")
+			return 0, nil, ErrMessageTooBig
+		}
+
+		// Fast-path: unfragmented message
+		if hdr.Fin && c.fragmentOpcode == 0 {
+			if hdr.Opcode == OpcodeContinuation {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Unexpected continuation frame")
+				return 0, nil, ErrUnexpectedContinuation
+			}
+
+			if cap(c.readPayloadBuf) < int(hdr.PayloadLen) {
+				c.readPayloadBuf = make([]byte, hdr.PayloadLen+1024)
+			}
+
+			p := c.readPayloadBuf[:hdr.PayloadLen]
+			if hdr.PayloadLen > 0 {
+				if _, err := io.ReadFull(c.rw, p); err != nil {
+					c.state.Store(uint32(StateClosed))
+					return 0, nil, err
+				}
+
+				if hdr.Masked {
+					Mask(p, hdr.MaskKey)
+				}
+			}
+
+			if hdr.Rsv1 {
+				decompressed, err := DecompressDeflate(p, c.readLimit)
+				if err != nil {
+					c.writeProtocolErrorAndClose(StatusProtocolError, "Deflate decompression error")
+					return 0, nil, err
+				}
+
+				p = decompressed
+			}
+
+			if hdr.Opcode == OpcodeText && !utf8.Valid(p) {
+				c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in text message")
+				return 0, nil, ErrInvalidUTF8
+			}
+
+			return hdr.Opcode, p, nil
+		}
+
+		// Fragmented message handling
+		if hdr.Opcode == OpcodeContinuation {
+			if c.fragmentOpcode == 0 {
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Unexpected continuation frame")
+				return 0, nil, ErrUnexpectedContinuation
+			}
+		} else {
+			if c.fragmentOpcode != 0 {
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Expected continuation frame")
+				return 0, nil, ErrExpectedContinuation
+			}
+
+			c.fragmentOpcode = hdr.Opcode
+			c.fragmentRsv1 = hdr.Rsv1
+			c.fragmentBuf = c.fragmentBuf[:0]
+		}
+
+		startOffset := len(c.fragmentBuf)
+		newLen := startOffset + int(hdr.PayloadLen)
+
+		if cap(c.fragmentBuf) < newLen {
+			newBuf := make([]byte, newLen, newLen+4096)
+			copy(newBuf, c.fragmentBuf)
+			c.fragmentBuf = newBuf
+		} else {
+			c.fragmentBuf = c.fragmentBuf[:newLen]
+		}
+
+		framePayload := c.fragmentBuf[startOffset:newLen]
+		if hdr.PayloadLen > 0 {
+			if _, err := io.ReadFull(c.rw, framePayload); err != nil {
+				c.state.Store(uint32(StateClosed))
+				return 0, nil, err
+			}
+
+			if hdr.Masked {
+				Mask(framePayload, hdr.MaskKey)
+			}
+		}
+
+		if hdr.Fin {
+			msgType := c.fragmentOpcode
+			msgPayload := c.fragmentBuf
+			isCompressed := c.fragmentRsv1
+
+			c.fragmentOpcode = 0
+			c.fragmentRsv1 = false
+
+			if isCompressed {
+				decompressed, err := DecompressDeflate(msgPayload, c.readLimit)
+				if err != nil {
+					c.writeProtocolErrorAndClose(StatusProtocolError, "Deflate decompression error")
+					return 0, nil, err
+				}
+
+				msgPayload = decompressed
+			}
+
+			if msgType == OpcodeText && !utf8.Valid(msgPayload) {
+				c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in text message")
+				return 0, nil, ErrInvalidUTF8
+			}
+
+			return msgType, msgPayload, nil
+		}
+	}
+}
+
+// ReadFrame reads the next raw WebSocket frame header and payload directly into buf.
+// If the frame is masked, it unmasks the payload in place within buf using hdr.MaskKey.
+// Incoming Ping control frames are automatically responded to with Pong.
+// Returns the frame Header and the payload subslice within buf.
+//
+// Zero-allocation: achieves strictly 0 allocs/op when cap(buf) >= hdr.PayloadLen.
+func (c *Conn) ReadFrame(buf []byte) (Header, []byte, error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+
+	for {
+		st := c.State()
+		if st == StateClosed {
+			return Header{}, nil, ErrClosed
+		}
+
+		hdr, err := ReadHeader(c.rw, c.readHdrBuf[:])
+		if err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				c.state.Store(uint32(StateClosed))
+				return Header{}, nil, io.EOF
+			}
+
+			if errors.Is(err, ErrInvalidOpcode) || errors.Is(err, ErrProtocolViolation) ||
+				errors.Is(err, ErrControlFrameFragmented) || errors.Is(err, ErrControlFrameTooLarge) ||
+				errors.Is(err, ErrInvalidLength) || errors.Is(err, ErrPayloadTooLarge) {
+				c.writeProtocolErrorAndClose(StatusProtocolError, err.Error())
+				return Header{}, nil, err
+			}
+
+			return Header{}, nil, err
+		}
+
+		if !hdr.Opcode.IsValid() || hdr.Opcode.IsReserved() {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Unknown or reserved opcode")
+			return Header{}, nil, ErrInvalidOpcode
+		}
+
+		if c.seenClose && !hdr.Opcode.IsControl() {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Data frame received after close")
+			return Header{}, nil, ErrDataAfterClose
+		}
+
+		if !c.skipMaskCheck {
+			if c.isServer && !hdr.Masked {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Server requires masked frames")
+				return Header{}, nil, ErrMaskRequired
+			}
+
+			if !c.isServer && hdr.Masked {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Client requires unmasked frames")
+				return Header{}, nil, ErrMaskForbidden
+			}
+		}
+
+		if hdr.Rsv2 || hdr.Rsv3 {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "Reserved bits RSV2/RSV3 set")
+			return Header{}, nil, ErrRSVSet
+		}
+
+		if hdr.Rsv1 && !c.enableDeflate {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusProtocolError, "RSV1 set without deflate extension")
+			return Header{}, nil, ErrRSVSet
+		}
+
+		if hdr.Opcode.IsControl() {
+			if !hdr.Fin {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame must not be fragmented")
+				return Header{}, nil, ErrControlFrameFragmented
+			}
+
+			if hdr.PayloadLen > 125 {
+				c.drainPayload(hdr.PayloadLen)
+				c.writeProtocolErrorAndClose(StatusProtocolError, "Control frame payload exceeds 125 bytes")
+				return Header{}, nil, ErrControlFrameTooLarge
+			}
+
+			var ctrlBuf [128]byte
+
+			ctrlPayload := ctrlBuf[:hdr.PayloadLen]
+			if hdr.PayloadLen > 0 {
+				if _, err := io.ReadFull(c.rw, ctrlPayload); err != nil {
+					c.state.Store(uint32(StateClosed))
+					return Header{}, nil, err
+				}
+
+				if hdr.Masked {
+					Mask(ctrlPayload, hdr.MaskKey)
+				}
+			}
+
+			switch hdr.Opcode {
+			case OpcodePing:
+				if c.pingHandler != nil {
+					if err := c.pingHandler(ctrlPayload); err != nil {
+						return Header{}, nil, err
+					}
+				}
+
+				continue
+
+			case OpcodePong:
+				if c.pongHandler != nil {
+					if err := c.pongHandler(ctrlPayload); err != nil {
+						return Header{}, nil, err
+					}
+				}
+
+				continue
+
+			case OpcodeClose:
+				c.seenClose = true
+
+				code, reason, parseErr := ParseClosePayload(ctrlPayload)
+				if parseErr != nil {
+					if errors.Is(parseErr, ErrInvalidUTF8) {
+						c.writeProtocolErrorAndClose(StatusInvalidFramePayloadData, "Invalid UTF-8 in Close frame")
+					} else {
+						c.writeProtocolErrorAndClose(StatusProtocolError, parseErr.Error())
+					}
+
+					return Header{}, nil, parseErr
+				}
+
+				if c.closeHandler != nil {
+					_ = c.closeHandler(code, reason)
+				}
+
+				oldState := c.State()
+				if oldState == StateOpen || oldState == StateConnecting {
+					c.state.Store(uint32(StateClosing))
+
+					if code == StatusNoStatusReceived {
+						_ = c.writeControlFrame(OpcodeClose, nil)
+					} else {
+						var cBuf [128]byte
+
+						n, _ := FormatClosePayload(cBuf[:], code, reason)
+						_ = c.writeControlFrame(OpcodeClose, cBuf[:n])
+					}
+
+					c.state.Store(uint32(StateClosed))
+					_ = c.closeTransport()
+
+					return hdr, nil, &CloseError{Code: code, Reason: reason}
+				}
+
+				c.state.Store(uint32(StateClosed))
+				_ = c.closeTransport()
+
+				return hdr, nil, &CloseError{Code: code, Reason: reason}
+			}
+		}
+
+		// Data Frame
+		if c.readLimit > 0 && hdr.PayloadLen > c.readLimit {
+			c.drainPayload(hdr.PayloadLen)
+			c.writeProtocolErrorAndClose(StatusMessageTooBig, "Frame payload exceeds read limit")
+			return Header{}, nil, ErrMessageTooBig
+		}
+
+		if int64(len(buf)) < hdr.PayloadLen {
+			return Header{}, nil, ErrBufferTooSmall
+		}
+
+		payload := buf[:hdr.PayloadLen]
+		if hdr.PayloadLen > 0 {
+			if _, err := io.ReadFull(c.rw, payload); err != nil {
+				c.state.Store(uint32(StateClosed))
+				return Header{}, nil, err
+			}
+
+			if hdr.Masked {
+				Mask(payload, hdr.MaskKey)
+			}
+		}
+
+		return hdr, payload, nil
 	}
 }
 

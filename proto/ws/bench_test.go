@@ -130,3 +130,31 @@ func BenchmarkHandshake_ValidateKey(b *testing.B) {
 		_ = ws.ValidateKey(key)
 	}
 }
+
+func BenchmarkMask_SWAR_Unaligned_1KB(b *testing.B) {
+	buf := make([]byte, 1024+7)
+	unaligned := buf[3 : 3+1024]
+	b.SetBytes(1024)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		ws.Mask(unaligned, benchKey)
+	}
+}
+
+func BenchmarkParser_Decode_10Frames(b *testing.B) {
+	data := []byte(
+		"\x81\x05Frame\x81\x05Frame\x81\x05Frame\x81\x05Frame\x81\x05Frame" +
+			"\x81\x05Frame\x81\x05Frame\x81\x05Frame\x81\x05Frame\x81\x05Frame",
+	)
+	var parser ws.Parser
+	chunks := make([]ws.FrameChunk, 0, 16)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		chunks = chunks[:0]
+		_ = parser.Decode(data, &chunks)
+	}
+}
