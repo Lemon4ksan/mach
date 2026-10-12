@@ -10,6 +10,34 @@ import (
 	"github.com/lemon4ksan/mach"
 )
 
+// Example provides a quick overview of mach's universal protocol-agnostic handler contract.
+func Example() {
+	// A universal HandlerFunc processes streams transparently across HTTP/1.1, HTTP/2, and HTTP/3.
+	handler := mach.HandlerFunc(func(stream mach.Stream) error {
+		// Read wire frames without heap allocations
+		frame, err := stream.ReadFrame()
+		if err != nil {
+			return err
+		}
+
+		// Inspect protocol-agnostic frame types and zero-copy payloads
+		switch frame.Type() {
+		case mach.FrameHeaders:
+			_ = frame.Payload()
+		case mach.FrameData:
+			_ = frame.Payload()
+		}
+
+		return nil
+	})
+
+	_ = handler
+	fmt.Println("mach protocol engine ready")
+
+	// Output:
+	// mach protocol engine ready
+}
+
 // ExampleConn demonstrates the abstract protocol connection contract.
 func ExampleConn() {
 	var _ mach.Conn // Interface compliance check
