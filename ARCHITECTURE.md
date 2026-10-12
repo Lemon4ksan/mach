@@ -159,8 +159,8 @@ Conventional protocol decoders allocate intermediate Go structs to represent par
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-* `CastFrameHeader(b []byte) FrameHeader`: Casts a 9-byte wire slice into an in-situ accessor.
-* Field extractions (`Length()`, `Type()`, `Flags()`, `StreamID()`) use direct big-endian bit shifts without pointer dereferencing or struct allocations.
+* `overlay.Frame(b)`: Casts a raw frame buffer into a zero-allocation in-situ view with BCE (Bounds Check Elimination).
+* Field extractions (`Length()`, `Type()`, `Flags()`, `StreamID()`, `Payload()`) use direct big-endian bit shifts without pointer dereferencing or struct allocations.
 * **Latency**: **0.49 ns/op** (35x faster than heap struct decode, 0 B/op).
 
 ---

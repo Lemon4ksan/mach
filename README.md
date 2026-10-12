@@ -93,7 +93,7 @@ Zero-allocation varint serialization and streaming header table lookups:
 #### 5. WebSocket 64-bit SWAR Vector Masking (RFC 6455)
 The RFC 6455 payload masking kernel is vectorized using 64-bit SWAR, unrolled across 32-byte iterations:
 
-| Payload Size | Standard Scalar XOR | `mach/proto/ws.MaskSWAR` | Acceleration Factor |
+| Payload Size | Standard Scalar XOR | `mach/proto/ws.Mask` (with SWAR acceleration) | Acceleration Factor |
 | :--- | :--- | :--- | :--- |
 | **64 Bytes** | `32.4 ns/op` (1.98 GB/s) | **`5.1 ns/op` (12.55 GB/s)** | **6.35x faster** |
 | **1 Kilobyte** | `412.0 ns/op` (2.48 GB/s) | **`24.8 ns/op` (41.29 GB/s)** | **16.6x faster** |
@@ -260,8 +260,10 @@ func main() {
 					if err != nil {
 						return nil // Client disconnected or closed cleanly
 					}
-					if err := wsConn.WriteMessage(op, payload); err != nil {
-						return err
+					if op == ws.OpText || op == ws.OpBinary {
+						if err := wsConn.WriteMessage(op, payload); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -283,7 +285,7 @@ func main() {
 
 	// Configure TLS credentials (certificates are automatically shared across TCP and QUIC)
 	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{/* load key pair */},
+		Certificates: []tls.Certificate{},
 	}
 
 	log.Println("Starting Mach Unified Multi-Protocol Server on :8443...")
@@ -389,7 +391,9 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Printf("Received [%s]: %s\n", op, string(data))
+	if op == ws.OpText {
+		fmt.Printf("Received Text: %s\n", string(data))
+	}
 }
 ```
 
@@ -403,7 +407,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/lemon4ksan/mach/net/proxy"
@@ -461,14 +464,14 @@ import (
 )
 
 func main() {
-	// Raw 9-byte HTTP/2 frame header: 16-byte length, SETTINGS type (0x04), flags=0x01 (ACK), Stream ID=0
-	wireBytes := []byte{0x00, 0x00, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00}
+	// Raw 9-byte header + 5 bytes payload
+	wireBytes := []byte{0x00, 0x00, 0x05, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 'h', 'e', 'l', 'l', 'o'}
 
 	// Cast raw bytes directly into zero-copy binary overlay
-	f := overlay.CastFrameHeader(wireBytes)
+	frame := overlay.Frame(wireBytes)
 
-	fmt.Printf("Frame Type: 0x%02X | Flags: 0x%02X | Stream ID: %d | Length: %d\n",
-		f.Type(), f.Flags(), f.StreamID(), f.Length())
+	fmt.Printf("StreamID: %d | Type: %d | Length: %d | Payload: %s\n",
+		frame.StreamID(), frame.Type(), frame.Length(), frame.Payload())
 	// Zero memory allocations, 0.49 ns/op access latency!
 }
 ```
@@ -491,8 +494,11 @@ mach/
 │   ├── proxy.go                # Proxy option normalization and resolution
 │   └── websocket.go            # Multi-protocol WebSocket dialer (RFC 6455, RFC 8441, RFC 9220)
 ├── net/                        # Network transport & tunneling layers
-│   ├── proxy/                  # SOCKS5 (RFC 1928/1929) and HTTP CONNECT (RFC 9110) dialers
-│   │   └── socks/              # Zero-allocation RFC 1928 SOCKS5 wire parser and client
+│   ├── proxy/                  # SOCKS5 (RFC 1928/1929) and HTTP CONNECT (RFC 9110 §9.3.6) proxy dialers
+│   │   ├── socks/              # Zero-allocation RFC 1928 SOCKS5 wire parser and client
+│   │   ├── connect.go          # HTTP CONNECT forward proxy tunneling
+│   │   ├── per_host.go         # Per-host proxy routing rules (NO_PROXY support)
+│   │   └── socks5.go           # SOCKS5 dialer factory and authentication
 │   └── quic/                   # RFC 9000 QUIC transport engine
 │       ├── core/               # Handshake (RFC 9001), wire framing, packet encryption
 │       │   ├── handshake/      # TLS 1.3 key schedule, transport parameters, HKDF
@@ -500,19 +506,32 @@ mach/
 │       │   └── wire/           # Variable-length integer encoding, packet headers, AEAD
 │       └── varint/             # RFC 9000 §16 variable-length integer codecs
 ├── proto/                      # Wire mechanics and RFC-conforming protocol state machines
+│   ├── cachestatus/            # RFC 9211 HTTP Cache-Status header parser and formatter
 │   ├── codec/                  # Header compression & streaming codecs
 │   │   ├── compress/           # Streaming Brotli, Gzip, Deflate, Zstd decompressors
 │   │   ├── hpack/              # RFC 7541 HPACK header compression for HTTP/2
 │   │   └── qpack/              # RFC 9204 QPACK header compression for HTTP/3
+│   ├── grpcweb/                # gRPC-Web protocol framing, trailers-over-body, text mode
+│   ├── h1/                     # RFC 9112 HTTP/1.1 wire framing, chunked transfer, SIMD vector scanning
 │   ├── h2/                     # RFC 9113 HTTP/2 framing, stream priority trees, flow control
 │   │   ├── fsm/                # Strict RFC 9113 §5.1 stream transition verifier
 │   │   └── overlay/            # Sub-nanosecond (0.49 ns/op) In-Situ binary frame overlay
 │   ├── h3/                     # RFC 9114 HTTP/3 framing, capsules, control streams, datagrams
-│   ├── headkit/                # Canonical HTTP header tokens, pseudo-headers, wire keys
-│   ├── http/                   # HTTP/1.1 wire parser, SIMD scanner, zero-alloc Request/Response
-│   │   └── stackless/          # Goroutine-free async I/O dispatch
-│   ├── raptor/                 # Ultra-low-latency layer-7 proxy and tunneling core
-│   ├── semantic/               # HTTP status codes, method constants, Alt-Svc tokenizers
+│   ├── headkit/                # Zero-alloc canonical header tokens, pseudo-headers, ASCII intern pools
+│   ├── http/                   # HTTP wire model, zero-alloc Request/Response envelopes, byte buffers
+│   ├── semantic/               # Canonical HTTP semantic protocol specifications
+│   │   ├── altsvc/             # RFC 7838 Alt-Svc header parser, serializer, and value models
+│   │   ├── auth/               # RFC 9110 HTTP Authentication credentials and challenge codecs
+│   │   ├── contentdisposition/ # RFC 6266 Content-Disposition header parser
+│   │   ├── cookie/             # RFC 6265 HTTP State Management (Cookies) tokenizer
+│   │   ├── digest/             # RFC 3230 / RFC 5843 Instance Digests in HTTP
+│   │   ├── etag/               # RFC 9110 §8.8.3 Entity Tag (ETag) validators
+│   │   ├── hpkp/               # RFC 7469 Public Key Pinning Extension for HTTP
+│   │   ├── priority/           # RFC 9218 Extensible Prioritization Scheme for HTTP
+│   │   ├── status/             # RFC 9110 §15 HTTP status codes and standard reason phrases
+│   │   └── uri/                # RFC 3986 URI parsing, query normalization, percent-encoding
+│   ├── sse/                    # W3C Server-Sent Events (SSE) streaming encoder and decoder
+│   ├── weblink/                # RFC 8288 Web Linking header parser (Link: <url>; rel=...)
 │   └── ws/                     # RFC 6455 WebSocket framing, 64-bit SWAR masking (50.3 GB/s)
 ├── scripts/                    # Fuzzing harnesses & automated validation
 │   └── fuzz_all.go             # Multi-protocol fuzz harness targeting 8 core engines
