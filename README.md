@@ -20,6 +20,8 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 
 **mach** is the high-velocity, zero-allocation network engine powering the [`aoni`](https://github.com/lemon4ksan/aoni) client ecosystem and [`sein`](https://github.com/lemon4ksan/sein) server frameworks. Built from bare silicon fundamentals, `mach` delivers sub-nanosecond binary frame overlays, 64-bit SWAR register vectorization, concurrent lock-sharded stream dispatch, transparent Alt-Svc protocol promotion, and RFC-frozen state machines.
 
+#### English • [Русский](README_RU.md)
+
 </div>
 
 ---
