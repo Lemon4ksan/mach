@@ -7,7 +7,7 @@
 //
 // # Clean-Room Core Integration & Architecture
 //
-// In Audit Swarm Season 10, the transport architecture integrates clean-room core engines
+// The transport architecture integrates clean-room core engines
 // designed for line-rate packet processing, zero allocations on steady-state hot paths,
 // and strict asymmetric isolation between L7 application handlers and L4/L5 transport congestion:
 //

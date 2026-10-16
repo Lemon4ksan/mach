@@ -11,11 +11,11 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 [![Go Reference](https://img.shields.io/badge/godoc-reference-007d9c?style=flat-square)](https://pkg.go.dev/github.com/lemon4ksan/mach)
 [![Architecture Docs](https://img.shields.io/badge/docs-ARCHITECTURE.md-purple?style=flat-square)](ARCHITECTURE.md)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=flat-square)](LICENSE)
-[![Zero-Alloc](https://img.shields.io/badge/memory-0%20B%2Fop%20%7C%200%20allocs-brightgreen?style=flat-square)](#season-15-velocity-records)
-[![H1 Throughput](https://img.shields.io/badge/h1%20throughput-2.61M%20req%2Fs-success?style=flat-square)](#season-15-velocity-records)
-[![H2 Stream Table](https://img.shields.io/badge/h2%20streams-14.1M%20ops%2Fs-success?style=flat-square)](#season-15-velocity-records)
-[![QUIC Reassembly](https://img.shields.io/badge/quic%20reassembly-14.2%20GB%2Fs-blueviolet?style=flat-square)](#season-15-velocity-records)
-[![WS SWAR Masking](https://img.shields.io/badge/ws%20swar-50.3%20GB%2Fs-orange?style=flat-square)](#season-15-velocity-records)
+[![Zero-Alloc](https://img.shields.io/badge/memory-0%20B%2Fop%20%7C%200%20allocs-brightgreen?style=flat-square)](#benchmarks--velocity-records)
+[![H1 Throughput](https://img.shields.io/badge/h1%20throughput-2.61M%20req%2Fs-success?style=flat-square)](#benchmarks--velocity-records)
+[![H2 Stream Table](https://img.shields.io/badge/h2%20streams-14.1M%20ops%2Fs-success?style=flat-square)](#benchmarks--velocity-records)
+[![QUIC Reassembly](https://img.shields.io/badge/quic%20reassembly-14.2%20GB%2Fs-blueviolet?style=flat-square)](#benchmarks--velocity-records)
+[![WS SWAR Masking](https://img.shields.io/badge/ws%20swar-50.3%20GB%2Fs-orange?style=flat-square)](#benchmarks--velocity-records)
 [![Fuzz Verified](https://img.shields.io/badge/fuzzing-Continuous%208%2F8%20Targets-success?style=flat-square)](scripts/fuzz_all.go)
 
 **mach** is the high-velocity, zero-allocation network engine powering the [`aoni`](https://github.com/lemon4ksan/aoni) client ecosystem and [`sein`](https://github.com/lemon4ksan/sein) server frameworks. Built from bare silicon fundamentals, `mach` delivers sub-nanosecond binary frame overlays, 64-bit SWAR register vectorization, concurrent lock-sharded stream dispatch, transparent Alt-Svc protocol promotion, and RFC-frozen state machines.
@@ -24,9 +24,9 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 
 </div>
 
-## The Unified v0.2.0 Stack
+## Unified Architecture & Stack
 
-The `v0.2.0` architecture unifies modern client and server operations into a cohesive, high-throughput protocol engine:
+The architecture unifies modern client and server operations into a cohesive, high-throughput protocol engine:
 
 * **Unified Server Architecture (`mach.Server` / `server.Server`)**: A single unified L7 server instance simultaneously binds TCP (`HTTP/1.1`, `HTTP/2`, and cleartext `H2C`) and UDP (`HTTP/3` over QUIC). Incoming traffic is demultiplexed at wire speed via TLS ALPN and 24-byte preface peeking, dispatching requests into zero-allocation per-core `Context` pools with automatic `Alt-Svc` header emission.
 * **Intelligent Client Engine (`mach.Engine` / `client.Engine`)**: An autonomous client transport engine featuring transparent Alt-Svc HTTP/3 discovery (RFC 7838), automatic origin ALPN negotiation (`h2`, `http/1.1`), concurrent session multiplexing, connection reuse via `PoolManager`, and graceful origin fallback on UDP packet degradation.
@@ -37,7 +37,7 @@ The `v0.2.0` architecture unifies modern client and server operations into a coh
   * **RFC 9220**: HTTP/3 Extended CONNECT stream encapsulation over QUIC datagrams and bidi streams.
   * **64-bit SWAR Acceleration**: Payload masking kernels vectorized using 64-bit SWAR (SIMD Within A Register) sustaining **50.3 GB/s**.
 
-## Season 15 Velocity Records
+## Benchmarks & Velocity Records
 
 Measured on bare-metal hardware (`12th Gen Intel Core i5-12400F @ 4.40 GHz`, 64 GB DDR4-3200, Windows x86_64, Go 1.27):
 
@@ -266,7 +266,7 @@ func main() {
 			c.SetStatusCode(200)
 			c.SetHeader("Content-Type", "application/json")
 			c.SetBodyString(fmt.Sprintf(
-				`{"protocol":%q,"method":%q,"path":%q,"engine":"mach/v0.2.0"}`,
+				`{"protocol":%q,"method":%q,"path":%q,"engine":"mach"}`,
 				c.Proto(), c.Method(), c.Path(),
 			))
 			return nil
@@ -326,7 +326,7 @@ func main() {
 
 	req.Header.SetMethod("GET")
 	req.SetRequestURI("https://api.example.com/v1/telemetry")
-	req.Header.Set("User-Agent", "mach-client/v0.2.0")
+	req.Header.Set("User-Agent", "mach-client")
 
 	// First execution negotiates ALPN (H2/H1) and caches received Alt-Svc headers.
 	// Subsequent requests to the same origin automatically promote to HTTP/3 over QUIC!

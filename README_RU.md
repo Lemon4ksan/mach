@@ -11,11 +11,11 @@ _«Аэродинамическая механика протоколов на �
 [![Go Reference](https://img.shields.io/badge/godoc-reference-007d9c?style=flat-square)](https://pkg.go.dev/github.com/lemon4ksan/mach)
 [![Architecture Docs](https://img.shields.io/badge/docs-ARCHITECTURE.md-purple?style=flat-square)](ARCHITECTURE.md)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=flat-square)](LICENSE)
-[![Zero-Alloc](https://img.shields.io/badge/memory-0%20B%2Fop%20%7C%200%20allocs-brightgreen?style=flat-square)](#рекорды-скорости-сезон-15)
-[![H1 Throughput](https://img.shields.io/badge/h1%20throughput-2.61M%20req%2Fs-success?style=flat-square)](#рекорды-скорости-сезон-15)
-[![H2 Stream Table](https://img.shields.io/badge/h2%20streams-14.1M%20ops%2Fs-success?style=flat-square)](#рекорды-скорости-сезон-15)
-[![QUIC Reassembly](https://img.shields.io/badge/quic%20reassembly-14.2%20GB%2Fs-blueviolet?style=flat-square)](#рекорды-скорости-сезон-15)
-[![WS SWAR Masking](https://img.shields.io/badge/ws%20swar-50.3%20GB%2Fs-orange?style=flat-square)](#рекорды-скорости-сезон-15)
+[![Zero-Alloc](https://img.shields.io/badge/memory-0%20B%2Fop%20%7C%200%20allocs-brightgreen?style=flat-square)](#бенчмарки-и-рекорды-скорости)
+[![H1 Throughput](https://img.shields.io/badge/h1%20throughput-2.61M%20req%2Fs-success?style=flat-square)](#бенчмарки-и-рекорды-скорости)
+[![H2 Stream Table](https://img.shields.io/badge/h2%20streams-14.1M%20ops%2Fs-success?style=flat-square)](#бенчмарки-и-рекорды-скорости)
+[![QUIC Reassembly](https://img.shields.io/badge/quic%20reassembly-14.2%20GB%2Fs-blueviolet?style=flat-square)](#бенчмарки-и-рекорды-скорости)
+[![WS SWAR Masking](https://img.shields.io/badge/ws%20swar-50.3%20GB%2Fs-orange?style=flat-square)](#бенчмарки-и-рекорды-скорости)
 [![Fuzz Verified](https://img.shields.io/badge/fuzzing-Continuous%208%2F8%20Targets-success?style=flat-square)](scripts/fuzz_all.go)
 
 **mach** — высокоскоростной сетевой движок с нулевыми аллокациями, лежащий в основе клиентской экосистемы [`aoni`](https://github.com/lemon4ksan/aoni) и серверного фреймворка [`sein`](https://github.com/lemon4ksan/sein). Построенный от фундаментального кремния, `mach` обеспечивает субнаносекундные наложения бинарных фреймов, 64-битную SWAR-векторизацию регистров, шардированную диспетчеризацию потоков, прозрачное повышение протокола через Alt-Svc и работу по строгим стандартам RFC.
@@ -24,9 +24,9 @@ _«Аэродинамическая механика протоколов на �
 
 </div>
 
-## Единый стек v0.2.0
+## Единая архитектура и стек
 
-Архитектура `v0.2.0` объединяет современные клиентские и серверные операции в связный протокольный движок предельной пропускной способности:
+Архитектура объединяет современные клиентские и серверные операции в связный протокольный движок предельной пропускной способности:
 
 * **Единая серверная архитектура (`mach.Server` / `server.Server`)**: Один экземпляр L7-сервера одновременно биндится к TCP (`HTTP/1.1`, `HTTP/2` и открытый `H2C`) и UDP (`HTTP/3` поверх QUIC). Входящий трафик демультиплексируется на скорости физической линии через TLS ALPN и 24-байтный префейс, распределяя запросы по пулам `Context` для каждого ядра процессора с 0 аллокаций и автоматической отдачей заголовка `Alt-Svc`.
 * **Интеллектуальный клиентский движок (`mach.Engine` / `client.Engine`)**: Автономный клиентский транспортный движок с прозрачным обнаружением HTTP/3 через Alt-Svc (RFC 7838), автоматическим согласованием ALPN хоста (`h2`, `http/1.1`), параллельным мультиплексированием сессий, переиспользованием соединений через `PoolManager` и плавным откатом при деградации пакетов UDP.
@@ -37,7 +37,7 @@ _«Аэродинамическая механика протоколов на �
   * **RFC 9220**: Инкапсуляция потоков HTTP/3 Extended CONNECT через датаграммы QUIC и двунаправленные потоки.
   * **64-битное ускорение SWAR**: Ядра маскирования полезной нагрузки векторизованы через 64-битный SWAR (SIMD Within A Register), удерживая **50.3 ГБ/с**.
 
-## Рекорды скорости (Сезон 15)
+## Бенчмарки и рекорды скорости
 
 Измерено на реальном аппаратном обеспечении (`12th Gen Intel Core i5-12400F @ 4.40 GHz`, 64 GB DDR4-3200, Windows x86_64, Go 1.27):
 
@@ -266,7 +266,7 @@ func main() {
 			c.SetStatusCode(200)
 			c.SetHeader("Content-Type", "application/json")
 			c.SetBodyString(fmt.Sprintf(
-				`{"protocol":%q,"method":%q,"path":%q,"engine":"mach/v0.2.0"}`,
+				`{"protocol":%q,"method":%q,"path":%q,"engine":"mach"}`,
 				c.Proto(), c.Method(), c.Path(),
 			))
 			return nil
@@ -326,7 +326,7 @@ func main() {
 
 	req.Header.SetMethod("GET")
 	req.SetRequestURI("https://api.example.com/v1/telemetry")
-	req.Header.Set("User-Agent", "mach-client/v0.2.0")
+	req.Header.Set("User-Agent", "mach-client")
 
 	// Первый вызов согласовывает ALPN (H2/H1) и кэширует полученные заголовки Alt-Svc.
 	// Последующие запросы к тому же хосту автоматически повышаются до HTTP/3 поверх QUIC!
