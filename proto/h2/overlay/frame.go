@@ -32,7 +32,7 @@ func (f Frame) StreamID() uint32 {
 }
 
 // Payload returns the raw frame body without allocation or copying.
-// It panics if the underlying slice is smaller than Length() + 9.
+// Requires len(f) >= 9 + Length().
 func (f Frame) Payload() []byte {
 	return f[9 : 9+f.Length()]
 }
@@ -109,10 +109,39 @@ func (h HeadersFrame) IsEndHeaders() bool {
 	return Frame(h).Flags()&0x4 != 0
 }
 
-// HeaderBlockFragment returns the hpack.HPACK-encoded header data.
+// IsPadded reports whether the PADDED flag is set.
+func (h HeadersFrame) IsPadded() bool {
+	return Frame(h).Flags()&0x8 != 0
+}
+
+// HasPriority reports whether the PRIORITY flag is set.
+func (h HeadersFrame) HasPriority() bool {
+	return Frame(h).Flags()&0x20 != 0
+}
+
+// HeaderBlockFragment returns the hpack.HPACK-encoded header data (RFC 9113 §6.2).
 func (h HeadersFrame) HeaderBlockFragment() []byte {
-	// For simplicity in this overlay, we omit Priority and Padding logic,
-	// assuming a clean fast-path. In a full implementation, BCE offsets
-	// would account for Flags() & 0x8 and Flags() & 0x20.
-	return Frame(h).Payload()
+	p := Frame(h).Payload()
+	start := 0
+	end := len(p)
+
+	if h.IsPadded() {
+		if len(p) == 0 {
+			return nil
+		}
+
+		padLen := int(p[0])
+		start = 1
+		end -= padLen
+	}
+
+	if h.HasPriority() {
+		start += 5
+	}
+
+	if start > end || end > len(p) {
+		return nil
+	}
+
+	return p[start:end]
 }

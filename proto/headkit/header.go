@@ -6,12 +6,33 @@ package headkit
 
 import (
 	"encoding/binary"
+	"errors"
 	"iter"
 	"math/bits"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+)
 
-	"github.com/lemon4ksan/mach/proto/http/header"
+var (
+	// ErrWhitespaceBeforeColon is returned when whitespace occurs between header name and colon (RFC 9112 §5.1).
+	ErrWhitespaceBeforeColon = errors.New(
+		"headkit: whitespace between header name and colon prohibited (RFC 9112 §5.1)",
+	)
+
+	// ErrDuplicateContentLength is returned when duplicate conflicting Content-Length headers are present (RFC 9112 §6.3).
+	ErrDuplicateContentLength = errors.New("headkit: duplicate conflicting content-length headers (RFC 9112 §6.3)")
+
+	// ErrMultipleHostHeaders is returned when multiple Host headers are present (RFC 9112 §3.2).
+	ErrMultipleHostHeaders = errors.New("headkit: multiple host headers prohibited (RFC 9112 §3.2)")
+
+	// ErrObsFold is returned when obsolete line folding is encountered (RFC 9112 §5.2).
+	ErrObsFold = errors.New("headkit: obsolete line folding prohibited (RFC 9112 §5.2)")
+
+	// ErrMalformedHeader is returned when a header line fails RFC 9112 §5 syntax rules.
+	ErrMalformedHeader = errors.New("headkit: malformed header line (RFC 9112 §5)")
+
+	// ErrBareCR is returned when a bare CR not immediately followed by LF is detected (RFC 9112 §2.2).
+	ErrBareCR = errors.New("headkit: bare CR prohibited (RFC 9112 §2.2)")
 )
 
 const (
@@ -39,6 +60,7 @@ type Headers struct {
 	count  int
 
 	dynamic []HeaderEntry // Fallback for dynamically added/modified headers
+	err     error
 }
 
 func NewWithCapacity(cap int) Headers {
@@ -48,16 +70,9 @@ func NewWithCapacity(cap int) Headers {
 	}
 }
 
-func (h *Headers) SetRawBuf(b []byte) {
-	h.buf = b
-}
-
-func (h *Headers) GetRawBuf() []byte {
-	return h.buf
-}
-
 func (h *Headers) Reset() {
 	h.buf = h.buf[:0]
+	h.err = nil
 
 	h.count = idxReservedCount
 	for i := range maxHeaders {
@@ -65,6 +80,11 @@ func (h *Headers) Reset() {
 	}
 
 	h.dynamic = h.dynamic[:0]
+}
+
+// Err returns any parsing error encountered during SWAR block processing (RFC 9112 §5.1).
+func (h *Headers) Err() error {
+	return h.err
 }
 
 const (
@@ -89,6 +109,13 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 	keyEnd := -1
 	valStart := -1
 
+	// Check if message begins with obsolete line folding (RFC 9112 §5.2)
+	if len(block) > 0 && (block[0] == ' ' || block[0] == '\t') {
+		if h.err == nil {
+			h.err = ErrObsFold
+		}
+	}
+
 	i := 0
 	for i+8 <= len(block) {
 		v := binary.LittleEndian.Uint64(block[i:])
@@ -110,6 +137,22 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 			c := block[idx]
 
 			if c == ':' && keyEnd == -1 {
+				// RFC 9112 §5.1: Field name cannot be empty
+				if idx == keyStart {
+					if h.err == nil {
+						h.err = ErrMalformedHeader
+					}
+				}
+
+				// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+				// A server MUST reject, with a response status code of 400 (Bad Request),
+				// any received request message that contains whitespace between a header field name and colon.
+				if idx > keyStart && (block[idx-1] == ' ' || block[idx-1] == '\t') {
+					if h.err == nil {
+						h.err = ErrWhitespaceBeforeColon
+					}
+				}
+
 				keyEnd = idx
 				valStart = idx + 1
 				// Trim leading spaces for value
@@ -124,11 +167,38 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 
 				if keyEnd != -1 {
 					h.addPacked(keyStart, keyEnd, valStart, valEnd)
+				} else if keyStart < valEnd {
+					// RFC 9112 §5: Non-empty line without a colon
+					if h.err == nil {
+						h.err = ErrMalformedHeader
+					}
+				}
+
+				// RFC 9112 §2.2: Bare CR check and null byte check
+				for j := keyStart; j < valEnd; j++ {
+					b := block[j]
+					switch b {
+					case 0:
+						if h.err == nil {
+							h.err = ErrMalformedHeader
+						}
+					case '\r':
+						if h.err == nil {
+							h.err = ErrBareCR
+						}
+					}
 				}
 
 				keyStart = idx + 1
 				keyEnd = -1
 				valStart = -1
+
+				// RFC 9112 §5.2: Obsolete line folding: line cannot start with SP or HTAB
+				if keyStart < len(block) && (block[keyStart] == ' ' || block[keyStart] == '\t') {
+					if h.err == nil {
+						h.err = ErrObsFold
+					}
+				}
 			}
 
 			// Clear the bit and continue
@@ -151,6 +221,19 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 	for ; i < len(block); i++ {
 		c := block[i]
 		if c == ':' && keyEnd == -1 {
+			if i == keyStart {
+				if h.err == nil {
+					h.err = ErrMalformedHeader
+				}
+			}
+
+			// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+			if i > keyStart && (block[i-1] == ' ' || block[i-1] == '\t') {
+				if h.err == nil {
+					h.err = ErrWhitespaceBeforeColon
+				}
+			}
+
 			keyEnd = i
 
 			valStart = i + 1
@@ -165,11 +248,35 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 
 			if keyEnd != -1 {
 				h.addPacked(keyStart, keyEnd, valStart, valEnd)
+			} else if keyStart < valEnd {
+				if h.err == nil {
+					h.err = ErrMalformedHeader
+				}
+			}
+
+			for j := keyStart; j < valEnd; j++ {
+				b := block[j]
+				switch b {
+				case 0:
+					if h.err == nil {
+						h.err = ErrMalformedHeader
+					}
+				case '\r':
+					if h.err == nil {
+						h.err = ErrBareCR
+					}
+				}
 			}
 
 			keyStart = i + 1
 			keyEnd = -1
 			valStart = -1
+
+			if keyStart < len(block) && (block[keyStart] == ' ' || block[keyStart] == '\t') {
+				if h.err == nil {
+					h.err = ErrObsFold
+				}
+			}
 		}
 	}
 
@@ -181,6 +288,31 @@ func (h *Headers) ParseHeaderBlockSWAR(block []byte) {
 		}
 
 		h.addPacked(keyStart, keyEnd, valStart, valEnd)
+
+		for j := keyStart; j < valEnd; j++ {
+			b := block[j]
+			switch b {
+			case 0:
+				if h.err == nil {
+					h.err = ErrMalformedHeader
+				}
+			case '\r':
+				if h.err == nil {
+					h.err = ErrBareCR
+				}
+			}
+		}
+	} else if keyStart < len(block) {
+		valEnd := len(block)
+		if valEnd > 0 && block[valEnd-1] == '\r' {
+			valEnd--
+		}
+
+		if keyStart < valEnd {
+			if h.err == nil {
+				h.err = ErrMalformedHeader
+			}
+		}
 	}
 }
 
@@ -204,6 +336,10 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 	}
 
 	if keyEnd <= keyStart || valEnd < valStart {
+		if h.err == nil && keyEnd <= keyStart {
+			h.err = ErrMalformedHeader
+		}
+
 		return
 	}
 
@@ -217,9 +353,19 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 	switch len(key) {
 	case 4:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Host") {
+			if h.packed[IdxHost] != 0 {
+				if h.err == nil {
+					h.err = ErrMultipleHostHeaders
+				}
+
+				return
+			}
+
 			h.packed[IdxHost] = packed
+
 			return
 		}
+
 	case 6:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Accept") {
 			h.packed[IdxAccept] = packed
@@ -230,6 +376,12 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 			h.packed[IdxConnection] = packed
 			return
 		}
+
+		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "User-Agent") {
+			h.packed[IdxUserAgent] = packed
+			return
+		}
+
 	case 12:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Content-Type") {
 			h.packed[IdxContentType] = packed
@@ -237,7 +389,23 @@ func (h *Headers) addPacked(keyStart, keyEnd, valStart, valEnd int) {
 		}
 	case 14:
 		if bytesconv.EqualFoldASCII(bytesconv.B2S(key), "Content-Length") {
+			if h.packed[IdxContentLength] != 0 {
+				oldVal := h.getVal(h.packed[IdxContentLength])
+
+				newVal := bytesconv.B2S(h.buf[valStart:valEnd])
+				if oldVal != newVal {
+					if h.err == nil {
+						h.err = ErrDuplicateContentLength
+					}
+
+					return
+				}
+
+				return
+			}
+
 			h.packed[IdxContentLength] = packed
+
 			return
 		}
 	}
@@ -273,6 +441,12 @@ func (h *Headers) Get(key string) string {
 	case 10:
 		if bytesconv.EqualFoldASCII(key, "Connection") {
 			if v := h.getVal(h.packed[IdxConnection]); v != "" {
+				return v
+			}
+		}
+
+		if bytesconv.EqualFoldASCII(key, "User-Agent") {
+			if v := h.getVal(h.packed[IdxUserAgent]); v != "" {
 				return v
 			}
 		}
@@ -352,7 +526,7 @@ func (h *Headers) Has(key string) bool {
 
 func (h *Headers) Del(key string) {
 	// Clear from packed
-	for i := 0; i < h.count; i++ {
+	for i := range h.count {
 		p := h.packed[i]
 		if p == 0 {
 			continue
@@ -378,7 +552,7 @@ func (h *Headers) Del(key string) {
 // All returns an iterator over all headers.
 func (h *Headers) All() iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
-		for i := 0; i < h.count; i++ {
+		for i := range h.count {
 			p := h.packed[i]
 			if p != 0 {
 				if !yield(h.getKey(p), h.getVal(p)) {
@@ -387,7 +561,7 @@ func (h *Headers) All() iter.Seq2[string, string] {
 			}
 		}
 
-		for i := 0; i < len(h.dynamic); i++ {
+		for i := range h.dynamic {
 			if !yield(h.dynamic[i].Key, h.dynamic[i].Value) {
 				return
 			}
@@ -402,7 +576,7 @@ var (
 
 // WriteTo writes headers directly into bufio.Writer without closures (0 allocs)
 func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
-	for i := 0; i < h.count; i++ {
+	for i := range h.count {
 		p := h.packed[i]
 		if p != 0 {
 			_, _ = bw.WriteString(h.getKey(p))
@@ -412,7 +586,7 @@ func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
 		}
 	}
 
-	for i := 0; i < len(h.dynamic); i++ {
+	for i := range h.dynamic {
 		_, _ = bw.WriteString(h.dynamic[i].Key)
 		_, _ = bw.Write(hdrColonSpace)
 		_, _ = bw.WriteString(h.dynamic[i].Value)
@@ -423,15 +597,15 @@ func (h *Headers) WriteTo(bw *bytesconv.ByteBuffer) {
 func (h *Headers) IsKeepAlive(proto string) bool {
 	connHeader := h.getVal(h.packed[IdxConnection])
 	if connHeader == "" {
-		connHeader = h.Get(header.Connection)
+		connHeader = h.Get(Connection)
 	}
 
 	if proto == "HTTP/1.0" {
-		return bytesconv.EqualFoldASCII(connHeader, header.ValueKeepAlive)
+		return bytesconv.EqualFoldASCII(connHeader, ValueKeepAlive)
 	}
 
 	// For HTTP/1.1, keep-alive by default
-	isKeepAlive := !bytesconv.EqualFoldASCII(connHeader, header.ValueClose)
+	isKeepAlive := !bytesconv.EqualFoldASCII(connHeader, ValueClose)
 
 	return isKeepAlive
 }

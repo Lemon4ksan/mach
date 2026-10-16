@@ -11,10 +11,13 @@ package weblink
 
 import (
 	"errors"
+	"iter"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // Header is the standard HTTP header field name for Web Linking (RFC 8288 §3).
@@ -275,53 +278,80 @@ func (g Group) AllByRel(rel string) []Link {
 	return matches
 }
 
-// Next returns the target URI of the next page in pagination (rel="next", RFC 8288 §4.2).
-func (g Group) Next() (string, bool) {
-	if l, ok := g.ByRel(RelNext); ok {
-		return l.Target, true
+// ByRelOptional returns an Optional wrapping the first link in the group matching the specified relation type (RFC 8288 §2.1.1).
+func (g Group) ByRelOptional(rel string) generic.Optional[Link] {
+	l, ok := g.ByRel(rel)
+	return generic.From(l, ok)
+}
+
+// NextOptional returns the target URI of the next page wrapped in an Optional (rel="next", RFC 8288 §4.2).
+func (g Group) NextOptional() generic.Optional[string] {
+	if l := g.ByRelOptional(RelNext); l.IsPresent() {
+		return generic.Some(l.MustValue().Target)
 	}
 
-	return "", false
+	return generic.None[string]()
+}
+
+// Next returns the target URI of the next page in pagination (rel="next", RFC 8288 §4.2).
+func (g Group) Next() (string, bool) {
+	return g.NextOptional().Value()
+}
+
+// PrevOptional returns the target URI of the previous page wrapped in an Optional (rel="prev" or rel="previous", RFC 8288 §4.2).
+func (g Group) PrevOptional() generic.Optional[string] {
+	if l := g.ByRelOptional(RelPrev).Or(g.ByRelOptional(RelPrevious)); l.IsPresent() {
+		return generic.Some(l.MustValue().Target)
+	}
+
+	return generic.None[string]()
 }
 
 // Prev returns the target URI of the previous page in pagination (rel="prev" or rel="previous", RFC 8288 §4.2).
 func (g Group) Prev() (string, bool) {
-	if l, ok := g.ByRel(RelPrev); ok {
-		return l.Target, true
+	return g.PrevOptional().Value()
+}
+
+// FirstOptional returns the target URI of the first page wrapped in an Optional (rel="first", RFC 8288 §4.2).
+func (g Group) FirstOptional() generic.Optional[string] {
+	if l := g.ByRelOptional(RelFirst); l.IsPresent() {
+		return generic.Some(l.MustValue().Target)
 	}
 
-	if l, ok := g.ByRel(RelPrevious); ok {
-		return l.Target, true
-	}
-
-	return "", false
+	return generic.None[string]()
 }
 
 // First returns the target URI of the first page in pagination (rel="first", RFC 8288 §4.2).
 func (g Group) First() (string, bool) {
-	if l, ok := g.ByRel(RelFirst); ok {
-		return l.Target, true
+	return g.FirstOptional().Value()
+}
+
+// LastOptional returns the target URI of the last page wrapped in an Optional (rel="last", RFC 8288 §4.2).
+func (g Group) LastOptional() generic.Optional[string] {
+	if l := g.ByRelOptional(RelLast); l.IsPresent() {
+		return generic.Some(l.MustValue().Target)
 	}
 
-	return "", false
+	return generic.None[string]()
 }
 
 // Last returns the target URI of the last page in pagination (rel="last", RFC 8288 §4.2).
 func (g Group) Last() (string, bool) {
-	if l, ok := g.ByRel(RelLast); ok {
-		return l.Target, true
+	return g.LastOptional().Value()
+}
+
+// CanonicalOptional returns the target URI of the canonical resource wrapped in an Optional (rel="canonical", RFC 6596 / RFC 8288 §4.2).
+func (g Group) CanonicalOptional() generic.Optional[string] {
+	if l := g.ByRelOptional(RelCanonical); l.IsPresent() {
+		return generic.Some(l.MustValue().Target)
 	}
 
-	return "", false
+	return generic.None[string]()
 }
 
 // Canonical returns the target URI of the canonical resource (rel="canonical", RFC 6596 / RFC 8288 §4.2).
 func (g Group) Canonical() (string, bool) {
-	if l, ok := g.ByRel(RelCanonical); ok {
-		return l.Target, true
-	}
-
-	return "", false
+	return g.CanonicalOptional().Value()
 }
 
 // String formats the entire group into a single comma-separated Link header value (RFC 8288 §3).
@@ -342,27 +372,83 @@ func (g Group) String() string {
 	return sb.String()
 }
 
-// Parse extracts Web Links from a Link HTTP header string according to RFC 8288 Appendix B algorithms.
-func Parse(header string) (Group, error) {
-	header = strings.TrimSpace(header)
-	if header == "" {
+// All returns an iterator over parsed Web Links according to RFC 8288 without accumulating a slice.
+func All[S ~string | ~[]byte](header S) iter.Seq2[Link, error] {
+	return func(yield func(Link, error) bool) {
+		hdr := strings.TrimSpace(string(header))
+		if hdr == "" {
+			yield(Link{}, ErrEmptyHeader)
+			return
+		}
+
+		start := 0
+		inQuote := false
+		inAngle := false
+		found := false
+
+		for i := 0; i < len(hdr); i++ {
+			c := hdr[i]
+			if c == '\\' && inQuote && i+1 < len(hdr) {
+				i++
+				continue
+			}
+
+			switch {
+			case c == '<' && !inQuote:
+				inAngle = true
+			case c == '>' && !inQuote:
+				inAngle = false
+			case c == '"' && !inAngle:
+				inQuote = !inQuote
+			case c == ',' && !inQuote && !inAngle:
+				candidate := strings.TrimSpace(hdr[start:i])
+				if candidate != "" {
+					found = true
+
+					link, err := parseLinkValue(candidate)
+					if err == nil {
+						if !yield(link, nil) {
+							return
+						}
+					}
+				}
+
+				start = i + 1
+			}
+		}
+
+		if start < len(hdr) {
+			candidate := strings.TrimSpace(hdr[start:])
+			if candidate != "" {
+				link, err := parseLinkValue(candidate)
+				if err == nil {
+					yield(link, nil)
+
+					return
+				}
+			}
+		}
+
+		if !found {
+			yield(Link{}, ErrInvalidHeader)
+		}
+	}
+}
+
+// Parse extracts Web Links from a Link HTTP header according to RFC 8288 Appendix B algorithms.
+func Parse[S ~string | ~[]byte](header S) (Group, error) {
+	hdr := strings.TrimSpace(string(header))
+	if hdr == "" {
 		return nil, ErrEmptyHeader
 	}
 
 	var links Group
-
-	rawLinks := splitHeaderLinks(header)
-	if len(rawLinks) == 0 {
-		return nil, ErrInvalidHeader
-	}
-
-	for _, raw := range rawLinks {
-		l, err := parseLinkValue(raw)
+	for link, err := range All(hdr) {
 		if err != nil {
-			continue
+			return nil, err
 		}
 
-		links = append(links, l)
+		links = append(links, link)
 	}
 
 	if len(links) == 0 {
@@ -403,47 +489,6 @@ func ParseHeader(h http.Header) (Group, error) {
 	}
 
 	return allLinks, nil
-}
-
-func splitHeaderLinks(header string) []string {
-	var links []string
-
-	start := 0
-	inQuotes := false
-	inAngle := false
-
-	for i := 0; i < len(header); i++ {
-		c := header[i]
-		if c == '\\' && inQuotes && i+1 < len(header) {
-			i++
-			continue
-		}
-
-		switch {
-		case c == '"' && !inAngle:
-			inQuotes = !inQuotes
-		case c == '<' && !inQuotes:
-			inAngle = true
-		case c == '>' && !inQuotes:
-			inAngle = false
-		case c == ',' && !inQuotes && !inAngle:
-			item := strings.TrimSpace(header[start:i])
-			if item != "" {
-				links = append(links, item)
-			}
-
-			start = i + 1
-		}
-	}
-
-	if start < len(header) {
-		item := strings.TrimSpace(header[start:])
-		if item != "" {
-			links = append(links, item)
-		}
-	}
-
-	return links
 }
 
 func parseLinkValue(raw string) (Link, error) {
@@ -503,13 +548,7 @@ func parseLinkValue(raw string) (Link, error) {
 			titlePlain = v
 
 		case k == "title*" && titleStar == "":
-			_, lang, val, err := decodeRFC8187(v)
-			if err == nil {
-				titleStar = val
-				titleStarLang = lang
-			} else {
-				titleStar = decodeRFC8187Value(v)
-			}
+			_, titleStarLang, titleStar = decodeRFC8187(v)
 		}
 	}
 

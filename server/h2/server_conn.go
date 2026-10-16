@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -16,8 +17,9 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/pool"
 	"golang.org/x/sys/cpu"
 
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
+	"github.com/lemon4ksan/mach/proto/h2/fsm"
 )
 
 // ServerHandlerFunc is the callback signature for dispatching an incoming HTTP/2 stream request (RFC 9113 §8.1).
@@ -27,127 +29,170 @@ import (
 // returning.
 type ServerHandlerFunc func(req *ServerRequest, res *ServerResponse) error
 
-// ServerRequest represents a parsed incoming HTTP/2 stream request in compliance with
-// RFC 9113 §8.3 (Request Pseudo-Header Fields) and RFC 8441 §4 (Extended CONNECT).
-//
-// Concurrency:
-// ServerRequest is allocated per stream and passed to a single ServerHandlerFunc goroutine.
-// It is not safe for concurrent use across multiple goroutines without external synchronization.
+// ServerRequest represents a parsed incoming HTTP/2 stream request (RFC 9113 §8.3, RFC 8441 §4).
 type ServerRequest struct {
-	StreamID   uint32          // StreamID is the odd-numbered stream identifier (RFC 9113 §5.1.1).
-	Method     string          // Method is the :method pseudo-header value (RFC 9113 §8.3.1).
-	Path       string          // Path is the :path pseudo-header value (RFC 9113 §8.3.1).
-	Scheme     string          // Scheme is the :scheme pseudo-header value (RFC 9113 §8.3.1).
-	Authority  string          // Authority is the :authority pseudo-header value (RFC 9113 §8.3.1).
-	Protocol   string          // Protocol is the :protocol pseudo-header for extended CONNECT (RFC 8441 §4).
-	Headers    http.Header     // Headers contains regular, lowercase header fields (RFC 9113 §8.2).
-	Body       []byte          // Body contains the reassembled payload from DATA frames (RFC 9113 §6.1).
-	RemoteAddr string          // RemoteAddr is the peer network address.
-	Ctx        context.Context // Ctx is the stream context cancelled upon stream termination or reset.
+	StreamID          uint32          // StreamID is the odd-numbered stream identifier (RFC 9113 §5.1.1).
+	Method            string          // Method is the :method pseudo-header value (RFC 9113 §8.3.1).
+	Path              string          // Path is the :path pseudo-header value (RFC 9113 §8.3.1).
+	Scheme            string          // Scheme is the :scheme pseudo-header value (RFC 9113 §8.3.1).
+	Authority         string          // Authority is the :authority pseudo-header value (RFC 9113 §8.3.1).
+	Protocol          string          // Protocol is the :protocol pseudo-header for extended CONNECT (RFC 8441 §4).
+	Headers           http.Header     // Headers contains regular, lowercase header fields (RFC 9113 §8.2).
+	Body              []byte          // Body contains the reassembled payload from DATA frames (RFC 9113 §6.1).
+	RemoteAddr        string          // RemoteAddr is the peer network address.
+	Ctx               context.Context // Ctx is the stream context cancelled upon stream termination or reset.
+	Stream            io.ReadWriteCloser
+	UpgradeFn         func(statusCode int, header http.Header) error
+	IsExtendedConnect bool
 }
 
-// ServerResponse represents an outgoing HTTP/2 stream response in compliance with
-// RFC 9113 §8.4 (Response Pseudo-Header Fields) and RFC 9110 §15 (Status Codes).
-//
-// Concurrency:
-// ServerResponse is populated by the stream handler and serialized by the connection write loop.
-// It is not safe for concurrent modification.
+// ServerResponse represents an outgoing HTTP/2 stream response (RFC 9113 §8.4, RFC 9110 §15).
 type ServerResponse struct {
 	StatusCode int         // StatusCode is the HTTP response status code (RFC 9113 §8.4 :status).
 	Headers    http.Header // Headers contains outgoing response headers.
 	Body       []byte      // Body contains response payload framed into DATA frames (RFC 9113 §6.1).
 }
 
-// ServerConn manages a single server-side HTTP/2 connection session in compliance with
-// RFC 9113 §3 (Starting HTTP/2), §4 (HTTP Frames), §5 (Streams and Multiplexing),
-// and §6 (Frame Definitions).
-//
-// Concurrency:
-// ServerConn is safe for concurrent use. Inbound frame demuxing is handled by Serve(),
-// while outbound frames and responses are serialized via writeMu. In-flight stream
-// goroutines are tracked by streamsWg to ensure race-free teardown and pooling.
-//
-// Silicon Invariants:
-// Hot atomic state counters are isolated on a dedicated cache line (_ cpu.CacheLinePad)
-// to prevent false sharing during high-concurrency stream multiplexing. Connection instances
-// are pooled via Per-P storage (foundation/silicon/pool) with zero allocations on hot paths.
+const streamShardsCount = 16
+
+type streamShard struct {
+	mu      sync.RWMutex
+	streams map[uint32]*serverStream
+}
+
+// ServerConn manages a single server-side HTTP/2 connection session (RFC 9113 §3).
 type ServerConn struct {
-	conn      net.Conn
-	br        *bufio.Reader
-	bw        *bufio.Writer
-	handler   ServerHandlerFunc
-	hpackDec  *hpack.HPACK
-	hpackEnc  *hpack.HPACK
-	encMu     sync.Mutex
-	writeMu   sync.Mutex
-	streamsMu sync.RWMutex
-	streams   map[uint32]*serverStream
-	streamsWg sync.WaitGroup
+	conn         net.Conn
+	bw           *bufio.Writer
+	sm           fsm.StateMachine
+	readBuf      []byte
+	muBuf        []byte
+	handler      ServerHandlerFunc
+	hpackDec     *hpack.HPACK
+	hpackEnc     *hpack.HPACK
+	encMu        sync.Mutex
+	writeMu      sync.Mutex
+	streamShards [streamShardsCount]streamShard
+	streamsWg    sync.WaitGroup
 
 	peerMaxFrameSize uint32
 	peerInitialWin   int32
 
+	maxStreamID        uint32
+	continuationStream uint32
+
 	_ cpu.CacheLinePad
 
-	isClosed       atomic.Bool
-	isReleased     atomic.Bool
-	connSendWindow atomic.Int32
-	closeErr       error
+	isClosed        atomic.Bool
+	isReleased      atomic.Bool
+	connSendWindow  atomic.Int32
+	connRecvUnacked atomic.Int32
+	closeErr        error
+
+	EnableConnectProtocol bool
 
 	ctx      context.Context
 	cancelFn context.CancelFunc
 }
 
-var serverConnStorage = pool.NewPerPStorage(func() *ServerConn {
+func (sc *ServerConn) getStream(streamID uint32) (*serverStream, bool) {
+	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+	shard.mu.RLock()
+
+	if shard.streams == nil {
+		shard.mu.RUnlock()
+		return nil, false
+	}
+
+	st, ok := shard.streams[streamID]
+	shard.mu.RUnlock()
+
+	return st, ok
+}
+
+func (sc *ServerConn) putStream(streamID uint32, st *serverStream) {
+	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+	shard.mu.Lock()
+	if shard.streams == nil {
+		shard.streams = make(map[uint32]*serverStream, 8)
+	}
+
+	shard.streams[streamID] = st
+	shard.mu.Unlock()
+}
+
+func (sc *ServerConn) deleteStream(streamID uint32) (*serverStream, bool) {
+	shard := &sc.streamShards[(streamID>>1)&(streamShardsCount-1)]
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+
+	if shard.streams == nil {
+		return nil, false
+	}
+
+	st, ok := shard.streams[streamID]
+	if ok {
+		delete(shard.streams, streamID)
+	}
+
+	return st, ok
+}
+
+var serverConnStorage = pool.NewPerCorePool(func() *ServerConn {
 	return &ServerConn{
-		br:               bufio.NewReaderSize(nil, 4096),
 		bw:               bufio.NewWriterSize(nil, 4096),
+		readBuf:          make([]byte, 32768),
+		muBuf:            make([]byte, 0, 32768),
 		hpackDec:         hpack.AcquireHPACK(),
 		hpackEnc:         hpack.AcquireHPACK(),
-		streams:          make(map[uint32]*serverStream, 64),
 		peerMaxFrameSize: coreh2.DefaultMaxLen,
 		peerInitialWin:   65535,
 	}
 })
 
 // NewServerConn creates a new HTTP/2 server connection handler wrapping netConn (RFC 9113 §3).
-//
-// Lifecycle:
-// Connection instances are acquired from an internal Per-P storage pool. When Serve()
-// completes, Release() MUST be called to return the ServerConn to the pool.
+// When Serve completes, Release must be called to return the ServerConn to the pool.
 func NewServerConn(netConn net.Conn, handler ServerHandlerFunc) *ServerConn {
 	sc := serverConnStorage.Get()
 
 	sc.conn = netConn
-	if sc.br == nil {
-		sc.br = bufio.NewReaderSize(netConn, 4096)
-	} else {
-		sc.br.Reset(netConn)
-	}
 
 	if sc.bw == nil {
 		sc.bw = bufio.NewWriterSize(netConn, 4096)
-	} else {
-		sc.bw.Reset(netConn)
 	}
+
+	sc.bw.Reset(netConn)
+
+	sc.muBuf = sc.muBuf[:0]
 
 	sc.handler = handler
 	sc.isClosed.Store(false)
 	sc.isReleased.Store(false)
 	sc.closeErr = nil
+	sc.maxStreamID = 0
+	sc.continuationStream = 0
 	sc.peerMaxFrameSize = coreh2.DefaultMaxLen
 	sc.peerInitialWin = 65535
 	sc.connSendWindow.Store(65535)
+	sc.connRecvUnacked.Store(0)
+	sc.EnableConnectProtocol = true
 
 	sc.ctx, sc.cancelFn = context.WithCancel(context.Background())
+	sc.sm.Handler = sc
 
 	sc.hpackDec.Reset()
 	sc.hpackEnc.Reset()
 	sc.hpackEnc.DisableDynamicTable = true
 
-	sc.streamsMu.Lock()
-	clear(sc.streams)
-	sc.streamsMu.Unlock()
+	for i := range streamShardsCount {
+		shard := &sc.streamShards[i]
+		shard.mu.Lock()
+		if shard.streams != nil {
+			clear(shard.streams)
+		}
+
+		shard.mu.Unlock()
+	}
 
 	return sc
 }
@@ -165,13 +210,37 @@ func (sc *ServerConn) Serve() error {
 			sc.cancelFn()
 		}
 
+		for i := range streamShardsCount {
+			shard := &sc.streamShards[i]
+			shard.mu.Lock()
+			for _, st := range shard.streams {
+				if st.cancel != nil {
+					st.cancel()
+				}
+
+				if st.pipeWriter != nil {
+					_ = st.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
+				}
+
+				if st.pipeReader != nil {
+					_ = st.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
+				}
+			}
+
+			clear(shard.streams)
+			shard.mu.Unlock()
+		}
+
+		// Wait for in-flight streams to complete (RFC 9113 §6.8 graceful shutdown)
+		sc.streamsWg.Wait()
+
 		if sc.conn != nil {
 			_ = sc.conn.Close()
 		}
 	}()
 
 	// 1. Read and verify 24-byte client connection preface (RFC 9113 §3.4)
-	if !coreh2.ReadPreface(sc.br) {
+	if !coreh2.ReadPreface(sc.conn) {
 		return errors.New("h2: invalid connection preface")
 	}
 
@@ -180,6 +249,7 @@ func (sc *ServerConn) Serve() error {
 	st.SetMaxConcurrentStreams(1000)
 	st.SetMaxFrameSize(coreh2.DefaultMaxLen)
 	st.SetMaxWindowSize(65535)
+	st.SetEnableConnect(sc.EnableConnectProtocol)
 
 	if err := sc.sendSettings(st, false); err != nil {
 		return err
@@ -211,12 +281,8 @@ func (sc *ServerConn) Closed() bool {
 	return sc.isClosed.Load()
 }
 
-// Release waits for all active stream dispatch goroutines to complete, tears down
-// connection resources, and returns the ServerConn to the Per-P storage pool.
-//
-// Concurrency:
-// Release is race-safe against asynchronous stream handlers and socket disconnects.
-// It guarantees zero pool contamination and eliminates use-after-free conditions.
+// Release waits for active stream dispatch goroutines to complete, tears down
+// connection resources, and returns sc to the pool.
 func (sc *ServerConn) Release() {
 	if sc.isReleased.Swap(true) {
 		return
@@ -235,13 +301,12 @@ func (sc *ServerConn) Release() {
 	// Wait for all in-flight stream dispatch goroutines to exit (Resolves Escalation 2)
 	sc.streamsWg.Wait()
 
-	// Mutex-protected map cleanup
-	sc.streamsMu.Lock()
-	clear(sc.streams)
-	sc.streamsMu.Unlock()
-
-	if sc.br != nil {
-		sc.br.Reset(nil)
+	// Mutex-protected map cleanup across shards
+	for i := range streamShardsCount {
+		shard := &sc.streamShards[i]
+		shard.mu.Lock()
+		clear(shard.streams)
+		shard.mu.Unlock()
 	}
 
 	if sc.bw != nil {

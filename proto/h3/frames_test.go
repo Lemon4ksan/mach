@@ -88,3 +88,66 @@ func TestAppendFrameHeaders(t *testing.T) {
 		t.Fatalf("appendDataHeader failed: type=%d, len=%d, err=%v", fType, pLen, err)
 	}
 }
+
+func TestReservedH2FrameTypes(t *testing.T) {
+	// RFC 9114 §7.2.8 & §11.2.1 Table 2: 0x02, 0x06, 0x08, 0x09 are reserved from HTTP/2
+	reserved := []uint64{
+		FrameTypeReservedPriority,
+		FrameTypeReservedPing,
+		FrameTypeReservedWindowUpdate,
+		FrameTypeReservedContinuation,
+	}
+
+	for _, ft := range reserved {
+		if !IsReservedH2FrameType(ft) {
+			t.Errorf("expected frame type 0x%02x to be identified as reserved H2 frame type (RFC 9114 §7.2.8)", ft)
+		}
+	}
+
+	nonReserved := []uint64{
+		FrameTypeData,
+		FrameTypeHeaders,
+		FrameTypeCancelPush,
+		FrameTypeSettings,
+		FrameTypePushPromise,
+		FrameTypeGoAway,
+		FrameTypeMaxPushID,
+		0x21,
+		0x40,
+	}
+
+	for _, ft := range nonReserved {
+		if IsReservedH2FrameType(ft) {
+			t.Errorf("frame type 0x%02x should not be identified as reserved H2 frame type", ft)
+		}
+	}
+}
+
+func TestGreaseFrameAndSettingTypes(t *testing.T) {
+	// RFC 9114 §7.2.8 & §7.2.4.1: 0x1f * N + 0x21 are reserved GREASE points
+	greaseValues := []uint64{
+		0x21,
+		0x40,
+		0x1f*2 + 0x21,
+		0x1f*100 + 0x21,
+	}
+
+	for _, g := range greaseValues {
+		if !IsGreaseFrameType(g) {
+			t.Errorf("expected 0x%x to be GREASE frame type (RFC 9114 §7.2.8)", g)
+		}
+		if !IsGreaseSetting(g) {
+			t.Errorf("expected 0x%x to be GREASE setting (RFC 9114 §7.2.4.1)", g)
+		}
+	}
+
+	nonGreaseValues := []uint64{0x00, 0x01, 0x02, 0x04, 0x06, 0x20, 0x22, 0x3f}
+	for _, ng := range nonGreaseValues {
+		if IsGreaseFrameType(ng) {
+			t.Errorf("0x%x should not be GREASE frame type", ng)
+		}
+		if IsGreaseSetting(ng) {
+			t.Errorf("0x%x should not be GREASE setting", ng)
+		}
+	}
+}

@@ -7,18 +7,20 @@ package h1_test
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"net"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
 func BenchmarkRequest_ReadRequest(b *testing.B) {
 	raw := []byte("GET /hello HTTP/1.1\r\nHost: example.com\r\nUser-Agent: bench\r\n\r\n")
-	br := bufio.NewReaderSize(bytes.NewReader(raw), 4096)
+	rd := bytes.NewReader(raw)
+	br := bufio.NewReaderSize(rd, 4096)
 
 	bw := bytesconv.AcquireByteBuffer()
 	defer bytesconv.ReleaseByteBuffer(bw)
@@ -26,11 +28,11 @@ func BenchmarkRequest_ReadRequest(b *testing.B) {
 	var req h1.Request
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req.Reset()
-		br.Reset(bytes.NewReader(raw))
+		rd.Reset(raw)
+		br.Reset(rd)
 
 		if err := req.ReadRequest(br, bw, 1024*1024); err != nil {
 			b.Fatal(err)
@@ -49,9 +51,8 @@ func BenchmarkResponse_WriteTo(b *testing.B) {
 	defer bytesconv.ReleaseByteBuffer(bw)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bw.Reset()
 
 		if err := res.WriteTo(bw, true, false); err != nil {
@@ -63,10 +64,11 @@ func BenchmarkResponse_WriteTo(b *testing.B) {
 func BenchmarkConnHandler_ServeConn_Pipeline(b *testing.B) {
 	reqData := []byte("GET /bench HTTP/1.1\r\nHost: example.com\r\n\r\n")
 
+	okBody := []byte("ok")
 	ch := &h1.ConnHandler{
 		Handler: func(req *h1.Request, res *h1.Response) error {
 			res.StatusCode = status.OK
-			res.Body = []byte("ok")
+			res.Body = okBody
 
 			return nil
 		},
@@ -85,9 +87,8 @@ func BenchmarkConnHandler_ServeConn_Pipeline(b *testing.B) {
 	var respBuf [256]byte
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := clientConn.Write(reqData); err != nil {
 			b.Fatal(err)
 		}
@@ -97,5 +98,45 @@ func BenchmarkConnHandler_ServeConn_Pipeline(b *testing.B) {
 		if err != nil || n == 0 {
 			b.Fatalf("read failed: %v", err)
 		}
+	}
+}
+
+func BenchmarkH1Pipeline_Throughput(b *testing.B) {
+	singleReq := []byte("GET /bench HTTP/1.1\r\nHost: example.com\r\nUser-Agent: bench\r\n\r\n")
+	okBody := []byte("ok")
+
+	ch := &h1.ConnHandler{
+		Handler: func(req *h1.Request, res *h1.Response) error {
+			res.StatusCode = status.OK
+			res.Body = okBody
+
+			return nil
+		},
+	}
+
+	for _, batchSize := range []int{16, 32, 64} {
+		batchData := bytes.Repeat(singleReq, batchSize)
+		b.Run(fmt.Sprintf("batch=%d", batchSize), func(b *testing.B) {
+			var conn mockConn
+			conn.Reader = bytes.NewReader(batchData)
+			conn.writeBuf = make([]byte, 0, 64*1024)
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(batchData)))
+			b.ResetTimer()
+
+			for b.Loop() {
+				conn.Reader.Reset(batchData)
+				conn.writeBuf = conn.writeBuf[:0]
+
+				if err := ch.ServeConn(&conn); err != nil {
+					b.Fatal(err)
+				}
+			}
+
+			elapsed := b.Elapsed().Seconds()
+			totalReqs := float64(b.N * batchSize)
+			b.ReportMetric(totalReqs/elapsed, "req/s")
+		})
 	}
 }

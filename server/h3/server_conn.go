@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/quic"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -31,19 +31,30 @@ type ServerConn struct {
 	hasControlIn    atomic.Bool
 	hasQPACKEncoder atomic.Bool
 	hasQPACKDecoder atomic.Bool
+
+	EnableConnectProtocol bool
 }
 
 // NewServerConn creates a new HTTP/3 server connection wrapping a QUIC connection (RFC 9114).
 func NewServerConn(quicConn *quic.Conn, handler ServerHandlerFunc) *ServerConn {
 	return &ServerConn{
-		quicConn: quicConn,
-		handler:  handler,
-		qpack:    coreh3.NewQPACKCodec(),
+		quicConn:              quicConn,
+		handler:               handler,
+		qpack:                 coreh3.NewQPACKCodec(),
+		EnableConnectProtocol: true,
 	}
 }
 
 // Serve initializes control streams and handles incoming bidirectional request streams (RFC 9114 §6.2.1, §6.1).
 func (sc *ServerConn) Serve() error {
+	sc.qpack.SetErrorHandler(func(err error) {
+		if qErr, ok := errors.AsType[*coreh3.QPACKStreamError](err); ok {
+			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(qErr.Code), qErr.Message)
+		} else {
+			_ = sc.quicConn.CloseWithError(quic.ApplicationErrorCode(coreh3.ErrCodeH3GeneralProtocolError), err.Error())
+		}
+	})
+
 	ctx := sc.quicConn.Context()
 
 	// 1. Open and initialize server unidirectional control stream (RFC 9114 §6.2.1)
@@ -65,6 +76,7 @@ func (sc *ServerConn) Serve() error {
 	// Write initial server SETTINGS frame (RFC 9114 §7.2.4)
 	st := &coreh3.Settings{
 		MaxFieldSectionSize: 64 * 1024,
+		EnableConnect:       sc.EnableConnectProtocol,
 	}
 	if _, err := ctrlStream.Write(st.Encode()); err != nil {
 		return err

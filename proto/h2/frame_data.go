@@ -88,7 +88,7 @@ func (d *Data) Serialize(fr *FrameHeader) {
 		fr.payload = append(fr.payload, padLen)
 
 		fr.payload = append(fr.payload, d.b...)
-		for i := byte(0); i < padLen; i++ {
+		for range padLen {
 			fr.payload = append(fr.payload, 0)
 		}
 	} else {

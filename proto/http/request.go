@@ -11,7 +11,8 @@ import (
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/headkit"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // Request represents an HTTP request message adhering to RFC 9110 Section 3 and RFC 9112 Section 2.
@@ -26,16 +27,16 @@ import (
 // Instances should be acquired via AcquireRequest and recycled via ReleaseRequest to avoid
 // heap allocations. Copying Request by value is forbidden; use CopyTo instead.
 type Request struct {
-	noCopy                zerocopy.NoCopy
+	noCopy                uri.NoCopy
 	bodyStream            io.Reader
 	w                     requestBodyWriter
 	body                  *bytesconv.ByteBuffer
 	multipartForm         *multipart.Form
 	multipartFormBoundary string
-	postArgs              zerocopy.Args
+	postArgs              uri.Args
 	bodyRaw               []byte
 
-	uri zerocopy.URI
+	uri uri.URI
 
 	// Header is the request header.
 	//
@@ -51,10 +52,10 @@ type Request struct {
 	isTLS                 bool
 	UseHostHeader         bool
 
-	// DisableRedirectPathNormalizing disables redirect path normalization when used with DoRedirects.
+	// DisableRedirectPathNormalizing is a legacy fasthttp compatibility flag.
+	// Mach normalizes request-targets canonically according to RFC 9112 Section 3.2.
 	//
-	// By default redirect path values are normalized, i.e.
-	// extra slashes are removed, special characters are encoded.
+	// Deprecated: Maintained for backward-compatible call-sites.
 	DisableRedirectPathNormalizing bool
 }
 
@@ -115,20 +116,20 @@ func (req *Request) RequestURI() []byte {
 	return req.Header.RequestURI()
 }
 
-// URI returns a pointer to the parsed zerocopy.URI representation of the request-target (RFC 3986, RFC 9112 Section 3.2).
+// URI returns a pointer to the parsed uri.URI representation of the request-target (RFC 3986, RFC 9112 Section 3.2).
 // The returned pointer is valid until the request is modified or released.
 //
 // Thread-safe: No.
-func (req *Request) URI() *zerocopy.URI {
+func (req *Request) URI() *uri.URI {
 	_ = req.ParseURI()
 	return &req.uri
 }
 
-// SetURI sets the request URI by copying from the provided zerocopy.URI instance (RFC 3986).
+// SetURI sets the request URI by copying from the provided uri.URI instance (RFC 3986).
 // If newURI is nil, the request URI is cleared.
 //
 // Thread-safe: No.
-func (req *Request) SetURI(newURI *zerocopy.URI) {
+func (req *Request) SetURI(newURI *uri.URI) {
 	if newURI != nil {
 		newURI.CopyTo(&req.uri)
 		req.parsedURI = true
@@ -155,6 +156,20 @@ func (req *Request) ParseURI() error {
 	req.uriParseErr = req.uri.ParseInternal(req.Header.Host(), req.Header.RequestURI(), req.isTLS)
 
 	return req.uriParseErr
+}
+
+// Headkit returns a pointer to the underlying headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe; single-threaded execution required.
+func (req *Request) Headkit() *headkit.Headers {
+	return req.Header.Headkit()
+}
+
+// SetFromHeadkit populates request headers from a headkit.Headers instance.
+//
+// Concurrency: Not goroutine-safe.
+func (req *Request) SetFromHeadkit(src *headkit.Headers) {
+	req.Header.SetFromHeadkit(src)
 }
 
 // ConnectionClose reports whether the "Connection: close" token is present in the request headers
@@ -188,7 +203,7 @@ func (req *Request) SetTimeout(t time.Duration) {
 }
 
 // Reset clears all request contents and returns internal buffers to their respective pools.
-// Must be called prior to returning the request to a sync.Pool.
+// Must be called prior to returning the request to a pool.
 //
 // Thread-safe: No.
 func (req *Request) Reset() {
@@ -199,6 +214,8 @@ func (req *Request) Reset() {
 	req.Header.Reset()
 	req.resetSkipHeader()
 	req.Timeout = 0
+	req.SecureErrorLogMessage = false
+	req.KeepBodyBuffer = false
 	req.UseHostHeader = false
 	req.DisableRedirectPathNormalizing = false
 }

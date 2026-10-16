@@ -11,14 +11,17 @@ import (
 	"io"
 	"mime/multipart"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+
+	"github.com/lemon4ksan/mach/proto/headkit"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 // PostArgs returns the parsed application/x-www-form-urlencoded POST parameters (RFC 1866).
 // The arguments are parsed lazily on first access.
 //
 // Thread-safe: No.
-func (req *Request) PostArgs() *zerocopy.Args {
+func (req *Request) PostArgs() *uri.Args {
 	req.parsePostArgs()
 	return &req.postArgs
 }
@@ -29,11 +32,11 @@ func (req *Request) parsePostArgs() {
 	}
 
 	req.ParsedPostArgs = true
-	if !bytes.HasPrefix(req.Header.ContentType(), zerocopy.StrPostArgsContentType) {
+	if !bytes.HasPrefix(req.Header.ContentType(), StrPostArgsContentType) {
 		return
 	}
 
-	req.postArgs.ParseBytes(req.bodyBytes())
+	uri.Parse(&req.postArgs, req.bodyBytes())
 }
 
 // MultipartForm returns the parsed multipart/form-data payload (RFC 7578).
@@ -54,20 +57,26 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 		return req.multipartForm, nil
 	}
 
-	req.multipartFormBoundary = string(req.Header.MultipartFormBoundary())
+	b := req.Header.MultipartFormBoundary()
+	if len(b) > 0 {
+		req.multipartFormBoundary = bytesconv.B2S(b)
+	} else {
+		req.multipartFormBoundary = headkit.ExtractBoundary(bytesconv.B2S(req.Header.ContentType()))
+	}
+
 	if req.multipartFormBoundary == "" {
 		return nil, ErrNoMultipartForm
 	}
 
 	var err error
 
-	ce := req.Header.peek(zerocopy.StrContentEncoding)
+	ce := req.Header.peek(StrContentEncoding)
 	if req.bodyStream != nil {
 		bodyStream := req.bodyStream
 
 		var lr *io.LimitedReader
 
-		if bytes.Equal(ce, zerocopy.StrGzip) {
+		if bytes.Equal(ce, StrGzip) {
 			if bodyStream, err = gzip.NewReader(bodyStream); err != nil {
 				return nil, fmt.Errorf("cannot gunzip request body: %w", err)
 			}
@@ -97,7 +106,7 @@ func (req *Request) MultipartFormWithLimit(maxBodySize int) (*multipart.Form, er
 		}
 	} else {
 		body := req.bodyBytes()
-		if bytes.Equal(ce, zerocopy.StrGzip) {
+		if bytes.Equal(ce, StrGzip) {
 			if body, err = gunzipData(body, maxBodySize); err != nil {
 				return nil, fmt.Errorf("cannot gunzip request body: %w", err)
 			}

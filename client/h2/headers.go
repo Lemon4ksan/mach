@@ -11,12 +11,12 @@ import (
 	"net/http/httptrace"
 	"net/textproto"
 	"strconv"
-	"strings"
 
+	"github.com/lemon4ksan/foundation/bufkit"
 	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -118,41 +118,48 @@ func (c *Conn) encodeRequestHeaders(h *coreh2.Headers, req *h1.Request) {
 		h.AppendHeaderField(enc, hf, true)
 	}
 
+	if protoVal := req.Header.Peek(":protocol"); len(protoVal) > 0 {
+		hf.SetBytes([]byte(":protocol"), protoVal)
+		h.AppendHeaderField(enc, hf, true)
+	}
+
 	if len(c.orderedKeys) > 0 {
 		c.appendOrderedHeaders(h, req, hf)
-	} else {
-		ua := req.Header.UserAgent()
-		if len(ua) > 0 {
-			hf.SetBytes(coreh2.StringUserAgent, ua)
-			h.AppendHeaderField(enc, hf, true)
+		return
+	}
+
+	ua := req.Header.UserAgent()
+	if len(ua) > 0 {
+		hf.SetBytes(coreh2.StringUserAgent, ua)
+		h.AppendHeaderField(enc, hf, true)
+	}
+
+	for k, v := range req.Header.All() {
+		if isForbiddenH2Header(k, v) {
+			continue
 		}
 
-		for k, v := range req.Header.All() {
-			if isForbiddenH2Header(k, v) {
-				continue
-			}
-
-			hf.SetBytes(coreh2.ToLowerCopy(k), v)
-			h.AppendHeaderField(enc, hf, false)
-		}
+		hf.SetBytes(coreh2.ToLowerCopy(k), v)
+		h.AppendHeaderField(enc, hf, false)
 	}
 }
 
-func getFastHTTPCookieHeader(req *h1.Request) []byte {
-	var sb strings.Builder
+func getRequestCookieHeader(req *h1.Request) []byte {
+	sb := bufkit.NewChain()
+	defer sb.Release()
 
 	for key, value := range req.Header.Cookies() {
 		if sb.Len() > 0 {
-			sb.WriteString("; ")
+			_, _ = sb.WriteString("; ")
 		}
 
-		sb.Write(key)
-		sb.WriteByte('=')
-		sb.Write(value)
+		_, _ = sb.Write(key)
+		_ = sb.WriteByte('=')
+		_, _ = sb.Write(value)
 	}
 
 	if sb.Len() > 0 {
-		return bytesconv.S2B(sb.String())
+		return bytesconv.S2B(string(sb.Bytes()))
 	}
 
 	if raw := req.Header.Peek("Cookie"); len(raw) > 0 {
@@ -189,7 +196,7 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *hpac
 
 		var val []byte
 		if bytesconv.EqualFoldASCII(key, "cookie") {
-			val = getFastHTTPCookieHeader(req)
+			val = getRequestCookieHeader(req)
 		} else {
 			val = req.Header.Peek(key)
 			if len(val) == 0 && len(key) > 0 {
@@ -197,13 +204,15 @@ func (c *Conn) appendOrderedHeaders(h *coreh2.Headers, req *h1.Request, hf *hpac
 			}
 		}
 
-		if len(val) > 0 {
-			hf.SetKey(key)
-			hf.SetValueBytes(val)
-			h.AppendHeaderField(c.enc, hf, false)
-
-			visitedBits |= (1 << i)
+		if len(val) == 0 {
+			continue
 		}
+
+		hf.SetKey(key)
+		hf.SetValueBytes(val)
+		h.AppendHeaderField(c.enc, hf, false)
+
+		visitedBits |= (1 << i)
 	}
 
 	for k, v := range req.Header.All() {
@@ -239,16 +248,14 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 
 	var (
 		totalSize uint32
-		maxList   = c.current.MaxHeaderListSize()
+		maxList   = generic.Coalesce(c.current.MaxHeaderListSize(), defaultMaxHeaderListSize)
 	)
-
-	if maxList == 0 {
-		maxList = defaultMaxHeaderListSize
-	}
 
 	if reqCtx.Trailers == nil {
 		reqCtx.Trailers = make(map[string][]string)
 	}
+
+	c.dec.BeginHeaderBlock()
 
 	for len(b) > 0 {
 		var err error
@@ -258,12 +265,39 @@ func (c *Conn) readTrailers(b []byte, reqCtx *Context) error {
 			return err
 		}
 
+		if hf.Empty() {
+			continue
+		}
+
 		totalSize += hf.Size()
 		if totalSize > maxList {
 			return coreh2.ErrPayloadExceeds
 		}
 
-		if !hf.IsPseudo() && len(hf.KeyBytes()) > 0 {
+		// RFC 9113 §8.3: Pseudo-header fields MUST NOT appear in a trailer section.
+		// Receiving pseudo-header fields in trailers MUST be treated as malformed (stream error of type PROTOCOL_ERROR).
+		if hf.IsPseudo() {
+			return coreh2.ProtocolError
+		}
+
+		k := hf.KeyBytes()
+		v := hf.ValueBytes()
+
+		// RFC 9113 §8.2.1: Field names MUST be lowercase ASCII and conform to field validity requirements.
+		if err := coreh2.ValidateHeaderName(k, false); err != nil {
+			return err
+		}
+
+		if err := coreh2.ValidateHeaderValue(v); err != nil {
+			return err
+		}
+
+		// RFC 9113 §8.2.2: Connection-specific header fields MUST NOT be present.
+		if coreh2.IsConnectionSpecificHeader(k, v) {
+			return coreh2.ProtocolError
+		}
+
+		if len(k) > 0 {
 			key := hf.Key()
 			reqCtx.Trailers[key] = append(reqCtx.Trailers[key], hf.Value())
 		}
@@ -277,17 +311,17 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 	defer hpack.ReleaseHeaderField(hf)
 
 	var (
-		err        error
-		statusCode int
-		totalSize  uint32
-		maxList    = c.current.MaxHeaderListSize()
+		err              error
+		statusCode       int
+		hasStatus        bool
+		hasRegularHeader bool
+		totalSize        uint32
+		maxList          = generic.Coalesce(c.current.MaxHeaderListSize(), defaultMaxHeaderListSize)
 	)
 
-	if maxList == 0 {
-		maxList = defaultMaxHeaderListSize
-	}
-
 	informationalHeader := make(http.Header)
+
+	c.dec.BeginHeaderBlock()
 
 	for len(b) > 0 {
 		b, err = c.dec.Next(hf, b)
@@ -295,18 +329,52 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 			return 0, err
 		}
 
+		if hf.Empty() {
+			continue
+		}
+
 		totalSize += hf.Size()
 		if totalSize > maxList {
 			return 0, coreh2.ErrPayloadExceeds
 		}
 
-		if hf.IsPseudo() && len(hf.KeyBytes()) > 1 && hf.KeyBytes()[1] == 's' {
+		k := hf.KeyBytes()
+		v := hf.ValueBytes()
+
+		// RFC 9113 §8.2.1: Field names MUST be lowercase ASCII and conform to field validity requirements.
+		if err := coreh2.ValidateHeaderName(k, hf.IsPseudo()); err != nil {
+			return 0, err
+		}
+
+		// RFC 9113 §8.2.1: Field values MUST NOT contain NUL, CR, or LF at any position.
+		if err := coreh2.ValidateHeaderValue(v); err != nil {
+			return 0, err
+		}
+
+		if hf.IsPseudo() {
+			// RFC 9113 §8.3: Pseudo-headers MUST appear before regular header fields.
+			if hasRegularHeader {
+				return 0, coreh2.ProtocolError
+			}
+
+			// RFC 9113 §8.3.2: For HTTP/2 responses, only the ":status" pseudo-header field is defined.
+			if !bytes.Equal(k, coreh2.StringStatus) {
+				return 0, coreh2.ProtocolError
+			}
+
+			// RFC 9113 §8.3: Repeated pseudo-header fields MUST be treated as malformed.
+			if hasStatus {
+				return 0, coreh2.ProtocolError
+			}
+
 			n, pErr := strconv.ParseInt(hf.Value(), 10, 64)
-			if pErr != nil {
-				return 0, pErr
+			if pErr != nil || n < 100 || n > 599 {
+				return 0, coreh2.ProtocolError
 			}
 
 			statusCode = int(n)
+			hasStatus = true
+
 			if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
 				res.SetStatusCode(statusCode)
 			}
@@ -314,17 +382,30 @@ func (c *Conn) readHeader(b []byte, res *h1.Response) (int, error) {
 			continue
 		}
 
+		hasRegularHeader = true
+
+		// RFC 9113 §8.2.2: Connection-specific header fields are prohibited in HTTP/2.
+		if coreh2.IsConnectionSpecificHeader(k, v) {
+			return 0, coreh2.ProtocolError
+		}
+
 		if statusCode >= 100 && statusCode < 200 && statusCode != 101 {
 			informationalHeader.Add(hf.Key(), hf.Value())
 			continue
 		}
 
-		if bytes.Equal(hf.KeyBytes(), coreh2.StringContentLength) {
+		if bytes.Equal(k, coreh2.StringContentLength) {
 			n, _ := strconv.Atoi(hf.Value())
 			res.Header.SetContentLength(n)
-		} else {
-			res.Header.AddBytesKV(hf.KeyBytes(), hf.ValueBytes())
+			continue
 		}
+
+		res.Header.AddBytesKV(k, v)
+	}
+
+	// RFC 9113 §8.3.2: ":status" pseudo-header field MUST be included in all responses.
+	if !hasStatus {
+		return 0, coreh2.ProtocolError
 	}
 
 	if statusCode == 103 {

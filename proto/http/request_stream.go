@@ -9,11 +9,9 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
-
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/foundation/silicon/pool"
 )
 
 type bodyStreamHeader interface {
@@ -113,35 +111,40 @@ func (rs *RequestStream) Read(p []byte) (int, error) {
 	return n, err
 }
 
+var requestStreamStorage = pool.NewPerCorePool[*RequestStream](func() *RequestStream {
+	return &RequestStream{}
+})
+
 // AcquireRequestStream acquires a pooled RequestStream instance initialized with prefetched bytes, reader, and header parser.
 //
-// Thread-safe: Yes (backed by sync.Pool).
+// Thread-safe: Yes (backed by PerCorePool).
 func AcquireRequestStream(b *bytesconv.ByteBuffer, r *bufio.Reader, h bodyStreamHeader) *RequestStream {
-	rs := RequestStreamPool.Get().(*RequestStream) //nolint:forcetypeassert
-	rs.prefetchedBytes = bytes.NewReader(b.B)
+	rs := requestStreamStorage.Get()
+	if rs.prefetchedBytes == nil {
+		rs.prefetchedBytes = bytes.NewReader(b.B)
+	} else {
+		rs.prefetchedBytes.Reset(b.B)
+	}
+
 	rs.reader = r
 	rs.header = h
 
 	return rs
 }
 
-// ReleaseRequestStream releases a RequestStream instance back to RequestStreamPool after resetting its fields.
+// ReleaseRequestStream releases a RequestStream instance back to the PerCorePool after resetting its fields.
 //
-// Thread-safe: Yes (backed by sync.Pool).
+// Thread-safe: Yes (backed by PerCorePool).
 func ReleaseRequestStream(rs *RequestStream) {
-	rs.prefetchedBytes = nil
+	if rs == nil {
+		return
+	}
+
 	rs.totalBytesRead = 0
 	rs.chunkLeft = 0
 	rs.reader = nil
 	rs.header = nil
-	RequestStreamPool.Put(rs)
-}
-
-// RequestStreamPool pools RequestStream instances to reduce garbage collection overhead during streaming I/O.
-var RequestStreamPool = sync.Pool{
-	New: func() any {
-		return &RequestStream{}
-	},
+	requestStreamStorage.Put(rs)
 }
 
 // SetBodyStream configures bodyStream as the request entity body reader with an expected length (RFC 9112 Section 7.1).
@@ -178,13 +181,6 @@ func (req *Request) BodyStream() io.Reader {
 	return req.bodyStream
 }
 
-// RequestBodyStream returns the configured request body reader.
-//
-// Thread-safe: No.
-func (req *Request) RequestBodyStream() io.Reader {
-	return req.bodyStream
-}
-
 // CloseBodyStream closes the active request body stream if it implements io.Closer and returns any error encountered.
 //
 // Thread-safe: No.
@@ -197,15 +193,7 @@ func (req *Request) closeBodyStream() error {
 		return nil
 	}
 
-	var err error
-	if bsc, ok := req.bodyStream.(io.Closer); ok {
-		err = bsc.Close()
-	}
-
-	if rs, ok := req.bodyStream.(*RequestStream); ok {
-		ReleaseRequestStream(rs)
-	}
-
+	err := closeBodyStreamReader(req.bodyStream, nil)
 	req.bodyStream = nil
 
 	return err
@@ -229,7 +217,7 @@ func (req *Request) ContinueReadBodyStream(r *bufio.Reader, maxBodySize int, pre
 	if contentLength > 0 {
 		if len(preParseMultipartForm) == 0 || preParseMultipartForm[0] {
 			req.multipartFormBoundary = bytesconv.B2S(req.Header.MultipartFormBoundary())
-			if req.multipartFormBoundary != "" && len(req.Header.peek(zerocopy.StrContentEncoding)) == 0 {
+			if req.multipartFormBoundary != "" && len(req.Header.peek(StrContentEncoding)) == 0 {
 				req.multipartForm, err = readMultipartForm(
 					r,
 					req.multipartFormBoundary,

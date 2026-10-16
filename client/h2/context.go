@@ -5,6 +5,8 @@
 package h2
 
 import (
+	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,15 +42,22 @@ type ClientOpts struct {
 // StreamID and state are managed via atomic primitives to eliminate data races between
 // request cancellation (CancelStream) and egress request writing (writeRequest).
 type Context struct {
-	Request        *h1.Request
-	Response       *h1.Response
-	Err            chan error
-	Trailers       map[string][]string
-	StreamID       atomic.Uint32
-	streamWindow   atomic.Int32
-	streamRxWindow atomic.Int32
-	state          atomic.Int32
-	headersParsed  bool
+	Request          *h1.Request
+	Response         *h1.Response
+	Err              chan error
+	Trailers         map[string][]string
+	StreamID         atomic.Uint32
+	streamWindow     atomic.Int32
+	streamRxWindow   atomic.Int32
+	state            atomic.Int32
+	headersParsed    bool
+	trailersReceived bool
+	endStreamPending bool
+	mu               sync.Mutex
+	isTunnel         bool
+	tunnelHeadersCh  chan error
+	pipeWriter       *io.PipeWriter
+	pipeReader       *io.PipeReader
 }
 
 // ID returns the active stream identifier (RFC 9113 §5.1.1).
@@ -69,4 +78,10 @@ func (ctx *Context) State() streamState {
 // SetState updates the stream state.
 func (ctx *Context) SetState(s streamState) {
 	ctx.state.Store(int32(s))
+}
+
+// Close atomically transitions the stream state to streamClosed and reports whether
+// this call transitioned the stream from a non-closed state.
+func (ctx *Context) Close() bool {
+	return ctx.state.Swap(int32(streamClosed)) != int32(streamClosed)
 }

@@ -190,9 +190,8 @@ func BenchmarkPoolManager_GetPut(b *testing.B) {
 	addr := "bench:443"
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		c, err := pm.Get(ctx, addr)
 		if err != nil {
 			b.Fatal(err)

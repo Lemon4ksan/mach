@@ -10,8 +10,8 @@ import (
 	"io"
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
-	"github.com/lemon4ksan/foundation/net/quic"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 )
 
@@ -26,7 +26,7 @@ func (cc *ClientConn) setupControlStream() error {
 	var stackBuf [64]byte
 
 	buf := varint.Append(stackBuf[:0], coreh3.StreamTypeControl)
-	buf = append(buf, cc.settings.Encode()...)
+	buf = append(buf, cc.localSettings.Encode()...)
 
 	_, err = str.Write(buf)
 
@@ -65,7 +65,7 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 		if cc.hasControlIn.Swap(true) {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
-				"duplicate control stream",
+				"duplicate control stream (RFC 9114 §6.2.1)",
 			)
 
 			return
@@ -77,25 +77,37 @@ func (cc *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 		if cc.hasQPACKEncoder.Swap(true) {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
-				"duplicate QPACK encoder stream",
+				"duplicate QPACK encoder stream (RFC 9114 §6.2 & RFC 9204 §4.2)",
 			)
 
 			return
 		}
 
-		_, _ = io.Copy(io.Discard, str)
+		_, err := cc.qpack.ReadEncoderStream(str)
+		if cc.qpack.Err() == nil && (err == nil || errors.Is(err, io.EOF)) {
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3ClosedCriticalStream),
+				"QPACK encoder stream closed (RFC 9114 §6.2.1 & RFC 9204 §4.2)",
+			)
+		}
 
 	case coreh3.StreamTypeQPACKDecoder:
 		if cc.hasQPACKDecoder.Swap(true) {
 			_ = cc.conn.CloseWithError(
 				quic.ApplicationErrorCode(coreh3.ErrCodeH3StreamCreationError),
-				"duplicate QPACK decoder stream",
+				"duplicate QPACK decoder stream (RFC 9114 §6.2 & RFC 9204 §4.2)",
 			)
 
 			return
 		}
 
-		_, _ = io.Copy(io.Discard, str)
+		_, err := cc.qpack.ReadDecoderStream(str)
+		if cc.qpack.Err() == nil && (err == nil || errors.Is(err, io.EOF)) {
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3ClosedCriticalStream),
+				"QPACK decoder stream closed (RFC 9114 §6.2.1 & RFC 9204 §4.2)",
+			)
+		}
 
 	default:
 		// Unknown unidirectional stream: RFC 9114 §6.2 specifies unknown stream types must be ignored.
@@ -114,49 +126,143 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 	for {
 		frameType, payloadLen, err := coreh3.ReadFrameHeader(r)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3ClosedCriticalStream),
+					"control stream closed unexpectedly (RFC 9114 §6.2.1)",
+				)
+			}
+
 			return
 		}
 
-		if firstFrame {
-			if frameType != coreh3.FrameTypeSettings {
-				_ = cc.conn.CloseWithError(
-					quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
-					"H3_MISSING_SETTINGS: first frame must be SETTINGS (RFC 9114 §7.2.4)",
-				)
+		if firstFrame && frameType != coreh3.FrameTypeSettings {
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3MissingSettings),
+				"H3_MISSING_SETTINGS: first frame must be SETTINGS (RFC 9114 §7.2.4)",
+			)
 
-				return
-			}
-
-			firstFrame = false
+			return
 		}
+
+		if !firstFrame && frameType == coreh3.FrameTypeSettings {
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+				"H3_FRAME_UNEXPECTED: second SETTINGS frame on control stream (RFC 9114 §7.2.4)",
+			)
+
+			return
+		}
+
+		firstFrame = false
 
 		switch frameType {
 		case coreh3.FrameTypeSettings:
 			st, err := coreh3.DecodeSettings(r, payloadLen)
 			if err != nil {
+				var (
+					msg  string
+					code = coreh3.ErrCodeH3SettingsError
+				)
 				if errors.Is(err, coreh3.ErrH3SettingsError) {
-					_ = cc.conn.CloseWithError(
-						quic.ApplicationErrorCode(coreh3.ErrCodeH3SettingsError),
-						"H3_SETTINGS_ERROR: reserved H2 setting ID (RFC 9114 §7.2.4.1)",
-					)
+					msg = "H3_SETTINGS_ERROR: reserved H2 setting ID (RFC 9114 §7.2.4.1)"
 				} else {
-					_ = cc.conn.CloseWithError(
-						quic.ApplicationErrorCode(coreh3.ErrCodeH3SettingsError),
-						"H3_SETTINGS_ERROR: invalid settings payload (RFC 9114 §7.2.4)",
-					)
+					code = coreh3.ErrCodeH3FrameError
+					msg = "H3_FRAME_ERROR: truncated settings payload (RFC 9114 §7.1)"
 				}
+
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(code),
+					msg,
+				)
 
 				return
 			}
 
-			cc.settings = *st
+			cc.peerSettingsMu.Lock()
+			cc.peerSettings = *st
+			cc.peerSettingsMu.Unlock()
+			cc.enableConnect.Store(st.EnableConnect)
+			cc.settingsReadyOnce.Do(func() {
+				close(cc.settingsReady)
+			})
+			cc.qpack.ApplySettings(st.QpackMaxTableCap, st.QpackBlockedStreams)
 
 		case coreh3.FrameTypeGoAway:
-			cc.handleGoAway(r, payloadLen)
+			if err := cc.handleGoAway(r, payloadLen); err != nil {
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameError),
+					"H3_FRAME_ERROR: malformed GOAWAY payload (RFC 9114 §7.1 & §7.2.6)",
+				)
+
+				return
+			}
+
+			return
+
+		case coreh3.FrameTypeCancelPush:
+			// RFC 9114 §7.2.3: CANCEL_PUSH payload is a single Push ID varint.
+			if payloadLen == 0 {
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameError),
+					"H3_FRAME_ERROR: empty CANCEL_PUSH payload (RFC 9114 §7.1 & §7.2.3)",
+				)
+
+				return
+			}
+
+			lr := io.LimitReader(r, int64(payloadLen)) //nolint:gosec
+
+			vReader := varint.NewReader(lr)
+			if _, err := varint.Read(vReader); err != nil {
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameError),
+					"H3_FRAME_ERROR: malformed CANCEL_PUSH push ID (RFC 9114 §7.1 & §7.2.3)",
+				)
+
+				return
+			}
+
+			var extra [1]byte
+			if n, _ := lr.Read(extra[:]); n > 0 {
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameError),
+					"H3_FRAME_ERROR: excess payload in CANCEL_PUSH frame (RFC 9114 §7.1 & §7.2.3)",
+				)
+
+				return
+			}
+
+		case coreh3.FrameTypeMaxPushID:
+			// RFC 9114 §7.2.7: A server MUST NOT send a MAX_PUSH_ID frame. A client MUST treat the
+			// receipt of a MAX_PUSH_ID frame as a connection error of type H3_FRAME_UNEXPECTED.
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+				"H3_FRAME_UNEXPECTED: server sent MAX_PUSH_ID frame (RFC 9114 §7.2.7)",
+			)
+
+			return
+
+		case coreh3.FrameTypeData, coreh3.FrameTypeHeaders, coreh3.FrameTypePushPromise:
+			// RFC 9114 §7.2.1, §7.2.2, §7.2.5: DATA, HEADERS, PUSH_PROMISE MUST NOT be received on control stream
+			_ = cc.conn.CloseWithError(
+				quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+				"H3_FRAME_UNEXPECTED: prohibited frame received on control stream (RFC 9114 §7.2)",
+			)
 
 			return
 
 		default:
+			if coreh3.IsReservedH2FrameType(frameType) {
+				// RFC 9114 §7.2.8 & §11.2.1: Reserved HTTP/2 frame types MUST cause H3_FRAME_UNEXPECTED
+				_ = cc.conn.CloseWithError(
+					quic.ApplicationErrorCode(coreh3.ErrCodeH3FrameUnexpected),
+					"H3_FRAME_UNEXPECTED: reserved H2 frame received on control stream (RFC 9114 §7.2.8)",
+				)
+
+				return
+			}
+
 			if _, err := io.CopyN(io.Discard, r, int64(payloadLen)); err != nil { //nolint:gosec
 				return
 			}
@@ -166,10 +272,24 @@ func (cc *ClientConn) handleControlStream(r varint.Reader) {
 
 // handleGoAway processes a GOAWAY frame received from the server, reads the shutdown stream ID,
 // and initiates client connection termination (RFC 9114 §7.2.6).
-func (cc *ClientConn) handleGoAway(r varint.Reader, payloadLen uint64) {
-	if payloadLen > 0 {
-		_, _ = varint.Read(r)
+func (cc *ClientConn) handleGoAway(r varint.Reader, payloadLen uint64) error {
+	if payloadLen == 0 {
+		return errors.New("empty GOAWAY payload")
+	}
+
+	lr := io.LimitReader(r, int64(payloadLen)) //nolint:gosec
+
+	vReader := varint.NewReader(lr)
+	if _, err := varint.Read(vReader); err != nil {
+		return err
+	}
+
+	var extra [1]byte
+	if n, _ := lr.Read(extra[:]); n > 0 {
+		return errors.New("excess payload in GOAWAY")
 	}
 
 	_ = cc.Close()
+
+	return nil
 }

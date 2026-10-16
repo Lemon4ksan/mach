@@ -5,11 +5,13 @@
 package headkit
 
 import (
+	"bytes"
 	"iter"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
@@ -21,21 +23,16 @@ type AcceptItem struct {
 }
 
 // Accepts yields an iterator traversing quality-weighted items from an Accept, Accept-Encoding,
-// or Accept-Language header string with zero heap allocations per token.
-func Accepts(header string) iter.Seq[AcceptItem] {
+// or Accept-Language header string or byte slice with zero heap allocations per token.
+func Accepts[S ~string | ~[]byte](header S) iter.Seq[AcceptItem] {
 	return func(yield func(item AcceptItem) bool) {
-		if header == "" {
+		if len(header) == 0 {
 			return
 		}
 
-		for _, rawToken := range Directives(header) {
-			_ = rawToken // unused in key/val split
-		}
-
-		// Direct iteration over comma-separated chunks
 		s := header
 		for len(s) > 0 {
-			s = strings.TrimLeft(s, " ,\t\r\n")
+			s = trimLeftDirectives(s, ',')
 			if len(s) == 0 {
 				break
 			}
@@ -53,17 +50,17 @@ func Accepts(header string) iter.Seq[AcceptItem] {
 				}
 			}
 
-			var token string
+			var token S
 			if end < len(s) {
 				token = s[:end]
 				s = s[end+1:]
 			} else {
 				token = s
-				s = ""
+				s = s[:0]
 			}
 
-			token = strings.TrimSpace(token)
-			if token == "" {
+			token = trimSpaceDirectives(token)
+			if len(token) == 0 {
 				continue
 			}
 
@@ -75,31 +72,34 @@ func Accepts(header string) iter.Seq[AcceptItem] {
 	}
 }
 
-func parseAcceptToken(token string) AcceptItem {
-	parts := strings.Split(token, ";")
-	val := strings.ToLower(strings.TrimSpace(parts[0]))
+func parseAcceptToken[S ~string | ~[]byte](token S) AcceptItem {
+	parts := splitSemicolons(token)
+	val := string(toLowerDirectives(trimSpaceDirectives(parts[0])))
 	q := float32(1.0)
 
 	var params map[string]string
 
 	for i := 1; i < len(parts); i++ {
-		p := strings.TrimSpace(parts[i])
-		if p == "" {
+		p := trimSpaceDirectives(parts[i])
+		if len(p) == 0 {
 			continue
 		}
 
-		k, v, ok := strings.Cut(p, "=")
+		k, v, ok := cutDirectives(p, '=')
 
-		k = strings.ToLower(strings.TrimSpace(k))
+		k = toLowerDirectives(trimSpaceDirectives(k))
 		if ok {
-			v = strings.TrimSpace(v)
+			v = trimSpaceDirectives(v)
 			if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
 				v = v[1 : len(v)-1]
 			}
 		}
 
-		if k == "q" {
-			if parsedQ, err := strconv.ParseFloat(v, 32); err == nil {
+		kStr := string(k)
+		vStr := string(v)
+
+		if kStr == "q" {
+			if parsedQ, err := strconv.ParseFloat(vStr, 32); err == nil {
 				if parsedQ >= 0 && parsedQ <= 1.0 {
 					q = float32(parsedQ)
 				}
@@ -109,7 +109,7 @@ func parseAcceptToken(token string) AcceptItem {
 				params = make(map[string]string)
 			}
 
-			params[k] = v
+			params[kStr] = vStr
 		}
 	}
 
@@ -120,14 +120,35 @@ func parseAcceptToken(token string) AcceptItem {
 	}
 }
 
-// SortedAccepts parses header and returns items sorted by quality Q in descending order (highest preference first).
-func SortedAccepts(header string) []AcceptItem {
-	var items []AcceptItem
-	for item := range Accepts(header) {
-		if item.Q > 0 { // RFC 9110 §12.4.2: q=0 means unacceptable
-			items = append(items, item)
+func splitSemicolons[S ~string | ~[]byte](s S) []S {
+	var parts []S
+	for {
+		idx := -1
+		for i := range len(s) {
+			if s[i] == ';' {
+				idx = i
+				break
+			}
 		}
+
+		if idx == -1 {
+			parts = append(parts, s)
+			break
+		}
+
+		parts = append(parts, s[:idx])
+		s = s[idx+1:]
 	}
+
+	return parts
+}
+
+// SortedAccepts parses header and returns items sorted by quality Q in descending order (highest preference first).
+// Supports both [string] and [[]byte].
+func SortedAccepts[S ~string | ~[]byte](header S) []AcceptItem {
+	items := generic.Filter(slices.Collect(Accepts(header)), func(item AcceptItem) bool {
+		return item.Q > 0 // RFC 9110 §12.4.2: q=0 means unacceptable
+	})
 
 	slices.SortStableFunc(items, func(a, b AcceptItem) int {
 		if b.Q > a.Q {
@@ -144,13 +165,14 @@ func SortedAccepts(header string) []AcceptItem {
 
 // Negotiate selects the best matching offer from offers according to the client's Accept header (RFC 9110 §12.5).
 // Supports exact matches, wildcard matching (*/* or type/*), and respects q=0 (not acceptable).
-// Returns an empty string if no acceptable match is found.
-func Negotiate(acceptHeader string, offers []string) string {
+// Returns an empty string if no acceptable match is found. Supports both [string] and [[]byte].
+func Negotiate[S ~string | ~[]byte](acceptHeader S, offers []string) string {
 	if len(offers) == 0 {
 		return ""
 	}
 
-	if acceptHeader == "" || acceptHeader == "*/*" {
+	bAccept := stringOrBytesToBytes(acceptHeader)
+	if len(bAccept) == 0 || bytes.Equal(bAccept, []byte("*/*")) {
 		return offers[0]
 	}
 
@@ -166,19 +188,19 @@ func Negotiate(acceptHeader string, offers []string) string {
 		}
 
 		// Exact match
-		for _, offer := range offers {
-			if bytesconv.EqualFoldASCII(offer, prefVal) {
-				return offer
-			}
+		if match, ok := generic.Find(offers, func(offer string) bool {
+			return bytesconv.EqualFoldASCII(offer, prefVal)
+		}); ok {
+			return match
 		}
 
 		// Wildcard match (e.g. "text/*")
 		if strings.HasSuffix(prefVal, "/*") {
 			prefix := prefVal[:len(prefVal)-1] // "text/"
-			for _, offer := range offers {
-				if strings.HasPrefix(strings.ToLower(offer), prefix) {
-					return offer
-				}
+			if match, ok := generic.Find(offers, func(offer string) bool {
+				return strings.HasPrefix(strings.ToLower(offer), prefix)
+			}); ok {
+				return match
 			}
 		}
 	}

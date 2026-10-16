@@ -38,12 +38,17 @@ func TestDirectives(t *testing.T) {
 	assert.Equal(t, 10, dm.Int("missing", 10))
 	assert.Equal(t, 5, dm.Len())
 
-	// Bytes test
-	bytesParsed := make(map[string]string)
-	for k, v := range headkit.DirectivesBytes([]byte(raw)) {
-		bytesParsed[string(k)] = string(v)
+	// Generic Directives test with []byte
+	genBytesParsed := make(map[string]string)
+	for k, v := range headkit.Directives([]byte(raw)) {
+		genBytesParsed[string(k)] = string(v)
 	}
-	assert.Equal(t, parsed, bytesParsed)
+	assert.Equal(t, parsed, genBytesParsed)
+
+	// Generic ParseDirectives test with []byte
+	dmBytes := headkit.ParseDirectives([]byte(raw))
+	assert.Equal(t, dm.Len(), dmBytes.Len())
+	assert.Equal(t, dm.Get("max-age"), dmBytes.Get("max-age"))
 }
 
 func TestParamDirectives(t *testing.T) {
@@ -56,6 +61,19 @@ func TestParamDirectives(t *testing.T) {
 	assert.Equal(t, 86400, dm.Int("ma", 0))
 	assert.True(t, dm.Bool("persist"))
 	assert.Equal(t, "quoted;semi", dm.Get("custom"))
+
+	// Generic ParamDirectives test with []byte
+	dmBytes := headkit.ParseParamDirectives([]byte(raw))
+	assert.Equal(t, dm.Get("h3"), dmBytes.Get("h3"))
+	assert.Equal(t, dm.Int("ma", 0), dmBytes.Int("ma", 0))
+	assert.Equal(t, dm.Bool("persist"), dmBytes.Bool("persist"))
+	assert.Equal(t, dm.Get("custom"), dmBytes.Get("custom"))
+
+	var paramKeys []string
+	for k, v := range headkit.ParamDirectives([]byte(raw)) {
+		paramKeys = append(paramKeys, string(k)+"="+string(v))
+	}
+	assert.Len(t, paramKeys, 4)
 }
 
 func TestAcceptAndNegotiate(t *testing.T) {
@@ -82,6 +100,14 @@ func TestAcceptAndNegotiate(t *testing.T) {
 	offers3 := []string{"video/mp4", "image/png"}
 	chosen3 := headkit.Negotiate(acceptHeader, offers3)
 	assert.Equal(t, "video/mp4", chosen3)
+
+	// Generic []byte test
+	sortedBytes := headkit.SortedAccepts([]byte(acceptHeader))
+	assert.Equal(t, len(sorted), len(sortedBytes))
+	assert.Equal(t, sorted[0].Value, sortedBytes[0].Value)
+
+	chosenByte := headkit.Negotiate([]byte(acceptHeader), offers)
+	assert.Equal(t, "text/html", chosenByte)
 }
 
 func TestMediaType(t *testing.T) {
@@ -114,6 +140,23 @@ func TestMediaType(t *testing.T) {
 	// Format media type
 	formatted := headkit.FormatMediaType("application/json", map[string]string{"charset": "utf-8"})
 	assert.Equal(t, "application/json; charset=utf-8", formatted)
+
+	// Generic []byte test
+	mtBytes, paramsBytes, errBytes := headkit.ParseMediaType([]byte(ct))
+	require.NoError(t, errBytes)
+	assert.Equal(t, "multipart/form-data", string(mtBytes))
+	assert.Equal(t, "utf-8", paramsBytes.Get("charset"))
+	assert.Equal(t, "----WebKitFormBoundary7MA4YWxkTrZu0gW", paramsBytes.Get("boundary"))
+
+	assert.Equal(t, "multipart/form-data", string(headkit.BaseMediaType([]byte(ct))))
+	assert.Equal(t, "----WebKitFormBoundary7MA4YWxkTrZu0gW", headkit.ExtractBoundary([]byte(ct)))
+	assert.Equal(t, "utf-8", headkit.ExtractCharset([]byte(ct)))
+	assert.True(t, headkit.IsMultipart([]byte(ct)))
+	assert.False(t, headkit.IsJSON([]byte(ct)))
+	assert.True(t, headkit.IsJSON([]byte(jsonCT)))
+	assert.False(t, headkit.IsXML([]byte(jsonCT)))
+	assert.True(t, headkit.IsXML([]byte(xmlCT)))
+	assert.True(t, headkit.IsForm([]byte(formCT)))
 }
 
 func TestSensitiveRedaction(t *testing.T) {
@@ -128,12 +171,17 @@ func TestSensitiveRedaction(t *testing.T) {
 	assert.False(t, headkit.IsSensitive("Content-Type"))
 	assert.False(t, headkit.IsSensitive("User-Agent"))
 
-	assert.True(t, headkit.IsSensitiveBytes([]byte("Authorization")))
-	assert.False(t, headkit.IsSensitiveBytes([]byte("Content-Type")))
+	assert.True(t, headkit.IsSensitive([]byte("Authorization")))
+	assert.True(t, headkit.IsSensitive([]byte("authorization")))
+	assert.True(t, headkit.IsSensitive([]byte("Cookie")))
+	assert.False(t, headkit.IsSensitive([]byte("Content-Type")))
 
 	assert.Equal(t, "Bearer [REDACTED]", headkit.RedactValue("Authorization", "Bearer eyJhbGciOi..."))
 	assert.Equal(t, "Basic [REDACTED]", headkit.RedactValue("Authorization", "Basic dXNlcjpwYXNz"))
 	assert.Equal(t, "[REDACTED]", headkit.RedactValue("Cookie", "session=secret123"))
+
+	assert.Equal(t, "Bearer [REDACTED]", headkit.RedactValue([]byte("Authorization"), []byte("Bearer eyJhbGciOi...")))
+	assert.Equal(t, "[REDACTED]", headkit.RedactValue([]byte("Cookie"), []byte("session=secret123")))
 
 	h := make(http.Header)
 	h.Set("Authorization", "Bearer my-secret-token")
@@ -152,6 +200,8 @@ func TestCanonicalKey(t *testing.T) {
 	assert.Equal(t, "Accept-Encoding", headkit.CanonicalKey("accept-encoding"))
 	assert.True(t, headkit.IsCanonical("User-Agent"))
 	assert.False(t, headkit.IsCanonical("user-agent"))
+	assert.True(t, headkit.IsCanonical([]byte("User-Agent")))
+	assert.False(t, headkit.IsCanonical([]byte("user-agent")))
 
 	b := []byte("x-custom-header")
 	headkit.CanonicalKeyBytes(b)
@@ -182,9 +232,8 @@ func TestHeaderIterators(t *testing.T) {
 func BenchmarkDirectives(b *testing.B) {
 	raw := "public, max-age=3600, must-revalidate, stale-while-revalidate=60"
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		count := 0
 		for k, v := range headkit.Directives(raw) {
 			if k != "" || v != "" {
@@ -197,9 +246,8 @@ func BenchmarkDirectives(b *testing.B) {
 func BenchmarkCanonicalKey_FastPath(b *testing.B) {
 	key := "Content-Type"
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = headkit.CanonicalKey(key)
 	}
 }

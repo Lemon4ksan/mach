@@ -18,7 +18,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 
 	machhttp "github.com/lemon4ksan/mach/proto/http"
 	h1server "github.com/lemon4ksan/mach/server/h1"

@@ -10,6 +10,7 @@ package cachestatus
 
 import (
 	"errors"
+	"iter"
 	"net/http"
 	"strconv"
 	"strings"
@@ -229,27 +230,80 @@ func (c Chain) String() string {
 	return sb.String()
 }
 
-// Parse extracts and parses all cache status entries from a Cache-Status HTTP header string (RFC 9211 §2).
-func Parse(header string) (Chain, error) {
-	header = strings.TrimSpace(header)
-	if header == "" {
+// All returns an iterator over parsed Cache-Status entries without accumulating a slice.
+func All[S ~string | ~[]byte](header S) iter.Seq2[Entry, error] {
+	return func(yield func(Entry, error) bool) {
+		hdr := strings.TrimSpace(string(header))
+		if hdr == "" {
+			yield(Entry{}, ErrEmptyHeader)
+			return
+		}
+
+		start := 0
+		inQuote := false
+		found := false
+
+		for i := 0; i < len(hdr); i++ {
+			c := hdr[i]
+			if c == '\\' && inQuote && i+1 < len(hdr) {
+				i++
+
+				continue
+			}
+
+			if c == '"' {
+				inQuote = !inQuote
+			} else if c == ',' && !inQuote {
+				member := strings.TrimSpace(hdr[start:i])
+				if member != "" {
+					found = true
+
+					entry, err := parseEntry(member)
+					if !yield(entry, err) || err != nil {
+						return
+					}
+				}
+
+				start = i + 1
+			}
+		}
+
+		if start < len(hdr) {
+			member := strings.TrimSpace(hdr[start:])
+			if member != "" {
+				entry, err := parseEntry(member)
+
+				yield(entry, err)
+
+				return
+			}
+		}
+
+		if !found {
+			yield(Entry{}, ErrInvalidHeader)
+		}
+	}
+}
+
+// Parse extracts and parses all cache status entries from a Cache-Status HTTP header (RFC 9211 §2).
+func Parse[S ~string | ~[]byte](header S) (Chain, error) {
+	hdr := strings.TrimSpace(string(header))
+	if hdr == "" {
 		return nil, ErrEmptyHeader
 	}
 
 	var chain Chain
-	// Split by comma outside quoted strings
-	members := splitMembers(header)
-	if len(members) == 0 {
-		return nil, ErrInvalidHeader
-	}
 
-	for _, member := range members {
-		entry, err := parseEntry(member)
+	for entry, err := range All(hdr) {
 		if err != nil {
 			return nil, err
 		}
 
 		chain = append(chain, entry)
+	}
+
+	if len(chain) == 0 {
+		return nil, ErrEmptyHeader
 	}
 
 	return chain, nil
@@ -283,41 +337,6 @@ func ParseHeader(h http.Header) (Chain, error) {
 	}
 
 	return chain, nil
-}
-
-func splitMembers(header string) []string {
-	var members []string
-
-	start := 0
-	inQuote := false
-
-	for i := 0; i < len(header); i++ {
-		c := header[i]
-		if c == '\\' && inQuote && i+1 < len(header) {
-			i++
-			continue
-		}
-
-		if c == '"' {
-			inQuote = !inQuote
-		} else if c == ',' && !inQuote {
-			m := strings.TrimSpace(header[start:i])
-			if m != "" {
-				members = append(members, m)
-			}
-
-			start = i + 1
-		}
-	}
-
-	if start < len(header) {
-		m := strings.TrimSpace(header[start:])
-		if m != "" {
-			members = append(members, m)
-		}
-	}
-
-	return members
 }
 
 func parseEntry(s string) (Entry, error) {
@@ -362,15 +381,15 @@ func parseEntry(s string) (Entry, error) {
 			continue
 		}
 
-		eqIdx := strings.IndexByte(p, '=')
+		before, after, ok := strings.Cut(p, "=")
 
 		var key, val string
-		if eqIdx < 0 {
+		if !ok {
 			key = strings.ToLower(p)
 			val = "?1" // RFC 8941 boolean true default for bare parameters
 		} else {
-			key = strings.ToLower(strings.TrimSpace(p[:eqIdx]))
-			val = strings.TrimSpace(p[eqIdx+1:])
+			key = strings.ToLower(strings.TrimSpace(before))
+			val = strings.TrimSpace(after)
 		}
 
 		switch key {

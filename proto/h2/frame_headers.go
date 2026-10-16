@@ -163,7 +163,7 @@ func (h *Headers) Serialize(frh *FrameHeader) {
 			frh.payload[0] = padLen
 		}
 
-		for i := byte(0); i < padLen; i++ {
+		for range padLen {
 			frh.payload = append(frh.payload, 0)
 		}
 	}

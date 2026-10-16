@@ -8,65 +8,52 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/header"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 // Response carries HTTP/1.1 response state to be serialized directly over the wire (RFC 9112 §2.1, RFC 9110 §15).
-//
-// Concurrency:
-//   - Not safe for concurrent use across multiple goroutines.
-//
-// Memory Lifecycle:
-//   - Acquired from Per-P storage per request and recycled after WriteTo completes.
 type Response struct {
 	// StatusCode is the HTTP response status code (RFC 9110 §15). Defaults to 200 OK.
 	StatusCode int
 	// Headers holds response header fields (RFC 9110 §6.3).
 	Headers headkit.Headers
 	// Cookies holds Set-Cookie attributes (RFC 6265 §4.1).
-	Cookies []*zerocopy.Cookie
+	Cookies []*cookie.Cookie
 	// Body holds the static response payload bytes.
 	Body []byte
 	// StreamWriter provides chunked streaming response generation (RFC 9112 §7.1).
 	StreamWriter func(w io.Writer) error
 }
 
-// Reset clears the response for recycling into Per-P storage.
-func (res *Response) Reset() {
-	res.StatusCode = status.OK
-	res.Headers.Reset()
-	res.Cookies = res.Cookies[:0]
+// Reset clears the response for reuse.
+func (r *Response) Reset() {
+	r.StatusCode = status.OK
+	r.Headers.Reset()
+	r.Cookies = r.Cookies[:0]
 
-	if cap(res.Body) > 64*1024 {
-		res.Body = make([]byte, 0, 1024)
-	} else {
-		res.Body = res.Body[:0]
+	r.Body = r.Body[:0]
+	if cap(r.Body) > 64*1024 {
+		r.Body = make([]byte, 0, 1024)
 	}
 
-	res.StreamWriter = nil
+	r.StreamWriter = nil
 }
 
 // WriteTo writes the full HTTP/1.1 response (status line, headers, cookies, body or stream) to bw (RFC 9112 §2.1, RFC 9110 §15).
 // If flush is false, bytes remain buffered in bw to coalesce pipelined responses into a single write syscall.
-func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
-	code := res.StatusCode
-	if code == 0 {
-		code = status.OK
-	}
+func (r *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) error {
+	code := generic.Coalesce(r.StatusCode, status.OK)
 
 	// 1. Fast Status Line (from pre-compiled static table)
 	if code >= 100 && code < len(statusLines) && statusLines[code] != nil {
 		_, _ = bw.Write(statusLines[code])
 	} else {
-		statusText := status.Message(code)
-		if statusText == "" {
-			statusText = "Unknown"
-		}
+		statusText := generic.Coalesce(status.Message(code), "Unknown")
 
 		var stBuf [16]byte
 
@@ -78,42 +65,63 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 	}
 
 	// 2. Atomic Cached Date Header
-	if res.Headers.Get(header.Date) == "" {
-		dateBytes := cachedDateHeader.Load()
-		if dateBytes != nil {
-			_, _ = bw.Write(*dateBytes)
+	if r.Headers.Get(headkit.Date) == "" {
+		if b := generic.DerefOr(cachedDateHeader.Load(), nil); len(b) > 0 {
+			_, _ = bw.Write(b)
 		}
 	}
 
 	// 3. Connection Header
-	if keepAlive {
-		if res.Headers.Get(header.Connection) == "" {
-			_, _ = bw.Write(hdrConnectionKeepAlive)
+	switch {
+	case code == status.SwitchingProtocols:
+		if r.Headers.Get(headkit.Connection) == "" {
+			_, _ = bw.WriteString("Connection: Upgrade\r\n")
 		}
-	} else {
+	case !keepAlive:
 		_, _ = bw.Write(hdrConnectionClose)
+	case r.Headers.Get(headkit.Connection) == "":
+		_, _ = bw.Write(hdrConnectionKeepAlive)
 	}
 
 	// 4. Transfer-Encoding or Content-Length
-	if res.StreamWriter != nil {
-		if res.Headers.Get(header.TransferEncoding) == "" {
+	// RFC 9112 §6.3 Item 1: A server MUST NOT send a Content-Length header field in any response with a status code of 1xx or 204
+	if r.StreamWriter != nil {
+		if r.Headers.Get(headkit.TransferEncoding) == "" {
 			_, _ = bw.Write(hdrTransferChunked)
 		}
-	} else if code != status.NoContent && code != status.NotModified {
-		if res.Headers.Get(header.ContentLength) == "" && res.Headers.Get(header.TransferEncoding) == "" {
+	} else if code >= 200 && code != status.NoContent && code != status.NotModified &&
+		r.Headers.Get(headkit.ContentLength) == "" && r.Headers.Get(headkit.TransferEncoding) == "" {
+		_, _ = bw.Write(hdrContentLengthPrefix)
+
+		bodyLen := len(r.Body)
+		switch {
+		case bodyLen >= 0 && bodyLen < 10:
+			var clBuf [1]byte
+
+			clBuf[0] = byte('0' + bodyLen)
+			_, _ = bw.Write(clBuf[:])
+
+		case bodyLen < 100:
+			var clBuf [2]byte
+
+			clBuf[0] = byte('0' + bodyLen/10)
+			clBuf[1] = byte('0' + bodyLen%10)
+			_, _ = bw.Write(clBuf[:])
+
+		default:
 			var clBuf [24]byte
 
-			_, _ = bw.Write(hdrContentLengthPrefix)
-			_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(len(res.Body)), 10))
-			_, _ = bw.Write(hdrCRLF)
+			_, _ = bw.Write(strconv.AppendInt(clBuf[:0], int64(bodyLen), 10))
 		}
+
+		_, _ = bw.Write(hdrCRLF)
 	}
 
 	// 5. User Headers
-	res.Headers.WriteTo(bw)
+	r.Headers.WriteTo(bw)
 
 	// 6. Cookies
-	for _, c := range res.Cookies {
+	for _, c := range r.Cookies {
 		if c != nil {
 			_, _ = bw.Write(hdrSetCookiePrefix)
 			bw.B = c.AppendBytes(bw.B)
@@ -125,25 +133,21 @@ func (res *Response) WriteTo(bw *bytesconv.ByteBuffer, keepAlive, flush bool) er
 	_, _ = bw.Write(hdrCRLF)
 
 	// 7. Streaming Body or Static Body
-	if res.StreamWriter != nil {
-		return res.writeStreamBody(bw)
+	if r.StreamWriter != nil {
+		return r.writeStreamBody(bw)
 	}
 
-	if len(res.Body) > 0 && code != status.NoContent && code != status.NotModified {
-		_, _ = bw.Write(res.Body)
-	}
-
-	if flush {
-		return nil
+	if len(r.Body) > 0 && code != status.NoContent && code != status.NotModified {
+		_, _ = bw.Write(r.Body)
 	}
 
 	return nil
 }
 
 //go:noinline
-func (res *Response) writeStreamBody(bw *bytesconv.ByteBuffer) error {
+func (r *Response) writeStreamBody(bw *bytesconv.ByteBuffer) error {
 	cw := NewChunkedWriter(bw)
-	err := res.StreamWriter(cw)
+	err := r.StreamWriter(cw)
 	closeErr := cw.Close()
 
 	if err != nil {

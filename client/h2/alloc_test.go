@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package h2_test
 
 import (
@@ -36,24 +40,18 @@ func TestDoAllocations(t *testing.T) {
 	m := &mockConn{Buffer: bytes.NewBuffer(nil)}
 	conn := h2.NewConn(m, h2.ConnOpts{})
 
-	allocs := testing.AllocsPerRun(100, func() {
+	_ = testing.AllocsPerRun(100, func() {
 		// Mocking a full H2 interaction is complex.
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 		defer cancel()
 		_ = conn.Do(ctx, req, res)
 	})
-
-	// Just a check to not fail immediately on the benchmark
-	if allocs > 100 {
-		// t.Errorf("expected 0 allocations, got %f", allocs)
-	}
 }
 
 func BenchmarkConnectionSetup(b *testing.B) {
 	m := &mockConn{Buffer: bytes.NewBuffer(nil)}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		conn := h2.NewConn(m, h2.ConnOpts{})
 		_ = conn
 	}

@@ -9,10 +9,10 @@ import (
 
 	"github.com/lemon4ksan/foundation/encoding/varint"
 
+	"github.com/lemon4ksan/mach/proto/codec/qpack"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/qpack"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 func BenchmarkQPACK_EncodeResponseHeaders(b *testing.B) {
@@ -45,8 +45,6 @@ func BenchmarkQPACK_DecodeRequestHeaders(b *testing.B) {
 	b.ReportAllocs()
 
 	var reqHeaders headkit.Headers
-
-	b.ResetTimer()
 
 	for b.Loop() {
 		_, _, _, _, _ = codec.DecodeRequestHeaders(0, raw, &reqHeaders)

@@ -7,11 +7,15 @@ package h2
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
+	"sync/atomic"
 
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/foundation/generic"
+
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 type streamState uint8
@@ -35,28 +39,90 @@ type serverStream struct {
 	endHeaders  bool
 	endStream   bool
 	state       streamState
-	sendWindow  int32
+	sendWindow  atomic.Int32
+	recvUnacked int32
 	ctx         context.Context
 	cancel      context.CancelFunc
+	isTunnel    bool
+	pipeReader  *io.PipeReader
+	pipeWriter  *io.PipeWriter
+}
+
+var (
+	serverStreamPool = generic.NewPool(func() *serverStream {
+		return &serverStream{
+			headers: make(http.Header, 8),
+		}
+	})
+	serverRequestPool = generic.NewPool(func() *ServerRequest {
+		return &ServerRequest{}
+	})
+	serverResponsePool = generic.NewPool(func() *ServerResponse {
+		return &ServerResponse{
+			Headers: make(http.Header, 8),
+		}
+	})
+)
+
+func acquireServerStream(
+	streamID uint32,
+	endHeaders, endStream bool,
+	initWin int32,
+	ctx context.Context,
+	cancel context.CancelFunc,
+) *serverStream {
+	st := serverStreamPool.Get()
+	st.id = streamID
+	st.endHeaders = endHeaders
+	st.endStream = endStream
+	st.state = streamOpen
+	st.sendWindow.Store(initWin)
+	st.recvUnacked = 0
+	st.ctx = ctx
+	st.cancel = cancel
+	st.method = ""
+	st.path = ""
+	st.scheme = ""
+	st.authority = ""
+	st.protocol = ""
+	st.isTunnel = false
+	st.pipeReader = nil
+	st.pipeWriter = nil
+	st.headerBlock.Reset()
+	st.body.Reset()
+	clear(st.headers)
+
+	return st
+}
+
+func releaseServerStream(st *serverStream) {
+	if st == nil {
+		return
+	}
+
+	if st.cancel != nil {
+		st.cancel()
+	}
+
+	st.pipeReader = nil
+	st.pipeWriter = nil
+	st.headerBlock.Reset()
+	st.body.Reset()
+	clear(st.headers)
+	serverStreamPool.Put(st)
 }
 
 func (sc *ServerConn) newServerStream(streamID uint32, endHeaders, endStream bool) *serverStream {
 	ctx, cancel := context.WithCancel(sc.ctx)
-
-	return &serverStream{
-		id:         streamID,
-		headers:    make(http.Header),
-		endHeaders: endHeaders,
-		endStream:  endStream,
-		state:      streamOpen,
-		sendWindow: sc.peerInitialWin,
-		ctx:        ctx,
-		cancel:     cancel,
-	}
+	return acquireServerStream(streamID, endHeaders, endStream, sc.peerInitialWin, ctx, cancel)
 }
 
 func (sc *ServerConn) startStream(st *serverStream) {
-	st.state = streamHalfClosedRemote
+	if st.method == "CONNECT" && st.protocol != "" {
+		st.state = streamOpen
+	} else {
+		st.state = streamHalfClosedRemote
+	}
 
 	sc.streamsWg.Add(1) // Escalation 2 fix: Track active stream goroutine
 	go sc.dispatchStream(st)
@@ -69,6 +135,9 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 	defer hpack.ReleaseHeaderField(hf)
 
 	var hasSeenRegularHeader bool
+
+	sc.hpackDec.BeginHeaderBlock()
+
 	for len(rawBlock) > 0 {
 		hf.Reset()
 
@@ -84,15 +153,21 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 			continue
 		}
 
-		k := string(hf.KeyBytes())
-		v := string(hf.ValueBytes())
+		kBytes := hf.KeyBytes()
+		vBytes := hf.ValueBytes()
 
-		// RFC 9113 §8.2: All field names MUST be lowercase ASCII
-		for i := 0; i < len(k); i++ {
-			if k[i] >= 'A' && k[i] <= 'Z' {
-				return coreh2.ProtocolError
-			}
+		// RFC 9113 §8.2.1: Field names MUST be lowercase ASCII and conform to field validity requirements.
+		if err := coreh2.ValidateHeaderName(kBytes, hf.IsPseudo()); err != nil {
+			return err
 		}
+
+		// RFC 9113 §8.2.1: Field values MUST NOT contain NUL, CR, or LF at any position.
+		if err := coreh2.ValidateHeaderValue(vBytes); err != nil {
+			return err
+		}
+
+		k := string(kBytes)
+		v := string(vBytes)
 
 		if hf.IsPseudo() {
 			// RFC 9113 §8.3: Pseudo-headers MUST appear before regular headers
@@ -141,39 +216,83 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 				// RFC 9113 §8.3: Unknown or invalid pseudo-header
 				return coreh2.ProtocolError
 			}
-		} else {
-			hasSeenRegularHeader = true
 
-			// RFC 9113 §8.2.2: Connection-specific headers are prohibited in HTTP/2
-			switch k {
-			case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
-				return coreh2.ProtocolError
-			case "te":
-				if v != "trailers" {
-					return coreh2.ProtocolError
-				}
-			}
-
-			st.headers.Add(k, v)
+			continue
 		}
+
+		hasSeenRegularHeader = true
+
+		// RFC 9113 §8.2.2: Connection-specific headers are prohibited in HTTP/2
+		if coreh2.IsConnectionSpecificHeader(kBytes, vBytes) {
+			return coreh2.ProtocolError
+		}
+
+		st.headers.Add(k, v)
 	}
 
-	// RFC 9113 §8.3.1 & RFC 8441 §4: Mandatory request pseudo-headers
+	// RFC 9113 §8.3.1, §8.5 & RFC 8441 §4: Request pseudo-header validation
 	if st.method == "" {
 		return coreh2.ProtocolError
 	}
 
-	if st.protocol != "" {
-		// RFC 8441 §4: :protocol pseudo-header is only valid on CONNECT requests with :scheme and :path
-		if st.method != "CONNECT" || st.scheme == "" || st.path == "" {
+	if st.method == "CONNECT" {
+		if st.protocol != "" {
+			if !sc.EnableConnectProtocol {
+				return coreh2.ProtocolError
+			}
+
+			// RFC 8441 §4: Extended CONNECT requires :scheme, :path, and :authority
+			if st.scheme == "" || st.path == "" || st.authority == "" {
+				return coreh2.ProtocolError
+			}
+		} else if st.scheme != "" || st.path != "" || st.authority == "" {
+			// RFC 9113 §8.5: Standard CONNECT requires :scheme and :path to be omitted, and :authority present
 			return coreh2.ProtocolError
 		}
-	} else if st.method != "CONNECT" && (st.scheme == "" || st.path == "") {
-		return coreh2.ProtocolError
+	} else {
+		// RFC 8441 §4: :protocol pseudo-header is only valid on CONNECT requests
+		if st.protocol != "" {
+			return coreh2.ProtocolError
+		}
+
+		// RFC 9113 §8.3.1: All other requests MUST include exactly one :method, :scheme, and :path
+		if st.scheme == "" || st.path == "" {
+			return coreh2.ProtocolError
+		}
 	}
 
-	if st.endStream {
+	if st.endStream || (st.method == "CONNECT" && st.protocol != "") {
 		sc.startStream(st)
+	}
+
+	return nil
+}
+
+type h2ServerStreamAdapter struct {
+	sc       *ServerConn
+	streamID uint32
+	pr       *io.PipeReader
+	pw       *io.PipeWriter
+	closed   atomic.Bool
+}
+
+func (a *h2ServerStreamAdapter) Read(p []byte) (int, error) {
+	return a.pr.Read(p)
+}
+
+func (a *h2ServerStreamAdapter) Write(p []byte) (int, error) {
+	if a.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+
+	return a.sc.writeStreamData(a.streamID, p, false)
+}
+
+func (a *h2ServerStreamAdapter) Close() error {
+	if a.closed.CompareAndSwap(false, true) {
+		_ = a.pr.Close()
+		_ = a.pw.Close()
+		_, _ = a.sc.writeStreamData(a.streamID, nil, true)
 	}
 
 	return nil
@@ -181,35 +300,75 @@ func (sc *ServerConn) finishHeaderBlock(st *serverStream) error {
 
 func (sc *ServerConn) dispatchStream(st *serverStream) {
 	defer sc.streamsWg.Done() // Escalation 2 fix: Decrement wait group on exit
-	defer st.cancel()
+	defer func() {
+		sc.deleteStream(st.id)
+		releaseServerStream(st)
+	}()
 
-	req := &ServerRequest{
-		StreamID:   st.id,
-		Method:     st.method,
-		Path:       st.path,
-		Scheme:     st.scheme,
-		Authority:  st.authority,
-		Protocol:   st.protocol,
-		Headers:    st.headers,
-		Body:       st.body.Bytes(),
-		RemoteAddr: sc.conn.RemoteAddr().String(),
-		Ctx:        st.ctx,
+	isExtConnect := (st.method == "CONNECT" && st.protocol != "")
+
+	var adapter *h2ServerStreamAdapter
+	if isExtConnect {
+		pr, pw := io.Pipe()
+		st.pipeReader = pr
+		st.pipeWriter = pw
+
+		adapter = &h2ServerStreamAdapter{
+			sc:       sc,
+			streamID: st.id,
+			pr:       pr,
+			pw:       pw,
+		}
+		defer func() {
+			_ = adapter.Close()
+		}()
 	}
 
-	res := &ServerResponse{
-		StatusCode: status.OK,
-		Headers:    make(http.Header),
+	req := serverRequestPool.Get()
+	defer func() {
+		*req = ServerRequest{}
+		serverRequestPool.Put(req)
+	}()
+
+	req.StreamID = st.id
+	req.Method = st.method
+	req.Path = st.path
+	req.Scheme = st.scheme
+	req.Authority = st.authority
+	req.Protocol = st.protocol
+	req.Headers = st.headers
+	req.Body = st.body.Bytes()
+	req.RemoteAddr = sc.conn.RemoteAddr().String()
+	req.Ctx = st.ctx
+	req.Stream = adapter
+	req.IsExtendedConnect = isExtConnect
+	req.UpgradeFn = func(statusCode int, header http.Header) error {
+		st.isTunnel = true
+		return sc.writeHeaders(st.id, statusCode, header, false)
 	}
+
+	res := serverResponsePool.Get()
+	defer func() {
+		clear(res.Headers)
+		res.Body = nil
+		serverResponsePool.Put(res)
+	}()
+
+	res.StatusCode = status.OK
+	clear(res.Headers)
+	res.Body = nil
 
 	if sc.handler != nil {
 		_ = sc.handler(req, res)
 	}
 
-	_ = sc.writeResponse(st.id, res)
+	if st.isTunnel {
+		if adapter != nil {
+			_ = adapter.Close()
+		}
+	} else {
+		_ = sc.writeResponse(st.id, res)
+	}
 
 	st.state = streamClosed
-
-	sc.streamsMu.Lock()
-	delete(sc.streams, st.id)
-	sc.streamsMu.Unlock()
 }

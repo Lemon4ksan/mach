@@ -9,12 +9,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
-	"github.com/lemon4ksan/foundation/net/quic"
 	"github.com/lemon4ksan/foundation/silicon/pool"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -25,7 +24,7 @@ var (
 		return &b
 	})
 
-	h3HeaderBlockStorage = pool.NewPerPStorage(func() *[]byte {
+	h3HeaderBlockStorage = pool.NewPerCorePool(func() *[]byte {
 		b := make([]byte, 0, 16384)
 		return &b
 	})
@@ -37,18 +36,26 @@ func (cc *ClientConn) readResponse(
 ) (trailers map[string][]string, err error) {
 	streamID := uint64(str.StreamID()) //nolint:gosec // StreamID is positive
 
-	return cc.readResponseFrom(str, resp, streamID)
+	trailers, err = cc.readResponseFrom(str, resp, streamID)
+	if err != nil {
+		if errors.Is(err, coreh3.ErrMalformedHeader) || errors.Is(err, coreh3.ErrMissingStatusHeader) {
+			str.CancelRead(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+			str.CancelWrite(quic.StreamErrorCode(coreh3.ErrCodeH3MessageError))
+		}
+	}
+
+	return trailers, err
 }
 
 func (cc *ClientConn) readResponseScoped(
 	reader io.Reader,
 	resp *h1.Response,
-	_ *borrow.Scope,
 ) (trailers map[string][]string, err error) {
 	var streamID uint64
-	if s, ok := reader.(*quic.Stream); ok {
+	switch s := reader.(type) {
+	case *quic.Stream:
 		streamID = uint64(s.StreamID()) //nolint:gosec
-	} else if s, ok := reader.(interface{ StreamID() int64 }); ok {
+	case interface{ StreamID() int64 }:
 		streamID = uint64(s.StreamID()) //nolint:gosec
 	}
 
@@ -112,30 +119,22 @@ func (cc *ClientConn) readResponseFrom(
 
 			if headersParsed {
 				trailers, err = cc.qpack.DecodeResponseTrailers(streamID, headerBlock)
-
-				if heapHeaderBuf != nil {
-					*heapHeaderBuf = (*heapHeaderBuf)[:0]
-					h3HeaderBlockStorage.Put(heapHeaderBuf)
-				}
-
-				if err != nil {
-					return nil, err
-				}
 			} else {
-				statusCode, err := cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
+				var statusCode int
 
-				if heapHeaderBuf != nil {
-					*heapHeaderBuf = (*heapHeaderBuf)[:0]
-					h3HeaderBlockStorage.Put(heapHeaderBuf)
-				}
-
-				if err != nil {
-					return nil, err
-				}
-
-				if statusCode < 100 || statusCode >= 200 || statusCode == 101 {
+				statusCode, err = cc.qpack.DecodeResponseHeaders(streamID, headerBlock, &resp.Header)
+				if err == nil && (statusCode < 100 || statusCode >= 200 || statusCode == 101) {
 					headersParsed = true
 				}
+			}
+
+			if heapHeaderBuf != nil {
+				*heapHeaderBuf = (*heapHeaderBuf)[:0]
+				h3HeaderBlockStorage.Put(heapHeaderBuf)
+			}
+
+			if err != nil {
+				return nil, err
 			}
 
 		case coreh3.FrameTypeData:
@@ -166,7 +165,24 @@ func (cc *ClientConn) readResponseFrom(
 
 			dataBufPool.Put(bufPtr)
 
+			if lim, ok := lr.(*io.LimitedReader); ok && lim.N > 0 {
+				return nil, io.ErrUnexpectedEOF
+			}
+
 		default:
+			if coreh3.IsReservedH2FrameType(frameType) {
+				// RFC 9114 §7.2.8 & §11.2.1: Reserved HTTP/2 frame types MUST cause H3_FRAME_UNEXPECTED
+				return nil, coreh3.ErrFrameUnexpected
+			}
+
+			// Control-only frames received on request/response stream (RFC 9114 Table 1, §7.2.3, §7.2.4, §7.2.6, §7.2.7)
+			if frameType == coreh3.FrameTypeSettings ||
+				frameType == coreh3.FrameTypeGoAway ||
+				frameType == coreh3.FrameTypeCancelPush ||
+				frameType == coreh3.FrameTypeMaxPushID {
+				return nil, coreh3.ErrFrameUnexpected
+			}
+
 			if _, err := io.CopyN(io.Discard, r, int64(payloadLen)); err != nil { //nolint:gosec
 				return nil, err
 			}

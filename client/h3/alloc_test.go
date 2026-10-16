@@ -1,54 +1,165 @@
-package h3_test
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package h3
 
 import (
+	"bytes"
 	"testing"
 
-	"github.com/lemon4ksan/foundation/net/quic"
+	"github.com/lemon4ksan/foundation/encoding/varint"
+	"github.com/lemon4ksan/foundation/testing/assert"
+	"github.com/lemon4ksan/foundation/testing/require"
 
-	"github.com/lemon4ksan/mach/client/h3"
-	"github.com/lemon4ksan/mach/proto/http"
+	"github.com/lemon4ksan/mach/proto/codec/qpack"
+	coreh3 "github.com/lemon4ksan/mach/proto/h3"
+	machhttp "github.com/lemon4ksan/mach/proto/http"
 )
 
-func TestDoAllocations(t *testing.T) {
-	req := http.AcquireRequest()
-	defer http.ReleaseRequest(req)
+type noopDiscardWriter struct{}
+
+func (noopDiscardWriter) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func TestSendRequest_AllocationProfile(t *testing.T) {
+	cc := &ClientConn{
+		qpack: coreh3.NewQPACKCodec(),
+	}
+
+	req := machhttp.AcquireRequest()
+	defer machhttp.ReleaseRequest(req)
+
 	req.Header.SetMethod("GET")
-	req.SetRequestURI("/")
+	req.SetRequestURI("https://api.example.com/v1/resource")
+	req.Header.Set("accept", "application/json")
+	req.Header.Set("user-agent", "mach-client/1.0")
 
-	res := http.AcquireResponse()
-	defer http.ReleaseResponse(res)
+	var dw noopDiscardWriter
 
-	// In a real scenario we'd use a real quic.Conn, but simulating H3 streams
-	// is complex. We verify it doesn't crash on setup and runs the test block.
-	var qconn *quic.Conn
-	func() {
-		defer func() { recover() }()
-		_, _ = h3.NewClientConn(qconn, nil)
-	}()
+	// Warm-up pool and codec
+	err := cc.sendRequestTo(dw, req, nil, 0)
+	require.NoError(t, err)
 
-	allocs := testing.AllocsPerRun(100, func() {
-		defer func() { recover() }()
-		// Mocking a full H3 interaction is complex.
-		// If we actually called Do it might panic with nil qconn.
-		// So we won't call it here. The prompt asks to ensure alloc_test.go exists.
-		// _ = conn.Do(context.Background(), req, res, nil)
-		_, _ = h3.NewClientConn(qconn, nil)
+	allocs := testing.AllocsPerRun(1000, func() {
+		_ = cc.sendRequestTo(dw, req, nil, 0)
 	})
 
-	if allocs > 100 {
-		// t.Errorf("expected 0 allocations, got %f", allocs)
+	t.Logf("sendRequestTo allocs per run: %v", allocs)
+	// QPACK dynamic header encoding and Request URI parsing requires ~35 allocations
+	assert.LessOrEqual(t, allocs, 40.0)
+}
+
+func TestReadResponse_AllocationProfile(t *testing.T) {
+	cc := &ClientConn{
+		qpack: coreh3.NewQPACKCodec(),
+	}
+
+	// Prepare an encoded response: HEADERS + DATA
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "content-type", Value: "application/json"},
+		{Name: "server", Value: "mach"},
+	}
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+
+	var wire bytes.Buffer
+	wire.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
+	wire.Write(hBlock)
+
+	body := []byte(`{"status":"ok"}`)
+	wire.Write(coreh3.AppendDataHeader(nil, uint64(len(body))))
+	wire.Write(body)
+
+	wireBytes := wire.Bytes()
+
+	resp := machhttp.AcquireResponse()
+	defer machhttp.ReleaseResponse(resp)
+
+	// Warm-up
+	reader := bytes.NewReader(wireBytes)
+	_, err := cc.readResponseFrom(reader, resp, 0)
+	require.NoError(t, err)
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		reader.Reset(wireBytes)
+		resp.Reset()
+		_, _ = cc.readResponseFrom(reader, resp, 0)
+	})
+
+	t.Logf("readResponseFrom allocs per run: %v", allocs)
+	// Response parsing uses stack buffers for headers <= 4KB and pooled data buffers
+	assert.LessOrEqual(t, allocs, 25.0)
+}
+
+func TestH3_ZeroAllocationFramePacking(t *testing.T) {
+	var stackBuf [16]byte
+
+	allocs := testing.AllocsPerRun(10000, func() {
+		b := varint.Append(stackBuf[:0], coreh3.FrameTypeHeaders)
+		_ = varint.Append(b, 2048)
+	})
+
+	assert.Equal(t, 0.0, allocs, "Frame header packing must have 0 allocations")
+}
+
+func BenchmarkSendRequest_HotPath(b *testing.B) {
+	cc := &ClientConn{
+		qpack: coreh3.NewQPACKCodec(),
+	}
+
+	req := machhttp.AcquireRequest()
+	defer machhttp.ReleaseRequest(req)
+
+	req.Header.SetMethod("GET")
+	req.SetRequestURI("https://api.example.com/v1/resource")
+	req.Header.Set("accept", "application/json")
+	req.Header.Set("user-agent", "mach-client/1.0")
+
+	var dw noopDiscardWriter
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		_ = cc.sendRequestTo(dw, req, nil, 0)
 	}
 }
 
-func BenchmarkConnectionSetup(b *testing.B) {
-	var qconn *quic.Conn
+func BenchmarkReadResponse_HotPath(b *testing.B) {
+	cc := &ClientConn{
+		qpack: coreh3.NewQPACKCodec(),
+	}
+
+	headers := []qpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "content-type", Value: "application/json"},
+		{Name: "server", Value: "mach"},
+	}
+	hBlock := qpack.NewEncoderWithDefaults(nil).EncodeHeaderList(0, headers, nil)
+
+	var wire bytes.Buffer
+	wire.Write(coreh3.AppendHeadersHeader(nil, uint64(len(hBlock))))
+	wire.Write(hBlock)
+
+	body := []byte(`{"status":"ok"}`)
+	wire.Write(coreh3.AppendDataHeader(nil, uint64(len(body))))
+	wire.Write(body)
+
+	wireBytes := wire.Bytes()
+
+	resp := machhttp.AcquireResponse()
+	defer machhttp.ReleaseResponse(resp)
+
+	reader := bytes.NewReader(wireBytes)
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		func() {
-			defer func() { recover() }()
-			conn, _ := h3.NewClientConn(qconn, nil)
-			_ = conn
-		}()
+
+	for b.Loop() {
+		reader.Reset(wireBytes)
+		resp.Reset()
+		_, _ = cc.readResponseFrom(reader, resp, 0)
 	}
 }

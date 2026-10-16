@@ -28,3 +28,12 @@ client_example
 *.so
 *.dylib
 states/
+
+# Audit Swarm state and team patches
+.agents/audit_swarm/
+scratch/
+.agents/rfc/
+
+# Go workspace
+go.work
+go.work.sum

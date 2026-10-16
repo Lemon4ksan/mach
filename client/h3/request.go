@@ -12,8 +12,8 @@ import (
 	"github.com/lemon4ksan/foundation/borrow"
 	"github.com/lemon4ksan/foundation/encoding/varint"
 	"github.com/lemon4ksan/foundation/generic"
-	"github.com/lemon4ksan/foundation/net/quic"
 
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
@@ -136,7 +136,7 @@ func (cc *ClientConn) DoScoped(
 		return nil, err
 	}
 
-	trailers, rErr := cc.readResponseScoped(str, resp, s)
+	trailers, rErr := cc.readResponseScoped(str, resp)
 
 	close(done)
 	<-cancelDone

@@ -20,6 +20,8 @@
 //     and multipart boundaries.
 //   - Sensitive Header Redaction (RFC 9110 §15): High-speed detection and masking of credentials,
 //     session cookies, and authorization tokens for HAR logs and telemetry.
+//   - Zero-Allocation .rodata Interning: O(1) length dispatch and 64-bit SWAR case-insensitive vector
+//     matching to intern common RFC header names and values without heap allocation.
 //   - Modern Go Iterators: Idiomatic [iter.Seq] and [iter.Seq2] range-over-func adapters for
 //     streaming header evaluation with zero heap overhead.
 package headkit

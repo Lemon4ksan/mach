@@ -1,0 +1,94 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package auth_test
+
+import (
+	"testing"
+
+	"github.com/lemon4ksan/foundation/testing/assert"
+	"github.com/lemon4ksan/foundation/testing/require"
+
+	"github.com/lemon4ksan/mach/proto/semantic/auth"
+)
+
+func TestBasicAuth_RFC7617(t *testing.T) {
+	t.Parallel()
+
+	formatted := auth.FormatBasic("aladdin", "opensesame")
+	assert.Equal(t, "Basic YWxhZGRpbjpvcGVuc2VzYW1l", formatted)
+
+	u, p, err := auth.ParseBasic(formatted)
+	assert.NoError(t, err)
+	assert.Equal(t, "aladdin", u)
+	assert.Equal(t, "opensesame", p)
+
+	uB, pB, errB := auth.ParseBasic([]byte(formatted))
+	assert.NoError(t, errB)
+	assert.Equal(t, "aladdin", string(uB))
+	assert.Equal(t, "opensesame", string(pB))
+
+	ch, ok := auth.ParseBasicChallenge(`Basic realm="WallyWorld", charset="UTF-8"`)
+	assert.True(t, ok)
+	assert.Equal(t, "WallyWorld", ch.Realm)
+	assert.Equal(t, "UTF-8", ch.Charset)
+	assert.Equal(t, `Basic realm="WallyWorld", charset="UTF-8"`, ch.String())
+
+	chB, okB := auth.ParseBasicChallenge([]byte(`Basic realm="WallyWorld", charset="UTF-8"`))
+	assert.True(t, okB)
+	assert.Equal(t, "WallyWorld", chB.Realm)
+	assert.Equal(t, "UTF-8", chB.Charset)
+
+	assert.True(t, auth.InScope("https://example.com/api/v1/users", "https://example.com/api"))
+	assert.False(t, auth.InScope("https://other.com/api/v1", "https://example.com/api"))
+}
+
+func TestBearerAuth_RFC6750(t *testing.T) {
+	t.Parallel()
+
+	token := "mF_9.B5f-4.1JqM"
+	assert.True(t, auth.IsValidBearerToken(token))
+	assert.True(t, auth.IsValidBearerToken([]byte(token)))
+
+	formatted := auth.FormatBearer(token)
+	assert.Equal(t, "Bearer mF_9.B5f-4.1JqM", formatted)
+
+	parsed, ok := auth.ParseBearer(formatted)
+	assert.True(t, ok)
+	assert.Equal(t, token, parsed)
+
+	parsedB, okB := auth.ParseBearer([]byte(formatted))
+	assert.True(t, okB)
+	assert.Equal(t, token, string(parsedB))
+
+	ch, ok := auth.ParseBearerChallenge(
+		`Bearer realm="example", error="invalid_token", error_description="The access token expired"`,
+	)
+	require.True(t, ok)
+	assert.Equal(t, "example", ch.Realm)
+	assert.Equal(t, "invalid_token", ch.Error)
+	assert.Equal(t, "The access token expired", ch.ErrorDescription)
+
+	chB, okB := auth.ParseBearerChallenge(
+		[]byte(`Bearer realm="example", error="invalid_token", error_description="The access token expired"`),
+	)
+	require.True(t, okB)
+	assert.Equal(t, "example", chB.Realm)
+	assert.Equal(t, "invalid_token", chB.Error)
+	assert.Equal(t, "The access token expired", ch.ErrorDescription)
+
+	// Optional challenge and token tests
+	optTok := auth.ParseBearerOptional(formatted)
+	assert.True(t, optTok.IsPresent())
+	assert.Equal(t, token, optTok.MustValue())
+
+	optCh := auth.ParseBearerChallengeOptional(`Bearer realm="example", error="invalid_token"`)
+	assert.True(t, optCh.IsPresent())
+	assert.Equal(t, "example", optCh.MustValue().Realm)
+
+	basicChOpt := auth.ParseBasicChallengeOptional(`Basic realm="WallyWorld", charset="UTF-8"`)
+	assert.True(t, basicChOpt.IsPresent())
+	assert.Equal(t, "WallyWorld", basicChOpt.MustValue().Realm)
+	assert.Equal(t, "UTF-8", basicChOpt.MustValue().Charset)
+}

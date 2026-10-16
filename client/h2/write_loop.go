@@ -5,12 +5,13 @@
 package h2
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
 	"github.com/lemon4ksan/foundation/silicon/clock"
 	"github.com/lemon4ksan/foundation/silicon/sysnet"
 
@@ -23,9 +24,7 @@ func (c *Conn) writeLoop() {
 	defer func() { _ = c.Close() }()
 	defer c.recoverWriteLoop(&lastErr)
 
-	if c.pingInterval <= 0 {
-		c.pingInterval = DefaultPingInterval
-	}
+	c.pingInterval = generic.Ternary(c.pingInterval > 0, c.pingInterval, DefaultPingInterval)
 
 	ticker := time.NewTicker(c.pingInterval)
 	defer ticker.Stop()
@@ -36,7 +35,7 @@ func (c *Conn) writeLoop() {
 			break
 		}
 
-		if !c.disableAcks && c.pingUnacks >= 5 {
+		if !c.disableAcks && c.pingUnacks.Load() >= 5 {
 			lastErr = coreh2.ErrTimeout
 			break
 		}
@@ -74,7 +73,7 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 		} else {
 			var bufs [][]byte
 
-			for i := 0; i < n; i++ {
+			for i := range n {
 				_, _ = batch[i].WriteTo(c.bw)
 				coreh2.ReleaseFrameHeader(batch[i])
 			}
@@ -102,16 +101,24 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 	}
 
 	select {
+	case <-c.done:
+		return true, nil
+
 	case ctx, ok := <-c.in:
 		if !ok {
-			return true, nil
+			c.in = nil
+			return false, nil
 		}
 
 		if err := c.writeRequest(ctx); err != nil {
-			ctx.Err <- err
-
-			if errors.Is(err, coreh2.ErrNoAvailableStreams) {
+			if errors.Is(err, coreh2.ErrNoAvailableStreams) || errors.Is(err, coreh2.ErrStreamClosed) ||
+				errors.Is(err, context.Canceled) {
 				return false, nil
+			}
+
+			select {
+			case ctx.Err <- err:
+			default:
 			}
 
 			return true, err
@@ -148,18 +155,17 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 
 func (c *Conn) recoverWriteLoop(lastErr *error) {
 	if r := recover(); r != nil && *lastErr == nil {
-		if err, ok := r.(error); ok {
-			*lastErr = err
-		} else {
-			*lastErr = fmt.Errorf("h2engine panic: %v", r)
+		err, ok := r.(error)
+		if !ok {
+			err = fmt.Errorf("h2engine panic: %v", r)
 		}
+
+		*lastErr = err
 	}
 
-	if *lastErr == nil {
-		*lastErr = io.ErrUnexpectedEOF
+	if *lastErr != nil {
+		c.broadcastErrorToAllStreams(*lastErr)
 	}
-
-	c.broadcastErrorToAllStreams(*lastErr)
 }
 
 func (c *Conn) writePing() error {
@@ -175,9 +181,10 @@ func (c *Conn) writePing() error {
 	_, err := fr.WriteTo(c.bw)
 	if err == nil {
 		err = c.bw.Flush()
-		if err == nil {
-			c.pingUnacks++
-		}
+	}
+
+	if err == nil {
+		c.pingUnacks.Add(1)
 	}
 
 	c.writeMu.Unlock()

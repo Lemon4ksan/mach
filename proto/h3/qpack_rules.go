@@ -8,10 +8,12 @@ import (
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
 )
 
-// isForbiddenH3Header checks if a byte-slice header field is prohibited in HTTP/3 (RFC 9114 §4.1, §4.3 & §4.5).
+// isForbiddenH3Header checks if a byte-slice header field is prohibited in HTTP/3 (RFC 9114 §4.2).
 //
-// HTTP/3 prohibits connection-specific header fields such as Connection, Keep-Alive,
-// Proxy-Connection, Transfer-Encoding, Upgrade, and TE (unless TE is exactly "trailers").
+// HTTP/3 does not use connection-specific header fields (RFC 9114 §4.2). An endpoint MUST NOT generate
+// an HTTP/3 field section containing connection-specific fields (Connection, Keep-Alive, Proxy-Connection,
+// Transfer-Encoding, Upgrade, and TE with values other than "trailers"). Any message containing them MUST
+// be treated as malformed (RFC 9114 §4.1.2 & §4.2).
 // Any pseudo-header (starting with ':') is also rejected here as a regular field.
 func isForbiddenH3Header(key, val []byte) bool {
 	if len(key) == 0 || key[0] == ':' {
@@ -36,7 +38,7 @@ func isForbiddenH3Header(key, val []byte) bool {
 	return false
 }
 
-// isForbiddenH3HeaderStr checks if a string-key header field is prohibited in HTTP/3 (RFC 9114 §4.1, §4.3 & §4.5).
+// isForbiddenH3HeaderStr checks if a string-key header field is prohibited in HTTP/3 (RFC 9114 §4.2).
 func isForbiddenH3HeaderStr(key string, val []byte) bool {
 	if key == "" || key[0] == ':' {
 		return true
@@ -54,6 +56,33 @@ func isForbiddenH3HeaderStr(key string, val []byte) bool {
 
 	if bytesconv.EqualFoldASCII(key, "te") {
 		return !bytesconv.EqualFoldASCII(bytesconv.B2S(val), "trailers")
+	}
+
+	return false
+}
+
+// isForbiddenH3HeaderString checks if string-key/val header is prohibited in HTTP/3 (RFC 9114 §4.2).
+func isForbiddenH3HeaderString(key, val string) bool {
+	if key == "" || key[0] == ':' {
+		return true
+	}
+
+	b0 := key[0] | 0x20
+	switch b0 {
+	case 'c', 'k', 'p', 't', 'u', 's':
+		if bytesconv.EqualFoldASCII(key, "connection") ||
+			bytesconv.EqualFoldASCII(key, "keep-alive") ||
+			bytesconv.EqualFoldASCII(key, "proxy-connection") ||
+			bytesconv.EqualFoldASCII(key, "transfer-encoding") ||
+			bytesconv.EqualFoldASCII(key, "upgrade") ||
+			bytesconv.EqualFoldASCII(key, "sec-websocket-key") ||
+			bytesconv.EqualFoldASCII(key, "sec-websocket-accept") {
+			return true
+		}
+
+		if bytesconv.EqualFoldASCII(key, "te") {
+			return !bytesconv.EqualFoldASCII(val, "trailers")
+		}
 	}
 
 	return false

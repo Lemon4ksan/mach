@@ -112,6 +112,15 @@ func TestWebLink_Pagination_Helpers(t *testing.T) {
 	last, okLast := group.Last()
 	assert.True(t, okLast)
 	assert.Equal(t, "https://api.github.com/user/repos?page=50&per_page=100", last)
+
+	// Test Optional methods
+	assert.True(t, group.ByRelOptional(weblink.RelNext).IsPresent())
+	assert.Equal(t, "https://api.github.com/user/repos?page=3&per_page=100", group.NextOptional().MustValue())
+	assert.Equal(t, "https://api.github.com/user/repos?page=1&per_page=100", group.PrevOptional().MustValue())
+	assert.Equal(t, "https://api.github.com/user/repos?page=1&per_page=100", group.FirstOptional().MustValue())
+	assert.Equal(t, "https://api.github.com/user/repos?page=50&per_page=100", group.LastOptional().MustValue())
+	assert.False(t, group.CanonicalOptional().IsPresent())
+	assert.Equal(t, "fallback", group.CanonicalOptional().OrElse("fallback"))
 }
 
 func TestWebLink_ParseHeader(t *testing.T) {
@@ -182,4 +191,24 @@ func TestWebLink_FormatRoundtrip(t *testing.T) {
 	assert.Equal(t, l.Title, parsed[0].Title)
 	assert.Equal(t, l.Type, parsed[0].Type)
 	assert.Equal(t, "value", parsed[0].Params["custom"])
+}
+
+func TestGenericParseAndAll(t *testing.T) {
+	raw := `</page/2>; rel="next", </page/1>; rel="prev"`
+
+	// Parse with []byte
+	group, err := weblink.Parse([]byte(raw))
+	require.NoError(t, err)
+	require.Len(t, group, 2)
+	assert.Equal(t, "/page/2", group[0].Target)
+	assert.Equal(t, "/page/1", group[1].Target)
+
+	// All with []byte
+	count := 0
+	for link, err := range weblink.All([]byte(raw)) {
+		require.NoError(t, err)
+		assert.NotEmpty(t, link.Target)
+		count++
+	}
+	assert.Equal(t, 2, count)
 }

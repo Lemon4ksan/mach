@@ -30,13 +30,13 @@ func TestRepro_Directives_EscapedQuotesWithDelimiter(t *testing.T) {
 		t.Fatalf("unexpected other value: %q", parsed["other"])
 	}
 
-	// Also test DirectivesBytes
+	// Also test Directives with []byte
 	parsedBytes := make(map[string]string)
-	for k, v := range DirectivesBytes([]byte(raw)) {
+	for k, v := range Directives([]byte(raw)) {
 		parsedBytes[string(k)] = string(v)
 	}
 	if _, ok := parsedBytes["other"]; !ok {
-		t.Fatalf("CRITICAL: 'other' directive was lost in DirectivesBytes! Parsed: %#v", parsedBytes)
+		t.Fatalf("CRITICAL: 'other' directive was lost in Directives([]byte)! Parsed: %#v", parsedBytes)
 	}
 
 	// Also test ParamDirectives

@@ -19,7 +19,8 @@ func CanonicalKey(s string) string {
 }
 
 // IsCanonical reports whether s is already in canonical MIME header format (RFC 9110 §5.1).
-func IsCanonical(s string) bool {
+// Accepts both [string] and [[]byte] without allocations.
+func IsCanonical[S ~string | ~[]byte](s S) bool {
 	n := len(s)
 	if n == 0 {
 		return true

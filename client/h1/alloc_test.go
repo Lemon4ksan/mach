@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package h1_test
 
 import (
@@ -37,7 +41,7 @@ func TestDoAllocations(t *testing.T) {
 	// We'll recreate the conn for each run since reading consumes the buffer,
 	// but testing.AllocsPerRun expects the func to not allocate.
 	// We can pre-fill a larger buffer or reset it.
-	m := &mockConn{Buffer: bytes.NewBuffer(nil)}
+	m := &mockConn{Buffer: bytes.NewBuffer(make([]byte, 0, 64*1024))}
 	conn := h1.NewClientConn(m)
 
 	allocs := testing.AllocsPerRun(100, func() {
@@ -45,16 +49,15 @@ func TestDoAllocations(t *testing.T) {
 		_ = conn.Do(context.Background(), req, res)
 	})
 
-	if allocs > 0 { // Or whatever the baseline is
-		// t.Errorf("expected 0 allocations, got %f", allocs)
+	if allocs > 0 {
+		t.Errorf("expected 0 allocations, got %f", allocs)
 	}
 }
 
 func BenchmarkConnectionSetup(b *testing.B) {
 	m := &mockConn{Buffer: bytes.NewBuffer(nil)}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		conn := h1.NewClientConn(m)
 		_ = conn
 	}

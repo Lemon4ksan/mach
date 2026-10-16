@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/foundation/net/quic"
 	h1client "github.com/lemon4ksan/mach/client/h1"
 	h2client "github.com/lemon4ksan/mach/client/h2"
 	h3client "github.com/lemon4ksan/mach/client/h3"
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1server "github.com/lemon4ksan/mach/server/h1"
 	h2server "github.com/lemon4ksan/mach/server/h2"
@@ -31,7 +31,7 @@ import (
 )
 
 // generateTestTLSConfig generates in-memory self-signed ECDSA certificates for secure test listeners.
-func generateTestTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {
+func generateTestTLSConfig(t testing.TB) (*tls.Config, *tls.Config) {
 	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -84,7 +84,7 @@ func generateTestTLSConfig(t *testing.T) (*tls.Config, *tls.Config) {
 }
 
 // startH1Server starts a loopback TCP listener and runs server/h1.ConnHandler on accepted connections.
-func startH1Server(t *testing.T, handler h1server.HandlerFunc) (string, func()) {
+func startH1Server(t testing.TB, handler h1server.HandlerFunc) (string, func()) {
 	t.Helper()
 
 	ch := h1server.ConnHandler{
@@ -95,7 +95,7 @@ func startH1Server(t *testing.T, handler h1server.HandlerFunc) (string, func()) 
 }
 
 // startH1ServerWithOpts starts a loopback TCP listener with custom h1server.ConnHandler configuration.
-func startH1ServerWithOpts(t *testing.T, ch h1server.ConnHandler) (string, func()) {
+func startH1ServerWithOpts(t testing.TB, ch h1server.ConnHandler) (string, func()) {
 	t.Helper()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -145,7 +145,7 @@ func startH1ServerWithOpts(t *testing.T, ch h1server.ConnHandler) (string, func(
 }
 
 // dialH1Client connects to an H1 server and returns an opaque *h1client.ClientConn and raw net.Conn.
-func dialH1Client(t *testing.T, addr string) (*h1client.ClientConn, net.Conn) {
+func dialH1Client(t testing.TB, addr string) (*h1client.ClientConn, net.Conn) {
 	t.Helper()
 
 	c, err := net.DialTimeout("tcp", addr, 2*time.Second)
@@ -157,7 +157,7 @@ func dialH1Client(t *testing.T, addr string) (*h1client.ClientConn, net.Conn) {
 }
 
 // startH2Server starts a loopback TCP listener and runs server/h2.ServerConn on accepted connections.
-func startH2Server(t *testing.T, handler h2server.ServerHandlerFunc) (string, func()) {
+func startH2Server(t testing.TB, handler h2server.ServerHandlerFunc) (string, func()) {
 	t.Helper()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -209,7 +209,7 @@ func startH2Server(t *testing.T, handler h2server.ServerHandlerFunc) (string, fu
 }
 
 // dialH2Client connects to an H2 server, performs the initial handshake, and returns an opaque *h2client.Conn.
-func dialH2Client(t *testing.T, addr string, opts h2client.ConnOpts) (*h2client.Conn, net.Conn) {
+func dialH2Client(t testing.TB, addr string, opts h2client.ConnOpts) (*h2client.Conn, net.Conn) {
 	t.Helper()
 
 	c, err := net.DialTimeout("tcp", addr, 2*time.Second)
@@ -227,7 +227,7 @@ func dialH2Client(t *testing.T, addr string, opts h2client.ConnOpts) (*h2client.
 }
 
 // startH3Server starts a loopback QUIC listener and runs server/h3.ServerConn on accepted sessions.
-func startH3Server(t *testing.T, handler h3server.ServerHandlerFunc) (string, *tls.Config, func()) {
+func startH3Server(t testing.TB, handler h3server.ServerHandlerFunc) (string, *tls.Config, func()) {
 	t.Helper()
 
 	serverTLS, clientTLS := generateTestTLSConfig(t)
@@ -280,7 +280,7 @@ func startH3Server(t *testing.T, handler h3server.ServerHandlerFunc) (string, *t
 }
 
 // dialH3Client dials a loopback QUIC session and initializes client/h3.ClientConn with control streams.
-func dialH3Client(t *testing.T, addr string, clientTLS *tls.Config) (*h3client.ClientConn, *quic.Conn) {
+func dialH3Client(t testing.TB, addr string, clientTLS *tls.Config) (*h3client.ClientConn, *quic.Conn) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

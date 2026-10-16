@@ -7,7 +7,8 @@ package http
 import (
 	"bufio"
 	"io"
-	"sync"
+
+	"github.com/lemon4ksan/foundation/generic"
 )
 
 // StreamWriter must write data to w.
@@ -33,15 +34,8 @@ func NewStreamReader(sw StreamWriter) io.ReadCloser {
 	pw := pc.Conn1()
 	pr := pc.Conn2()
 
-	var bw *bufio.Writer
-
-	v := streamWriterBufPool.Get()
-	if v == nil {
-		bw = bufio.NewWriter(pw)
-	} else {
-		bw = v.(*bufio.Writer) //nolint:forcetypeassert
-		bw.Reset(pw)
-	}
+	bw := streamWriterBufPool.Get()
+	bw.Reset(pw)
 
 	go func() {
 		sw(bw)
@@ -54,4 +48,6 @@ func NewStreamReader(sw StreamWriter) io.ReadCloser {
 	return pr
 }
 
-var streamWriterBufPool sync.Pool
+var streamWriterBufPool = generic.NewPool(func() *bufio.Writer {
+	return bufio.NewWriter(nil)
+})

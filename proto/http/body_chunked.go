@@ -11,7 +11,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/foundation/silicon/hexkit"
+	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
 var errChunkedStream = errors.New("chunked stream")
@@ -20,16 +21,6 @@ var errChunkedStream = errors.New("chunked stream")
 // framing, missing CRLF delimiters, invalid characters, or an unreadable chunk size
 // per RFC 9112 Section 7.1.
 type ErrBrokenChunk struct{ error }
-
-// ParseHexUint parses a hex-encoded uint from src per RFC 9112 Section 7.1.1.
-//
-// It returns the parsed integer value, the number of bytes consumed from src,
-// and an error if the hex sequence is malformed, signed, or overflows 15 hex digits.
-//
-// Concurrency: Thread-safe; operates strictly on the provided byte slice without allocations.
-func ParseHexUint(src []byte) (int, int, error) {
-	return parseHexUintFallback(src)
-}
 
 // ReadBodyChunked decodes an HTTP/1.1 chunked transfer coding stream from r into dst
 // in accordance with RFC 9112 Section 7.1.
@@ -41,53 +32,50 @@ func ParseHexUint(src []byte) (int, int, error) {
 //
 // Concurrency: Not thread-safe; caller must own r and dst exclusively during execution.
 func ReadBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, error) {
-	return readBodyChunked(r, maxBodySize, dst)
+	if len(dst) > 0 {
+		panic("BUG: expected zero-length buffer")
+	}
+
+	for {
+		chunkSize, err := parseChunkSize(r)
+		if err != nil {
+			return dst, err
+		}
+
+		if chunkSize == 0 {
+			return dst, err
+		}
+
+		if maxBodySize > 0 && len(dst)+chunkSize > maxBodySize {
+			return dst, ErrBodyTooLarge
+		}
+
+		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(StrCRLF))
+		if err != nil {
+			return dst, err
+		}
+
+		if !bytes.Equal(dst[len(dst)-len(StrCRLF):], StrCRLF) {
+			return dst, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
+		}
+
+		dst = dst[:len(dst)-len(StrCRLF)]
+	}
 }
 
 // FormatChunkHeader formats a hex-encoded chunk size header followed by CRLF (\r\n)
 // into buf per RFC 9112 Section 7.1.
 //
 // buf must have a capacity of at least 24 bytes. Returns the total number of bytes written.
+// Accelerated via foundation/silicon/hexkit implementation.
 //
 // Concurrency: Thread-safe; writes strictly into caller-provided stack or heap buffer.
 func FormatChunkHeader(buf *[24]byte, val int) int {
-	n := zerocopy.FormatHexUint((*[16]byte)(buf[:16]), val)
+	n := hexkit.FormatHexUint((*[16]byte)(buf[:16]), val)
 	buf[n] = '\r'
 	buf[n+1] = '\n'
 
 	return n + 2
-}
-
-func parseHexUintFallback(src []byte) (int, int, error) {
-	if len(src) == 0 {
-		return 0, 0, zerocopy.ErrEmptyHexNum
-	}
-
-	var n, i int
-	for i = 0; i < len(src); i++ {
-		c := src[i]
-
-		k := int(zerocopy.Hex2intTable[c])
-		if k == 16 {
-			if i == 0 {
-				return 0, 0, zerocopy.ErrEmptyHexNum
-			}
-
-			return n, i, nil
-		}
-
-		if i >= 15 {
-			return n, i, zerocopy.ErrTooLargeHexNum
-		}
-
-		n = (n << 4) | k
-	}
-
-	if i == 0 {
-		return 0, 0, zerocopy.ErrEmptyHexNum
-	}
-
-	return n, i, nil
 }
 
 type chunkedBodyWriter struct {
@@ -110,7 +98,7 @@ func (cw *chunkedBodyWriter) Write(p []byte) (int, error) {
 
 func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 	var wt io.WriterTo
-	// Frame WriteTo output directly, skipping zerocopy.CopyBufPool, for bodies whose
+	// Frame WriteTo output directly, skipping CopyBufPool, for bodies whose
 	// WriteTo is known to match reading.
 	switch v := r.(type) {
 	case *bytes.Reader:
@@ -136,7 +124,7 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 		return writeChunk(w, nil)
 	}
 
-	vbuf := zerocopy.CopyBufPool.Get()
+	vbuf := CopyBufPool.Get()
 	buf := vbuf.([]byte)
 
 	var (
@@ -166,18 +154,23 @@ func writeBodyChunked(w *bufio.Writer, r io.Reader) error {
 		}
 	}
 
-	zerocopy.CopyBufPool.Put(vbuf)
+	CopyBufPool.Put(vbuf)
 
 	return err
 }
 
 func writeChunk(w *bufio.Writer, b []byte) error {
 	n := len(b)
-	if err := zerocopy.WriteHexInt(w, n); err != nil {
+
+	var hexBuf [16]byte
+
+	hexLen := hexkit.FormatHexUint(&hexBuf, n)
+
+	if _, err := w.Write(hexBuf[:hexLen]); err != nil {
 		return err
 	}
 
-	if _, err := w.Write(zerocopy.StrCRLF); err != nil {
+	if _, err := w.Write(StrCRLF); err != nil {
 		return err
 	}
 
@@ -186,7 +179,7 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 	}
 
 	if n > 0 {
-		if _, err := w.Write(zerocopy.StrCRLF); err != nil {
+		if _, err := w.Write(StrCRLF); err != nil {
 			return err
 		}
 	}
@@ -194,101 +187,58 @@ func writeChunk(w *bufio.Writer, b []byte) error {
 	return w.Flush()
 }
 
-// readBodyChunked parses a chunked transfer coding body (RFC 9112 Section 7.1).
-// It repeatedly reads chunk sizes and data until the terminating 0-size chunk is found.
-func readBodyChunked(r *bufio.Reader, maxBodySize int, dst []byte) ([]byte, error) {
-	if len(dst) > 0 {
-		panic("BUG: expected zero-length buffer")
-	}
-
-	for {
-		chunkSize, err := parseChunkSize(r)
-		if err != nil {
-			return dst, err
-		}
-
-		if chunkSize == 0 {
-			return dst, err
-		}
-
-		if maxBodySize > 0 && len(dst)+chunkSize > maxBodySize {
-			return dst, ErrBodyTooLarge
-		}
-
-		dst, err = appendBodyFixedSize(r, dst, chunkSize+len(zerocopy.StrCRLF))
-		if err != nil {
-			return dst, err
-		}
-
-		if !bytes.Equal(dst[len(dst)-len(zerocopy.StrCRLF):], zerocopy.StrCRLF) {
-			return dst, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
-		}
-
-		dst = dst[:len(dst)-len(zerocopy.StrCRLF)]
-	}
-}
-
 // parseChunkSize decodes the chunk size hex value and skips optional chunk extensions (RFC 9112 Section 7.1.1).
 func parseChunkSize(r *bufio.Reader) (int, error) {
-	n, err := zerocopy.ReadHexInt(r)
+	line, err := r.ReadSlice('\n')
 	if err != nil {
-		return -1, err
-	}
-
-	inExt := false
-	for {
-		c, err := r.ReadByte()
-		if err != nil {
-			return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read '\\r' char at the end of chunk size: %w", err)}
+		if errors.Is(err, io.EOF) {
+			return -1, io.EOF
 		}
 
-		if c == '\r' {
-			if err := r.UnreadByte(); err != nil {
-				return -1, ErrBrokenChunk{
-					error: fmt.Errorf("cannot unread '\\r' char at the end of chunk size: %w", err),
-				}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			fullLine, errFull := r.ReadBytes('\n')
+			if errFull != nil {
+				return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read chunk size line: %w", errFull)}
 			}
 
-			break
-		}
-
-		if c == '\n' {
-			return -1, ErrBrokenChunk{error: errors.New("invalid character '\\n' after chunk size")}
-		}
-
-		if inExt {
-			continue
-		}
-
-		switch c {
-		case ' ', '\t':
-			continue
-		case ';':
-			inExt = true
-			continue
-		default:
-			return -1, ErrBrokenChunk{error: fmt.Errorf("invalid character %q after chunk size", c)}
+			line = fullLine
+		} else {
+			return -1, ErrBrokenChunk{error: fmt.Errorf("cannot read chunk size line: %w", err)}
 		}
 	}
 
-	err = readCrLf(r)
-	if err != nil {
-		return -1, err
+	if len(line) < 2 || line[len(line)-2] != '\r' || line[len(line)-1] != '\n' {
+		return -1, ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk size")}
 	}
 
-	return n, nil
+	line = line[:len(line)-2]
+
+	// Strip chunk extensions (RFC 9112 §7.1.1)
+	if idx := bytes.IndexByte(line, ';'); idx != -1 {
+		line = line[:idx]
+	}
+
+	// Strip trailing BWS (RFC 9112 §7.1.1)
+	line = simd.TrimTrailingSpaceSWAR(line)
+
+	if len(line) == 0 {
+		return -1, ErrBrokenChunk{error: errors.New("empty chunk size")}
+	}
+
+	chunkSize, consumed, err := hexkit.ParseHexUint(line)
+	if err != nil || chunkSize < 0 || consumed != len(line) {
+		return -1, ErrBrokenChunk{error: fmt.Errorf("invalid chunk size: %w", err)}
+	}
+
+	return chunkSize, nil
 }
 
 func readCrLf(r *bufio.Reader) error {
-	for _, exp := range []byte{'\r', '\n'} {
-		c, err := r.ReadByte()
-		if err != nil {
-			return ErrBrokenChunk{error: fmt.Errorf("cannot read %q char at the end of chunk size: %w", exp, err)}
-		}
+	b1, err1 := r.ReadByte()
 
-		if c != exp {
-			return ErrBrokenChunk{error: fmt.Errorf("unexpected char %q at the end of chunk size: expected %q", c, exp)}
-		}
+	b2, err2 := r.ReadByte()
+	if err1 != nil || err2 != nil || b1 != '\r' || b2 != '\n' {
+		return ErrBrokenChunk{error: errors.New("cannot find crlf at the end of chunk")}
 	}
 
 	return nil

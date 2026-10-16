@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
 )
 
 // Read deserializes an HTTP request (including headers and entity body) from the buffered reader r (RFC 9112 Section 2.1).
@@ -52,7 +50,7 @@ func (req *Request) readLimitBody(r *bufio.Reader, maxBodySize int, getOnly, pre
 //
 // Thread-safe: No.
 func (req *Request) MayContinue() bool {
-	return bytes.Equal(req.Header.peek(zerocopy.StrExpect), zerocopy.Str100Continue)
+	return bytes.Equal(req.Header.peek(StrExpect), Str100Continue)
 }
 
 // ContinueReadBody completes reading the entity body after an interim 100 Continue response has been transmitted (RFC 9110 Section 10.1.1).
@@ -69,7 +67,7 @@ func (req *Request) ContinueReadBody(r *bufio.Reader, maxBodySize int, preParseM
 
 		if len(preParseMultipartForm) == 0 || preParseMultipartForm[0] {
 			req.multipartFormBoundary = string(req.Header.MultipartFormBoundary())
-			if req.multipartFormBoundary != "" && len(req.Header.peek(zerocopy.StrContentEncoding)) == 0 {
+			if req.multipartFormBoundary != "" && len(req.Header.peek(StrContentEncoding)) == 0 {
 				req.multipartForm, err = readMultipartForm(
 					r,
 					req.multipartFormBoundary,
@@ -122,7 +120,7 @@ func (req *Request) ReadBody(r *bufio.Reader, contentLength, maxBodySize int) (e
 	case contentLength >= 0:
 		bodyBuf.B, err = readBody(r, contentLength, maxBodySize, bodyBuf.B)
 	case contentLength == -1:
-		bodyBuf.B, err = readBodyChunked(r, maxBodySize, bodyBuf.B)
+		bodyBuf.B, err = ReadBodyChunked(r, maxBodySize, bodyBuf.B)
 		if err == nil && len(bodyBuf.B) == 0 {
 			req.Header.SetContentLength(0)
 		}
@@ -161,7 +159,7 @@ func (req *Request) Write(w *bufio.Writer) error {
 
 		if len(uri.Username()) > 0 {
 			nl := len(uri.Username()) + len(uri.Password()) + 1
-			nb := nl + len(zerocopy.StrBasicSpace)
+			nb := nl + len(StrBasicSpace)
 
 			tl := nb + base64.StdEncoding.EncodedLen(nl)
 			if tl > cap(req.Header.bufV) {
@@ -170,11 +168,11 @@ func (req *Request) Write(w *bufio.Writer) error {
 
 			buf := req.Header.bufV[:0]
 			buf = append(buf, uri.Username()...)
-			buf = append(buf, zerocopy.StrColon...)
+			buf = append(buf, StrColon...)
 			buf = append(buf, uri.Password()...)
-			buf = append(buf, zerocopy.StrBasicSpace...)
+			buf = append(buf, StrBasicSpace...)
 			base64.StdEncoding.Encode(buf[nb:tl], buf[:nl])
-			req.Header.SetBytesKV(zerocopy.StrAuthorization, buf[nl:tl])
+			req.Header.SetBytesKV(StrAuthorization, buf[nl:tl])
 		}
 	}
 

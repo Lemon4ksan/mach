@@ -16,7 +16,7 @@ import (
 
 	"github.com/lemon4ksan/foundation/testing/assert"
 	"github.com/lemon4ksan/foundation/testing/require"
-	"github.com/lemon4ksan/mach/proto/http/status"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 
 	"github.com/lemon4ksan/mach/client"
 	h1client "github.com/lemon4ksan/mach/client/h1"
@@ -238,7 +238,7 @@ func TestPoolManager_ConcurrentGetPut(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -246,7 +246,7 @@ func TestPoolManager_ConcurrentGetPut(t *testing.T) {
 			ctx := context.Background()
 			host := hosts[workerID%len(hosts)]
 
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				c, err := pm.Get(ctx, host)
 				if err != nil {
 					if errors.Is(err, context.DeadlineExceeded) {
@@ -281,7 +281,7 @@ func TestPoolManager_RealH1ClientConnIntegration(t *testing.T) {
 	addr, cleanup := startH1Server(t, func(req *h1server.Request, res *h1server.Response) error {
 		cnt := reqCounter.Add(1)
 		res.StatusCode = status.OK
-		res.Body = []byte(fmt.Sprintf("pool-response-%d", cnt))
+		res.Body = fmt.Appendf(nil, "pool-response-%d", cnt)
 
 		return nil
 	})

@@ -11,9 +11,8 @@ import (
 	"fmt"
 	"io"
 
-	machcompress "github.com/lemon4ksan/mach/proto/compress"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	machcompress "github.com/lemon4ksan/mach/proto/codec/compress"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 )
 
 // Read deserializes an HTTP response (handling interim 1xx responses like Early Hints) from r (RFC 9110 Section 15.2, RFC 9112 Section 2.1).
@@ -94,7 +93,7 @@ func (resp *Response) ReadBody(r *bufio.Reader, maxBodySize int) (err error) {
 		if resp.StreamBody {
 			resp.bodyStream = AcquireRequestStream(bodyBuf, r, &resp.Header)
 		} else {
-			bodyBuf.B, err = readBodyChunked(r, maxBodySize, bodyBuf.B)
+			bodyBuf.B, err = ReadBodyChunked(r, maxBodySize, bodyBuf.B)
 		}
 
 	default:
@@ -214,8 +213,8 @@ func (resp *Response) brotliBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(zerocopy.StrBr)
-	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(StrBr)
+	resp.Header.addVaryBytes(StrAcceptEncoding)
 }
 
 func (resp *Response) gzipBody(level int) {
@@ -247,8 +246,8 @@ func (resp *Response) gzipBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(zerocopy.StrGzip)
-	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(StrGzip)
+	resp.Header.addVaryBytes(StrAcceptEncoding)
 }
 
 func (resp *Response) deflateBody(level int) {
@@ -280,8 +279,8 @@ func (resp *Response) deflateBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(zerocopy.StrDeflate)
-	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(StrDeflate)
+	resp.Header.addVaryBytes(StrAcceptEncoding)
 }
 
 func (resp *Response) zstdBody(level int) {
@@ -313,8 +312,8 @@ func (resp *Response) zstdBody(level int) {
 		resp.bodyRaw = nil
 	}
 
-	resp.Header.SetContentEncodingBytes(zerocopy.StrZstd)
-	resp.Header.addVaryBytes(zerocopy.StrAcceptEncoding)
+	resp.Header.SetContentEncodingBytes(StrZstd)
+	resp.Header.addVaryBytes(StrAcceptEncoding)
 }
 
 // Write serializes the HTTP response message to w without flushing (RFC 9112 Section 2.1).

@@ -9,16 +9,24 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lemon4ksan/foundation/silicon/bytesconv"
+	"github.com/lemon4ksan/foundation/silicon/hexkit"
+	"github.com/lemon4ksan/foundation/testing/assert"
+	"github.com/lemon4ksan/foundation/testing/require"
 
+	"github.com/lemon4ksan/mach"
 	"github.com/lemon4ksan/mach/proto/headkit"
-	"github.com/lemon4ksan/mach/proto/http/status"
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/status"
 	"github.com/lemon4ksan/mach/server/h1"
 )
 
@@ -344,6 +352,25 @@ func TestRequestParsing_RFC9112_MissingHost(t *testing.T) {
 	}
 }
 
+func TestRequestParsing_RFC9112_WhitespaceBeforeColon(t *testing.T) {
+	// RFC 9112 §5.1: No whitespace is allowed between the header field name and colon.
+	// Server MUST reject with 400 Bad Request.
+	badRequests := []string{
+		"GET /ping HTTP/1.1\r\nHost : example.com\r\n\r\n",
+		"GET /ping HTTP/1.1\r\nHost: example.com\r\nUser-Agent \t: test\r\n\r\n",
+		"GET /ping HTTP/1.1\r\nHost: example.com\r\nFoo : bar\r\n\r\n",
+	}
+
+	for _, raw := range badRequests {
+		br := bufio.NewReader(stringsReader(raw))
+		var req h1.Request
+		err := req.ReadRequest(br, nil, 1024)
+		if !errors.Is(err, h1.ErrWhitespaceBeforeColon) {
+			t.Fatalf("expected ErrWhitespaceBeforeColon for %q, got: %v", raw, err)
+		}
+	}
+}
+
 func stringsReader(s string) io.Reader {
 	return bytes.NewReader([]byte(s))
 }
@@ -391,15 +418,72 @@ func TestChunkedWriter_And_FormatHex(t *testing.T) {
 	// Test FormatHexUint zero and numbers
 	var hexBuf [16]byte
 
-	n0 := h1.FormatHexUint(&hexBuf, 0)
+	n0 := hexkit.FormatHexUint(&hexBuf, 0)
 	if string(hexBuf[:n0]) != "0" {
 		t.Fatalf("expected 0, got %s", string(hexBuf[:n0]))
 	}
 
-	n255 := h1.FormatHexUint(&hexBuf, 255)
+	n255 := hexkit.FormatHexUint(&hexBuf, 255)
 	if string(hexBuf[:n255]) != "ff" {
 		t.Fatalf("expected ff, got %s", string(hexBuf[:n255]))
 	}
+}
+
+func TestChunkedReader_RFC9112Compliance(t *testing.T) {
+	// RFC 9112 §7.1: chunk-size = 1*HEXDIG. Leading whitespace is prohibited.
+	t.Run("LeadingWhitespaceRejection", func(t *testing.T) {
+		raw := " 5\r\nhello\r\n0\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		_, err := io.ReadAll(cr)
+		if !errors.Is(err, h1.ErrInvalidChunkSize) {
+			t.Fatalf("expected ErrInvalidChunkSize for leading whitespace, got: %v", err)
+		}
+	})
+
+	// RFC 9112 §7.1.1: Chunk extensions and BWS before ';'
+	t.Run("ChunkExtensionsAndBWS", func(t *testing.T) {
+		raw := "5;ext=foo\r\nhello\r\n5 ;ext=bar;token=val\r\nworld\r\n0;terminal\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		data, err := io.ReadAll(cr)
+		require.NoError(t, err)
+		assert.Equal(t, "helloworld", string(data))
+	})
+
+	// RFC 9112 §7.1: Integer overflow prevention in chunk size
+	t.Run("ChunkSizeIntegerOverflow", func(t *testing.T) {
+		raw := "7fffffffffffffff0\r\nhello\r\n0\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		_, err := io.ReadAll(cr)
+		if !errors.Is(err, h1.ErrInvalidChunkSize) {
+			t.Fatalf("expected ErrInvalidChunkSize on overflow, got: %v", err)
+		}
+	})
+
+	// RFC 9112 §7.1: Chunk boundary missing CRLF
+	t.Run("MissingCRLFBoundary", func(t *testing.T) {
+		raw := "5\r\nhelloXX0\r\n\r\n"
+		cr := h1.NewChunkedReader(bufio.NewReader(stringsReader(raw)))
+		_, err := io.ReadAll(cr)
+		if !errors.Is(err, h1.ErrChunkBoundaryError) {
+			t.Fatalf("expected ErrChunkBoundaryError, got: %v", err)
+		}
+	})
+
+	// RFC 9112 §7.1.2: Terminal chunk trailer draining *( field-line CRLF ) CRLF
+	t.Run("TrailerSectionDraining", func(t *testing.T) {
+		raw := "5\r\nhello\r\n0\r\nExpires: Wed, 21 Oct 2026 07:28:00 GMT\r\nContent-MD5: Q2hlY2sgSW50ZWdyaXR5IQ==\r\n\r\nNEXT_REQUEST"
+		br := bufio.NewReader(stringsReader(raw))
+		cr := h1.NewChunkedReader(br)
+
+		data, err := io.ReadAll(cr)
+		require.NoError(t, err)
+		assert.Equal(t, "hello", string(data))
+
+		// Subsequent read from underlying bufio.Reader should immediately yield NEXT_REQUEST
+		nextData, err := io.ReadAll(br)
+		require.NoError(t, err)
+		assert.Equal(t, "NEXT_REQUEST", string(nextData))
+	})
 }
 
 func TestHeaders_Comprehensive(t *testing.T) {
@@ -504,8 +588,8 @@ func TestResponse_StreamingWriteTo(t *testing.T) {
 	}
 }
 
-func createTestCookie(name, value, path []byte) *zerocopy.Cookie {
-	c := zerocopy.AcquireCookie()
+func createTestCookie(name, value, path []byte) *cookie.Cookie {
+	c := cookie.AcquireCookie()
 	c.SetKeyBytes(name)
 	c.SetValueBytes(value)
 	c.SetPathBytes(path)
@@ -596,4 +680,274 @@ func TestConnHandler_RequestSmuggling_ConnectionClose(t *testing.T) {
 	if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 		t.Errorf("expected io.EOF on closed connection, got %v", err)
 	}
+}
+
+// TestAdversarial_H1_Smuggling_PipelinedDataNeverAnswered verifies that when a client sends
+// conflicting framing headers (dual Transfer-Encoding and Content-Length) followed immediately
+// by pipelined requests, the server MUST close the TCP socket and the pipelined data is NEVER
+// processed or answered (RFC 9112 §6.3 & §11.2).
+func TestAdversarial_H1_Smuggling_PipelinedDataNeverAnswered(t *testing.T) {
+	testCases := []struct {
+		name       string
+		requestRaw string
+	}{
+		{
+			name: "TE_Before_CL_Chunked",
+			requestRaw: "POST /smuggle-te-first HTTP/1.1\r\n" +
+				"Host: 127.0.0.1\r\n" +
+				"Transfer-Encoding: chunked\r\n" +
+				"Content-Length: 5\r\n" +
+				"\r\n" +
+				"5\r\nhello\r\n0\r\n\r\n" +
+				"POST /pipelined-evil HTTP/1.1\r\n" +
+				"Host: 127.0.0.1\r\n" +
+				"Content-Length: 4\r\n" +
+				"\r\n" +
+				"evil",
+		},
+		{
+			name: "CL_Before_TE_Chunked",
+			requestRaw: "POST /smuggle-cl-first HTTP/1.1\r\n" +
+				"Host: 127.0.0.1\r\n" +
+				"Content-Length: 5\r\n" +
+				"Transfer-Encoding: chunked\r\n" +
+				"\r\n" +
+				"5\r\nworld\r\n0\r\n\r\n" +
+				"POST /pipelined-evil HTTP/1.1\r\n" +
+				"Host: 127.0.0.1\r\n" +
+				"Content-Length: 4\r\n" +
+				"\r\n" +
+				"evil",
+		},
+		{
+			name: "Mixed_Case_Headers",
+			requestRaw: "POST /smuggle-mixed HTTP/1.1\r\n" +
+				"Host: 127.0.0.1\r\n" +
+				"transfer-encoding: chunked\r\n" +
+				"content-length: 5\r\n" +
+				"\r\n" +
+				"5\r\nalive\r\n0\r\n\r\n" +
+				"GET /pipelined-evil HTTP/1.1\r\n" +
+				"Host: 127.0.0.1\r\n\r\n",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				invokedMu sync.Mutex
+				pathsSeen []string
+			)
+
+			ch := &h1.ConnHandler{
+				Handler: func(req *h1.Request, res *h1.Response) error {
+					invokedMu.Lock()
+
+					pathsSeen = append(pathsSeen, req.Path)
+					invokedMu.Unlock()
+
+					res.StatusCode = status.OK
+					res.Body = []byte("smuggling-handled")
+
+					return nil
+				},
+			}
+
+			var lc net.ListenConfig
+
+			ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			defer ln.Close()
+
+			go func() {
+				c, aErr := ln.Accept()
+				if aErr != nil {
+					return
+				}
+
+				_ = ch.ServeConn(c)
+			}()
+
+			var d net.Dialer
+
+			conn, err := d.DialContext(context.Background(), "tcp", ln.Addr().String())
+			require.NoError(t, err)
+
+			defer conn.Close()
+
+			// Send smuggling request + pipelined request in a single TCP write
+			_, err = conn.Write([]byte(tc.requestRaw))
+			require.NoError(t, err)
+
+			br := bufio.NewReader(conn)
+
+			resp, err := http.ReadResponse(br, nil)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			// RFC 9112 §11.2: Server MUST emit Connection: close indicator
+			assert.True(t, resp.Close || resp.Header.Get("Connection") == "close")
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, "smuggling-handled", string(body))
+
+			// Socket MUST be closed by server immediately following the response
+			_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+			_, err = br.ReadByte()
+			assert.True(t, errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed),
+				fmt.Sprintf("expected EOF/ErrClosed indicating socket teardown, got %v", err))
+
+			// Oracle verification: pipelined /pipelined-evil MUST NEVER have reached the handler
+			invokedMu.Lock()
+			defer invokedMu.Unlock()
+
+			for _, p := range pathsSeen {
+				assert.NotEqual(t, "/pipelined-evil", p, "smuggled pipelined request was processed by handler!")
+			}
+
+			assert.Equal(t, 1, len(pathsSeen), "handler should only have been invoked exactly once")
+		})
+	}
+}
+
+// TestAdversarial_H1_Smuggling_PerPStorage_NoCrossContamination verifies that
+// when a request triggers CloseConnection, the Per-P recycled request struct has its
+// CloseConnection state completely cleared, ensuring subsequent connections are not falsely closed.
+func TestAdversarial_H1_Smuggling_PerPStorage_NoCrossContamination(t *testing.T) {
+	ch := &h1.ConnHandler{
+		Handler: func(req *h1.Request, res *h1.Response) error {
+			res.StatusCode = status.OK
+			res.Body = []byte("ok")
+
+			return nil
+		},
+	}
+
+	var lc net.ListenConfig
+
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	defer ln.Close()
+
+	var activeConns atomic.Int32
+
+	go func() {
+		for {
+			c, aErr := ln.Accept()
+			if aErr != nil {
+				return
+			}
+
+			activeConns.Add(1)
+
+			go func(conn net.Conn) {
+				defer activeConns.Add(-1)
+
+				_ = ch.ServeConn(conn)
+			}(c)
+		}
+	}()
+
+	addr := ln.Addr().String()
+
+	var d net.Dialer
+
+	// 1. Send 10 smuggling requests across 10 connections to dirty Per-P pools
+	for range 10 {
+		c, dErr := d.DialContext(context.Background(), "tcp", addr)
+		require.NoError(t, dErr)
+
+		raw := "POST /dirty HTTP/1.1\r\n" +
+			"Host: 127.0.0.1\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"Content-Length: 4\r\n\r\n" +
+			"4\r\ntest\r\n0\r\n\r\n"
+		_, _ = c.Write([]byte(raw))
+
+		br := bufio.NewReader(c)
+
+		resp, rErr := http.ReadResponse(br, nil)
+		if rErr == nil {
+			_ = resp.Body.Close()
+		}
+
+		_ = c.Close()
+	}
+
+	// Wait for connections to close and recycle into Per-P
+	time.Sleep(50 * time.Millisecond)
+
+	// 2. Open a persistent connection and send 5 sequential keep-alive requests
+	c, err := d.DialContext(context.Background(), "tcp", addr)
+	require.NoError(t, err)
+
+	defer c.Close()
+
+	br := bufio.NewReader(c)
+
+	for seq := range 5 {
+		reqWire := fmt.Sprintf("GET /seq-%d HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n", seq)
+		_, err = c.Write([]byte(reqWire))
+		require.NoError(t, err)
+
+		resp, err := http.ReadResponse(br, nil)
+		require.NoErrorf(t, err, "sequential keep-alive request %d failed: connection was prematurely closed!", seq)
+
+		_ = resp.Body.Close()
+
+		assert.False(t, resp.Close, "keep-alive connection falsely marked Close!")
+		assert.NotEqual(t, "close", resp.Header.Get("Connection"), "unexpected Connection: close header")
+	}
+}
+
+func TestConnHandler_StreamHandler(t *testing.T) {
+	t.Parallel()
+
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	ch := &h1.ConnHandler{
+		StreamHandler: mach.HandlerFunc(func(stream mach.Stream) error {
+			s, ok := stream.(*h1.ServerStream)
+			assert.True(t, ok)
+			assert.Equal(t, "GET", s.Request().Method)
+			assert.Equal(t, "/universal", s.Request().Path)
+
+			s.Response().StatusCode = 200
+			s.Response().Body = []byte("universal-mach-engine")
+			return nil
+		}),
+	}
+
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			defer conn.Close()
+			_ = ch.ServeConn(conn)
+		}
+	}()
+
+	var d net.Dialer
+	c, err := d.DialContext(context.Background(), "tcp", ln.Addr().String())
+	require.NoError(t, err)
+	defer c.Close()
+
+	_, err = c.Write([]byte("GET /universal HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"))
+	require.NoError(t, err)
+
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "universal-mach-engine", string(body))
 }

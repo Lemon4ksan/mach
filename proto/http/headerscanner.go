@@ -5,45 +5,38 @@
 package http
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
 	"github.com/lemon4ksan/foundation/silicon/simd"
 )
 
+// errInvalidHeaderLeadingWhitespace indicates that headers cannot start with space or tab.
+var errInvalidHeaderLeadingWhitespace = errors.New("invalid headers, headers cannot start with space or tab")
+
 type headerScanner struct {
-	initialized bool
-
-	b []byte
-	r int
-
-	// blockEnd is the end of the header block in b when the caller has
-	// already found it (see readRawHeaders), 0 otherwise. next only trusts
-	// it if the block really ends in CRLFCRLF there.
+	b        []byte
+	r        int
 	blockEnd int
 
 	key   []byte
 	value []byte
 
-	// keyHasSpace reports whether key contains a space that survives
-	// trailing-whitespace trimming; such keys must not be canonicalized.
-	keyHasSpace bool
-
-	err error
+	err         error
+	initialized bool
 }
 
 func (s *headerScanner) next() bool {
 	if !s.initialized {
-		if simd.MatchCRLF(s.b) {
+		if len(s.b) >= 2 && s.b[0] == '\r' && s.b[1] == '\n' {
 			s.r = 2
 			return false
 		}
 
 		if s.blockEnd >= 4 && s.blockEnd <= len(s.b) &&
-			simd.MatchCRLFCRLF(s.b[s.blockEnd-4:s.blockEnd]) {
-			// The caller already found the end of the block, no need to
-			// search for it again. The first CRLFCRLF can only sit at
-			// blockEnd-4 since readRawHeaders stops at the first blank line.
+			s.b[s.blockEnd-4] == '\r' && s.b[s.blockEnd-3] == '\n' &&
+			s.b[s.blockEnd-2] == '\r' && s.b[s.blockEnd-1] == '\n' {
 			s.b = s.b[:s.blockEnd]
 		} else {
 			i := simd.IndexCRLFCRLF(s.b)
@@ -55,8 +48,9 @@ func (s *headerScanner) next() bool {
 			s.b = s.b[:i]
 		}
 
+		// RFC 9112 §5.2: Obsolete line folding: message cannot begin with leading whitespace.
 		if len(s.b) > 0 && (s.b[0] == ' ' || s.b[0] == '\t') {
-			s.err = errors.New("invalid headers, headers cannot start with space or tab")
+			s.err = errInvalidHeaderLeadingWhitespace
 			return false
 		}
 
@@ -69,25 +63,20 @@ func (s *headerScanner) next() bool {
 		return false
 	}
 
-	// Key ends at the first colon, already found by readContinuedLineSlice.
 	k, v := kv[:colon], kv[colon+1:]
 
-	valid, innerSpace := isValidHeaderKey(k)
-	if !valid {
+	// RFC 9112 §5.1: Field name validation (no whitespace before colon, valid token characters).
+	if !isValidHeaderKey(k) {
 		s.err = fmt.Errorf("malformed mime header line: %q", kv)
 		return false
 	}
 
-	s.keyHasSpace = innerSpace
-
-	// Skip initial spaces in value, without bytes.TrimLeft: it would
-	// rebuild its ASCII set on every call.
-	for len(v) > 0 && (v[0] == ' ' || v[0] == '\t') {
-		v = v[1:]
-	}
-
 	s.key = k
-	s.value = v
+	if len(v) > 1 && v[0] == ' ' && v[1] > ' ' {
+		s.value = v[1:]
+	} else {
+		s.value = simd.TrimLeadingSpaceSWAR(v)
+	}
 
 	if err != nil {
 		s.err = err
@@ -97,11 +86,8 @@ func (s *headerScanner) next() bool {
 	return true
 }
 
-// readLine reads a line from b, starting at s.r, and returns it with the
-// trailing \n and a possible preceding \r dropped. b is truncated at the
-// header block terminator, so every line ends in \n.
 func (s *headerScanner) readLine() []byte {
-	i := simd.IndexByteVector(s.b[s.r:], '\n')
+	i := bytes.IndexByte(s.b[s.r:], '\n')
 	if i < 0 {
 		return nil
 	}
@@ -116,90 +102,67 @@ func (s *headerScanner) readLine() []byte {
 	return line
 }
 
-// readContinuedLineSlice reads continued lines from b until it finds a line
-// that does not start with a space or tab, or it reaches the end of b.
-// It also returns the position of the first colon in the returned line:
-// the line can never start with a space or tab (the scanner rejects that for
-// the first line and joins such lines into the previous header), so trimming
-// it doesn't shift the colon.
 func (s *headerScanner) readContinuedLineSlice() ([]byte, int, error) {
 	line := s.readLine()
-	if len(line) == 0 { // blank line - no continuation
+	if len(line) == 0 {
 		return line, -1, nil
 	}
 
-	colon := simd.IndexByteVector(line, ':')
+	colon := simd.IndexColonSWAR(line)
 	if colon < 0 {
 		return nil, -1, fmt.Errorf("malformed mime header: missing colon: %q", line)
 	}
 
-	// If the next line doesn't start with a space or tab, we are done.
 	if len(s.b)-s.r > 1 {
 		peek := s.b[s.r : s.r+2]
 		if len(peek) > 0 && (isASCIILetter(peek[0]) || peek[0] == '\n') ||
 			len(peek) == 2 && peek[0] == '\r' && peek[1] == '\n' {
-			return trim(line), colon, nil
+			return line, colon, nil
 		}
 	}
 
-	mline := trim(line)
+	mline := simd.TrimSpaceSWAR(line)
 
-	// Read continuation lines.
 	for s.skipSpace() {
 		mline = append(mline, ' ')
-		line := s.readLine()
-		mline = append(mline, trim(line)...)
+		nxt := s.readLine()
+		mline = append(mline, simd.TrimSpaceSWAR(nxt)...)
 	}
 
 	return mline, colon, nil
 }
 
-// skipSpace skips one or multiple spaces and tabs in b.
 func (s *headerScanner) skipSpace() bool {
-	skipped := false
-	for {
-		c := s.b[s.r]
-		if c != ' ' && c != '\t' {
-			break
-		}
-
-		s.r++
-		skipped = true
+	if s.r >= len(s.b) {
+		return false
 	}
 
-	return skipped
+	trimmed := simd.TrimLeadingSpaceSWAR(s.b[s.r:])
+
+	skipped := len(s.b[s.r:]) - len(trimmed)
+	if skipped > 0 {
+		s.r += skipped
+		return true
+	}
+
+	return false
 }
 
 func isASCIILetter(b byte) bool {
-	b |= 0x20 // Make lower case.
+	b |= 0x20
 	return 'a' <= b && b <= 'z'
 }
 
-// trim returns s with leading and trailing spaces and tabs removed.
-// It does not assume Unicode or UTF-8.
+// trim returns s with leading and trailing spaces and tabs removed using SWAR vectorization.
+//
+//go:inline
 func trim(s []byte) []byte {
-	i := 0
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-		i++
-	}
-
-	n := len(s)
-	for n > i && (s[n-1] == ' ' || s[n-1] == '\t') {
-		n--
-	}
-
-	return s[i:n]
+	return simd.TrimSpaceSWAR(s)
 }
 
+// trimTrailingSpace returns s with trailing spaces and tabs removed using SWAR vectorization.
+//
+//go:inline
 func trimTrailingSpace(s []byte) []byte {
-	for len(s) > 0 {
-		c := s[len(s)-1]
-		if c != ' ' && c != '\t' {
-			break
-		}
-
-		s = s[:len(s)-1]
-	}
-
-	return s
+	return simd.TrimTrailingSpaceSWAR(s)
 }

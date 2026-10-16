@@ -7,7 +7,6 @@ package h1_test
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -174,6 +173,34 @@ func TestClientConn_Close(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestEngine_DialAndOpenStream(t *testing.T) {
+	t.Parallel()
+
+	ln, addr := runMockH1Server(t, func(c net.Conn) {
+		defer c.Close()
+		br := bufio.NewReader(c)
+		line, _ := br.ReadSlice('\n')
+		_, _ = c.Write(line)
+	})
+	defer ln.Close()
+
+	var engine h1.Engine
+	conn, err := engine.Dial(context.Background(), addr)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	stream, err := conn.OpenStream(context.Background())
+	require.NoError(t, err)
+	defer stream.Close()
+
+	_, err = stream.Write([]byte("PING\n"))
+	require.NoError(t, err)
+
+	frame, err := stream.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, "PING\n", string(frame.Payload()))
+}
+
 func BenchmarkClientConn_RoundTrip(b *testing.B) {
 	var lc net.ListenConfig
 
@@ -246,11 +273,10 @@ func BenchmarkClientConn_RoundTrip(b *testing.B) {
 	req.Header.SetHost(ln.Addr().String())
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := cc.Do(ctx, req, resp); err != nil {
-			b.Fatal(fmt.Errorf("Do failed at iteration %d: %w", i, err))
+			b.Fatal(err)
 		}
 	}
 }

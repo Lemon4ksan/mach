@@ -50,7 +50,6 @@ func BenchmarkLegacyStructDecode(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var (
 		id         uint32
@@ -58,7 +57,7 @@ func BenchmarkLegacyStructDecode(b *testing.B) {
 		payloadLen int
 	)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		frame := DecodeLegacy(raw)
 		id = frame.StreamID
 		flags = frame.Flags
@@ -80,7 +79,6 @@ func BenchmarkInSituOverlay(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var (
 		id         uint32
@@ -88,7 +86,7 @@ func BenchmarkInSituOverlay(b *testing.B) {
 		payloadLen int
 	)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		frame := Frame(raw)
 		if !frame.IsValid() {
 			continue
@@ -186,7 +184,7 @@ func TestInSituOverlay_ValidFrames(t *testing.T) {
 
 func TestInSituOverlay_TruncatedFrames(t *testing.T) {
 	// Sub-9 byte slices
-	for length := 0; length < 9; length++ {
+	for length := range 9 {
 		f := Frame(make([]byte, length))
 		if f.IsValid() {
 			t.Errorf("expected slice of length %d to be invalid", length)

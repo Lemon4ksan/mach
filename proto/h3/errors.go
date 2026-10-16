@@ -78,6 +78,9 @@ var (
 	// ErrFrameUnexpected indicates an unexpected frame type was received in current stream state (RFC 9114 §4.1 & §7.2).
 	ErrFrameUnexpected = errors.New("aoni/h3engine: received unexpected frame type (RFC 9114 §4.1)")
 
+	// ErrFrameError indicates frame payload format or length violations (RFC 9114 §7.1).
+	ErrFrameError = errors.New("aoni/h3engine: frame payload syntax or length error (RFC 9114 §7.1)")
+
 	// ErrHeaderTooLarge indicates header block exceeded SETTINGS_MAX_FIELD_SECTION_SIZE (RFC 9114 §7.2.4.1 & §10.5.1).
 	ErrHeaderTooLarge = errors.New("aoni/h3engine: response headers exceed size limit (RFC 9114 §10.5.1)")
 

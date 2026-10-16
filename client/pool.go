@@ -73,6 +73,11 @@ func NewPoolManager[T any]() *PoolManager[T] {
 
 // closeConnHelper releases underlying resources for a discarded connection.
 func (p *PoolManager[T]) closeConnHelper(c T) {
+	var zero T
+	if any(c) == any(zero) || any(c) == nil {
+		return
+	}
+
 	if p.CloseConn != nil {
 		_ = p.CloseConn(c)
 		return
@@ -179,6 +184,19 @@ func (p *PoolManager[T]) Put(addr string, c T) {
 		conn:       c,
 		lastActive: time.Now(),
 	})
+}
+
+// Discard releases a connection without returning it to the idle pool, decrementing the host count.
+func (p *PoolManager[T]) Discard(addr string, c T) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	hp, ok := p.pools[addr]
+	if ok && hp.count > 0 {
+		hp.count--
+	}
+
+	p.closeConnHelper(c)
 }
 
 // Close closes all idle connections across all destination pools and clears the manager.

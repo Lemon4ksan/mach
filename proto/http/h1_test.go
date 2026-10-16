@@ -5,17 +5,19 @@
 package http
 
 import (
+	"bytes"
 	"sync"
 	"testing"
 
 	"github.com/lemon4ksan/foundation/borrow"
 
-	"github.com/lemon4ksan/mach/proto/http/zerocopy"
+	"github.com/lemon4ksan/mach/proto/semantic/cookie"
+	"github.com/lemon4ksan/mach/proto/semantic/uri"
 )
 
 func TestH1Engine_URIAndArgs(t *testing.T) {
-	u := zerocopy.AcquireURI()
-	defer zerocopy.ReleaseURI(u)
+	u := uri.AcquireURI()
+	defer uri.ReleaseURI(u)
 
 	_ = u.Parse(nil, []byte("https://example.com:8080/path/test?foo=bar&baz=123"))
 
@@ -48,7 +50,6 @@ var legacySyncPool = sync.Pool{
 
 func BenchmarkPool_LegacySyncPool_Parallel(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			req := legacySyncPool.Get().(*Request)
@@ -58,9 +59,8 @@ func BenchmarkPool_LegacySyncPool_Parallel(b *testing.B) {
 	})
 }
 
-func BenchmarkPool_PerPStorage_Parallel(b *testing.B) {
+func BenchmarkPool_PerCorePool_Parallel(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			req := AcquireRequest()
@@ -76,7 +76,6 @@ func BenchmarkBorrow_Scoped(b *testing.B) {
 	resp.SetBodyString(`{"status":"ok","code":200,"message":"high-performance"}`)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		_ = resp.ReadBodyScoped(func(body []byte) error {
@@ -96,7 +95,6 @@ func BenchmarkBorrow_LegacyCloneCopy(b *testing.B) {
 	resp.SetBodyString(`{"status":"ok","code":200,"message":"high-performance"}`)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		raw := resp.Body()
@@ -127,14 +125,14 @@ var testHeaderRaw1KB = []byte("HTTP/1.1 200 OK\r\n" +
 	"Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\r\n")
 
 func BenchmarkHeaderScanner_SIMD(b *testing.B) {
-	b.SetBytes(int64(len(testHeaderRaw1KB)))
+	headersOnly := testHeaderRaw1KB[bytes.Index(testHeaderRaw1KB, []byte("\r\n"))+2:]
+	b.SetBytes(int64(len(headersOnly)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		var s headerScanner
 
-		s.b = testHeaderRaw1KB
+		s.b = headersOnly
 		for s.next() {
 			if len(s.key) == 0 || len(s.value) == 0 {
 				b.Fatal("empty kv")
@@ -146,7 +144,6 @@ func BenchmarkHeaderScanner_SIMD(b *testing.B) {
 func BenchmarkHeaderParse_ResponseHeader_SIMD(b *testing.B) {
 	b.SetBytes(int64(len(testHeaderRaw1KB)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var h ResponseHeader
 	for b.Loop() {
@@ -162,14 +159,13 @@ func BenchmarkCookie_Scoped(b *testing.B) {
 	scope := borrow.AcquireScope()
 	defer scope.Release()
 
-	var c zerocopy.Cookie
+	var c cookie.Cookie
 	c.SetKey("session_id")
 	c.SetValue("xyz_987654321_secure_token")
 	c.SetDomain("api.aoni.dev")
 	c.SetPath("/v1/auth")
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		k := c.KeyScoped(scope)
@@ -184,14 +180,13 @@ func BenchmarkCookie_Scoped(b *testing.B) {
 }
 
 func BenchmarkCookie_LegacyAlloc(b *testing.B) {
-	var c zerocopy.Cookie
+	var c cookie.Cookie
 	c.SetKey("session_id")
 	c.SetValue("xyz_987654321_secure_token")
 	c.SetDomain("api.aoni.dev")
 	c.SetPath("/v1/auth")
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		k := string(c.Key())
@@ -209,8 +204,8 @@ func BenchmarkURI_Scoped(b *testing.B) {
 	scope := borrow.AcquireScope()
 	defer scope.Release()
 
-	u := zerocopy.AcquireURI()
-	defer zerocopy.ReleaseURI(u)
+	u := uri.AcquireURI()
+	defer uri.ReleaseURI(u)
 
 	_ = u.Parse(
 		nil,
@@ -218,7 +213,6 @@ func BenchmarkURI_Scoped(b *testing.B) {
 	)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		host := u.HostScoped(scope)
@@ -236,8 +230,8 @@ func BenchmarkURI_Scoped(b *testing.B) {
 }
 
 func BenchmarkURI_LegacyAlloc(b *testing.B) {
-	u := zerocopy.AcquireURI()
-	defer zerocopy.ReleaseURI(u)
+	u := uri.AcquireURI()
+	defer uri.ReleaseURI(u)
 
 	_ = u.Parse(
 		nil,
@@ -245,7 +239,6 @@ func BenchmarkURI_LegacyAlloc(b *testing.B) {
 	)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		host := string(u.Host())
@@ -274,7 +267,6 @@ func BenchmarkFullPipeline_ScopedBorrow(b *testing.B) {
 	resp.SetBodyString(`{"id":42,"username":"admin","status":"authenticated","role":"superadmin"}`)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		contentType := resp.Header.PeekScoped(scope, "Content-Type")
@@ -300,7 +292,6 @@ func BenchmarkFullPipeline_LegacyCopy(b *testing.B) {
 	resp.SetBodyString(`{"id":42,"username":"admin","status":"authenticated","role":"superadmin"}`)
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	for b.Loop() {
 		contentType := string(resp.Header.Peek("Content-Type"))

@@ -7,6 +7,7 @@ package h2
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,10 +19,13 @@ import (
 	"github.com/lemon4ksan/foundation/sync/spinlock"
 	"golang.org/x/sys/cpu"
 
-	"github.com/lemon4ksan/mach/hpack"
+	"github.com/lemon4ksan/mach"
+	"github.com/lemon4ksan/mach/proto/codec/hpack"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1 "github.com/lemon4ksan/mach/proto/http"
 )
+
+var _ mach.Conn = (*Conn)(nil)
 
 // ConnOpts defines connection configuration options for client-side HTTP/2 sessions (RFC 9113 §6.5).
 type ConnOpts struct {
@@ -65,13 +69,14 @@ type Conn struct {
 	onDisconnect  func(ctx context.Context, c *Conn)
 	onRTT         func(time.Duration)
 	onPushPromise func(pushReq *h1.Request, pushResp *h1.Response)
+	errMu         sync.Mutex
 	lastErr       error
 	orderedKeys   []string
 	windowCond    *sync.Cond
 
 	writeMu  sync.Mutex
 	inMu     sync.Mutex
-	windowMu spinlock.SpinLock
+	windowMu spinlock.Lock
 
 	// Hot atomic counters isolated on their own 64-byte cache lines
 	serverWindow             atomic.Int32
@@ -79,7 +84,7 @@ type Conn struct {
 	maxWindow                int32
 	currentWindow            int32
 	openStreams              atomic.Int32
-	pingUnacks               int32
+	pingUnacks               atomic.Int32
 	consecutiveControlFrames int32
 	nextID                   atomic.Uint32
 
@@ -90,9 +95,13 @@ type Conn struct {
 	reqStreams [streamTableSize]atomic.Pointer[Context]
 	reqShards  [streamNumShards]streamShard
 
+	continuationStream uint32
+	headerBuf          []byte
+
 	in           chan *Context
 	out          chan *coreh2.FrameHeader
 	outRing      *ringbuf.SPSCRingBuffer[coreh2.FrameHeader]
+	done         chan struct{}
 	pingInterval time.Duration
 	closed       atomic.Uint64
 	inClosed     bool
@@ -119,6 +128,7 @@ func NewConn(c net.Conn, opts ConnOpts) *Conn {
 		in:            make(chan *Context, 128),
 		out:           make(chan *coreh2.FrameHeader, 128),
 		outRing:       ringbuf.NewSPSCRingBuffer[coreh2.FrameHeader](512),
+		done:          make(chan struct{}),
 		pingInterval:  opts.PingInterval,
 		disableAcks:   opts.DisablePingChecking,
 		onDisconnect:  opts.OnDisconnect,
@@ -159,16 +169,32 @@ func (c *Conn) SetOrderedHeaders(keys []string) {
 // CancelStream terminates an active HTTP/2 stream by transmitting an RST_STREAM frame
 // with error code CANCEL (0x08) per RFC 9113 §5.1 and §6.4.
 func (c *Conn) CancelStream(ctx *Context) {
-	if ctx == nil || ctx.StreamID.Load() == 0 {
+	if ctx == nil {
 		return
 	}
 
-	if ctx.State() == streamClosed {
+	if ctx.pipeWriter != nil {
+		_ = ctx.pipeWriter.CloseWithError(coreh2.ErrStreamClosed)
+	}
+
+	if ctx.pipeReader != nil {
+		_ = ctx.pipeReader.CloseWithError(coreh2.ErrStreamClosed)
+	}
+
+	if !ctx.Close() {
 		return
 	}
 
-	ctx.SetState(streamClosed)
+	ctx.mu.Lock()
+	ctx.Request = nil
+	ctx.Response = nil
+	ctx.mu.Unlock()
+
 	streamID := ctx.StreamID.Load()
+	if streamID == 0 {
+		return
+	}
+
 	c.deleteStream(streamID)
 	c.openStreams.Add(-1)
 
@@ -183,6 +209,7 @@ func (c *Conn) CancelStream(ctx *Context) {
 		select {
 		case c.out <- fr:
 		default:
+			coreh2.ReleaseFrameHeader(fr)
 		}
 	}
 
@@ -196,6 +223,8 @@ func (c *Conn) Close() error {
 		return io.EOF
 	}
 
+	close(c.done)
+
 	c.inMu.Lock()
 	if !c.inClosed {
 		c.inClosed = true
@@ -208,8 +237,29 @@ func (c *Conn) Close() error {
 	defer coreh2.ReleaseFrameHeader(fr)
 
 	ga := coreh2.AcquireFrame(coreh2.FrameGoAway).(*coreh2.GoAway)
-	ga.SetStream(0)
-	ga.SetCode(coreh2.NoError)
+
+	errCode := coreh2.NoError
+
+	c.errMu.Lock()
+
+	streamErr := c.lastErr
+	if streamErr == nil {
+		streamErr = coreh2.ErrStreamClosed
+	} else {
+		var h2Err coreh2.Error
+		if errors.As(c.lastErr, &h2Err) {
+			errCode = h2Err.Code()
+		} else {
+			var code coreh2.ErrorCode
+			if errors.As(c.lastErr, &code) {
+				errCode = code
+			}
+		}
+	}
+
+	c.errMu.Unlock()
+
+	ga.SetCode(errCode)
 	fr.SetBody(ga)
 
 	c.writeMu.Lock()
@@ -223,7 +273,7 @@ func (c *Conn) Close() error {
 
 	_ = c.c.Close()
 	c.broadcastWindowUpdate()
-	c.broadcastErrorToAllStreams(coreh2.ErrStreamClosed)
+	c.broadcastErrorToAllStreams(streamErr)
 
 	if c.onDisconnect != nil {
 		c.onDisconnect(context.Background(), c)
@@ -265,7 +315,6 @@ func (c *Conn) Handshake() error {
 	st := fr.Body().(*coreh2.Settings)
 	if !st.IsAck() {
 		st.CopyTo(&c.serverS)
-		c.serverStreamWindow += c.serverS.MaxWindowSize()
 
 		c.enc.SetMaxTableSize(st.HeaderTableSize())
 
@@ -358,4 +407,138 @@ func (c *Conn) Do(ctx context.Context, req *h1.Request, res *h1.Response) error 
 	case err := <-errCh:
 		return err
 	}
+}
+
+// OpenStream opens a new stream on Conn, satisfying mach.Conn.
+func (c *Conn) OpenStream(ctx context.Context) (mach.Stream, error) {
+	if c.Closed() {
+		return nil, coreh2.ErrStreamClosed
+	}
+
+	return NewStream(c, ctx), nil
+}
+
+func (c *Conn) setLastError(err error) {
+	if err == nil {
+		return
+	}
+
+	c.errMu.Lock()
+	if c.lastErr == nil {
+		c.lastErr = err
+	}
+
+	c.errMu.Unlock()
+}
+
+// EnableConnect reports whether the server advertised SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 8441 §3).
+func (c *Conn) EnableConnect() bool {
+	return c.serverS.EnableConnect()
+}
+
+// ServerSettings returns a copy of the settings received from the server.
+func (c *Conn) ServerSettings() coreh2.Settings {
+	var s coreh2.Settings
+	c.serverS.CopyTo(&s)
+	return s
+}
+
+// ExtendedConnectStream adapts an HTTP/2 Extended CONNECT stream to io.ReadWriteCloser.
+type ExtendedConnectStream struct {
+	conn   *Conn
+	reqCtx *Context
+	pr     *io.PipeReader
+	pw     *io.PipeWriter
+	closed atomic.Bool
+}
+
+func (s *ExtendedConnectStream) Read(p []byte) (int, error) {
+	return s.pr.Read(p)
+}
+
+func (s *ExtendedConnectStream) Write(p []byte) (int, error) {
+	if s.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+
+	err := s.conn.WriteTunnelData(s.reqCtx, p, false)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(p), nil
+}
+
+func (s *ExtendedConnectStream) Close() error {
+	if s.closed.CompareAndSwap(false, true) {
+		_ = s.pr.Close()
+		_ = s.pw.Close()
+		_ = s.conn.WriteTunnelData(s.reqCtx, nil, true)
+		s.conn.CancelStream(s.reqCtx)
+	}
+
+	return nil
+}
+
+// StartExtendedConnect initiates an Extended CONNECT stream (RFC 8441 §4).
+func (c *Conn) StartExtendedConnect(
+	ctx context.Context,
+	req *h1.Request,
+) (*ExtendedConnectStream, *h1.Response, error) {
+	if !c.EnableConnect() {
+		return nil, nil, errors.New("h2: server did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL")
+	}
+
+	pr, pw := io.Pipe()
+	res := h1.AcquireResponse()
+	errCh := make(chan error, 1)
+	tunnelHdrCh := make(chan error, 1)
+
+	reqCtx := &Context{
+		Request:         req,
+		Response:        res,
+		Err:             errCh,
+		isTunnel:        true,
+		tunnelHeadersCh: tunnelHdrCh,
+		pipeWriter:      pw,
+		pipeReader:      pr,
+	}
+
+	if err := c.Write(reqCtx); err != nil {
+		h1.ReleaseResponse(res)
+		return nil, nil, err
+	}
+
+	select {
+	case <-ctx.Done():
+		c.CancelStream(reqCtx)
+		h1.ReleaseResponse(res)
+		return nil, nil, ctx.Err()
+	case err := <-tunnelHdrCh:
+		if err != nil {
+			c.CancelStream(reqCtx)
+			h1.ReleaseResponse(res)
+			return nil, nil, err
+		}
+
+	case err := <-errCh:
+		if err != nil {
+			h1.ReleaseResponse(res)
+			return nil, nil, err
+		}
+	}
+
+	if res.StatusCode() != 200 {
+		c.CancelStream(reqCtx)
+		return nil, res, fmt.Errorf("h2: unexpected Extended CONNECT response status: %d", res.StatusCode())
+	}
+
+	stream := &ExtendedConnectStream{
+		conn:   c,
+		reqCtx: reqCtx,
+		pr:     pr,
+		pw:     pw,
+	}
+
+	return stream, res, nil
 }

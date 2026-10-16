@@ -305,3 +305,86 @@ func TestAcquireFrameInArena(t *testing.T) {
 		}
 	})
 }
+
+func TestHeaderValidation_RFC9113(t *testing.T) {
+	// RFC 9113 §8.2.1: Valid lowercase ASCII names
+	validNames := [][]byte{
+		[]byte("content-type"),
+		[]byte("accept-encoding"),
+		[]byte("x-custom-header"),
+		[]byte("cache-control"),
+	}
+	for _, name := range validNames {
+		if err := ValidateHeaderName(name, false); err != nil {
+			t.Errorf("expected valid for %s, got %v", name, err)
+		}
+	}
+
+	// RFC 9113 §8.2.1: Reject uppercase field names
+	uppercaseNames := [][]byte{
+		[]byte("Content-Type"),
+		[]byte("ACCEPT"),
+		[]byte("X-Custom-Header"),
+		[]byte("Host"),
+	}
+	for _, name := range uppercaseNames {
+		if err := ValidateHeaderName(name, false); err == nil {
+			t.Errorf("expected ProtocolError for uppercase %s, got nil", name)
+		}
+	}
+
+	// RFC 9113 §8.2.1: Reject invalid characters (0x00-0x20, 0x7f-0xff, colon in regular)
+	invalidNames := [][]byte{
+		[]byte("content type"),
+		[]byte("content\ttype"),
+		[]byte("content:type"),
+		[]byte("foo\x00bar"),
+		[]byte("foo\x7fbar"),
+		[]byte("foo\xffbar"),
+	}
+	for _, name := range invalidNames {
+		if err := ValidateHeaderName(name, false); err == nil {
+			t.Errorf("expected ProtocolError for invalid chars in %q, got nil", name)
+		}
+	}
+
+	// RFC 9113 §8.2.1: Pseudo-headers start with ':' and allow lowercase
+	if err := ValidateHeaderName([]byte(":status"), true); err != nil {
+		t.Errorf("expected valid for :status, got %v", err)
+	}
+	if err := ValidateHeaderName([]byte(":Status"), true); err == nil {
+		t.Errorf("expected ProtocolError for :Status, got nil")
+	}
+	if err := ValidateHeaderName([]byte(":"), true); err == nil {
+		t.Errorf("expected ProtocolError for lone colon, got nil")
+	}
+
+	// RFC 9113 §8.2.1: Field values must not contain NUL, CR, or LF
+	if err := ValidateHeaderValue([]byte("valid value")); err != nil {
+		t.Errorf("expected valid value, got %v", err)
+	}
+	for _, badVal := range [][]byte{
+		[]byte("val\x00ue"),
+		[]byte("val\rue"),
+		[]byte("val\nue"),
+	} {
+		if err := ValidateHeaderValue(badVal); err == nil {
+			t.Errorf("expected ProtocolError for bad value %q, got nil", badVal)
+		}
+	}
+
+	// RFC 9113 §8.2.2: Connection-specific headers prohibited
+	connHeaders := []string{"connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade"}
+	for _, h := range connHeaders {
+		if !IsConnectionSpecificHeader([]byte(h), []byte("foo")) {
+			t.Errorf("expected IsConnectionSpecificHeader=true for %s", h)
+		}
+	}
+	// TE is only allowed with "trailers"
+	if IsConnectionSpecificHeader([]byte("te"), []byte("trailers")) {
+		t.Errorf("expected te: trailers to be allowed")
+	}
+	if !IsConnectionSpecificHeader([]byte("te"), []byte("gzip")) {
+		t.Errorf("expected te: gzip to be prohibited")
+	}
+}
