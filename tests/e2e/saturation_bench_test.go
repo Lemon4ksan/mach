@@ -395,11 +395,20 @@ func runH3SaturationLoad(
 		errCount    atomic.Int64
 	)
 
+	maxConcurrent := 100
+	if workers < maxConcurrent {
+		maxConcurrent = workers
+	}
+
+	sem := make(chan struct{}, maxConcurrent)
+
 	start := time.Now()
 
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
+
 		workerID := w
+
 		go func() {
 			defer wg.Done()
 
@@ -407,6 +416,7 @@ func runH3SaturationLoad(
 
 			req := machhttp.AcquireRequest()
 			resp := machhttp.AcquireResponse()
+
 			defer machhttp.ReleaseRequest(req)
 			defer machhttp.ReleaseResponse(resp)
 
@@ -417,11 +427,15 @@ func runH3SaturationLoad(
 			localDurs := make([]time.Duration, 0, requestsPerWorker)
 
 			for i := 0; i < requestsPerWorker; i++ {
+				sem <- struct{}{}
+
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				reqStart := time.Now()
 				_, err := cc.Do(ctx, req, resp, nil)
 				reqDur := time.Since(reqStart)
+
 				cancel()
+				<-sem
 
 				if err != nil || resp.StatusCode() != 200 {
 					errCount.Add(1)
