@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/lemon4ksan/mach"
@@ -159,8 +160,8 @@ type ClientConn struct {
 	bw         *bufio.Writer
 	br         *bufio.Reader
 	stream     Stream
-	isClosed   bool
-	isUpgraded bool
+	isClosed   atomic.Bool
+	isUpgraded atomic.Bool
 }
 
 // NewClientConn creates an HTTP/1.1 client connection wrapping the provided network socket c.
@@ -248,11 +249,11 @@ func (f *Frame) Payload() []byte {
 //
 // Do is not safe for concurrent execution on the same ClientConn instance.
 func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Response) error {
-	if cc.isClosed {
+	if cc.isClosed.Load() {
 		return ErrConnClosed
 	}
 
-	if cc.isUpgraded {
+	if cc.isUpgraded.Load() {
 		return ErrConnUpgraded
 	}
 
@@ -309,13 +310,13 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 
 	// RFC 9112 §9.3: If response signaled Connection: close, close and mark connection non-reusable
 	if res.Header.ConnectionClose() {
-		cc.isClosed = true
+		cc.isClosed.Store(true)
 		_ = cc.conn.Close()
 	}
 
 	// RFC 9112 §9.3: 101 Switching Protocols upgrades connection away from HTTP/1.1
 	if res.StatusCode() == status.SwitchingProtocols {
-		cc.isUpgraded = true
+		cc.isUpgraded.Store(true)
 	}
 
 	return nil
@@ -323,11 +324,11 @@ func (cc *ClientConn) Do(ctx context.Context, req *http.Request, res *http.Respo
 
 // Hijack takes over the underlying network connection and I/O buffers after protocol upgrade.
 func (cc *ClientConn) Hijack() (net.Conn, *bufio.Reader, *bufio.Writer, error) {
-	if cc.isClosed {
+	if cc.isClosed.Load() {
 		return nil, nil, nil, ErrConnClosed
 	}
 
-	cc.isUpgraded = true
+	cc.isUpgraded.Store(true)
 
 	return cc.conn, cc.br, cc.bw, nil
 }
@@ -335,14 +336,17 @@ func (cc *ClientConn) Hijack() (net.Conn, *bufio.Reader, *bufio.Writer, error) {
 // Close terminates the HTTP/1.1 client connection and releases the underlying socket (RFC 9112 §9.6).
 // Any active or pending Do operation on cc will immediately fail with a closed connection error.
 func (cc *ClientConn) Close() error {
-	cc.isClosed = true
+	if cc.isClosed.Swap(true) {
+		return nil
+	}
+
 	return cc.conn.Close()
 }
 
 // IsClosed reports whether the client connection has closed or is non-reusable.
 // If the connection is idle, it performs a non-destructive probe to detect peer EOF (RFC 9112 §9.3).
 func (cc *ClientConn) IsClosed() bool {
-	if cc.isClosed {
+	if cc.isClosed.Load() {
 		return true
 	}
 
@@ -352,7 +356,7 @@ func (cc *ClientConn) IsClosed() bool {
 
 		_ = cc.conn.SetReadDeadline(time.Time{})
 		if err == io.EOF || errors.Is(err, net.ErrClosed) {
-			cc.isClosed = true
+			cc.isClosed.Store(true)
 			_ = cc.conn.Close()
 
 			return true

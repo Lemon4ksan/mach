@@ -839,10 +839,10 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 		}
 
 		packetCount++
-		if packetCount%16 == 0 {
+		if packetCount%8 == 0 {
 			b.mu.Unlock()
 
-			time.Sleep(30 * time.Microsecond)
+			time.Sleep(100 * time.Microsecond)
 
 			b.mu.Lock()
 		}

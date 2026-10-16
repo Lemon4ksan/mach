@@ -30,8 +30,6 @@ import (
 // ============================================================================
 
 func TestH3_PayloadTransfer_1MB(t *testing.T) {
-	t.Parallel()
-
 	payloadSize := 1024 * 1024 // 1 MB
 	payload := make([]byte, payloadSize)
 	for i := range payload {
@@ -76,8 +74,6 @@ func TestH3_PayloadTransfer_1MB(t *testing.T) {
 }
 
 func TestH3_PayloadTransfer_5MB(t *testing.T) {
-	t.Parallel()
-
 	payloadSize := 5 * 1024 * 1024 // 5 MB
 	payload := make([]byte, payloadSize)
 	for i := range payload {
@@ -122,8 +118,6 @@ func TestH3_PayloadTransfer_5MB(t *testing.T) {
 }
 
 func TestH3_PayloadTransfer_10MB(t *testing.T) {
-	t.Parallel()
-
 	payloadSize := 10 * 1024 * 1024 // 10 MB
 	payload := make([]byte, payloadSize)
 	for i := range payload {
