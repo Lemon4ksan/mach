@@ -10,9 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lemon4ksan/mach/net/quic/core/handshake"
 	"github.com/lemon4ksan/mach/net/quic/core/stream"
@@ -839,9 +839,11 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 		}
 
 		packetCount++
-		if packetCount%64 == 0 {
+		if packetCount%16 == 0 {
 			b.mu.Unlock()
-			runtime.Gosched()
+
+			time.Sleep(30 * time.Microsecond)
+
 			b.mu.Lock()
 		}
 	}

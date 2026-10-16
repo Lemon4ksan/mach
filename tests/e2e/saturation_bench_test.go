@@ -183,22 +183,67 @@ func runH1SaturationLoad(
 		scheme = "https"
 	}
 
+	conns := make([]*h1client.ClientConn, workers)
+	raws := make([]net.Conn, workers)
+
+	var (
+		dialWg  sync.WaitGroup
+		dialErr atomic.Pointer[error]
+	)
+
+	sem := make(chan struct{}, 50)
+
+	for i := 0; i < workers; i++ {
+		dialWg.Add(1)
+
+		idx := i
+
+		go func() {
+			defer dialWg.Done()
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			c, rawConn, dErr := dialH1ClientSafe(tb, addr, clientTLS)
+			if dErr != nil {
+				dialErr.Store(&dErr)
+				return
+			}
+
+			conns[idx] = c
+			raws[idx] = rawConn
+		}()
+	}
+
+	dialWg.Wait()
+
+	defer func() {
+		for _, raw := range raws {
+			if raw != nil {
+				_ = raw.Close()
+			}
+		}
+	}()
+
+	if pErr := dialErr.Load(); pErr != nil {
+		tb.Fatalf("runH1SaturationLoad: pre-dial failed: %v", *pErr)
+	}
+
 	start := time.Now()
 
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
+
+		workerID := w
+
 		go func() {
 			defer wg.Done()
 
-			c, rawConn, dErr := dialH1ClientSafe(tb, addr, clientTLS)
-			if dErr != nil {
-				errCount.Add(int64(requestsPerWorker))
-				return
-			}
-			defer func() { _ = rawConn.Close() }()
+			c := conns[workerID]
 
 			req := machhttp.AcquireRequest()
 			resp := machhttp.AcquireResponse()
+
 			defer machhttp.ReleaseRequest(req)
 			defer machhttp.ReleaseResponse(resp)
 
@@ -213,6 +258,7 @@ func runH1SaturationLoad(
 				reqStart := time.Now()
 				err := c.Do(ctx, req, resp)
 				reqDur := time.Since(reqStart)
+
 				cancel()
 
 				if err != nil || resp.StatusCode() != 200 {
