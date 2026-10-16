@@ -101,6 +101,7 @@ type Conn struct {
 	in           chan *Context
 	out          chan *coreh2.FrameHeader
 	outRing      *ringbuf.SPSCRingBuffer[coreh2.FrameHeader]
+	done         chan struct{}
 	pingInterval time.Duration
 	closed       atomic.Uint64
 	inClosed     bool
@@ -127,6 +128,7 @@ func NewConn(c net.Conn, opts ConnOpts) *Conn {
 		in:            make(chan *Context, 128),
 		out:           make(chan *coreh2.FrameHeader, 128),
 		outRing:       ringbuf.NewSPSCRingBuffer[coreh2.FrameHeader](512),
+		done:          make(chan struct{}),
 		pingInterval:  opts.PingInterval,
 		disableAcks:   opts.DisablePingChecking,
 		onDisconnect:  opts.OnDisconnect,
@@ -220,6 +222,8 @@ func (c *Conn) Close() error {
 	if !c.closed.CompareAndSwap(0, 1) {
 		return io.EOF
 	}
+
+	close(c.done)
 
 	c.inMu.Lock()
 	if !c.inClosed {

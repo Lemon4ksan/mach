@@ -101,6 +101,9 @@ func (c *Conn) selectWriteEvent(pingChan <-chan time.Time) (bool, error) {
 	}
 
 	select {
+	case <-c.done:
+		return true, nil
+
 	case ctx, ok := <-c.in:
 		if !ok {
 			c.in = nil
