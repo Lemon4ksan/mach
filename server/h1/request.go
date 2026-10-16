@@ -203,7 +203,17 @@ func (r *Request) ReadRequest(br *bufio.Reader, bw *bytesconv.ByteBuffer, maxBod
 				headerEnd := protoh1.IndexCRLFCRLF(peekBytes[startIdx:])
 				if headerEnd != -1 {
 					headerEnd += startIdx
-					headerBlock := peekBytes[startIdx : headerEnd-4]
+
+					delimLen := 2
+					if headerEnd-startIdx >= 4 && bytes.Equal(peekBytes[headerEnd-4:headerEnd], []byte("\r\n\r\n")) {
+						delimLen = 4
+					}
+
+					if headerEnd-delimLen < startIdx {
+						return ErrMalformedRequestLine
+					}
+
+					headerBlock := peekBytes[startIdx : headerEnd-delimLen]
 					_, _ = br.Discard(headerEnd)
 
 					r.headerBuf = append(r.headerBuf[:0], headerBlock...)

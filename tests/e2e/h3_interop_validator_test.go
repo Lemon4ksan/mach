@@ -587,7 +587,8 @@ func TestH3_GracefulTermination_ServerCloseWithInflight(t *testing.T) {
 	require.NoError(t, err)
 	defer listener.Close()
 
-	var activeServerConn *h3server.ServerConn
+	handlerEntered := make(chan struct{}, 1)
+	scCh := make(chan *h3server.ServerConn, 1)
 
 	go func() {
 		conn, aErr := listener.Accept(context.Background())
@@ -596,6 +597,10 @@ func TestH3_GracefulTermination_ServerCloseWithInflight(t *testing.T) {
 		}
 
 		handler := func(req *h3server.ServerRequest, res *h3server.ServerResponse) error {
+			select {
+			case handlerEntered <- struct{}{}:
+			default:
+			}
 			time.Sleep(100 * time.Millisecond)
 			res.StatusCode = status.OK
 			res.Body = []byte("graceful-response")
@@ -603,7 +608,10 @@ func TestH3_GracefulTermination_ServerCloseWithInflight(t *testing.T) {
 		}
 
 		sc := h3server.NewServerConn(conn, handler)
-		activeServerConn = sc
+		select {
+		case scCh <- sc:
+		default:
+		}
 		_ = sc.Serve()
 	}()
 
@@ -629,10 +637,16 @@ func TestH3_GracefulTermination_ServerCloseWithInflight(t *testing.T) {
 		reqDone <- err
 	}()
 
-	// Wait briefly for request to arrive at server, then gracefully close server
-	time.Sleep(30 * time.Millisecond)
-	if activeServerConn != nil {
-		_ = activeServerConn.Close()
+	// Wait for request to arrive at server handler, then gracefully close server
+	select {
+	case <-handlerEntered:
+	case <-time.After(2 * time.Second):
+	}
+
+	select {
+	case sc := <-scCh:
+		_ = sc.Close()
+	default:
 	}
 
 	// Request should complete or terminate without panic/deadlock

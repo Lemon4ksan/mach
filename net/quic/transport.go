@@ -232,8 +232,8 @@ func (l *Listener) readLoop() {
 			serverParams.InitialMaxStreamDataBidiLocal = 64 * 1024 * 1024
 			serverParams.InitialMaxStreamDataBidiRemote = 64 * 1024 * 1024
 			serverParams.InitialMaxStreamDataUni = 64 * 1024 * 1024
-			serverParams.InitialMaxStreamsBidi = 1000
-			serverParams.InitialMaxStreamsUni = 1000
+			serverParams.InitialMaxStreamsBidi = 65535
+			serverParams.InitialMaxStreamsUni = 65535
 
 			session, err := NewCoreSessionBridge(CoreBridgeConfig{
 				Perspective:        handshake.PerspectiveServer,
@@ -392,8 +392,8 @@ func dialInternal(
 	clientParams.InitialMaxStreamDataBidiLocal = 64 * 1024 * 1024
 	clientParams.InitialMaxStreamDataBidiRemote = 64 * 1024 * 1024
 	clientParams.InitialMaxStreamDataUni = 64 * 1024 * 1024
-	clientParams.InitialMaxStreamsBidi = 1000
-	clientParams.InitialMaxStreamsUni = 1000
+	clientParams.InitialMaxStreamsBidi = 65535
+	clientParams.InitialMaxStreamsUni = 65535
 
 	session, err := NewCoreSessionBridge(CoreBridgeConfig{
 		Perspective: handshake.PerspectiveClient,

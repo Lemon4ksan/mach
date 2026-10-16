@@ -25,8 +25,16 @@ func (c *Conn) waitExpectContinue(ctx *Context) {
 	select {
 	case <-t.C:
 		// ExpectContinueTimeout elapsed; proceed to transmit body payload
-	case <-ctx.Err:
-		// Early response arrived (100 Continue or 4xx/5xx error rejection)
+	case err := <-ctx.Err:
+		// Early response or error arrived; preserve result for caller
+		select {
+		case ctx.Err <- err:
+		default:
+		}
+
+		if err != nil {
+			return
+		}
 	}
 }
 

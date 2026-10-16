@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 
@@ -134,10 +135,10 @@ func NewCoreSessionBridge(cfg CoreBridgeConfig) (*CoreSessionBridge, error) {
 		MaxStreamReceiveWindow:         64 * 1024 * 1024,
 		InitialConnectionReceiveWindow: 64 * 1024 * 1024,
 		MaxConnectionReceiveWindow:     64 * 1024 * 1024,
-		InitialMaxStreamsBidi:          1000,
-		InitialMaxStreamsUni:           1000,
-		InitialPeerMaxStreamsBidi:      1000,
-		InitialPeerMaxStreamsUni:       1000,
+		InitialMaxStreamsBidi:          65535,
+		InitialMaxStreamsUni:           65535,
+		InitialPeerMaxStreamsBidi:      65535,
+		InitialPeerMaxStreamsUni:       65535,
 		InitialPeerMaxData:             64 * 1024 * 1024,
 	})
 
@@ -805,6 +806,7 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 		return nil
 	}
 
+	packetCount := 0
 	for {
 		data, offset, fin, ok := str.PopStreamFrame(1150)
 		if !ok {
@@ -816,8 +818,17 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 			return err
 		}
 
-		if b.packetConn != nil && b.remoteAddr != nil {
-			if _, err := b.packetConn.WriteTo(pkt, b.remoteAddr); err != nil {
+		packetConn := b.packetConn
+		remoteAddr := b.remoteAddr
+
+		if packetConn != nil && remoteAddr != nil {
+			b.mu.Unlock()
+
+			_, err := packetConn.WriteTo(pkt, remoteAddr)
+
+			b.mu.Lock()
+
+			if err != nil {
 				return err
 			}
 		} else {
@@ -825,6 +836,13 @@ func (b *CoreSessionBridge) FlushStreamData(id stream.StreamID) error {
 			case b.outgoingPackets <- pkt:
 			default:
 			}
+		}
+
+		packetCount++
+		if packetCount%64 == 0 {
+			b.mu.Unlock()
+			runtime.Gosched()
+			b.mu.Lock()
 		}
 	}
 

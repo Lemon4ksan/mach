@@ -71,8 +71,10 @@ type Conn struct {
 	closedStreams map[StreamID]struct{}
 
 	// Incoming streams acceptance queues
-	acceptBidiCh chan *Stream
-	acceptUniCh  chan *ReceiveStream
+	acceptBidiCh    chan *Stream
+	acceptBidiQueue []*Stream
+	acceptUniCh     chan *ReceiveStream
+	acceptUniQueue  []*ReceiveStream
 
 	// Lifecycle
 	closeOnce sync.Once
@@ -338,13 +340,77 @@ func (c *Conn) OpenUniStreamSync(ctx context.Context) (*SendStream, error) {
 	}
 }
 
+func (c *Conn) enqueueBidiStreamLocked(str *Stream) {
+	if len(c.acceptBidiQueue) > 0 {
+		c.acceptBidiQueue = append(c.acceptBidiQueue, str)
+		return
+	}
+
+	select {
+	case c.acceptBidiCh <- str:
+	default:
+		c.acceptBidiQueue = append(c.acceptBidiQueue, str)
+	}
+}
+
+func (c *Conn) enqueueUniStreamLocked(rStr *ReceiveStream) {
+	if len(c.acceptUniQueue) > 0 {
+		c.acceptUniQueue = append(c.acceptUniQueue, rStr)
+		return
+	}
+
+	select {
+	case c.acceptUniCh <- rStr:
+	default:
+		c.acceptUniQueue = append(c.acceptUniQueue, rStr)
+	}
+}
+
 // AcceptStream accepts the next incoming peer-initiated bidirectional stream (RFC 9000 §2.1).
 func (c *Conn) AcceptStream(ctx context.Context) (*Stream, error) {
+	c.mu.Lock()
+	if c.IsClosed() && len(c.acceptBidiQueue) == 0 {
+		c.mu.Unlock()
+		return nil, ErrConnClosed
+	}
+
+	if len(c.acceptBidiQueue) > 0 {
+		str := c.acceptBidiQueue[0]
+		c.acceptBidiQueue = c.acceptBidiQueue[1:]
+
+	refillBidi:
+		for len(c.acceptBidiQueue) > 0 {
+			select {
+			case c.acceptBidiCh <- c.acceptBidiQueue[0]:
+				c.acceptBidiQueue = c.acceptBidiQueue[1:]
+			default:
+				break refillBidi
+			}
+		}
+
+		c.mu.Unlock()
+
+		return str, nil
+	}
+
+	c.mu.Unlock()
+
 	select {
 	case str, ok := <-c.acceptBidiCh:
 		if !ok {
 			return nil, ErrConnClosed
 		}
+
+		c.mu.Lock()
+		if len(c.acceptBidiQueue) > 0 {
+			select {
+			case c.acceptBidiCh <- c.acceptBidiQueue[0]:
+				c.acceptBidiQueue = c.acceptBidiQueue[1:]
+			default:
+			}
+		}
+
+		c.mu.Unlock()
 
 		return str, nil
 
@@ -357,11 +423,49 @@ func (c *Conn) AcceptStream(ctx context.Context) (*Stream, error) {
 
 // AcceptUniStream accepts the next incoming peer-initiated unidirectional stream (RFC 9000 §2.1).
 func (c *Conn) AcceptUniStream(ctx context.Context) (*ReceiveStream, error) {
+	c.mu.Lock()
+	if c.IsClosed() && len(c.acceptUniQueue) == 0 {
+		c.mu.Unlock()
+		return nil, ErrConnClosed
+	}
+
+	if len(c.acceptUniQueue) > 0 {
+		str := c.acceptUniQueue[0]
+		c.acceptUniQueue = c.acceptUniQueue[1:]
+
+	refillUni:
+		for len(c.acceptUniQueue) > 0 {
+			select {
+			case c.acceptUniCh <- c.acceptUniQueue[0]:
+				c.acceptUniQueue = c.acceptUniQueue[1:]
+			default:
+				break refillUni
+			}
+		}
+
+		c.mu.Unlock()
+
+		return str, nil
+	}
+
+	c.mu.Unlock()
+
 	select {
 	case str, ok := <-c.acceptUniCh:
 		if !ok {
 			return nil, ErrConnClosed
 		}
+
+		c.mu.Lock()
+		if len(c.acceptUniQueue) > 0 {
+			select {
+			case c.acceptUniCh <- c.acceptUniQueue[0]:
+				c.acceptUniQueue = c.acceptUniQueue[1:]
+			default:
+			}
+		}
+
+		c.mu.Unlock()
 
 		return str, nil
 
@@ -483,10 +587,7 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 			}
 
 			str = c.createBidiStreamLocked(id)
-			select {
-			case c.acceptBidiCh <- str:
-			default:
-			}
+			c.enqueueBidiStreamLocked(str)
 		}
 
 		c.mu.Unlock()
@@ -541,10 +642,7 @@ func (c *Conn) HandleStreamFrame(id StreamID, offset uint64, data []byte, fin bo
 		rStr = NewReceiveStream(c.ctx, id, c, sfc)
 
 		c.recvStreams[id] = rStr
-		select {
-		case c.acceptUniCh <- rStr:
-		default:
-		}
+		c.enqueueUniStreamLocked(rStr)
 	}
 
 	c.mu.Unlock()
@@ -601,10 +699,7 @@ func (c *Conn) HandleResetStreamFrame(id StreamID, code StreamErrorCode, finalSi
 			return nil
 		} else if isPeerInitiated {
 			str = c.createBidiStreamLocked(id)
-			select {
-			case c.acceptBidiCh <- str:
-			default:
-			}
+			c.enqueueBidiStreamLocked(str)
 
 			recvStr = str.recvStr
 		}
@@ -627,10 +722,7 @@ func (c *Conn) HandleResetStreamFrame(id StreamID, code StreamErrorCode, finalSi
 			rStr = NewReceiveStream(c.ctx, id, c, sfc)
 
 			c.recvStreams[id] = rStr
-			select {
-			case c.acceptUniCh <- rStr:
-			default:
-			}
+			c.enqueueUniStreamLocked(rStr)
 
 			recvStr = rStr
 		}
