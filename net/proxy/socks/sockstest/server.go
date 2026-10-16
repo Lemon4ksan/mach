@@ -11,6 +11,7 @@ import (
 	"net"
 
 	"github.com/lemon4ksan/foundation/generic"
+
 	"github.com/lemon4ksan/mach/net/proxy/socks"
 )
 

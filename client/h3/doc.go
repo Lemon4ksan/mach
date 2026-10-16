@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package h3 implements the HTTP/3 client protocol engine conforming to RFC 9114,
 // featuring QUIC stream multiplexing, QPACK field compression, and asymmetric isolation.
 //

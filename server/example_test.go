@@ -33,9 +33,9 @@ func ExampleServer() {
 	// Output: Unified server configured
 }
 
-// ExampleServer_ServeUnified demonstrates starting a multi-protocol L7 server
+// ExampleServer_unified demonstrates starting a multi-protocol L7 server
 // with ALPN H1/H2 transparent negotiation and automated Alt-Svc H3 announcement.
-func ExampleServer_ServeUnified() {
+func ExampleServer_unified() {
 	// 1. Configure the unified server with a universal handler and Alt-Svc H3 advertisement
 	srv := server.New(
 		server.WithHandlerFunc(func(ctx *server.Context) error {

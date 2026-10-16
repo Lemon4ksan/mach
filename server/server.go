@@ -165,6 +165,7 @@ func (s *Server) acquireContext() *Context {
 
 func (s *Server) releaseContext(ctx *Context) {
 	ctx.Reset()
+
 	poolInstance := generic.FromPtr(s.ctxPool).ValueOr(defaultContextPool)
 	poolInstance.Put(ctx)
 }

@@ -191,6 +191,8 @@ func (a *Automaton) GetETagOptional(key string) generic.Optional[string] {
 }
 
 // Reconstruct304Optional returns an Optional wrapping the reconstructed http.Response if key is cached.
+//
+//nolint:bodyclose // false positive: response ownership is returned to caller
 func (a *Automaton) Reconstruct304Optional(key string) generic.Optional[*http.Response] {
 	resp := a.Reconstruct304(key)
 	return generic.FromPtr(resp)

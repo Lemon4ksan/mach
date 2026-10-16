@@ -24,8 +24,6 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 
 </div>
 
----
-
 ## The Unified v0.2.0 Stack
 
 The `v0.2.0` architecture unifies modern client and server operations into a cohesive, high-throughput protocol engine:
@@ -38,8 +36,6 @@ The `v0.2.0` architecture unifies modern client and server operations into a coh
   * **RFC 8441**: HTTP/2 Extended CONNECT multiplexed over existing H2 multiplexers (`:protocol = websocket`).
   * **RFC 9220**: HTTP/3 Extended CONNECT stream encapsulation over QUIC datagrams and bidi streams.
   * **64-bit SWAR Acceleration**: Payload masking kernels vectorized using 64-bit SWAR (SIMD Within A Register) sustaining **50.3 GB/s**.
-
----
 
 ## Season 15 Velocity Records
 
@@ -101,8 +97,6 @@ The RFC 6455 payload masking kernel is vectorized using 64-bit SWAR, unrolled ac
 | **1 Kilobyte** | `412.0 ns/op` (2.48 GB/s) | **`24.8 ns/op` (41.29 GB/s)** | **16.6x faster** |
 | **64 Kilobytes** | `26.2 µs/op` (2.50 GB/s) | **`1.32 µs/op` (49.62 GB/s)** | **19.8x faster** |
 | **1 Megabyte** | `428.1 µs/op` (2.45 GB/s) | **`20.8 µs/op` (50.30 GB/s)** | **20.5x faster** |
-
----
 
 ## Architecture Visualizations
 
@@ -222,8 +216,6 @@ flowchart TD
         RespWriter --> ReleaseCtx["Reset & Return Context to Per-Core Pool"]
     end
 ```
-
----
 
 ## Production Quickstarts
 
@@ -478,8 +470,6 @@ func main() {
 }
 ```
 
----
-
 ## Protocol & Package Directory Map
 
 ```text
@@ -549,8 +539,6 @@ mach/
     └── e2e/                    # Multi-protocol matrix, saturation, and nemesis tests
 ```
 
----
-
 ## The Zero-Drag Manifesto
 
 The engineering principles driving `mach` maintain unconditional mechanical purity:
@@ -576,8 +564,6 @@ The engineering principles driving `mach` maintain unconditional mechanical puri
    * **RFC 1928 / 1929** (SOCKS Protocol Version 5 & Username/Password Authentication)
    * **RFC 9110 §9.3.6** (HTTP CONNECT Tunneling)
 
----
-
 ## Continuous Fuzzing & Verification
 
 The protocol mechanics in `mach` are continuously hardened against adversarial mutations, malformed frame injections, and protocol state violations using Go native fuzzing:
@@ -597,8 +583,6 @@ Run micro-benchmarks with memory allocation profiling:
 go test -bench=. -benchmem ./...
 ```
 
----
-
-## License
+## 📄 License
 
 This project is licensed under the **BSD 3-Clause License**. See the [LICENSE](LICENSE) file for details.

@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lemon4ksan/mach/net/quic"
 	h1client "github.com/lemon4ksan/mach/client/h1"
 	h2client "github.com/lemon4ksan/mach/client/h2"
 	h3client "github.com/lemon4ksan/mach/client/h3"
+	"github.com/lemon4ksan/mach/net/quic"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 	h1server "github.com/lemon4ksan/mach/server/h1"
 	h2server "github.com/lemon4ksan/mach/server/h2"

@@ -118,7 +118,7 @@ func Parse[S ~string | ~[]byte](header S) ContentDisposition {
 	}
 
 	sanitized := generic.From(filename, filename != "").
-		Map(func(fn string) string { return FileName(fn) }).
+		Map(FileName).
 		ValueOr("downloaded_file")
 
 	return ContentDisposition{

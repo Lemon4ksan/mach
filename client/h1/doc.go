@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package h1 implements the HTTP/1.1 client protocol engine conforming to RFC 9112,
 // featuring asymmetric isolation and zero-allocation persistent connection reuse.
 //

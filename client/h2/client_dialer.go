@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/generic"
+
 	"github.com/lemon4ksan/mach/net/proxy"
 	coreh2 "github.com/lemon4ksan/mach/proto/h2"
 )

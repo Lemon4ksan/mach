@@ -25,9 +25,9 @@ func ExampleFromEnvironment() {
 	// Dialer configured from environment
 }
 
-// ExampleDialer_SOCKS5 demonstrates configuring and dialing through a SOCKS5 proxy
+// ExampleSOCKS5 demonstrates configuring and dialing through a SOCKS5 proxy
 // with username/password authentication (RFC 1929) and context deadline control.
-func ExampleDialer_SOCKS5() {
+func ExampleSOCKS5() {
 	// 1. Configure authentication credentials for the SOCKS5 proxy gateway
 	auth := &proxy.Auth{
 		User:     "production_service",

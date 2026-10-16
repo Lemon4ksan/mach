@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/lemon4ksan/foundation/generic"
+
 	"github.com/lemon4ksan/mach"
 	h1client "github.com/lemon4ksan/mach/client/h1"
 	h2client "github.com/lemon4ksan/mach/client/h2"
@@ -181,6 +182,7 @@ func (e *Engine) Dial(ctx context.Context, addr string) (mach.Conn, error) {
 	if !e.DisableAltSvc && e.AltSvcCache != nil {
 		if h3Opt := e.AltSvcCache.GetH3Optional(origin); h3Opt.IsPresent() {
 			h3Addr := h3Opt.MustValue()
+
 			h3c, err := e.getOrDialH3(ctx, h3Addr, host)
 			if err == nil {
 				return newPooledConn(e, origin, h3c), nil
@@ -219,6 +221,7 @@ func (e *Engine) Do(ctx context.Context, req *http.Request, res *http.Response) 
 	if !e.DisableAltSvc && e.AltSvcCache != nil {
 		if h3Opt := e.AltSvcCache.GetH3Optional(origin); h3Opt.IsPresent() {
 			h3Addr := h3Opt.MustValue()
+
 			h3c, err := e.getOrDialH3(ctx, h3Addr, host)
 			if err == nil {
 				err = h3c.Do(ctx, req, res)

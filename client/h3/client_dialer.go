@@ -13,6 +13,7 @@ import (
 	"net/url"
 
 	"github.com/lemon4ksan/foundation/generic"
+
 	"github.com/lemon4ksan/mach/net/proxy"
 	"github.com/lemon4ksan/mach/net/quic"
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"

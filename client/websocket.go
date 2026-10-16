@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lemon4ksan/foundation/generic"
+
 	h1client "github.com/lemon4ksan/mach/client/h1"
 	h2client "github.com/lemon4ksan/mach/client/h2"
 	h3client "github.com/lemon4ksan/mach/client/h3"
@@ -23,8 +25,6 @@ import (
 	coreh3 "github.com/lemon4ksan/mach/proto/h3"
 	"github.com/lemon4ksan/mach/proto/http"
 	"github.com/lemon4ksan/mach/proto/ws"
-
-	"github.com/lemon4ksan/foundation/generic"
 )
 
 var (
@@ -178,6 +178,7 @@ func (e *Engine) DialWebSocket(
 	path := generic.Coalesce(u.RequestURI(), "/")
 
 	baseTLS := generic.CoalesceNil(cfg.TLSConfig, e.TLSConfig)
+
 	var tlsConf *tls.Config
 	if baseTLS != nil {
 		tlsConf = baseTLS.Clone()

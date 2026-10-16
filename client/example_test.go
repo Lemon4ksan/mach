@@ -59,7 +59,7 @@ func ExampleEngine_Do() {
 	}()
 
 	engine := client.NewEngine(
-		client.WithIdleTimeout(30 * time.Second),
+		client.WithIdleTimeout(30*time.Second),
 		client.WithMaxConnsPerHost(10),
 	)
 	defer func() { _ = engine.Close() }()

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Lemon4ksan All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // Package http implements high-performance, zero-allocation HTTP/1.x wire parsing,
 // message serialization, header manipulation, and streaming body decoders conforming to RFC 9110 and RFC 9112.
 //

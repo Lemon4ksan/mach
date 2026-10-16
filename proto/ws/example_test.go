@@ -11,9 +11,9 @@ import (
 	"github.com/lemon4ksan/mach/proto/ws"
 )
 
-// ExampleWebSocket_Echo demonstrates high-speed WebSocket echo handling
+// ExampleConn_echo demonstrates high-speed WebSocket echo handling
 // using zero-allocation wire framing and vectorized SWAR masking.
-func ExampleWebSocket_Echo() {
+func ExampleConn_echo() {
 	// 1. Establish an in-process TCP listener to pair client and server endpoints
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

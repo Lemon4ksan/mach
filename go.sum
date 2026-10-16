@@ -1,3 +1,7 @@
+github.com/lemon4ksan/foundation v0.2.0 h1:DwAMOE70fxPqWPIGVoTa1080AUfa0fAxEKilDZhAdD4=
+github.com/lemon4ksan/foundation v0.2.0/go.mod h1:8/8JZihcnJnnv03Pu45v48gA6Qwgr3HNLlz0Y3lkkpo=
+github.com/lemon4ksan/seal v0.1.0 h1:qEWPg5jb69qy08Q6ifwnQGhKMWUu0acly2q8H143zmM=
+github.com/lemon4ksan/seal v0.1.0/go.mod h1:RfBHOhww4Dp8dtLAO60MXlEuqsa+x07NJFZQHW1qIgk=
 golang.org/x/crypto v0.58.0 h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54=
 golang.org/x/crypto v0.58.0/go.mod h1:Xh+kl5A+M0gMiWDytH2Hhr5Z7WbNCpv/eB/EFgfSk+w=
 golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=
