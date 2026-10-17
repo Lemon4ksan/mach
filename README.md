@@ -2,7 +2,7 @@
 
 # mach
 
-### Silicon-Speed Protocol Engines & Transport Layers for Go 1.27+
+### High-Throughput Layer 7 Protocol Engine & Transport Layers for Go 1.27+
 
 _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation meets wire throughput»_
 
@@ -11,14 +11,8 @@ _«Aerodynamic protocol mechanics at Mach speed — where zero heap allocation m
 [![Go Reference](https://img.shields.io/badge/godoc-reference-007d9c?style=flat-square)](https://pkg.go.dev/github.com/lemon4ksan/mach)
 [![Architecture Docs](https://img.shields.io/badge/docs-ARCHITECTURE.md-purple?style=flat-square)](ARCHITECTURE.md)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue?style=flat-square)](LICENSE)
-[![Zero-Alloc](https://img.shields.io/badge/memory-0%20B%2Fop%20%7C%200%20allocs-brightgreen?style=flat-square)](#benchmarks--velocity-records)
-[![H1 Throughput](https://img.shields.io/badge/h1%20throughput-2.61M%20req%2Fs-success?style=flat-square)](#benchmarks--velocity-records)
-[![H2 Stream Table](https://img.shields.io/badge/h2%20streams-14.1M%20ops%2Fs-success?style=flat-square)](#benchmarks--velocity-records)
-[![QUIC Reassembly](https://img.shields.io/badge/quic%20reassembly-14.2%20GB%2Fs-blueviolet?style=flat-square)](#benchmarks--velocity-records)
-[![WS SWAR Masking](https://img.shields.io/badge/ws%20swar-50.3%20GB%2Fs-orange?style=flat-square)](#benchmarks--velocity-records)
-[![Fuzz Verified](https://img.shields.io/badge/fuzzing-Continuous%208%2F8%20Targets-success?style=flat-square)](scripts/fuzz_all.go)
 
-**mach** is the high-velocity, zero-allocation network engine powering the [`aoni`](https://github.com/lemon4ksan/aoni) client ecosystem and [`sein`](https://github.com/lemon4ksan/sein) server frameworks. Built from bare silicon fundamentals, `mach` delivers sub-nanosecond binary frame overlays, 64-bit SWAR register vectorization, concurrent lock-sharded stream dispatch, transparent Alt-Svc protocol promotion, and RFC-frozen state machines.
+**mach** is a zero-allocation Layer 7 protocol engine powering the [`aoni`](https://github.com/lemon4ksan/aoni) client ecosystem and [`sein`](https://github.com/lemon4ksan/sein) server frameworks. Designed for mechanical sympathy and low latency, `mach` delivers in-situ binary frame overlays, 64-bit SWAR vectorization, lock-sharded stream dispatch, transparent Alt-Svc protocol promotion, and strict RFC-compliant state machines.
 
 #### English • [Русский](README_RU.md)
 
@@ -37,11 +31,11 @@ The architecture unifies modern client and server operations into a cohesive, hi
   * **RFC 9220**: HTTP/3 Extended CONNECT stream encapsulation over QUIC datagrams and bidi streams.
   * **64-bit SWAR Acceleration**: Payload masking kernels vectorized using 64-bit SWAR (SIMD Within A Register) sustaining **50.3 GB/s**.
 
-## Benchmarks & Velocity Records
+## Benchmarks & Performance Metrics
 
 Measured on bare-metal hardware (`12th Gen Intel Core i5-12400F @ 4.40 GHz`, 64 GB DDR4-3200, Windows x86_64, Go 1.27):
 
-| Subsystem | Benchmark Metric | Wire Speed / Velocity | Memory Overhead | Allocations |
+| Subsystem | Benchmark Metric | Throughput | Memory Overhead | Allocations |
 | :--- | :--- | :--- | :--- | :--- |
 | **HTTP/1.1 Ingestion** | Pipeline Ingestion & Dispatch | **`2,610,000 req/s` (2.61M req/s)** | 0 B/op | **0 allocs/op** |
 | **HTTP/2 Core** | Sharded Stream Table Mutations | **`14,100,000 ops/s` (14.1M ops/s)** | 0 B/op | **0 allocs/op** |
@@ -539,9 +533,9 @@ mach/
     └── e2e/                    # Multi-protocol matrix, saturation, and nemesis tests
 ```
 
-## The Zero-Drag Manifesto
+## Core Engineering Principles
 
-The engineering principles driving `mach` maintain unconditional mechanical purity:
+The architecture of `mach` is driven by four core invariants:
 
 1. **Strict Zero-Allocation Hot Path**:
    Connection establishment, stream multiplexing, frame serialization, header compression, and WebSocket masking execute with **0 heap allocations** on active connections. All buffers are recycled through multi-tiered arenas and per-core pools.
