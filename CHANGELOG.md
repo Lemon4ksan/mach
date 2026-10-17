@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/Lemon4ksan/mach/compare/v0.1.0...v0.2.0) (2026-10-17)
+
+
+### Features
+
+* **v0.2.0:** modern unified protocol stack, zero-alloc engines, and architecture ([#2](https://github.com/Lemon4ksan/mach/issues/2)) ([05017a0](https://github.com/Lemon4ksan/mach/commit/05017a0f14d0f06edd9c6fe65812b2cc964f9ca5))
+
+
+### Bug Fixes
+
+* **server/h1:** restore req.RemoteAddr from connection in ServeConn ([9630170](https://github.com/Lemon4ksan/mach/commit/963017039de275004d39c5c546e54f78fa3cea3d))
+
 ## [0.1.0](https://github.com/Lemon4ksan/mach/compare/v0.0.1...v0.1.0) (2026-10-04)
 
 
