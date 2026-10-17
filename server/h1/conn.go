@@ -136,6 +136,13 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		tlsState = &state
 	}
 
+	var remoteAddr string
+	if conn != nil {
+		if ra := conn.RemoteAddr(); ra != nil {
+			remoteAddr = ra.String()
+		}
+	}
+
 	maxBody := ch.MaxBodySize
 	if maxBody <= 0 {
 		maxBody = 32 << 20 // 32MB default
@@ -146,6 +153,7 @@ func (ch *ConnHandler) ServeConn(conn net.Conn) error {
 		res.Reset()
 
 		req.Conn = conn
+		req.RemoteAddr = remoteAddr
 		req.bw = bw
 		req.br = br
 		req.TLS = tlsState
