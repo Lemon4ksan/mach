@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="crystal-wing-l" x1="58.5" y1="5.5" x2="6" y2="31" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E0F2FE"/>
+      <stop offset="32%" stop-color="#7DD3FC"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="crystal-ridge-l" x1="58.5" y1="5.5" x2="22" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#BAE6FD"/>
+      <stop offset="45%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#00ADD8"/>
+    </linearGradient>
+    <linearGradient id="crystal-ridge-r" x1="58.5" y1="5.5" x2="28" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00ADD8"/>
+      <stop offset="50%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#0369A1"/>
+    </linearGradient>
+    <linearGradient id="crystal-wing-r" x1="58.5" y1="5.5" x2="33" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="55%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+
+    <linearGradient id="tail-bevel-l" x1="6" y1="31" x2="26" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="tail-bevel-r" x1="28" y1="36" x2="33" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#090D16"/>
+    </linearGradient>
+
+    <linearGradient id="shroud-unified" x1="48.5" y1="15.5" x2="26" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F43F5E" stop-opacity="0.78"/>
+      <stop offset="45%" stop-color="#818CF8" stop-opacity="0.48"/>
+      <stop offset="85%" stop-color="#38BDF8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#00ADD8" stop-opacity="0.0"/>
+    </linearGradient>
+
+    <linearGradient id="veil-1-rim" x1="49" y1="15" x2="18" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F43F5E"/>
+      <stop offset="45%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="veil-2-rim" x1="38" y1="26" x2="10" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FB7185"/>
+      <stop offset="45%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <polygon points="6.0,31.0 17.5,32.0 28.5,35.5 23.8,40.8 23.5,40.5" fill="url(#tail-bevel-l)"/>
+  <polygon points="28.5,35.5 32.0,46.5 33.0,58.0 23.5,40.5" fill="url(#tail-bevel-r)"/>
+
+  <polygon points="58.5,5.5 6.0,31.0 17.5,32.5 38.0,19.0" fill="url(#crystal-wing-l)"/>
+  <polygon points="58.5,5.5 45.0,26.0 31.5,46.5 33.0,58.0" fill="url(#crystal-wing-r)"/>
+
+  <polygon points="58.5,5.5 17.5,32.5 28.5,35.5 43.5,20.5" fill="url(#crystal-ridge-l)"/>
+  <polygon points="58.5,5.5 28.5,35.5 31.5,46.5" fill="url(#crystal-ridge-r)"/>
+
+  <path d="M 13.0 13.0
+           C 24.5 7.5, 40.5 7.5, 48.5 15.5
+           C 56.5 23.5, 56.5 39.5, 51.0 51.0
+           C 48.0 55.0, 44.8 57.5, 42.0 59.0
+           C 45.2 47.5, 42.4 36.6, 34.9 29.1
+           C 27.4 21.6, 16.5 18.8, 5.0 22.0
+           C 6.5 19.2, 9.0 16.0, 13.0 13.0 Z"
+        fill="url(#shroud-unified)"/>
+
+  <path d="M 5.0 22.0
+           C 16.5 16.0, 30.0 18.0, 38.0 26.0
+           C 46.0 34.0, 48.0 47.5, 42.0 59.0
+           C 45.2 47.5, 42.4 36.6, 34.9 29.1
+           C 27.4 21.6, 16.5 18.8, 5.0 22.0 Z"
+        fill="url(#veil-2-rim)"/>
+
+  <path d="M 13.0 13.0
+           C 24.5 7.5, 40.5 7.5, 48.5 15.5
+           C 56.5 23.5, 56.5 39.5, 51.0 51.0
+           C 54.0 39.2, 52.2 25.6, 45.3 18.7
+           C 38.4 11.8, 24.8 10.0, 13.0 13.0 Z"
+        fill="url(#veil-1-rim)"/>
+</svg>
