@@ -2,8 +2,6 @@
 
 This document provides a comprehensive technical overview of the architecture, memory topology, protocol state machines, and concurrency models powering **mach v0.2.0**.
 
----
-
 ## 1. Architectural Philosophy: The Zero-Drag Manifesto
 
 The `mach` engine is designed to eliminate computational drag from high-throughput network pipelines. It operates on four core principles:
@@ -31,8 +29,6 @@ The `mach` engine is designed to eliminate computational drag from high-throughp
    * **RFC 7838**: HTTP Alternative Services (Alt-Svc)
    * **RFC 1928 / RFC 1929**: SOCKS Protocol Version 5 & Authentication
    * **RFC 9110 §9.3.6**: HTTP CONNECT Tunneling
-
----
 
 ## 2. Core Architecture Topology
 
@@ -96,8 +92,6 @@ Alt-Svc: h3=":443"; ma=86400
 ```
 This signals clients to immediately upgrade subsequent requests to HTTP/3 over QUIC without manual header plumbing.
 
----
-
 ### 2.2 Intelligent Client Engine (`client.Engine`)
 
 The `client.Engine` manages the entire client-side transport lifecycle:
@@ -112,8 +106,6 @@ The `client.Engine` manages the entire client-side transport lifecycle:
    * **HTTP/1.1**: Idle connections are returned to the pool for keep-alive reuse.
 4. **Proxy & Tunneling Integration**:
    The engine transparently accepts custom dialers, SOCKS5 proxies (`RFC 1928`), and HTTP CONNECT tunnels (`RFC 9110`), routing TCP connections through intermediary relays.
-
----
 
 ## 3. High-Velocity Wire Subsystems
 
@@ -139,8 +131,6 @@ Standard byte-by-byte scalar loops process 1 byte per cycle, bottlenecking throu
 
 **Throughput Result**: Sustains **50.3 GB/s**, completely eliminating masking overhead as a bottleneck.
 
----
-
 ### 3.2 In-Situ Binary Overlays (`proto/h2/overlay`)
 
 Conventional protocol decoders allocate intermediate Go structs to represent parsed frames. At millions of frames per second, heap allocation and GC scanning destroy throughput.
@@ -163,8 +153,6 @@ Conventional protocol decoders allocate intermediate Go structs to represent par
 * Field extractions (`Length()`, `Type()`, `Flags()`, `StreamID()`, `Payload()`) use direct big-endian bit shifts without pointer dereferencing or struct allocations.
 * **Latency**: **0.49 ns/op** (35x faster than heap struct decode, 0 B/op).
 
----
-
 ### 3.3 HTTP/2 Sharded Stream Table
 
 In high-concurrency HTTP/2 servers, thousands of concurrent streams read and write simultaneously. A single global lock creates severe CPU contention across cores.
@@ -174,16 +162,12 @@ In high-concurrency HTTP/2 servers, thousands of concurrent streams read and wri
 * Each shard maintains independent spin-locks or fine-grained read/write mutexes with 64-byte padding to prevent false sharing.
 * **Velocity Record**: Sustains **14.1M ops/s** under high-goroutine contention with 0 B/op memory overhead.
 
----
-
 ### 3.4 QUIC Zero-Copy Stream Reassembly Ring
 
 In QUIC (RFC 9000), UDP packets frequently arrive out of order. `net/quic/core/stream` uses a high-performance circular reassembly ring:
 * Fast Path: In-order packets are passed directly to the stream consumer without copying.
 * Gap Buffer: Out-of-order frames are indexed by stream offset into pre-allocated memory slices.
 * **Velocity Record**: **14.2 GB/s** reassembly throughput with zero GC pressure.
-
----
 
 ## 4. Multi-Protocol WebSocket Mechanics
 
@@ -211,8 +195,6 @@ if ctx.IsWebSocket() {
 ```
 
 The underlying engine handles the protocol-specific handshakes automatically.
-
----
 
 ## 5. Memory Architecture & Pool Topology
 
@@ -242,8 +224,6 @@ To maintain zero heap allocations, `mach` uses a tiered memory hierarchy:
 3. **Global Arenas (`sync.Pool`)**:
    Recycle 32 KB and 64 KB byte slices for payload buffering, WebSocket masking, and streaming compression.
 
----
-
 ## 6. Formal RFC Compliance Mapping
 
 | RFC | Section / Feature | `mach` Implementation Package |
@@ -263,8 +243,6 @@ To maintain zero heap allocations, `mach` uses a tiered memory hierarchy:
 | **RFC 1928** | SOCKS Protocol Version 5 (TCP CONNECT, Domain/IPv4/IPv6) | `mach/net/proxy/socks` |
 | **RFC 1929** | SOCKS Version 5 Username/Password Authentication | `mach/net/proxy/socks` |
 | **RFC 9110** | HTTP CONNECT Method Tunneling (§9.3.6) | `mach/net/proxy/connect.go` |
-
----
 
 ## 7. Verification & Fuzzing Architecture
 
